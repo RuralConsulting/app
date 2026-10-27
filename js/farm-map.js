@@ -189,6 +189,8 @@ FP.farmMap = (() => {
     new maplibregl.Popup({ maxWidth: "320px" }).setLngLat(e.lngLat).setDOMContent(FP.popup.content(hit)).addTo(map);
   }
 
-  return { open, setVisible, basemap: (k) => FP.basemaps.pick(init(), k), resize: () => map && map.resize() };
+  // Wait for a painted, idle map before capturing a view (DOM readiness alone is too early for WebGL).
+  const whenIdle = () => new Promise((resolve) => { if (!map) return resolve(); map.once("idle", resolve); map.triggerRepaint(); });
+  return { open, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), resize: () => map && map.resize() };
 })();
 

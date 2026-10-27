@@ -1,9 +1,10 @@
 // Service worker: makes the app installable and quick to start. Caches only the app's own files (this site);
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
-const VERSION = "202610271140-80fcc73";
+const VERSION = "202610271147-972f76f";
 const CACHE = `fp-app-${VERSION}`;
 const SHELL = ["./", "index.html", "css/app.css", "manifest.webmanifest",
   "js/demo.js", "css/demo.css", "demo/cairnvale-pdm.json", "demo/source.html",
+  "js/answer.js", "css/answer.css",
   "css/plan.css", "js/plan/provenance.js", "js/plan/value.js", "js/plan/markdown.js",
   "js/plan/templates/fep_canterbury.js", "js/plan/render.js", "js/plan/main.js",
   "js/guard.js", "js/config.js", "js/util.js", "js/qml.js", "js/basemaps.js", "js/auth.js", "js/popup.js", "js/farm-map.js", "js/main.js",
@@ -27,5 +28,6 @@ self.addEventListener("fetch", (e) => {
   }
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request)));
 });
+
 
 

@@ -60,6 +60,12 @@
       $("#farm-name").textContent = view.farm.name;
       $("#farm-sub").textContent = `${FP.ha(view.extentHa)} farmed`;
       layerList(view.entries);
+      $("#demo-answer")?.remove();
+      if (FP.demo?.active && ["#/demo/pattern", "#/demo/empty"].includes(location.hash)) {
+        const panel = el("aside", { id: "demo-answer", class: "demo-answer", "aria-label": "Farm answer" });
+        panel.innerHTML = FP.answer.render(FP.demo.answerModel(await FP.demo.ready));
+        $("#screen-map").append(panel);
+      }
     } catch (e) {
       note.textContent = `Couldn't load the farm: ${e.message || e}`;
     }
@@ -149,7 +155,8 @@
     for (const b of $$(".b-signout")) b.textContent = "Exit demo";
     const banner = el("aside", { class: "demo-banner", "aria-label": "Demonstration" },
       el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Demo advisor · Illustrative map"),
-      ...[["#/demo", "Map"], ["#/demo/farms", "Farms"], ["#/demo/plans", "Plans"], ["#/demo/plan", "Plan"]].map(([href, label]) => el("a", { href }, label)),
+      ...[[FP.href("#/farm/" + FP.demo.FARM), "Map"], ["#/demo/pattern", "Answer pattern"], ["#/demo/empty", "Empty farm"],
+        [FP.href("#/farm/" + FP.demo.FARM + "/plans"), "Plans"], ...(!FP.demo.sparse ? [["#/demo/farms", "Farms"], ["#/demo/plan", "Plan"]] : [])].map(([href, label]) => el("a", { href }, label)),
       el("a", { href: location.pathname + location.search }, "Exit"));
     document.body.prepend(banner);
     const reserveBanner = () => document.documentElement.style.setProperty("--demo-banner-height", banner.getBoundingClientRect().height + "px");
@@ -158,5 +165,6 @@
     FP.demo.ready.then(start).catch((e) => { show("screen-farms"); msg("#farms-msg", e.message); });
   } else start();
 })();
+
 
 
