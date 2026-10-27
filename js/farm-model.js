@@ -88,9 +88,9 @@
         auths.length ? { text: auths.length + (auths.length === 1 ? " authorisation is recorded" : " authorisations are recorded"), because: checks.some(human) ? "advisor assessments are shown with their authors" : "the checks still need an advisor\'s assessment" } : null,
         { text: "No authorisations recorded.", startBy: "recording the farm's activities and the consents or rules they rely on." }),
       actions: make("actions", "Risks & actions", actionItems,
-        due.length ? { text: due.length + " actions have dates to revisit" + overallLine, because: "their dates have passed and they are not marked complete" } :
+        due.length ? { text: due.length + " actions are still recorded as planned after their due dates" + overallLine } :
           actions.length ? { text: actions.length + " actions are recorded" + overallLine, because: "they form the recorded programme; current progress has not been confirmed here" } : null,
-        { text: context.assemblyMissing ? "Risk and action information has not yet been assembled for this farm." : "No risks or actions recorded.", startBy: "looking at the farm's activities with its advisor." },
+        { text: context.assemblyMissing ? "No risks or actions recorded yet." : "No risks or actions recorded.", startBy: "looking at the farm's activities with its advisor." },
         { rank: due.length ? "due_date" : "receptor_weight" }),
       plans: make("plans", "Plans & documents", planItems,
         plans.length ? { text: plans.length + " plan version" + (plans.length === 1 ? "" : "s") + " and " + docs.length + (context.uncited ? (docs.length === 1 ? " document" : " documents") : (docs.length === 1 ? " cited document" : " cited documents")) + " recorded", because: plans.some((x) => ["draft", "in_review"].includes(x.status)) ? "a draft is waiting for review" : "signed versions preserve the agreed record" } : null,

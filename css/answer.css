@@ -18,5 +18,5 @@
 .answer-compact .answer-highlights { margin: 8px 0; font-size: 13px; }
 .answer-compact .answer-highlights li { padding: 8px 0; }
 @media (max-width: 800px) {
-  .answer-compact .answer-highlights { display: none; }
+  .answer-compact .answer-highlights li:not(:first-child) { display: none; }
 }
