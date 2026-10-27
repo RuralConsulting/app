@@ -12,7 +12,7 @@
     if (!user) { show("screen-signin"); $("#email").focus(); return; }
     for (const w of $$(".who")) w.textContent = `Signed in as ${user.email}`;
     $("#pw-email").value = user.email;
-    const { data, error } = await sb.from("farms").select("id, name, region").order("name");
+    const { data, error } = await sb.from("farms").select("id, name, region, org_id").order("name");
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     farms = data;
     $("#b-farms").hidden = farms.length < 2;
@@ -20,6 +20,13 @@
   }
 
   function route() {
+    const planRoute = FP.plan.routes.match(location.hash);
+    FP.plan.routes.cancel();
+    if (planRoute) {
+      const farm = farms.find((f) => f.id === planRoute.farm);
+      if (farm) { FP.plan.routes.open(planRoute, farm); return; }
+      listFarms(); return;
+    }
     const m = location.hash.match(/^#\/farm\/([0-9a-f-]{36})$/);
     const farm = m ? farms.find((f) => f.id === m[1]) : farms.length === 1 ? farms[0] : null;
     if (farm) openFarm(farm.id);
@@ -37,10 +44,12 @@
   async function openFarm(id) {
     show("screen-map");
     afterPassword = "map";
+    $("#farm-plans-link").href = `#/farm/${id}/plans`;
     const note = $("#map-msg");
     note.hidden = false; note.textContent = "Loading the farm…";
     try {
       const view = await FP.farmMap.open(id);
+      if (FP.plan.routes.match(location.hash)) return;
       FP.farmMap.resize();
       if (!view) { note.textContent = "This farm isn't shared with your login."; return; }
       note.hidden = true;
@@ -72,6 +81,7 @@
   }
 
   // ---- events --------------------------------------------------------------------------------------
+  $("#plan-print").addEventListener("click", () => window.print());
   $("#f-signin").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const btn = ev.target.querySelector("button");
@@ -130,3 +140,4 @@
 
   start();
 })();
+

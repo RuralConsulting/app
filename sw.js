@@ -1,8 +1,10 @@
 // Service worker: makes the app installable and quick to start. Caches only the app's own files (this site);
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
-const VERSION = "202610270357-8cf8e5c";
+const VERSION = "202610271017-cec4816";
 const CACHE = `fp-app-${VERSION}`;
 const SHELL = ["./", "index.html", "css/app.css", "manifest.webmanifest",
+  "css/plan.css", "js/plan/provenance.js", "js/plan/value.js", "js/plan/markdown.js",
+  "js/plan/templates/fep_canterbury.js", "js/plan/render.js", "js/plan/main.js",
   "js/guard.js", "js/config.js", "js/util.js", "js/qml.js", "js/basemaps.js", "js/auth.js", "js/popup.js", "js/farm-map.js", "js/main.js",
   "vendor/supabase.js", "vendor/maplibre-gl-csp.js", "vendor/maplibre-gl-csp-worker.js", "vendor/maplibre-gl.css",
   "brand/logo.png", "brand/logo-dark.png", "brand/icon.png", "brand/icon-192.png"];
@@ -24,3 +26,4 @@ self.addEventListener("fetch", (e) => {
   }
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request)));
 });
+

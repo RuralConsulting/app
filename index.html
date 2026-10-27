@@ -8,7 +8,7 @@
 <!-- GitHub Pages can't send security headers, so the page carries its own policy (same as _headers) -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://basemaps.linz.govt.nz; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://basemaps.linz.govt.nz; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#231f20">
-<script src="js/guard.js?v=202610270357-8cf8e5c"></script>
+<script src="js/guard.js?v=202610271017-cec4816"></script>
 <title>Farm platform | Rural Consulting</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="brand/icon.png">
@@ -18,7 +18,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&display=swap">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
-<link rel="stylesheet" href="css/app.css?v=202610270357-8cf8e5c">
+<link rel="stylesheet" href="css/app.css?v=202610271017-cec4816">
+<link rel="stylesheet" href="css/plan.css?v=202610271017-cec4816">
 </head>
 <body>
 <p id="loading" class="loading">Loading…</p>
@@ -77,6 +78,7 @@
     </button>
     <div id="panel-body" class="panel-body">
       <p id="farm-sub" class="sub"></p>
+      <p><a id="farm-plans-link" href="#">Farm plans</a></p>
       <div class="basemaps" role="group" aria-label="Background">
         <button type="button" data-basemap="aerial" aria-pressed="true">Aerial</button>
         <button type="button" data-basemap="topo" aria-pressed="false">Map</button>
@@ -92,15 +94,34 @@
   <p id="map-msg" class="map-msg" role="status" hidden></p>
 </div>
 
+<main id="screen-plans" hidden>
+  <nav class="plan-toolbar" aria-label="Plan navigation">
+    <a id="plan-farm-link" href="#">Back to map</a>
+    <a id="plan-list-link" href="#">All plans</a>
+    <b id="plan-farm-label"></b>
+    <button type="button" id="plan-print">Print plan</button>
+    <button type="button" class="link b-signout">Sign out</button>
+  </nav>
+  <p id="plan-msg" role="status"></p>
+  <div id="plan-content"></div>
+</main>
+
 <script src="vendor/supabase.js"></script>
 <script src="vendor/maplibre-gl-csp.js"></script>
-<script src="js/config.js?v=202610270357-8cf8e5c"></script>
-<script src="js/util.js?v=202610270357-8cf8e5c"></script>
-<script src="js/qml.js?v=202610270357-8cf8e5c"></script>
-<script src="js/basemaps.js?v=202610270357-8cf8e5c"></script>
-<script src="js/auth.js?v=202610270357-8cf8e5c"></script>
-<script src="js/popup.js?v=202610270357-8cf8e5c"></script>
-<script src="js/farm-map.js?v=202610270357-8cf8e5c"></script>
-<script src="js/main.js?v=202610270357-8cf8e5c"></script>
+<script src="js/config.js?v=202610271017-cec4816"></script>
+<script src="js/util.js?v=202610271017-cec4816"></script>
+<script src="js/qml.js?v=202610271017-cec4816"></script>
+<script src="js/basemaps.js?v=202610271017-cec4816"></script>
+<script src="js/auth.js?v=202610271017-cec4816"></script>
+<script src="js/popup.js?v=202610271017-cec4816"></script>
+<script src="js/farm-map.js?v=202610271017-cec4816"></script>
+<script src="js/plan/provenance.js"></script>
+<script src="js/plan/value.js"></script>
+<script src="js/plan/markdown.js"></script>
+<script src="js/plan/templates/fep_canterbury.js"></script>
+<script src="js/plan/render.js"></script>
+<script src="js/plan/main.js"></script>
+<script src="js/main.js?v=202610271017-cec4816"></script>
 </body>
 </html>
+
