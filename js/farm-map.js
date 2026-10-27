@@ -109,11 +109,11 @@ FP.farmMap = (() => {
     if (!data) return null;
     await loaded();
     clear();
-    const entries = [];   // what the layer list shows: {name, sub, ids, on, markers}
+    const entries = [];   // what the layer list shows: {key, name, sub, ids, on, markers, job}
 
     if (data.extent) {
       source("extent", { type: "Feature", geometry: data.extent, properties: {} });
-      entries.push({ name: "Farm extent", sub: `${FP.ha(data.extent_ha)} · titles, leased land and land units`, on: true,
+      entries.push({ key: "extent", name: "Farm extent", sub: `${FP.ha(data.extent_ha)} · titles, leased land and land units`, on: true,
         ids: [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": "#fec956", "line-width": 3 } })] });
     }
     source("titles", data.titles);
@@ -124,7 +124,7 @@ FP.farmMap = (() => {
                   props: { area_ha: f.properties.area_ha, estate: f.properties.estate } }))];
     const nTitles = data.titles.features.length;
     const titleHa = data.titles.features.reduce((a, f) => a + (Number(f.properties.area_ha) || 0), 0);
-    entries.push({ name: "Titles", sub: `${nTitles} title${nTitles === 1 ? "" : "s"}, ${FP.ha(titleHa)}`, on: true, ids: titleIds });
+    entries.push({ key: "titles", name: "Titles", sub: `${nTitles} title${nTitles === 1 ? "" : "s"}, ${FP.ha(titleHa)}`, on: true, ids: titleIds });
 
     data.layers.forEach((l, i) => source(`fl-${i}`, l.features));
     source("land-units", data.land_units);
@@ -134,7 +134,8 @@ FP.farmMap = (() => {
     }
     data.layers.forEach((l, i) => {
       const n = l.features.features.length;
-      const e = { name: l.name, sub: [`${n} feature${n === 1 ? "" : "s"}`, l.shown_as].filter(Boolean).join(" · "), on: true, ids: layerIds[i] };
+      const e = { key: l.theme, name: l.name, sub: [`${n} feature${n === 1 ? "" : "s"}`, l.shown_as].filter(Boolean).join(" · "),
+                  ids: layerIds[i], job: l.job || null };
       if (l.theme === "land_units") {
         landUnitLabels(data.land_units);
         e.markers = markers.slice();
@@ -154,8 +155,12 @@ FP.farmMap = (() => {
         (f) => ({ title: `${r.theme === "wells" ? "Bore" : r.name} ${f.properties.external_id}`, layerName: r.name,
                   qualifier: f.properties.on_farm ? "On the farm" : "Off the farm, linked to the farm's permit",
                   props: f.properties, permits: f.properties.authorisations || [], attribution: r.attribution }));
-      entries.push({ name: r.theme === "wells" ? `Bores on the farm (${n})` : r.name, sub: r.name, on: true, ids: [id] });
+      entries.push({ key: "reference", name: r.theme === "wells" ? `Bores on the farm (${n})` : r.name, sub: r.name, ids: [id] });
     }
+
+    // what's on when the farm opens comes from config.js (farmView.defaultOn); the rest is a tick away
+    const defaultOn = new Set(FP_CONFIG.farmView?.defaultOn || []);
+    for (const e of entries) setVisible(e, defaultOn.has(e.key));
 
     if (data.extent) map.fitBounds(bbox(data.extent), { padding: { top: 40, bottom: 40, left: window.innerWidth > 700 ? 340 : 40, right: 60 }, duration: 0 });
     return { farm: data.farm, extentHa: data.extent_ha, entries };

@@ -53,11 +53,22 @@
     }
   }
 
+  // the farm's standing layers first, then layers made for a job under that job's name
   function layerList(entries) {
-    $("#layer-list").replaceChildren(...entries.map((e) => {
+    const item = (e) => {
       const box = el("input", { type: "checkbox", checked: e.on, onchange: (ev) => FP.farmMap.setVisible(e, ev.target.checked) });
       return el("li", {}, el("label", {}, box, el("span", {}, el("b", {}, e.name), e.sub ? el("small", {}, e.sub) : null)));
-    }));
+    };
+    const items = entries.filter((e) => !e.job).map(item);
+    const jobs = new Map();
+    for (const e of entries.filter((e) => e.job)) {
+      if (!jobs.has(e.job.id)) jobs.set(e.job.id, { job: e.job, entries: [] });
+      jobs.get(e.job.id).entries.push(e);
+    }
+    for (const { job, entries: es } of jobs.values()) {
+      items.push(el("li", { class: "group" }, el("span", {}, "Made for: " + job.name)), ...es.map(item));
+    }
+    $("#layer-list").replaceChildren(...items);
   }
 
   // ---- events --------------------------------------------------------------------------------------
@@ -101,6 +112,7 @@
   });
   if (window.innerWidth < 700) { $("#panel").classList.add("closed"); $("#b-panel").setAttribute("aria-expanded", "false"); }
 
+  if (FP.basemaps.names.length < 2) $(".basemaps").hidden = true;
   for (const b of $$("[data-basemap]")) {
     b.addEventListener("click", () => {
       for (const o of $$("[data-basemap]")) o.setAttribute("aria-pressed", String(o === b));

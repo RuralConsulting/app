@@ -1,19 +1,16 @@
-// Background maps. LINZ Basemaps (aerial imagery and topo) when a LINZ key is set in config.js; otherwise
-// Esri's imagery and topo maps, as the map portal uses.
+// Background maps: LINZ Basemaps aerial imagery (CC BY 4.0), the brief's basemap. Free and licensed for this
+// use, with the attribution LINZ asks for. Only tile sets listed here are used (no Esri or other providers).
+// LINZ's topographic map is vector-only (its own style); adding it as a second background is a later piece of
+// work, so the background switch shows only when more than one set is listed.
 FP.basemaps = (() => {
   const key = FP_CONFIG.linzKey;
   const linz = (set) => [`https://basemaps.linz.govt.nz/v1/tiles/${set}/WebMercatorQuad/{z}/{x}/{y}.webp?api=${encodeURIComponent(key)}`];
-  const sets = key ? {
-    aerial: { tiles: linz("aerial"), maxzoom: 22, attribution: "Imagery © LINZ CC BY 4.0, Toitū Te Whenua" },
-    topo: { tiles: linz("topographic-v2"), maxzoom: 18, attribution: "© LINZ CC BY 4.0, Toitū Te Whenua" },
-  } : {
-    aerial: { tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-              maxzoom: 19, attribution: "Imagery © Esri" },
-    topo: { tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"],
-            maxzoom: 19, attribution: "Map © Esri" },
-  };
+  const ATTRIB = '<a href="https://www.linz.govt.nz/copyright" target="_blank" rel="noopener">LINZ CC BY 4.0</a> © ' +
+    '<a href="https://basemaps.linz.govt.nz/" target="_blank" rel="noopener">Imagery Basemap contributors</a>';
+  const sets = key ? { aerial: { tiles: linz("aerial"), maxzoom: 22, attribution: ATTRIB } } : {};
+
   function style(initial) {
-    const s = { version: 8, sources: {}, layers: [] };
+    const s = { version: 8, sources: {}, layers: [{ id: "bm-blank", type: "background", paint: { "background-color": "#dfe6e1" } }] };
     for (const [k, b] of Object.entries(sets)) {
       s.sources["bm-" + k] = { type: "raster", tiles: b.tiles, tileSize: 256, maxzoom: b.maxzoom, attribution: b.attribution };
       s.layers.push({ id: "bm-" + k, type: "raster", source: "bm-" + k,
@@ -24,5 +21,5 @@ FP.basemaps = (() => {
   function pick(map, which) {
     for (const k of Object.keys(sets)) map.setLayoutProperty("bm-" + k, "visibility", k === which ? "visible" : "none");
   }
-  return { style, pick, names: Object.keys(sets) };
+  return { style, pick, names: Object.keys(sets), missingKey: !key };
 })();

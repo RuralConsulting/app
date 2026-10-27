@@ -3,8 +3,18 @@
 window.FP_CONFIG = {
   supabaseUrl: "https://swbpymacxycbmdbexnuw.supabase.co",
   supabaseKey: "sb_publishable_ezMJPCuTFBl3wQAVeOJPXg_BoXxVY8A",
-  // A LINZ Basemaps API key (basemaps.linz.govt.nz) switches the backgrounds to LINZ aerial imagery and topo
-  // maps. Browser keys are public. Without one, the app falls back to Esri's imagery and topo maps.
+
+  // LINZ Basemaps API key (basemaps.linz.govt.nz): the aerial background. Browser keys are public by design.
+  // A standard key expires after 90 days; a developer key (free, from LINZ) doesn't and can be limited to
+  // app.ruralconsulting.co.nz. With no key the map has a plain background. No other tile provider is used.
   linzKey: "",
+
+  // What the farm view shows when it opens. Keys: "extent", "titles", a layer's theme (e.g. "land_units"),
+  // or "reference" (the farm's own bores etc.). Everything else starts off and can be switched on.
+  // Layers made for a job (measured distances for a consent AEE) are listed under that job.
+  farmView: {
+    defaultOn: ["extent", "land_units", "plantings"],
+  },
+
   photoLinkSeconds: 3600,
 };
