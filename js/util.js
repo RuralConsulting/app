@@ -16,6 +16,8 @@ FP.show = (id) => {
   for (const s of FP.$$("body > main, #screen-map, #loading")) s.hidden = s.id !== id;
 };
 FP.ha = (n) => `${Number(n).toLocaleString("en-NZ", { maximumFractionDigits: 1 })} ha`;
-FP.sb = supabase.createClient(FP_CONFIG.supabaseUrl, FP_CONFIG.supabaseKey, {
+FP.href = (hash) => FP.demo?.active ? FP.demo.href(hash) : hash;
+FP.sb = FP.demo?.active ? FP.demo.client : supabase.createClient(FP_CONFIG.supabaseUrl, FP_CONFIG.supabaseKey, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
 });
+

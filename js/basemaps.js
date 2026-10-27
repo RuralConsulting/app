@@ -3,7 +3,8 @@
 // LINZ's topographic map is vector-only (its own style); adding it as a second background is a later piece of
 // work, so the background switch shows only when more than one set is listed.
 FP.basemaps = (() => {
-  const key = FP_CONFIG.linzKey;
+  // Demo maps use fixture geometry on a neutral background, without external tiles or credentials.
+  const key = FP.demo?.active ? null : FP_CONFIG.linzKey;
   const linz = (set) => [`https://basemaps.linz.govt.nz/v1/tiles/${set}/WebMercatorQuad/{z}/{x}/{y}.webp?api=${encodeURIComponent(key)}`];
   const ATTRIB = '<a href="https://www.linz.govt.nz/copyright" target="_blank" rel="noopener">LINZ CC BY 4.0</a> © ' +
     '<a href="https://basemaps.linz.govt.nz/" target="_blank" rel="noopener">Imagery Basemap contributors</a>';
@@ -23,3 +24,4 @@ FP.basemaps = (() => {
   }
   return { style, pick, names: Object.keys(sets), missingKey: !key };
 })();
+

@@ -159,7 +159,7 @@ FP.farmMap = (() => {
     }
 
     // what's on when the farm opens comes from config.js (farmView.defaultOn); the rest is a tick away
-    const defaultOn = new Set(FP_CONFIG.farmView?.defaultOn || []);
+    const defaultOn = new Set([...(FP_CONFIG.farmView?.defaultOn || []), ...(FP.demo?.active ? ["actions"] : [])]);
     for (const e of entries) setVisible(e, defaultOn.has(e.key));
 
     if (data.extent) map.fitBounds(bbox(data.extent), { padding: { top: 40, bottom: 40, left: window.innerWidth > 700 ? 340 : 40, right: 60 }, duration: 0 });
@@ -191,3 +191,4 @@ FP.farmMap = (() => {
 
   return { open, setVisible, basemap: (k) => FP.basemaps.pick(init(), k), resize: () => map && map.resize() };
 })();
+

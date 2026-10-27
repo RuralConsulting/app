@@ -71,8 +71,8 @@
     FP.show("screen-plans");
     const host = $("#plan-content"), note = $("#plan-msg");
     host.replaceChildren(); note.textContent = "Loading…";
-    $("#plan-farm-link").href = "#/farm/" + farm.id;
-    $("#plan-list-link").href = "#/farm/" + farm.id + "/plans";
+    $("#plan-farm-link").href = FP.href("#/farm/" + farm.id);
+    $("#plan-list-link").href = FP.href("#/farm/" + farm.id + "/plans");
     $("#plan-farm-label").textContent = farm.name;
     try {
       const user = await FP.auth.user(); if (!user || token !== navigation) return;
@@ -86,7 +86,7 @@
         const { data: plans, error } = await sb.from("plans").select("id,title,status,plan_date,version_label,created_at").eq("farm_id", farm.id).eq("template", FP.plan.template.key).order("created_at", { ascending: false });
         if (error) throw error; if (token !== navigation) return;
         host.append(el("h1", {}, farm.name + " — plans"), el("ul", { class: "plan-list" }, ...plans.map((p) => el("li", {},
-          el("a", { href: "#/farm/" + farm.id + "/plan/" + p.id }, p.title + " · " + (p.version_label || "version not recorded") + " · " + p.status.replaceAll("_", " ") + " · " + P.date(p.plan_date))))));
+          el("a", { href: FP.href("#/farm/" + farm.id + "/plan/" + p.id) }, p.title + " · " + (p.version_label || "version not recorded") + " · " + p.status.replaceAll("_", " ") + " · " + P.date(p.plan_date))))));
         if (!plans.length) host.append(el("p", {}, "No plans recorded yet."));
         if (canEdit) host.append(el("button", { type: "button", onclick: () => startForm(host, farm, user, plans, token, advisor) }, "Start a new plan version"));
         note.textContent = ""; return;
@@ -95,6 +95,7 @@
       // A frozen PDM records its reviewer's role. Display affordances use this caller's role.
       pdm.viewer = { is_advisor: advisor };
       host.innerHTML = FP.plan.renderPlan(pdm);
+      if (FP.demo?.active) for (const a of host.querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
       document.title = farm.name + " — Farm Environment Plan";
       if (canEdit && ["draft", "in_review"].includes(pdm.plan.status) && (pdm.plan.status === "draft" || advisor)) {
         const keys = [...new Set([...Object.keys(pdm.sections), "land_unit_definitions", "action_method", "action_categories", "management_introduction", "risk_method"])];
@@ -169,7 +170,11 @@
         await saveSection(FP.sb, pdm, key, { body: body.value, state: state.value, na_reason: reason.value,
           source_document_id: sourceSelect.value, source_page: page.value ? Number(page.value) : null,
           citation: citeSelect.value ? { document_id: citeSelect.value, page: citePage.value ? Number(citePage.value) : null, note: citeNote.value || null } : null });
-        d.close(); if (token === navigation) location.reload();
+        d.close();
+        if (token === navigation) {
+          if (FP.demo?.active) open({ farm: pdm.farm.id, plan: pdm.plan.id }, pdm.farm);
+          else location.reload();
+        }
       } catch (e) { note.textContent = e.message; button.disabled = false; }
     });
     form.querySelector("[type=submit]").disabled = false;
@@ -196,10 +201,11 @@
         // Read the caller-scoped PDM for the previous plan; no profile-policy widening for the UI.
         const id = await startPlan(FP.sb, farm.id, user.id, { prepared_by_name: name.value, prepared_by_role: role.value, prepared_by_org: org.value,
           plan_date: dateInput.value, version_label: version.value, for_authorisation_id: forAuth.value }, previous, FP.plan.template, advisor);
-        d.close(); if (token === navigation) location.hash = "#/farm/" + farm.id + "/plan/" + id;
+        d.close(); if (token === navigation) location.hash = FP.href("#/farm/" + farm.id + "/plan/" + id);
       } catch (e) { note.textContent = e.message; button.disabled = false; }
     });
     form.querySelector("[type=submit]").disabled = false;
   }
   return { match, load, saveSection, startPlan, open, cancel };
 });
+
