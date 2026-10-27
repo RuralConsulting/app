@@ -3,6 +3,7 @@
 // 2 km) is advisor-side job tooling and never drawn here (ARCHITECTURE.md "Presenting reference data").
 FP.farmMap = (() => {
   let map = null;
+  let opening = 0;
   let ready = null;    // resolves once the map's style has loaded
   let added = [];      // MapLibre layer and source ids for the current farm
   let markers = [];    // land unit labels
@@ -102,12 +103,14 @@ FP.farmMap = (() => {
     return [[w, s], [e, n]];
   }
 
-  async function open(farmId) {
+  async function open(farmId, supplied = null) {
+    const request = ++opening;
     init();
-    const { data, error } = await FP.sb.rpc("farm_map", { f: farmId });
+    const { data, error } = supplied ? { data: supplied, error: null } : await FP.sb.rpc("farm_map", { f: farmId });
     if (error) throw error;
     if (!data) return null;
     await loaded();
+    if (request !== opening) return null;
     clear();
     const entries = [];   // what the layer list shows: {key, name, sub, ids, on, markers, job}
 
@@ -143,6 +146,14 @@ FP.farmMap = (() => {
           (f) => ({ title: `${f.properties.code} ${f.properties.name || ""}`.trim(), layerName: "Land unit", qualifier: f.properties.shown_as,
                     props: { area_ha: f.properties.area_ha, mapped: f.properties.method } })));
       }
+      if (l.theme === "actions") {
+        e.markers = [];
+        for (const f of l.features.features) if (f.geometry?.type === "Point" && f.properties.map_code) {
+          const label = FP.el("div", { class: "action-label" }, f.properties.map_code);
+          const marker = new maplibregl.Marker({ element: label }).setLngLat(f.geometry.coordinates).addTo(map);
+          markers.push(marker); e.markers.push(marker);
+        }
+      }
       entries.push(e);
     });
 
@@ -162,8 +173,39 @@ FP.farmMap = (() => {
     const defaultOn = new Set([...(FP_CONFIG.farmView?.defaultOn || []), ...(FP.demo?.active ? ["actions"] : [])]);
     for (const e of entries) setVisible(e, defaultOn.has(e.key));
 
-    if (data.extent) map.fitBounds(bbox(data.extent), { padding: { top: 40, bottom: 40, left: window.innerWidth > 700 ? 340 : 40, right: 60 }, duration: 0 });
+    if (data.extent) map.fitBounds(bbox(data.extent), { padding: 40, duration: 0 });
     return { farm: data.farm, extentHa: data.extent_ha, entries };
+  }
+
+  function addActions(actions, units = []) {
+    const features = [], groups = new Map();
+    for (const a of actions || []) {
+      const geometries = a.geom ? [a.geom] : (a.places || []).map((p) => p.geom).filter(Boolean);
+      for (const geometry of geometries) {
+        if (!geometry.coordinates) continue;
+        const b = bbox(geometry), at = geometry.type === "Point" ? geometry.coordinates :
+          units.find((u) => (a.places || []).some((p) => p.id === u.id))?.label_at?.coordinates ||
+          [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+        features.push({ type: "Feature", geometry, properties: { name: a.title, code: a.map_code, timeframe: a.timeframe_text || a.due_date, status: a.status } });
+        const key = at.join(",");
+        if (!groups.has(key)) groups.set(key, { at, codes: [] });
+        if (a.map_code) groups.get(key).codes.push(a.map_code);
+      }
+    }
+    if (!features.length) return null;
+    source("action-programme", { type: "FeatureCollection", features });
+    const describe = (f) => ({ title: (f.properties.code || "") + " " + f.properties.name, props: f.properties, layerName: "Actions" });
+    const ids = [
+      layer({ id: "action-programme-lines", source: "action-programme", type: "line", paint: { "line-color": "#fec956", "line-width": 3 }, filter: ["!=", ["geometry-type"], "Point"] }, describe),
+      layer({ id: "action-programme-points", source: "action-programme", type: "circle", paint: { "circle-color": "#fec956", "circle-radius": 6, "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 }, filter: ["==", ["geometry-type"], "Point"] }, describe),
+    ];
+    const actionMarkers = [];
+    for (const { at, codes } of groups.values()) {
+      const label = FP.el("div", { class: "action-label" }, codes.slice(0, 3).join(", ") + (codes.length > 3 ? " +" + (codes.length - 3) : ""));
+      const marker = new maplibregl.Marker({ element: label }).setLngLat(at).addTo(map);
+      markers.push(marker); actionMarkers.push(marker);
+    }
+    return { key: "actions", name: "Actions", ids, on: true, markers: actionMarkers, sub: features.length + " mapped locations" };
   }
 
   function setVisible(entry, on) {
@@ -191,6 +233,7 @@ FP.farmMap = (() => {
 
   // Wait for a painted, idle map before capturing a view (DOM readiness alone is too early for WebGL).
   const whenIdle = () => new Promise((resolve) => { if (!map) return resolve(); map.once("idle", resolve); map.triggerRepaint(); });
-  return { open, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), resize: () => map && map.resize() };
+  return { open, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+    resize: () => map && map.resize() };
 })();
 

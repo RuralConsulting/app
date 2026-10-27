@@ -15,78 +15,26 @@
     const { data, error } = await sb.from("farms").select("id, name, region, org_id").order("name");
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     farms = data;
-    $("#b-farms").hidden = farms.length < 2;
+    FP.farmSpace.setPortfolio(farms, user);
     route();
   }
 
   function route() {
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
-    if (FP.demo?.active && hash == null) { listFarms(); return; }
-    const planRoute = FP.plan.routes.match(hash);
+    const route = FP.farmModel.match(hash);
+    const farm = route ? farms.find((f) => f.id === route.farm) : (!hash && !FP.demo?.active && farms.length === 1 ? farms[0] : null);
     FP.plan.routes.cancel();
-    if (planRoute) {
-      const farm = farms.find((f) => f.id === planRoute.farm);
-      if (farm) { FP.plan.routes.open(planRoute, farm); return; }
-      listFarms(); return;
-    }
-    const m = hash.match(/^#\/farm\/([0-9a-f-]{36})$/);
-    if (FP.demo?.active && hash === "") { listFarms(); return; }
-    const farm = m ? farms.find((f) => f.id === m[1]) : farms.length === 1 ? farms[0] : null;
-    if (farm) openFarm(farm.id);
+    if (farm) FP.farmSpace.open(farm, route || { farm: farm.id, view: "map" });
     else listFarms();
   }
 
   function listFarms() {
+    FP.farmSpace.close();
     const ul = $("#farm-list");
     ul.replaceChildren(...farms.map((f) => el("li", {}, el("button", { type: "button", onclick: () => { location.hash = FP.href(`#/farm/${f.id}`); } },
       el("b", {}, f.name), el("span", {}, f.region ? f.region[0].toUpperCase() + f.region.slice(1) : "")))));
     msg("#farms-msg", farms.length ? "" : "No farms are shared with this login yet. Ask RCL to give you access.");
     show("screen-farms");
-  }
-
-  async function openFarm(id) {
-    show("screen-map");
-    afterPassword = "map";
-    $("#farm-plans-link").href = FP.href(`#/farm/${id}/plans`);
-    const note = $("#map-msg");
-    note.hidden = false; note.textContent = "Loading the farm…";
-    try {
-      const view = await FP.farmMap.open(id);
-      if (FP.plan.routes.match(FP.demo?.active ? FP.demo.routeHash(location.hash) || "" : location.hash)) return;
-      FP.farmMap.resize();
-      if (!view) { note.textContent = "This farm isn't shared with your login."; return; }
-      note.hidden = true;
-      document.title = `${view.farm.name} | Farm platform`;
-      $("#farm-name").textContent = view.farm.name;
-      $("#farm-sub").textContent = `${FP.ha(view.extentHa)} farmed`;
-      layerList(view.entries);
-      $("#demo-answer")?.remove();
-      if (FP.demo?.active && ["#/demo/pattern", "#/demo/empty"].includes(location.hash)) {
-        const panel = el("aside", { id: "demo-answer", class: "demo-answer", "aria-label": "Farm answer" });
-        panel.innerHTML = FP.answer.render(FP.demo.answerModel(await FP.demo.ready));
-        $("#screen-map").append(panel);
-      }
-    } catch (e) {
-      note.textContent = `Couldn't load the farm: ${e.message || e}`;
-    }
-  }
-
-  // the farm's standing layers first, then layers made for a job under that job's name
-  function layerList(entries) {
-    const item = (e) => {
-      const box = el("input", { type: "checkbox", checked: e.on, onchange: (ev) => FP.farmMap.setVisible(e, ev.target.checked) });
-      return el("li", {}, el("label", {}, box, el("span", {}, el("b", {}, e.name), e.sub ? el("small", {}, e.sub) : null)));
-    };
-    const items = entries.filter((e) => !e.job).map(item);
-    const jobs = new Map();
-    for (const e of entries.filter((e) => e.job)) {
-      if (!jobs.has(e.job.id)) jobs.set(e.job.id, { job: e.job, entries: [] });
-      jobs.get(e.job.id).entries.push(e);
-    }
-    for (const { job, entries: es } of jobs.values()) {
-      items.push(el("li", { class: "group" }, el("span", {}, "Made for: " + job.name)), ...es.map(item));
-    }
-    $("#layer-list").replaceChildren(...items);
   }
 
   // ---- events --------------------------------------------------------------------------------------
@@ -118,22 +66,13 @@
     p.classList.add("ok"); p.textContent = "Password changed. Use the new one next time you sign in.";
     setTimeout(() => { p.classList.remove("ok"); p.textContent = ""; back(); }, 2500);
   }
-  function back() { if (afterPassword === "map") show("screen-map"), FP.farmMap.resize(); else listFarms(); }
+  function back() { route(); }
   $("#b-pw-back").addEventListener("click", back);
   for (const b of $$(".b-password")) b.addEventListener("click", () => { msg("#pw-msg", ""); show("screen-password"); $("#pw0").focus(); });
   for (const b of $$(".b-signout")) b.addEventListener("click", async () => {
     if (FP.demo?.active) { location.href = location.pathname + location.search; return; }
     await FP.auth.signOut(); location.hash = ""; location.reload();
   });
-  $("#b-farms").addEventListener("click", () => { location.hash = ""; afterPassword = "farms"; listFarms(); });
-
-  $("#b-panel").addEventListener("click", () => {
-    const panel = $("#panel");
-    const open = panel.classList.toggle("closed") === false;
-    $("#b-panel").setAttribute("aria-expanded", String(open));
-  });
-  if (window.innerWidth < 700) { $("#panel").classList.add("closed"); $("#b-panel").setAttribute("aria-expanded", "false"); }
-
   if (FP.basemaps.names.length < 2) $(".basemaps").hidden = true;
   for (const b of $$("[data-basemap]")) {
     b.addEventListener("click", () => {
@@ -143,7 +82,7 @@
   }
 
   window.addEventListener("hashchange", () => { if (farms.length) route(); });
-  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") show("screen-signin"); });
+  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { FP.farmSpace.close(); show("screen-signin"); } });
 
   // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts
   if (!FP.demo?.active && "serviceWorker" in navigator && location.protocol === "https:") {
@@ -154,9 +93,8 @@
     document.body.classList.add("demo-mode");
     for (const b of $$(".b-signout")) b.textContent = "Exit demo";
     const banner = el("aside", { class: "demo-banner", "aria-label": "Demonstration" },
-      el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Demo advisor · Illustrative map"),
-      ...[[FP.href("#/farm/" + FP.demo.FARM), "Map"], ["#/demo/pattern", "Answer pattern"], ["#/demo/empty", "Empty farm"],
-        [FP.href("#/farm/" + FP.demo.FARM + "/plans"), "Plans"], ...(!FP.demo.sparse ? [["#/demo/farms", "Farms"], ["#/demo/plan", "Plan"]] : [])].map(([href, label]) => el("a", { href }, label)),
+      el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Illustrative map"),
+      ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"]].map(([href, label]) => el("a", { href }, label)),
       el("a", { href: location.pathname + location.search }, "Exit"));
     document.body.prepend(banner);
     const reserveBanner = () => document.documentElement.style.setProperty("--demo-banner-height", banner.getBoundingClientRect().height + "px");

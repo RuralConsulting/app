@@ -206,6 +206,7 @@
     });
     form.querySelector("[type=submit]").disabled = false;
   }
-  return { match, load, saveSection, startPlan, open, cancel };
+  return { match, load, saveSection, startPlan, open, cancel, openDocument: signedDocument,
+    startNew: (host, farm, user, plans, advisor) => startForm(host, farm, user, plans, ++navigation, advisor) };
 });
 

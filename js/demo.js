@@ -4,15 +4,15 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else {
     root.FP = root.FP || {};
-    const active = api.isRoute(root.location.hash), sparse = api.isSparse(root.location.hash);
+    const active = api.isRoute(root.location.hash), sparse = api.isSparse(root.location.hash), farmer = api.isFarmer(root.location.hash);
     const ready = active ? fetch("demo/cairnvale-pdm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }).then((pdm) => api.dataset(pdm, { sparse })) : null;
-    root.FP.demo = { ...api, active, sparse, href: (hash) => api.href(hash, sparse), ready, client: active ? api.client(ready) : null };
+    }).then((pdm) => api.dataset(pdm, { sparse, farmer })) : null;
+    root.FP.demo = { ...api, active, sparse, farmer, href: (hash) => api.href(hash, sparse, farmer), ready, client: active ? api.client(ready) : null };
     // Entering/leaving demo always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
-      if (api.isRoute(root.location.hash) !== active || api.isSparse(root.location.hash) !== sparse) { event.stopImmediatePropagation(); root.location.reload(); }
+      if (api.isRoute(root.location.hash) !== active || api.isSparse(root.location.hash) !== sparse || api.isFarmer(root.location.hash) !== farmer) { event.stopImmediatePropagation(); root.location.reload(); }
     });
   }
 })(typeof window === "undefined" ? globalThis : window, function () {
@@ -23,28 +23,28 @@
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|$)/.test(hash);
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|$)/.test(hash);
+  const isFarmer = (hash) => /^#\/demo\/farmer(?:\/|$)/.test(hash);
   function routeHash(hash) {
-    if (isSparse(hash)) hash = hash.replace("#/demo/empty", "#/demo");
-    if (hash === "#/demo/pattern") return "#/farm/" + FARM;
-    if (hash === "#/demo" || hash === "#/demo/") return "#/farm/" + FARM;
-    if (hash === "#/demo/farms") return "";
-    if (hash === "#/demo/plans") return "#/farm/" + FARM + "/plans";
-    if (hash === "#/demo/plan") return "#/farm/" + FARM + "/plan/" + PLAN;
-    if (hash.startsWith("#/demo/plan/")) return "#/farm/" + FARM + "/plan/" + hash.slice(12);
-    return null;
+    hash = hash.replace(/^#\/demo\/(empty|farmer)(?=\/|$)/, "#/demo");
+    const [path, query] = hash.split("?");
+    let suffix = path.slice("#/demo".length);
+    if (suffix === "/pattern" || suffix === "/") suffix = "";
+    if (suffix === "/farms") return "";
+    if (suffix === "/plan") suffix = "/plan/" + PLAN;
+    if (!/^$|^\/(authorisations|actions|plans|review)$|^\/plan\/[0-9a-f-]{36}$/.test(suffix)) return null;
+    return "#/farm/" + FARM + suffix + (query ? "?" + query : "");
   }
-  function href(hash, sparse = false) {
-    if (sparse) return href(hash).replace(/^#\/demo(?=\/|$)/, "#/demo/empty");
-    if (hash === "#/farm/" + FARM) return "#/demo";
-    if (hash === "#/farm/" + FARM + "/plans") return "#/demo/plans";
-    if (hash === "#/farm/" + FARM + "/plan/" + PLAN) return "#/demo/plan";
-    if (hash.startsWith("#/farm/" + FARM + "/plan/")) return "#/demo/plan/" + hash.split("/").pop();
-    return hash;
+  function href(hash, sparse = false, farmer = false) {
+    const prefix = "#/farm/" + FARM;
+    if (!hash.startsWith(prefix)) return hash;
+    let suffix = hash.slice(prefix.length);
+    if (suffix === "/plan/" + PLAN) suffix = "/plan";
+    return "#/demo" + (sparse ? "/empty" : farmer ? "/farmer" : "") + suffix;
   }
   const polygon = (w, s, e, n) => ({ type: "Polygon", coordinates: [[[w,s],[e,s],[e,n],[w,n],[w,s]]] });
   const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
   const collection = (features) => ({ type: "FeatureCollection", features });
-  function dataset(fixture, { sparse = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false } = {}) {
     const pdm = copy(fixture);
     pdm.farm = { ...pdm.farm, id: FARM, org_id: ORG, name: "Cairnvale — synthetic demo" };
     pdm.plan = { ...pdm.plan, id: PLAN, farm_id: FARM, status: "draft", title: "Farm Environment Plan", created_at: "2026-10-27T00:00:00Z" };
@@ -88,30 +88,12 @@
       data.tables.authorisations = [];
       data.tables.documents = [{ id: "empty-doc-1", farm_id: FARM, title: "Synthetic property notes" }, { id: "empty-doc-2", farm_id: FARM, title: "Synthetic field notes" }];
     }
+    if (farmer) {
+      data.tables.farm_members[0].role = "view"; data.tables.org_members = [];
+      data.user.email = "farmer@example.test";
+      if (data.pdm) { data.pdm.viewer.is_advisor = false; data.pdm.actions.not_doing = []; }
+    }
     return data;
-  }
-  function answerModel(data) {
-    if (!data.pdm) return {
-      key: "sparse-farm", question: "What is recorded for this farm?", isAdvisor: true,
-      currency: "Last updated: not recorded", coverage: "As far as what is recorded; authorisations and actions have not yet been looked at.",
-      empty: { text: "No consents recorded · " + (data.tables.plans.length ? data.tables.plans.length + " draft plan recorded" : "No plan yet") + " · " + data.tables.documents.length + " documents",
-        because: "This summary uses the recorded farm extent, plan list and document index. This does not establish whether consents are needed.",
-        startBy: "reading the property notes and recording the farm's activities." },
-      allLabel: "All documents", items: data.tables.documents.map((d) => ({ id: d.id, text: d.title, eligible: false })),
-    };
-    const pdm = data.pdm, actions = pdm.actions.programme;
-    const due = actions.filter((a) => a.due_date && a.due_date < pdm.as_at && !["done", "not_doing", "possible"].includes(a.status));
-    return {
-      key: "recorded-actions", question: "What needs a look in the recorded programme?", rank: "due_date", isAdvisor: true,
-      answer: due.length ? { text: "Some recorded actions are still marked planned after their due dates; completion has not been checked.",
-        because: "Their stored due dates precede " + pdm.as_at + " and their recorded status is planned. This is a timing prompt, not a finding." } : null,
-      currency: "Programme source prepared " + (actions[0]?.source?.date_prepared || "date not recorded"),
-      coverage: "As far as the recorded programme goes. Completion and current compliance have not been confirmed.",
-      allLabel: "All recorded actions", items: actions.map((a) => ({ id: a.id, text: a.map_code + " " + a.title,
-        due_date: a.due_date, eligible: due.some((d) => d.id === a.id),
-        because: a.due_date ? "Shown because its recorded due date is " + a.due_date + ", before the fixture's as-at date " + pdm.as_at + ". Completion has not been checked." : null })),
-      empty: { text: "No dated actions are ready to summarise.", because: "No recorded action has a past due date and an outstanding status.", startBy: "checking the recorded programme dates with the farmer." },
-    };
   }
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });
@@ -161,6 +143,11 @@
       from: query,
       async rpc(name, args) {
         const d = await ready;
+        if (name === "review_counts") {
+          if (args.farm !== FARM || !d.tables.org_members.length) return error("Advisor review only");
+          const count = d.pdm ? d.pdm.checks.filter((c) => c.author_kind === "system" && !c.confirmed_by && !c.superseded_at).length : 0;
+          return result({ total: count, by_source: { review_item: 0, unchecked_fact: 0, unconfirmed_check: count, conflict: 0 }, earliest_due: null });
+        }
         if (name === "farm_map") return result(args.f === FARM ? d.map : null);
         if (name !== "plan_document") return error("This operation is not available in the demo");
         const plan = d.tables.plans.find((p) => p.id === args.p);
@@ -184,6 +171,6 @@
       storage: { from: () => ({ createSignedUrl: async () => result({ signedUrl: new URL("demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }) }) },
     };
   }
-  return { FARM, PLAN, USER, ORG, isRoute, isSparse, routeHash, href, dataset, answerModel, client };
+  return { FARM, PLAN, USER, ORG, isRoute, isSparse, isFarmer, routeHash, href, dataset, client };
 });
 
