@@ -161,7 +161,7 @@
         "storage_path": "farm-fixture/fep.pdf"
       },
       "alternatives": [],
-      "note": "present in baseline (1 July 2014 \u2013 30 June 2019)"
+      "note": "present in baseline (1 July 2014 – 30 June 2019)"
     },
     {
       "state": "recorded",
@@ -299,7 +299,7 @@
       },
       "alternatives": [],
       "item": "dairy_grazing",
-      "note": "2400 max, June\u2013July grazing"
+      "note": "2400 max, June–July grazing"
     },
     {
       "state": "recorded",
@@ -474,7 +474,7 @@
     "summary": {
       "id": "section-summary",
       "state": "written",
-      "body": "Synthetic fixture text for summary.",
+      "body": "Synthetic fixture text for plan summary.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -540,7 +540,7 @@
     "area.land_soil.description": {
       "id": "section-area.land_soil.description",
       "state": "written",
-      "body": "Synthetic fixture text for area.land_soil.description.",
+      "body": "Synthetic fixture text for land and soil management description.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -562,7 +562,7 @@
     "area.waterways_wetlands.description": {
       "id": "section-area.waterways_wetlands.description",
       "state": "written",
-      "body": "Synthetic fixture text for area.waterways_wetlands.description.",
+      "body": "Synthetic fixture text for waterways and wetland management description.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -584,7 +584,7 @@
     "area.nutrients.description": {
       "id": "section-area.nutrients.description",
       "state": "written",
-      "body": "Synthetic fixture text for area.nutrients.description.",
+      "body": "Synthetic fixture text for nutrient management description.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -606,7 +606,7 @@
     "area.point_sources.description": {
       "id": "section-area.point_sources.description",
       "state": "written",
-      "body": "Synthetic fixture text for area.point_sources.description.",
+      "body": "Synthetic fixture text for point source management description.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -628,7 +628,7 @@
     "area.irrigation.description": {
       "id": "section-area.irrigation.description",
       "state": "written",
-      "body": "Synthetic fixture text for area.irrigation.description.",
+      "body": "Synthetic fixture text for irrigation management description.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -650,7 +650,7 @@
     "cccv.fmu": {
       "id": "section-cccv.fmu",
       "state": "written",
-      "body": "Synthetic fixture text for cccv.fmu.",
+      "body": "Synthetic fixture text for freshwater management unit.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -684,7 +684,7 @@
     "cccv.zone": {
       "id": "section-cccv.zone",
       "state": "written",
-      "body": "Synthetic fixture text for cccv.zone.",
+      "body": "Synthetic fixture text for zone committee outcomes.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -718,7 +718,7 @@
     "cccv.objectives": {
       "id": "section-cccv.objectives",
       "state": "written",
-      "body": "Synthetic fixture text for cccv.objectives.",
+      "body": "Synthetic fixture text for regional plan objectives.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -752,7 +752,7 @@
     "cccv.tangata_whenua": {
       "id": "section-cccv.tangata_whenua",
       "state": "written",
-      "body": "Synthetic fixture text for cccv.tangata_whenua.",
+      "body": "Synthetic fixture text for tangata whenua values.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -786,7 +786,7 @@
     "cccv.contaminants": {
       "id": "section-cccv.contaminants",
       "state": "written",
-      "body": "Synthetic fixture text for cccv.contaminants.",
+      "body": "Synthetic fixture text for contaminants of concern.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -820,7 +820,7 @@
     "mahinga_kai": {
       "id": "section-mahinga_kai",
       "state": "written",
-      "body": "Synthetic fixture text for mahinga_kai.",
+      "body": "Synthetic fixture text for mahinga kai.",
       "written_by": {
         "by_name": "Fixture advisor"
       },
@@ -1705,7 +1705,7 @@
       "activity_id": "activity-land_soil",
       "place_id": "lu1",
       "management_area": "land_soil",
-      "description": "Synthetic land_soil risk",
+      "description": "Synthetic land and soil management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1727,7 +1727,7 @@
       "activity_id": "activity-land_soil",
       "place_id": "lu2",
       "management_area": "land_soil",
-      "description": "Synthetic land_soil risk",
+      "description": "Synthetic land and soil management risk",
       "rating": "moderate",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1749,7 +1749,7 @@
       "activity_id": "activity-land_soil",
       "place_id": "lu3",
       "management_area": "land_soil",
-      "description": "Synthetic land_soil risk",
+      "description": "Synthetic land and soil management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1771,7 +1771,7 @@
       "activity_id": "activity-land_soil",
       "place_id": "lu4",
       "management_area": "land_soil",
-      "description": "Synthetic land_soil risk",
+      "description": "Synthetic land and soil management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1793,7 +1793,7 @@
       "activity_id": "activity-waterways_wetlands",
       "place_id": "lu1",
       "management_area": "waterways_wetlands",
-      "description": "Synthetic waterways_wetlands risk",
+      "description": "Synthetic waterways and wetland management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1815,7 +1815,7 @@
       "activity_id": "activity-waterways_wetlands",
       "place_id": "lu2",
       "management_area": "waterways_wetlands",
-      "description": "Synthetic waterways_wetlands risk",
+      "description": "Synthetic waterways and wetland management risk",
       "rating": "moderate",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1837,7 +1837,7 @@
       "activity_id": "activity-waterways_wetlands",
       "place_id": "lu3",
       "management_area": "waterways_wetlands",
-      "description": "Synthetic waterways_wetlands risk",
+      "description": "Synthetic waterways and wetland management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1859,7 +1859,7 @@
       "activity_id": "activity-waterways_wetlands",
       "place_id": "lu4",
       "management_area": "waterways_wetlands",
-      "description": "Synthetic waterways_wetlands risk",
+      "description": "Synthetic waterways and wetland management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1881,7 +1881,7 @@
       "activity_id": "activity-nutrients",
       "place_id": "lu1",
       "management_area": "nutrients",
-      "description": "Synthetic nutrients risk",
+      "description": "Synthetic nutrient management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1903,7 +1903,7 @@
       "activity_id": "activity-nutrients",
       "place_id": "lu2",
       "management_area": "nutrients",
-      "description": "Synthetic nutrients risk",
+      "description": "Synthetic nutrient management risk",
       "rating": "moderate",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1925,7 +1925,7 @@
       "activity_id": "activity-nutrients",
       "place_id": "lu3",
       "management_area": "nutrients",
-      "description": "Synthetic nutrients risk",
+      "description": "Synthetic nutrient management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1947,7 +1947,7 @@
       "activity_id": "activity-nutrients",
       "place_id": "lu4",
       "management_area": "nutrients",
-      "description": "Synthetic nutrients risk",
+      "description": "Synthetic nutrient management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1969,7 +1969,7 @@
       "activity_id": "activity-point_sources",
       "place_id": "lu1",
       "management_area": "point_sources",
-      "description": "Synthetic point_sources risk",
+      "description": "Synthetic point source management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -1991,7 +1991,7 @@
       "activity_id": "activity-point_sources",
       "place_id": "lu2",
       "management_area": "point_sources",
-      "description": "Synthetic point_sources risk",
+      "description": "Synthetic point source management risk",
       "rating": "moderate",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -2013,7 +2013,7 @@
       "activity_id": "activity-point_sources",
       "place_id": "lu3",
       "management_area": "point_sources",
-      "description": "Synthetic point_sources risk",
+      "description": "Synthetic point source management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -2035,7 +2035,7 @@
       "activity_id": "activity-point_sources",
       "place_id": "lu4",
       "management_area": "point_sources",
-      "description": "Synthetic point_sources risk",
+      "description": "Synthetic point source management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -2057,7 +2057,7 @@
       "activity_id": "activity-irrigation",
       "place_id": "lu1",
       "management_area": "irrigation",
-      "description": "Synthetic irrigation risk",
+      "description": "Synthetic irrigation management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -2079,7 +2079,7 @@
       "activity_id": "activity-irrigation",
       "place_id": "lu2",
       "management_area": "irrigation",
-      "description": "Synthetic irrigation risk",
+      "description": "Synthetic irrigation management risk",
       "rating": "moderate",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -2101,7 +2101,7 @@
       "activity_id": "activity-irrigation",
       "place_id": "lu3",
       "management_area": "irrigation",
-      "description": "Synthetic irrigation risk",
+      "description": "Synthetic irrigation management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -2123,7 +2123,7 @@
       "activity_id": "activity-irrigation",
       "place_id": "lu4",
       "management_area": "irrigation",
-      "description": "Synthetic irrigation risk",
+      "description": "Synthetic irrigation management risk",
       "rating": "minor",
       "assessed_by": "Billy Bartrum",
       "assessed_on": "2024-08-01",
@@ -3629,7 +3629,7 @@
       "valid_to": "2025-01-01",
       "holder": "Fixture operators",
       "holder_is_farm": true,
-      "status": "Issued \u2013 Active",
+      "status": "Issued – Active",
       "source": {
         "document_id": "d-fep",
         "title": "Synthetic Cairnvale-shaped FEP fixture",
@@ -3659,7 +3659,7 @@
       "valid_to": null,
       "holder": "Fixture operators",
       "holder_is_farm": true,
-      "status": "Issued \u2013 Active",
+      "status": "Issued – Active",
       "source": {
         "document_id": "d-fep",
         "title": "Synthetic Cairnvale-shaped FEP fixture",
@@ -3689,7 +3689,7 @@
       "valid_to": null,
       "holder": "Fixture operators",
       "holder_is_farm": true,
-      "status": "Issued \u2013 Active",
+      "status": "Issued – Active",
       "source": {
         "document_id": "d-fep",
         "title": "Synthetic Cairnvale-shaped FEP fixture",
@@ -3738,7 +3738,7 @@
       "valid_to": null,
       "holder": "Fixture operators",
       "holder_is_farm": true,
-      "status": "Issued \u2013 Active",
+      "status": "Issued – Active",
       "source": {
         "document_id": "d-fep",
         "title": "Synthetic Cairnvale-shaped FEP fixture",

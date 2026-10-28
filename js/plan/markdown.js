@@ -10,9 +10,9 @@
     const m = key.match(/^fact:([a-z_]+)(?:\|item=([a-z_]+))?$/);
     if (m) {
       const exists = (ctx.pdm.values || []).some((v) => v.fact_type === m[1] && (v.item ?? null) === (m[2] || null) && !v.place_id && !v.title_nos?.length);
-      if (exists) return V.render(V.fact(ctx.pdm, m[1], m[2] || null), ctx, m[1]);
+      if (exists) return V.render(V.fact(ctx.pdm, m[1], m[2] || null), ctx, ctx.labels ? (m[2] ? ctx.labels.item(m[1], m[2]) : ctx.labels.factType(m[1])) : "Recorded value");
     }
-    return '<span class="placeholder-error" role="status">Unknown placeholder: ' + P.esc(key) + "</span>";
+    return '<span class="placeholder-error" role="status">Unknown value placeholder' + (ctx.advisor ? ": " + P.esc(key.replaceAll("_", " ")) : "") + "</span>";
   }
   function inline(text, ctx) {
     // Split before escaping. Stored prose cannot inject a token or HTML returned by a placeholder.
@@ -37,3 +37,4 @@
   }
   return { render, lint, placeholder };
 });
+

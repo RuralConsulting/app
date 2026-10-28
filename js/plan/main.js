@@ -69,7 +69,7 @@
   async function open(route, farm) {
     const token = ++navigation, { $, el, sb } = FP, P = FP.plan.provenance;
     FP.show("screen-plans");
-    const host = $("#plan-content"), note = $("#plan-msg");
+    const host = $("#plan-content"), note = $("#plan-msg"), signal = pageSignal();
     host.replaceChildren(); note.textContent = "Loading…";
     $("#plan-farm-link").href = FP.href("#/farm/" + farm.id);
     $("#plan-list-link").href = FP.href("#/farm/" + farm.id + "/plans");
@@ -94,13 +94,15 @@
       const pdm = await load(sb, farm.id, route.plan); if (token !== navigation) return;
       // A frozen PDM records its reviewer's role. Display affordances use this caller's role.
       pdm.viewer = { is_advisor: advisor };
-      host.innerHTML = FP.plan.renderPlan(pdm);
+      const rendered = FP.plan.renderReader(pdm);
+      host.innerHTML = rendered.html;
+      mountReader(host, signal);
       if (FP.demo?.active) for (const a of host.querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
       document.title = farm.name + " — Farm Environment Plan";
       if (canEdit && ["draft", "in_review"].includes(pdm.plan.status) && (pdm.plan.status === "draft" || advisor)) {
         const keys = [...new Set([...Object.keys(pdm.sections), "land_unit_definitions", "action_method", "action_categories", "management_introduction", "risk_method"])];
-        const pick = el("select", { "aria-label": "Plan text to edit" }, ...keys.map((key) => el("option", { value: key }, key.replaceAll("_", " ").replaceAll(".", " / "))));
-        host.prepend(el("div", { class: "prose-picker screen-only" }, pick, el("button", { type: "button", onclick: () => editor(host, pdm, pick.value, token) }, "Edit plan text")));
+        const pick = el("select", { "aria-label": "Plan text to edit" }, ...keys.map((key) => el("option", { value: key }, FP.plan.template.labels.section(key))));
+        host.querySelector(".plan-contents").append(el("div", { class: "prose-picker screen-only" }, pick, el("button", { type: "button", onclick: () => editor(host, pdm, pick.value, token) }, "Edit plan text")));
       }
       for (const button of host.querySelectorAll("[data-edit-section]")) {
         if (!canEdit || (pdm.plan.status === "in_review" && !pdm.viewer?.is_advisor)) button.remove();
@@ -108,10 +110,10 @@
       }
       host.addEventListener("click", (event) => {
         const anchor = event.target.closest("[data-plan-anchor]");
-        if (anchor) { event.preventDefault(); document.getElementById(anchor.dataset.planAnchor)?.scrollIntoView({ behavior: "smooth" }); }
+        if (anchor) { event.preventDefault(); selectSection(host, anchor.dataset.planAnchor); }
         const doc = event.target.closest("[data-document-path]");
         if (doc) signedDocument(doc, doc.dataset.documentPath, doc.dataset.page);
-      }, { signal: pageSignal() });
+      }, { signal });
       // Photos use signed URLs only; no reads of the live evidence/facts tables.
       for (const img of host.querySelectorAll("[data-photo-path]")) {
         const { data, error } = await sb.storage.from("documents").createSignedUrl(img.dataset.photoPath, 3600);
@@ -120,6 +122,46 @@
       }
       note.textContent = "";
     } catch (e) { if (token === navigation) note.textContent = e.message || String(e); }
+  }
+  function selectSection(host, id, scroll = true) {
+    const target = host.querySelector('[id="' + CSS.escape(id) + '"]');
+    if (!target?.classList.contains("plan-section")) return;
+    for (const section of host.querySelectorAll(".plan-section")) section.classList.toggle("is-active", section === target);
+    for (const link of host.querySelectorAll(".plan-contents [data-plan-anchor]")) {
+      if (link.dataset.planAnchor === id) link.setAttribute("aria-current", "location"); else link.removeAttribute("aria-current");
+    }
+    const contents = host.querySelector(".plan-contents");
+    contents?.classList.remove("contents-open");
+    contents?.querySelector("[data-contents-toggle]")?.setAttribute("aria-expanded", "false");
+    if (scroll) {
+      target.scrollIntoView({ behavior: "instant", block: "start" });
+      target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true });
+    }
+  }
+  function mountReader(host, signal) {
+    const contents = host.querySelector(".plan-contents");
+    const toggle = FP.el("button", { type: "button", "data-contents-toggle": "", "aria-expanded": "false", "aria-controls": "reader-contents" }, "Contents");
+    contents.querySelector(".contents-links").id = "reader-contents";
+    contents.prepend(toggle);
+    selectSection(host, "plan-front", false);
+    const toolbar = document.querySelector(".plan-toolbar");
+    const observer = new ResizeObserver(() => {
+      host.style.setProperty("--plan-toolbar-height", toolbar.getBoundingClientRect().height + "px");
+      host.style.setProperty("--reader-nav-height", contents.getBoundingClientRect().height + "px");
+    });
+    observer.observe(toolbar); observer.observe(contents);
+    signal.addEventListener("abort", () => observer.disconnect(), { once: true });
+    host.addEventListener("click", (event) => {
+      if (event.target.closest("[data-contents-toggle]")) {
+        const expanded = contents.classList.toggle("contents-open"); toggle.setAttribute("aria-expanded", String(expanded));
+      }
+      const trigger = event.target.closest("[data-source-open]");
+      if (trigger) {
+        const modal = FP.el("dialog", { class: "source-dialog", "aria-label": "Value source" });
+        modal.append(FP.el("h2", {}, "Source"), trigger.closest("[data-provenance]").querySelector("template").content.cloneNode(true), FP.el("button", { type: "button", onclick: () => modal.close() }, "Close"));
+        modal.addEventListener("close", () => { modal.remove(); trigger.focus(); }); host.append(modal); modal.showModal();
+      }
+    }, { signal });
   }
   let pageController;
   function pageSignal() { pageController?.abort(); pageController = new AbortController(); return pageController.signal; }
@@ -144,7 +186,7 @@
     return { d, form, note, finish };
   }
   async function editor(host, pdm, key, token) {
-    const s = pdm.sections[key] || {}, { d, form, note, finish } = dialog(host, "Edit " + key.replaceAll("_", " "));
+    const s = pdm.sections[key] || {}, { d, form, note, finish } = dialog(host, "Edit " + FP.plan.template.labels.section(key));
     const body = field(form, "Plan text (markdown; use live values such as {{fact:effective_area}})", "textarea", "body", s.body);
     const state = FP.el("select", { name: "state" }, ...[["draft", "Draft"], ["written", "Written"], ...(pdm.viewer.is_advisor ? [["not_applicable", "Not applicable"]] : [])].map(([v, text]) => FP.el("option", { value: v }, text)));
     state.value = s.state === "not_recorded" || !s.state ? "draft" : s.state;
@@ -209,4 +251,5 @@
   return { match, load, saveSection, startPlan, open, cancel, openDocument: signedDocument,
     startNew: (host, farm, user, plans, advisor) => startForm(host, farm, user, plans, ++navigation, advisor) };
 });
+
 

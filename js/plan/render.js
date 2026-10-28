@@ -12,9 +12,17 @@
     rows.map((r) => "<tr>" + r.map((c) => "<td>" + c + "</td>").join("") + "</tr>").join("") + "</tbody></table></div>";
   const list = (items) => items.length ? "<ul>" + items.map((s) => "<li>" + s + "</li>").join("") + "</ul>" : "";
   const display = (s) => esc(s == null ? "" : typeof s === "object" ? JSON.stringify(s) : s);
-  function renderPlan(pdm, template = defaultTemplate) {
+  function renderReader(pdm, template = defaultTemplate) {
     if (!pdm || pdm.pdm_schema_version !== 1) throw new Error("Plan document unavailable or unsupported");
     if (pdm.template !== template.key || Number(pdm.template_version) !== Number(template.version)) throw new Error("Plan template version is not supported");
+    const L = template.labels;
+    const notes = [];
+    const labelled = (key) => L.factTypes[key] ? L.factType(key) : L.section(key);
+    const structured = (v) => {
+      if (Array.isArray(v)) return v.map(structured).join(", ");
+      if (v && typeof v === "object") return Object.entries(v).map(([k, a]) => labelled(k) + ": " + structured(a)).join(" · ");
+      return typeof v === "string" && v.includes("_") ? L.humanise ? L.humanise(v) : v.replaceAll("_", " ") : String(v ?? "");
+    };
     const plan = pdm.plan, sections = pdm.sections || {}, units = arr(pdm.land_units), risks = arr(pdm.risks), activities = arr(pdm.activities);
     const programme = arr(pdm.actions?.programme).filter((a) => !["possible", "not_doing"].includes(a.status));
     const possible = arr(pdm.actions?.possible), checks = arr(pdm.checks).filter((c) => !c.superseded_at), auths = arr(pdm.authorisations);
@@ -28,18 +36,18 @@
     });
     const audit = [], issues = [], missing = (ctx, label) => V.render(null, ctx, label);
     const value = (ctx, v, label, required) => { audit.push({ label, state: v?.state || "not_recorded" }); return V.render(v, ctx, label, required); };
-    const fact = (ctx, key, item) => value(ctx, V.fact(pdm, key, item), key.replaceAll("_", " "));
+    const fact = (ctx, key, item) => value(ctx, V.fact(pdm, key, item), item ? L.item(key, item) : L.factType(key));
     const record = (ctx, text, label, origin = {}) => value(ctx, text == null || text === "" ? null : { state: "recorded", text: String(text), ...origin }, label);
     const calculated = (ctx, n, unit, formula, inputs, label) => value(ctx, V.calculated(n, unit, formula, inputs), label);
     function prose(ctx, key, required = true) {
       const s = sections[key] || {};
       let html;
       if (s.state === "not_applicable") {
-        html = value(ctx, { state: "not_applicable", na_reason: s.na_reason, assessed_by: person(s.written_by), assessed_on: s.updated_at, source: s.source }, key);
+        html = value(ctx, { state: "not_applicable", na_reason: s.na_reason, assessed_by: person(s.written_by), assessed_on: s.updated_at, source: s.source }, L.section(key));
         if (!s.na_reason) issues.push(key + ": reason not recorded");
       } else if (!s.body) {
         if (!required) return "";
-        html = missing(ctx, key);
+        html = missing(ctx, L.section(key));
       } else {
         html = M.render(s.body, ctx);
         html += '<p class="prose-credit">' + esc(s.state === "draft" ? "Draft text · " : "") +
@@ -48,7 +56,7 @@
         if (s.state !== "written") issues.push(key + ": text needs a person to save it as written");
       }
       if (/^(cccv\.|mahinga_kai$)/.test(key) && !s.sources?.length) { issues.push(key + ": Source not recorded"); if (ctx.advisor) html += '<p class="value-box">Source not recorded</p>'; }
-      html += list(arr(s.sources).map(source));
+      for (const citation of arr(s.sources)) html += ctx.marker({ source: citation, method: "authored prose" });
       if (ctx.advisor) {
         const literals = M.lint(s.body); if (literals.length) html += '<aside class="number-lint advisor-only">Check numbers in prose: ' + literals.map(esc).join(", ") + "</aside>";
       }
@@ -68,48 +76,70 @@
       return '<div class="plan-check"><b>' + esc(words[status] || "We can't tell yet") + "</b> — " + esc(author) +
         (c.inputs?.threshold_to_confirm ? ' <strong>threshold to be confirmed</strong>' : "") +
         '<p>' + esc(c.explanation || "Explanation not recorded") + "</p>" +
-        (c.inputs ? '<details class="screen-only"><summary>Inputs used by this check</summary>' + record(ctx, JSON.stringify(c.inputs), "Check inputs", { method: author, source: c.source }) + "</details>" : "") +
+        (c.inputs ? '<details class="screen-only"><summary>Inputs used by this check</summary>' + record(ctx, structured(c.inputs), "Check inputs", { method: author, source: c.source }) + "</details>" : "") +
         (c.action_ids?.length ? "<p>Linked actions: " + c.action_ids.map((id) => { const a = actions.find((x) => x.id === id); return esc(a ? a.map_code + " " + a.title : id); }).join("; ") + "</p>" : "") + ctx.marker({ source: c.source, method: author }) + "</div>";
     }
     function risk(ctx, r) {
-      return record(ctx, (r.rating || "not assessed").replaceAll("_", " "), "Risk rating", {
+      return record(ctx, r.rating ? L.enumLabel("risk_rating", r.rating) : null, "Risk rating", {
         class: "assessment", assessed_by: r.assessed_by || person(r.author), assessed_on: r.assessed_on, source: r.source });
     }
     function map(ctx, key, label, present = true) {
       return '<figure class="map-placeholder" data-map-key="' + esc(key) + '"><figcaption>' + esc(label) + '</figcaption>' +
-        (present ? '<p>Map preview — <a href="#/farm/' + esc(pdm.farm.id) + '">Open the interactive farm map</a>. Static image follows in PR 4.</p>' : missing(ctx, label)) +
-        "<p>LINZ Basemaps CC BY 4.0 · As at " + esc(date(pdm.as_at)) + "</p></figure>";
+        (present ? "" : missing(ctx, label)) +
+        '<p><a href="#/farm/' + esc(pdm.farm.id) + '">Open on the map</a></p></figure>';
     }
     function authLabel(a) { return [a.consent_no || a.rule_ref, a.title].filter(Boolean).join(" — "); }
     function actionTable(ctx, rows) {
-      return table(["Ref", "Management area", "Farming activity", "Risks", "Land units", "Specific action", "Category", "New or existing", "Implementation timeframe", "Status"], rows.map((a) => {
+      const heads = ["Ref", "Management area", "Farming activity", "Risks", "Land units", "Specific action", "Category", "New or existing", "Implementation timeframe", "Status"];
+      const cells = rows.map((a) => {
         const linked = risks.filter((r) => arr(a.risk_ids).includes(r.id));
         const ids = new Set([a.activity_id, ...linked.map((r) => r.activity_id)]);
         const places = arr(a.places), all = units.length && units.every((u) => places.some((p) => p.id === u.id));
-        return [esc(a.map_code), esc(template.managementAreas.find((m) => m.key === a.management_area)?.label || a.management_area || "Not yet recorded"),
+        return [esc(a.map_code), a.management_area ? esc(L.managementArea(a.management_area)) : missing(ctx, "Action management area"),
           activities.filter((b) => ids.has(b.id)).map((b) => esc(b.name)).join(", ") || missing(ctx, "Farming activity"),
           linked.map((r) => esc(r.description)).join("; ") || esc(a.description || ""),
           all ? "All" : places.map((p) => esc(p.code || p.name)).join(", ") || missing(ctx, "Action location"),
           record(ctx, a.title, "Action", { source: a.source }) + "<p>" + esc(a.description) + "</p>",
-          esc(template.boilerplate.categories[a.category] || "Not yet recorded"),
+          a.category ? esc(L.enumLabel("action_category", a.category)) : missing(ctx, "Action category"),
           a.is_existing == null ? missing(ctx, "New or existing") : a.is_existing ? "Existing" : "New",
           record(ctx, a.due_date ? date(a.due_date) : a.timeframe_text, "Implementation timeframe", { source: a.source }),
-          esc(a.status.replaceAll("_", " ")) + (a.completed_on ? " · " + esc(date(a.completed_on)) : "") + " · " + record(ctx, a.evidence_count ?? 0, "Evidence count", { method: "count(linked evidence)" }) + " evidence"];
-      }));
+          esc(L.enumLabel("action_status", a.status)) + (a.completed_on ? " · " + esc(date(a.completed_on)) : "") + " · " + record(ctx, a.evidence_count ?? 0, "Evidence count", { method: "count(linked evidence)" }) + " evidence"];
+      });
+      return '<div class="wide-table">' + table(heads, cells) + '</div><div class="phone-cards action-cards">' + cells.map((r) =>
+        '<article class="reader-card"><h4>' + r[0] + '</h4><div class="card-action">' + r[5] + '</div><dl>' + [1, 8, 9, 2, 3, 4, 6, 7].map((i) => '<div><dt>' + esc(heads[i]) + '</dt><dd>' + r[i] + '</dd></div>').join("") + '</dl></article>').join("") + '</div>';
+    }
+    function riskGrid(ctx, rs, includeArea = false) {
+      const groups = [...new Set(rs.map((r) => (includeArea ? r.management_area + "|" : "") + r.description))];
+      const rows = groups.map((group) => {
+        const matches = rs.filter((r) => (includeArea ? r.management_area + "|" : "") + r.description === group);
+        const label = (includeArea ? L.managementArea(matches[0].management_area) + " / " : "") + matches[0].description;
+        return [esc(label), ...units.map((u) => {
+          const ratings = matches.filter((r) => r.place_id === u.id);
+          return ratings.length ? ratings.map((r) => risk(ctx, r)).join("<br>") : missing(ctx, u.code + " " + label + " risk assessment");
+        })];
+      });
+      const receptorNotes = units.map((u) => {
+        const degraded = rs.filter((r) => r.place_id === u.id && arr(pdm.receptors).some((x) => x.id === r.receptor_id && Number(x.significance) >= 4));
+        if (!degraded.length) return "";
+        const assessors = [...new Set(degraded.map((r) => (r.assessed_by || person(r.author)) + (r.assessed_on ? ", " + date(r.assessed_on) : "")))];
+        return "Drains to a degraded receptor — assessed by " + esc(assessors.join("; "));
+      });
+      if (receptorNotes.some(Boolean)) rows.push(["Receiving environment", ...receptorNotes]);
+      return '<div class="wide-table">' + table(["Management area / risk", ...units.map((u) => u.code)], rows) + '</div><div class="phone-cards risk-cards">' + units.map((u, i) =>
+        '<article class="reader-card" data-risk-unit="' + esc(u.id) + '"><h4>' + esc(u.code + " " + u.name) + '</h4><dl>' + rows.map((r) => '<div><dt>' + r[0] + '</dt><dd>' + r[i + 1] + '</dd></div>').join("") + '</dl></article>').join("") + '</div>';
     }
     const renderers = {
       front(ctx) {
         const forAuth = auths.find((a) => a.id === plan.for_authorisation_id);
-        return '<h1>Farm Environment Plan</h1><p class="cover-farm">' + esc(pdm.farm.name) + "</p>" +
-          table(["Plan detail", "Recorded value"], [
-            ["Developer", record(ctx, plan.prepared_by_name, "Plan developer")],
-            ["Role / organisation", esc([plan.prepared_by_role, plan.prepared_by_org].filter(Boolean).join(", "))],
-            ["Date", record(ctx, plan.plan_date && date(plan.plan_date), "Plan date")],
-            ["Version", record(ctx, plan.version_label, "Version")],
-            ["Supersedes", esc(plan.supersedes_plan_id || "No earlier version recorded")],
-            ["Prepared for", forAuth ? esc(authLabel(forAuth)) : missing(ctx, "Prepared for")],
-            ["Signed off", plan.signed_off_at ? esc(person(plan.signer || { user_id: plan.signed_off_by }) + ", " + date(plan.signed_off_at)) : "Not signed off"],
-          ]) + "<p>" + esc(template.boilerplate.copyright.text) + " <small>" + esc(template.boilerplate.copyright.citation) + "</small></p>";
+        return '<div class="plan-cover"><div><p class="cover-farm">' + esc(pdm.farm.name) + '</p><h1>' + esc(plan.title || template.title) +
+          '</h1><p class="cover-status">' + esc(L.enumLabel("plan_status", plan.status)) + (plan.signed_off_at ? " · Signed off " + esc(date(plan.signed_off_at)) : " · Not signed off") + '</p><dl class="cover-details">' +
+          [["Developer", record(ctx, plan.prepared_by_name, "Plan developer")],
+           ["Role / organisation", esc([plan.prepared_by_role, plan.prepared_by_org].filter(Boolean).join(", "))],
+           ["Date", record(ctx, plan.plan_date && date(plan.plan_date), "Plan date")],
+           ["Version", record(ctx, plan.version_label, "Version")],
+           ...(forAuth ? [["Prepared for", esc(authLabel(forAuth))]] : [])].filter(([, v]) => v).map(([label, v]) => '<div><dt>' + esc(label) + '</dt><dd>' + v + '</dd></div>').join("") +
+          '</dl></div><footer class="cover-foot"><p>Signatures: ' + (plan.signed_off_at ? esc(person(plan.signer || { user_id: plan.signed_off_by }) + ", " + date(plan.signed_off_at)) : "Not signed off") +
+          '</p><p>' + esc(template.boilerplate.copyright.text) + ' <small>' + esc(template.boilerplate.copyright.citation) + '</small></p></footer></div>';
       },
       summary(ctx) {
         const next = [...actions].sort((a, b) => Number(!!(b.meets_condition && b.reduces_risk)) - Number(!!(a.meets_condition && a.reduces_risk)) || (a.due_date || "9999").localeCompare(b.due_date || "9999") || a.id.localeCompare(b.id)).slice(0, 3);
@@ -150,7 +180,7 @@
         const total = valid ? owned.reduce((sum, v) => sum + Number(v.v), 0) : null;
         const effective = V.fact(pdm, "effective_area"), sheep = V.fact(pdm, "stock_units", "sheep"), cattle = V.fact(pdm, "stock_units", "cattle");
         const rows = [["Land use", fact(ctx, "land_use")], ["Grazable ha", fact(ctx, "effective_area")], ["Winter cropping", fact(ctx, "winter_grazing_area")],
-          ...stocks.map((v) => [esc(v.item), value(ctx, v, v.item) + (v.note ? "<p>" + esc(v.note) + "</p>" : "")]),
+          ...stocks.map((v) => [esc(L.item(v.fact_type, v.item)), value(ctx, v, L.item(v.fact_type, v.item)) + (v.note ? "<p>" + esc(v.note) + "</p>" : "")]),
           ["Total owned stock units", calculated(ctx, total, "SU", "sum(owned enterprise stock units; excludes dairy grazing)", owned, "Total owned stock units")],
           ["Sheep:cattle ratio", sheep.state === "recorded" && cattle.state === "recorded" && total > 0 ? calculated(ctx, Number(sheep.v) / (Number(sheep.v) + Number(cattle.v)) * 100, "% sheep", "sheep SU / (sheep SU + cattle SU) × 100; cattle = 100 − sheep", [sheep, cattle], "Sheep:cattle ratio") : missing(ctx, "Sheep:cattle ratio")],
           ["Stock units / grazable ha", calculated(ctx, total != null && effective.state === "recorded" && Number(effective.v) > 0 ? total / Number(effective.v) : null, "SU/ha", "owned SU / effective ha", [...owned, effective], "Stock units / grazable ha")]];
@@ -163,11 +193,14 @@
         let html = prose(ctx, "land_unit_definitions", false) || missing(ctx, "Cited land-unit definitions (Cairnvale FEP p7)");
         html += "<p>" + value(ctx, pdm.land_unit_count, "Land unit count") + " land units were identified.</p>";
         if (!units.length) return html + missing(ctx, "Land units");
-        html += table(["Land unit", "Area (ha)", "Description", "Inherent vulnerabilities", "Soils"], units.map((u) => [
-          esc(u.code + " " + u.name), value(ctx, u.area_ha, "Mapped area") + '<details class="screen-only"><summary>Area stated in source plan</summary>' + value(ctx, u.stated_area, "Stated area", false) + "</details>",
-          esc(u.description), list(template.vulnerabilities.map(([key, label]) => esc(label) + ": " + (u.vulnerabilities?.[key]?.state === "not_recorded" ? '<span class="value-box">Not yet assessed</span>' + value(ctx, u.vulnerabilities[key], label) : value(ctx, u.vulnerabilities?.[key], label)))),
+        const heads = ["Land unit", "Area (ha)", "Description", "Inherent vulnerabilities", "Soils"];
+        const cells = units.map((u) => [
+          esc(u.code + " " + u.name), value(ctx, u.area_ha, u.code + " mapped area") + (u.stated_area?.state && u.stated_area.state !== "not_recorded" ? '<details class="screen-only"><summary>Area stated in source plan</summary>' + value(ctx, u.stated_area, "Stated area", false) + "</details>" : ""),
+          esc(u.description), list(template.vulnerabilities.map(([key, label]) => esc(label) + ": " + value(ctx, u.vulnerabilities?.[key], u.code + " " + label))),
           list(arr(pdm.soils).filter((s) => s.place_id === u.id).map((s) => esc(s.sibling) + " " + value(ctx, s.area, "Soil area") + " " + arr(s.fact_sheets).map(source).join("; "))) || "No soil facts recorded for this unit",
-        ]));
+        ]);
+        html += '<div class="wide-table">' + table(heads, cells) + '</div><div class="phone-cards land-unit-cards">' + cells.map((r) =>
+          '<article class="reader-card"><h4>' + r[0] + '</h4><dl>' + [1, 2, 3, 4].map((i) => '<div><dt>' + esc(heads[i]) + '</dt><dd>' + r[i] + '</dd></div>').join("") + '</dl></article>').join("") + '</div>';
         html += list(units.map((u) => esc(u.code + ": " + [u.method, u.shown_as, u.layer].filter(Boolean).join(" · ")) + ctx.marker({ source: u.source, method: u.method, shown_as: u.shown_as })));
         return html + "<h3>2.1 Land unit map</h3>" + map(ctx, "land-units", "Land units", !!pdm.extent);
       },
@@ -195,10 +228,7 @@
             prose(ctx, "area." + area.key + ".description", !!area.core || !!irrigation) + list(acts.map((a) => esc(a.description))) +
             "<h4>Significance of risks to freshwater</h4><p>" + esc(template.boilerplate.riskMethod.text) + " <small>" + esc(template.boilerplate.riskMethod.citation) + "</small></p>";
           const labels = [...new Set(rs.map((r) => r.description))];
-          html += labels.length ? table(["Risk", ...units.map((u) => u.code)], labels.map((label) => [esc(label), ...units.map((u) => {
-            const matches = rs.filter((r) => r.description === label && r.place_id === u.id);
-            return matches.length ? matches.map((r) => risk(ctx, r)).join("<br>") : '<span class="value-box">not assessed</span>';
-          })])) : missing(ctx, "Attributed risk assessments");
+          html += labels.length ? riskGrid(ctx, rs) : missing(ctx, "Attributed risk assessments for " + label);
           html += "<h4>Actions included in this plan, and justification</h4>" + table(["Action", "Justification"], as.map((a) => [esc(a.map_code + " " + a.title), record(ctx, a.rationale, "Action rationale", { source: a.source })]));
           if (ps.length) html += "<h4>Possible future actions</h4>" + list(ps.map((a) => record(ctx, a.title, "Possible action", { source: a.source }) + " " + esc(a.description)));
           // Require a complete unit grid as well as minor/N/A ratings; absence is not a decision.
@@ -224,21 +254,21 @@
         const groups = new Map();
         for (const a of auths) {
           const kinds = [...new Set(activities.filter((b) => arr(a.activity_ids).includes(b.id)).map((b) => b.kind))].sort();
-          const key = kinds.join(", ") || "Activity not recorded"; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(a);
+          const key = kinds.map((k) => L.enumLabel("activity_kind", k)).join(", ") || "Activity not recorded"; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(a);
         }
         let html = "";
         for (const [key, group] of groups) {
-          html += "<h3>" + esc(key.replaceAll("_", " ")) + "</h3>";
+          html += "<h3>" + esc(key) + "</h3>";
           for (const a of [...group].sort((a, b) => ["current", "future", "history"].indexOf(a.period_state) - ["current", "future", "history"].indexOf(b.period_state) || (a.valid_from || "").localeCompare(b.valid_from || "") || a.id.localeCompare(b.id))) {
             html += '<article class="authorisation ' + esc(a.period_state) + '"><h4>' + esc(authLabel(a)) + "</h4><p>" +
-              esc(({ permitted_rule: "Permitted activity rule", consent: "Resource consent", national_regulation: "National regulation" })[a.kind] || a.kind) + " · " +
+              esc(L.enumLabel("authorisation_kind", a.kind)) + " · " +
               esc(a.holder || "Holder not recorded") + (a.holder_is_farm === false ? " (held by others for this farm)" : "") + "</p><p>" +
               (a.period_state === "history" ? "History · Until " + esc(date(a.valid_to)) : a.period_state === "future" ? "Future · From " + esc(date(a.valid_from)) :
                 (a.valid_from ? esc(date(a.valid_from)) : "start date not yet recorded") + " – " + (a.valid_to ? esc(date(a.valid_to)) : "current")) +
-              "</p><p>Status as published: " + esc(a.status || "Not yet recorded") + "</p>" + source(a.source);
+              "</p><p>Status as published: " + (a.status ? esc(L.enumLabel("consent_status", a.status)) : missing(ctx, "Published authorisation status")) + "</p>" + source(a.source);
             for (const o of arr(a.obligations)) {
-              html += "<div class='obligation'><h5>" + esc([o.code, o.summary].filter(Boolean).join(" — ")) + "</h5><p>" + esc(o.kind) + " · " + esc(o.due_date ? date(o.due_date) : o.recurrence) + "</p>";
-              html += o.parameters ? record(ctx, JSON.stringify(o.parameters), "Obligation parameters", { class: "designation", shown_as: "under " + authLabel(a), source: o.source }) : "";
+              html += "<div class='obligation'><h5>" + esc([o.code, o.summary].filter(Boolean).join(" — ")) + "</h5><p>" + esc(L.enumLabel("obligation_kind", o.kind)) + " · " + esc(o.due_date ? date(o.due_date) : o.recurrence) + "</p>";
+              html += o.parameters ? record(ctx, structured(o.parameters), "Obligation parameters", { class: "designation", shown_as: "under " + authLabel(a), source: o.source }) : "";
               html += source(o.source);
               if (o.full_text) html += '<details class="obligation-text ' + (template.printFullText.includes(o.kind) ? "print-expanded" : "screen-only") + '"><summary>Full condition text</summary><blockquote>' + esc(o.full_text) + "</blockquote></details>";
               html += arr(o.checks).filter((c) => !c.superseded_at).map((c) => check(ctx, c)).join("") || missing(ctx, "Obligation check");
@@ -250,7 +280,7 @@
         return html;
       },
       cccv(ctx) {
-        return ["fmu", "zone", "objectives", "tangata_whenua", "contaminants"].map((key) => "<h3>" + esc(key.replaceAll("_", " ")) + "</h3>" +
+        return ["fmu", "zone", "objectives", "tangata_whenua", "contaminants"].map((key) => "<h3>" + esc(L.section("cccv." + key)) + "</h3>" +
           (["objectives", "tangata_whenua"].includes(key) ? "<blockquote>" + prose(ctx, "cccv." + key) + "</blockquote>" : prose(ctx, "cccv." + key))).join("") +
           "<h3>Receptors reached through the farm's risks</h3>" + (arr(pdm.receptors).length ? table(["Receptor", "State", "Contaminants / values", "Source / date"], pdm.receptors.map((r) => [
             esc(r.name), record(ctx, r.state, "Receptor state", { source: typeof r.source === "object" ? r.source : { title: r.source }, as_at: r.as_at }),
@@ -258,14 +288,7 @@
           ])) : missing(ctx, "Receptor information"));
       },
       "risk-grid"(ctx) {
-        const labels = [...new Set(risks.map((r) => r.description))];
-        return (prose(ctx, "risk_method", false) || missing(ctx, "Cited risk method and vulnerability × intensity matrix (Cairnvale FEP pp28–29)")) +
-          table(["Management area / risk", ...units.map((u) => u.code)], template.managementAreas.flatMap((area) =>
-            labels.filter((label) => risks.some((r) => r.management_area === area.key && r.description === label)).map((label) => [esc(area.label + " / " + label), ...units.map((u) => {
-              const rs = risks.filter((r) => r.management_area === area.key && r.description === label && r.place_id === u.id);
-              return rs.length ? rs.map((r) => '<span class="rating rating-' + esc(r.rating) + '">' + risk(ctx, r) + "</span>" +
-                (arr(pdm.receptors).some((x) => x.id === r.receptor_id && Number(x.significance) >= 4) ? " · drains to a degraded receptor" : "")).join("<br>") : '<span class="value-box">not assessed</span>';
-            })])));
+        return (prose(ctx, "risk_method", false) || missing(ctx, "Cited risk method and vulnerability × intensity matrix (Cairnvale FEP pp28–29)")) + riskGrid(ctx, risks, true);
       },
       maps(ctx) {
         const smap = arr(pdm.reference_sources).find((s) => s.key === "smap");
@@ -274,7 +297,7 @@
           (smap?.serve_to_customers ? '<p>Soil fact sheets shown; polygon preview follows in PR 4.</p>' : '<p>Soil polygons not shown: S-map licence check pending</p>') +
           ["slope", "regulatory_low_slope", "elevation", ...(layers.some((l) => l.theme === "aspect") ? ["aspect"] : [])].map((key) => {
             const layer = layers.find((l) => l.theme === key);
-            return map(ctx, key, key.replaceAll("_", " "), !!layer) + (layer ? record(ctx, layer.name, "Map layer", { shown_as: layer.shown_as, method: layer.method,
+            return map(ctx, key, L.enumLabel("map_theme", key), !!layer) + (layer ? record(ctx, layer.name, "Map layer", { shown_as: layer.shown_as, method: layer.method,
               source: arr(pdm.map_sources).find((s) => s.layer_id === layer.id)?.source }) : "");
           }).join("") +
           list(arr(pdm.reference_sources).map((s) => esc([s.name, s.attribution, s.licence_status, s.refreshed_at && date(s.refreshed_at)].filter(Boolean).join(" · ")))) +
@@ -282,9 +305,9 @@
       },
       mahinga(ctx) { return prose(ctx, "mahinga_kai") + (sections["mahinga_kai.actions"] ? prose(ctx, "mahinga_kai.actions", false) : ""); },
       sources(ctx) {
-        return table(["Document", "Details", "Pages"], arr(pdm.documents).map((d) => [source({ ...d, document_id: d.id }), esc([d.doc_type, d.author, d.author_org, d.period_start, d.period_end, d.model, d.model_version, d.status].filter(Boolean).join(" · ")), record(ctx, arr(d.pages).join(", "), "Cited pages", { source: d })])) +
+        return table(["Document", "Details", "Pages"], arr(pdm.documents).map((d) => [source({ ...d, document_id: d.id }), esc([L.enumLabel("document_kind", d.doc_type), d.author, d.author_org, d.period_start, d.period_end, d.model, d.model_version, d.status].filter(Boolean).join(" · ")), record(ctx, arr(d.pages).join(", "), "Cited pages", { source: d })])) +
           "<h3>Evidence</h3>" + table(["Kind / date", "Linked action / check", "Source"], arr(pdm.evidence).map((e) => [
-            esc(e.kind + " · " + date(e.taken_at)), esc([actions.find((a) => a.id === e.action_id)?.map_code || e.action_id, e.check_id].filter(Boolean).join(" · ")),
+            esc(L.enumLabel("evidence_kind", e.kind) + " · " + date(e.taken_at)), esc([actions.find((a) => a.id === e.action_id)?.map_code || e.action_id, e.check_id].filter(Boolean).join(" · ")),
             source(e.source) + (e.kind === "photo" && e.source?.storage_path ? '<img class="evidence-photo screen-only" data-photo-path="' + esc(e.source.storage_path) + '" alt="Evidence photo">' : ""),
           ])) + "<h3>AI use</h3><p>" + record(ctx, pdm.ai_use?.checked_fact_count ?? 0, "Checked AI fact count", { method: "count(checked AI facts used in PDM)" }) +
           " AI-extracted facts used, checked by an advisor.</p>" + list(arr(pdm.ai_use?.models).map((m) => esc(m.model + " " + m.model_version + " · checked by " + person(m.checked) + ", " + date(m.checked?.at))));
@@ -293,8 +316,8 @@
     function nutrients(ctx) {
       let html = "<h4>Synthetic nitrogen</h4>" + fact(ctx, "synthetic_n_pasture") + checks.filter((c) => c.rule_module === "nesf-n-cap").map((c) => check(ctx, c)).join("");
       for (const g of arr(pdm.nutrient_history)) {
-        html += "<h4>" + esc([g.fact_type, g.model, g.model_version].join(" · ")) + "</h4>" +
-          table(["Season", "Recorded value"], arr(g.values).map((v) => [esc(v.season), value(ctx, v, g.fact_type)]));
+        html += "<h4>" + esc([L.factType(g.fact_type), L.enumLabel("nutrient_model", g.model), g.model_version].join(" · ")) + "</h4>" +
+          table(["Season", "Recorded value"], arr(g.values).map((v) => [esc(v.season), value(ctx, v, L.factType(g.fact_type))]));
         const vs = arr(g.values).filter((v) => v.state === "recorded" && v.v != null);
         if (vs.some((v) => v.model !== g.model || v.model_version !== g.model_version)) throw new Error("Nutrient comparison across model versions refused");
         if (new Set(vs.map((v) => v.unit)).size > 1) throw new Error("Nutrient comparison across units refused");
@@ -306,15 +329,18 @@
         }
       }
       const ghg = arr(pdm.values).filter((v) => (v.fact_type?.startsWith("ghg_") || v.fact_type === "tree_scrub_area") && v.state !== "not_recorded");
-      if (ghg.length || actions.some((a) => /ghg/i.test(a.title))) html += "<h4>Greenhouse gases</h4>" + table(["Recorded measure", "Value"], ghg.map((v) => [esc(v.fact_type), value(ctx, v, v.fact_type)]));
+      if (ghg.length || actions.some((a) => /ghg/i.test(a.title))) html += "<h4>Greenhouse gases</h4>" + table(["Recorded measure", "Value"], ghg.map((v) => [esc(L.factType(v.fact_type)), value(ctx, v, L.factType(v.fact_type))]));
       const total = ghg.find((v) => v.fact_type === "ghg_total"), components = ["ghg_methane", "ghg_n2o", "ghg_co2"].map((k) => ghg.find((v) => v.fact_type === k));
       if (ctx.advisor && total?.state === "recorded" && components.every((v) => v?.state === "recorded" && v.unit === total.unit && v.model === total.model && v.model_version === total.model_version && v.season === total.season) &&
           Math.abs(components.reduce((n, v) => n + Number(v.v), 0) - Number(total.v)) > 0.01) html += '<p class="advisor-only flag">Recorded GHG components differ from the total. Check the cited source.</p>';
       return html;
     }
     const parts = template.sections.map(([key, label]) => {
-      const ctx = P.context(pdm, key);
-      return '<section class="plan-section" id="plan-' + key + '"><h2>' + esc(label) + "</h2>" + renderers[key](ctx) + ctx.sources() + "</section>";
+      const ctx = P.context(pdm, key, notes, L);
+      const index = template.sections.findIndex(([k]) => k === key);
+      const adjacent = (offset, text) => { const target = template.sections[index + offset]; return target ? '<a href="#plan-' + target[0] + '" data-plan-anchor="plan-' + target[0] + '">' + text + ': ' + esc(target[1]) + '</a>' : '<span></span>'; };
+      return '<section class="plan-section" id="plan-' + key + '" aria-label="' + esc(label) + '"><h2>' + esc(label) + "</h2>" + renderers[key](ctx) +
+        (key === "sources" ? ctx.sources() : "") + '<nav class="section-navigation screen-only" aria-label="Section navigation">' + adjacent(-1, "Previous") + adjacent(1, "Next") + '</nav></section>';
     });
     const completeness = [];
     for (const k of template.requiredProse) if (!["written", "not_applicable"].includes(sections[k]?.state) || (sections[k]?.state === "not_applicable" && !sections[k]?.na_reason)) completeness.push(k + ": required text not ready");
@@ -324,12 +350,15 @@
     for (const a of audit) if (["not_recorded", "awaiting_check"].includes(a.state)) completeness.push(a.label + ": " + a.state.replaceAll("_", " "));
     for (const a of auths.filter((a) => a.period_state === "current")) for (const o of arr(a.obligations).filter((o) => o.kind === "plan_content")) completeness.push("Required by " + (a.consent_no || a.title) + " condition " + (o.code || "?") + ": " + o.summary + " — advisor review needed");
     for (const v of arr(pdm.values)) if (v.flagged) completeness.push((v.fact_type || v.fact_id) + ": recorded disagreement needs acknowledgement");
-    const panel = pdm.viewer?.is_advisor && !frozen ? '<aside class="completeness screen-only"><h2>Completeness — review list</h2><p>' + esc(template.verification) + '</p><p>Static map images follow in PR 4. This panel is read-only.</p>' +
-      list([...new Set([...completeness, ...issues])].map(esc)) + "</aside>" : "";
-    return '<article class="farm-plan" data-template="' + esc(template.key) + '"><div class="plan-status">' +
-      esc(frozen ? "Signed off " + date(plan.signed_off_at) : plan.status === "in_review" ? "In review – not signed off" : "Draft – not signed off") +
-      '</div><nav class="plan-contents" aria-label="Contents"><h2>Contents</h2>' + list(template.sections.map(([key, label]) => '<a href="#plan-' + key + '" data-plan-anchor="plan-' + key + '">' + esc(label) + "</a>")) +
-      "</nav>" + panel + parts.join("") + "</article>";
+    const reviewItems = [...new Set([...completeness, ...issues])];
+    const panel = pdm.viewer?.is_advisor && !frozen && reviewItems.length ? '<aside class="review-banner screen-only">' + reviewItems.length +
+      ' things to review before sign-off <a href="#/farm/' + esc(pdm.farm.id) + '/review">→ Review</a></aside>' : "";
+    const html = '<article class="farm-plan" data-template="' + esc(template.key) + '"><nav class="plan-contents screen-only" aria-label="Contents"><h2>Contents</h2><div class="contents-links">' + template.sections.map(([key, label]) =>
+      '<a href="#plan-' + key + '" data-plan-anchor="plan-' + key + '">' + esc(label) + '</a>').join("") + '</div></nav><div class="reader-body">' + panel + parts.join("") + '</div></article>';
+    return { html, reviewItems };
   }
-  return { renderPlan };
+  // Existing pure string API remains stable for exports and frozen-plan consumers.
+  function renderPlan(pdm, template = defaultTemplate) { return renderReader(pdm, template).html; }
+  return { renderPlan, renderReader };
 });
+

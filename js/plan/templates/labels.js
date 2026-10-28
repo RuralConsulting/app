@@ -61,6 +61,8 @@
     maps: "Maps in support of the risk assessment", mahinga: "Mahinga kai", sources: "Sources and evidence",
     // prose section keys (plan_sections.section_key)
     vision: "Vision", farm_story: "Farm story", consents_none: "No consents held", action_overview: "Action plan overview",
+    land_unit_definitions: "Land unit definitions", action_method: "Action plan overview", action_categories: "Action categories",
+    management_introduction: "Management introduction", risk_method: "Risk assessment method",
     location_map: "Location map", "cccv.fmu": "Freshwater management unit", "cccv.zone": "Zone committee outcomes",
     "cccv.objectives": "Regional plan objectives", "cccv.tangata_whenua": "Tangata whenua values",
     "cccv.contaminants": "Contaminants of concern", mahinga_kai: "Mahinga kai", "mahinga_kai.actions": "Mahinga kai actions",
@@ -68,6 +70,12 @@
   for (const k of Object.keys(managementAreas)) sections["area." + k + ".description"] = managementAreas[k] + " description";
 
   const enums = {
+    activity_kind: { waterways_wetlands: "Waterways and wetlands", point_sources: "Point sources", cultivation: "Cultivation", winter_grazing: "Intensive winter grazing", grazing: "Grazing", stock_access: "Stock access", stock_exclusion: "Stock exclusion", fertiliser: "Fertiliser", nutrients: "Nutrient management", offal_pit: "Offal pits", silage: "Silage", point_source: "Point sources", irrigation: "Irrigation", effluent: "Effluent", water_use: "Water use", biodiversity: "Biodiversity", cultural_heritage: "Cultural heritage", biosecurity: "Biosecurity", land_use: "Land use" },
+    map_theme: { location: "Property location", land_units: "Land units", features: "Farm features", actions: "Action plan", soils: "Soils", slope: "Slope", regulatory_low_slope: "Regulatory low slope", elevation: "Elevation", aspect: "Aspect", wells: "Wells", wetlands: "Wetlands", waterways: "Waterways" },
+    nutrient_model: { overseer: "Overseer", overseerfm: "OverseerFM", OverseerFM: "OverseerFM" },
+    consent_status: { current: "Current", active: "Active", granted: "Granted", expired: "Expired", surrendered: "Surrendered", replaced: "Replaced", superseded: "Superseded" },
+    document_kind: { fep: "Farm Environment Plan", nutrient_budget: "Nutrient budget", consent: "Resource consent", memo: "Memo", aee: "Assessment of environmental effects", report: "Report", ghg: "Greenhouse gas report" },
+    evidence_kind: { photo: "Photo", document: "Document", record: "Record", note: "Note", audit: "Audit" },
     author_kind: { system: "Written by the system", advisor: "Advisor", farmer: "Farmer" },
     risk_rating: { minor: "Minor", moderate: "Moderate", major: "Major", not_applicable: "Not applicable" },
     action_category: { regulated: "Regulatory", catchment: "Catchment", supplementary: "Supplementary" },
@@ -128,3 +136,4 @@
   }
   return { ...create(), create, humanise };
 });
+
