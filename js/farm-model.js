@@ -55,7 +55,7 @@
           actions: authActions.filter((x) => actionIds.has(x.id)).map((x) => ({ text: [x.map_code, x.title].filter(Boolean).join(" "), href: href(f, "actions", x.id) })),
         };
       });
-      return { id: a.id, href: href(f, "authorisations", a.id), text: authName(a), eligible: !!chosen || !!expiring,
+      return { id: a.id, href: href(f, "authorisations", a.id), text: authName(a), eligible: !!chosen || !!expiring, cardType: "authorisation",
         because: chosen ? status(chosen) + (chosen.obligation_id ? " for a recorded condition" : " in the recorded assessment") :
           expiring ? "expires " + date(a.valid_to) : null, due_date: expiring ? a.valid_to : chosen?.due_date,
         group, kind: authKind(a), meta: [
@@ -71,18 +71,47 @@
       v.class === "assessment" && v.checked?.at && v.assessed_by && v.assessed_on);
     const overallLine = overall ? "; overall significance " + (overall.text || overall.v) + " (" + overall.assessed_by + ", " + date(overall.assessed_on) + ")" : "";
     const due = actions.filter((a) => a.due_date && at && a.due_date < at && a.status !== "done");
-    const actionItems = [...actions, ...list(p.actions?.possible)].map((a) => ({
-      id: a.id, href: href(f, "actions", a.id), text: [a.map_code, a.title].filter(Boolean).join(" "),
-      eligible: due.some((d) => d.id === a.id), because: a.due_date ? "due " + date(a.due_date) + "; still recorded as " + String(a.status || "planned").replaceAll("_", " ") : null,
-      due_date: a.due_date, detail: [a.status?.replaceAll("_", " "), a.timeframe_text, a.rationale,
-        ...list(a.places).map((x) => x.code || x.name)].filter(Boolean).join(" · "),
-    }));
+    const landUnits = list(p.land_units), allActions = [...actions, ...list(p.actions?.possible)];
+    const obligationsByAction = new Map();
+    for (const a of auths) for (const o of list(a.obligations)) {
+      const latest = list(o.checks).find((c) => !c.superseded_at) || checks.find((c) => c.authorisation_id === a.id && c.obligation_id === o.id);
+      for (const actionId of list(latest?.action_ids)) {
+        if (!obligationsByAction.has(actionId)) obligationsByAction.set(actionId, []);
+        obligationsByAction.get(actionId).push({ text: [authName(a), o.code ? (a.kind === "consent" ? "Condition " + o.code : o.code) : null, o.summary].filter(Boolean).join(" · "), href: href(f, "authorisations", a.id) });
+      }
+    }
+    const riskLine = (r) => r.author_kind !== "system" && r.assessed_by && r.assessed_on ?
+      (r.description || "Recorded risk") + " — " + L.enumLabel("risk_rating", r.rating || "not_assessed") + " — " + r.assessed_by + ", " + date(r.assessed_on) :
+      (r.description || "Recorded risk") + " — rating not yet assessed";
+    const actionItems = allActions.map((a) => {
+      const linkedRisks = risks.filter((r) => list(a.risk_ids).includes(r.id));
+      const places = list(a.places), placeText = places.map((x) => x.code || x.name).filter(Boolean).join(", ");
+      const possible = a.status === "possible";
+      return { id: a.id, href: href(f, "actions", a.id), text: [a.map_code, a.title].filter(Boolean).join(" ") || "Recorded action",
+        eligible: due.some((d) => d.id === a.id), because: a.due_date ? "due " + date(a.due_date) + "; still recorded as " + L.enumLabel("action_status", a.status || "planned").toLowerCase() : null,
+        due_date: a.due_date, group: possible ? "possible" : "programme", cardType: "action", kind: L.managementArea(a.management_area), managementArea: a.management_area,
+        placeIds: places.map((x) => x.id).filter(Boolean), meta: [
+          { label: "Land units", value: placeText || "Not recorded" },
+          { label: "Implementation timeframe", value: a.due_date ? date(a.due_date) : a.timeframe_text || "Not recorded" },
+          { label: "Status", value: L.enumLabel("action_status", a.status || (possible ? "possible" : "planned")) },
+          { label: "Evidence", value: Number(a.evidence_count) ? a.evidence_count + " linked record" + (a.evidence_count === 1 ? "" : "s") : "None linked" },
+        ], sections: [
+          linkedRisks.length ? { title: "Risks this action reduces", items: linkedRisks.map((r) => ({ text: riskLine(r), href: href(f, "actions", r.id) })) } : null,
+          obligationsByAction.has(a.id) ? { title: "Obligations this action meets", items: obligationsByAction.get(a.id) } : null,
+        ].filter(Boolean), note: a.rationale ? "Why it is in the programme: " + a.rationale : null };
+    });
     for (const r of risks) {
       const receptor = list(p.receptors).find((x) => x.id === r.receptor_id), assessed = r.author_kind !== "system" && r.assessed_by && r.assessed_on;
+      const unit = landUnits.find((x) => x.id === r.place_id), linkedActions = allActions.filter((a) => list(a.risk_ids).includes(r.id));
       actionItems.push({ id: r.id, href: href(f, "actions", r.id), text: r.description || "Recorded risk",
         eligible: !!assessed && Number(receptor?.significance) >= 4, receptor_weight: Number(receptor?.significance) || 0,
         because: assessed && receptor ? "drains to " + receptor.name + "; assessed " + String(r.rating || "not assessed").replaceAll("_", " ") + " by " + r.assessed_by + ", " + date(r.assessed_on) : null,
-        detail: assessed ? "Assessed " + String(r.rating || "not assessed").replaceAll("_", " ") + " by " + r.assessed_by + ", " + date(r.assessed_on) : "Not yet assessed" });
+        group: "risks", cardType: "risk", kind: L.managementArea(r.management_area), managementArea: r.management_area, placeIds: [r.place_id].filter(Boolean),
+        meta: [
+          { label: "Land unit", value: unit ? [unit.code, unit.name].filter(Boolean).join(" · ") : "Not recorded" },
+          { label: "Rating", value: assessed ? L.enumLabel("risk_rating", r.rating || "not_assessed") + " — " + r.assessed_by + ", " + date(r.assessed_on) : "Not yet assessed" },
+          { label: "Receptor", value: receptor?.name || "Not recorded" },
+        ], sections: linkedActions.length ? [{ title: "Actions that reduce this risk", items: linkedActions.map((a) => ({ text: [a.map_code, a.title].filter(Boolean).join(" "), href: href(f, "actions", a.id) })) }] : [] });
     }
     const planItems = plans.map((plan) => ({ id: plan.id, text: [plan.title || "Farm Environment Plan", plan.version_label, plan.status?.replaceAll("_", " ")].filter(Boolean).join(" · "),
       href: "#/farm/" + f + "/plan/" + plan.id, eligible: ["draft", "in_review"].includes(plan.status), because: plan.status === "in_review" ? "submitted for review" : "draft awaiting review",
@@ -117,7 +146,12 @@
         due.length ? { text: due.length + " actions are still recorded as planned after their due dates" + overallLine } :
           actions.length ? { text: actions.length + " actions are recorded" + overallLine, because: "they form the recorded programme; current progress has not been confirmed here" } : null,
         { text: context.assemblyMissing ? "No risks or actions recorded yet." : "No risks or actions recorded.", startBy: "looking at the farm's activities with its advisor." },
-        { rank: due.length ? "due_date" : "receptor_weight" }),
+        { rank: due.length ? "due_date" : "receptor_weight", cards: true,
+          groups: [["programme", "Five-year programme"], ["possible", "Possible actions"], ["risks", "Recorded risks"]],
+          filters: {
+            managementAreas: [...new Set(actionItems.map((x) => x.managementArea).filter(Boolean))].sort().map((key) => ({ value: key, label: L.managementArea(key) })),
+            landUnits: landUnits.map((u) => ({ value: u.id, label: [u.code, u.name].filter(Boolean).join(" · ") || "Recorded land unit" })),
+          } }),
       plans: make("plans", "Plans & documents", planItems,
         plans.length ? { text: plans.length + " plan version" + (plans.length === 1 ? "" : "s") + " and " + docs.length + (context.uncited ? (docs.length === 1 ? " document" : " documents") : (docs.length === 1 ? " cited document" : " cited documents")) + " recorded", because: plans.some((x) => ["draft", "in_review"].includes(x.status)) ? "a draft is waiting for review" : "signed versions preserve the agreed record" } : null,
         { text: "No plan yet · " + docs.length + " documents recorded.", startBy: "reading the existing documents, then starting a draft when ready." },
@@ -134,3 +168,4 @@
   }
   return { models, match, href, views, status, date };
 });
+

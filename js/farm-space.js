@@ -88,6 +88,26 @@
         if (source?.storage_path) FP.plan.routes.openDocument(doc, source.storage_path);
       }
     });
+    $("#space-content").addEventListener("change", (e) => {
+      if (!e.target.matches("[data-record-filter]")) return;
+      const host = e.target.closest(".answer-panel"), area = host.querySelector('[data-record-filter="management"]')?.value || "";
+      const place = host.querySelector('[data-record-filter="place"]')?.value || "";
+      let shown = 0, total = 0;
+      for (const card of host.querySelectorAll(".record-card")) {
+        total++;
+        const places = (card.dataset.placeIds || "").split(" ").filter(Boolean);
+        card.hidden = !!(area && card.dataset.managementArea !== area || place && !places.includes(place));
+        if (!card.hidden) shown++;
+      }
+      for (const group of host.querySelectorAll(".record-group")) {
+        const visible = [...group.querySelectorAll(".record-card")].filter((card) => !card.hidden).length;
+        group.hidden = visible === 0;
+        const heading = group.querySelector("h3");
+        if (heading) heading.textContent = heading.textContent.replace(/\s+\(\d+\)$/, "") + " (" + visible + ")";
+      }
+      const count = host.querySelector(".record-filter-count");
+      if (count) count.textContent = area || place ? "Showing " + shown + " of " + total + " records." : "Showing all " + total + " records.";
+    });
   }
   function jumpItems() {
     if (!context) return [];
@@ -191,3 +211,4 @@
   }
   return { load, setPortfolio, close, open };
 });
+
