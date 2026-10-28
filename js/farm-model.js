@@ -18,6 +18,11 @@
     return (words[state] || "We can't tell yet") + " — " + author + (c.inputs?.threshold_to_confirm ? "; threshold to be confirmed" : "");
   }
   const authName = (a) => [a.consent_no || a.rule_ref, a.title].filter(Boolean).join(" · ");
+  function authKind(a) {
+    if (a.kind !== "consent") return L.enumLabel("authorisation_kind", a.kind || "authorisation");
+    return ({ land_use: "Land use consent", water_permit: "Water permit", discharge_consent: "Discharge consent",
+      discharge_permit: "Discharge consent" })[a.consent_type] || "Resource consent";
+  }
   function models(context) {
     const { farm, pdm: p, advisor } = context, f = farm.id;
     const checks = list(p.checks).filter((c) => !c.superseded_at), auths = list(p.authorisations);
@@ -31,13 +36,33 @@
       sourceDates.length ? "Recorded information to " + date(sourceDates.at(-1)) : null;
     const make = (key, title, items, answer, empty, extra = {}) => ({ key, title, items, answer, empty, currency,
       isAdvisor: advisor, href: href(f, key), allLabel: "All " + (key === "plans" ? "plans and documents" : key === "actions" ? "risks and actions" : key === "review" ? "review items" : "authorisations"), ...extra });
+    const authActions = [...actions, ...list(p.actions?.possible)];
     const authItems = auths.map((a) => {
       const cs = checks.filter((c) => c.authorisation_id === a.id);
       const chosen = cs.find((c) => human(c) && ["worth_checking", "gap", "cant_tell_yet"].includes(c.status));
       const expiring = at && a.valid_to && a.valid_to >= at && (Date.parse(a.valid_to) - Date.parse(at)) / 86400000 <= 90;
+      const group = ["current", "future", "history"].includes(a.period_state) ? a.period_state : "recorded";
+      const period = a.valid_from && a.valid_to ? date(a.valid_from) + " to " + date(a.valid_to) :
+        a.valid_from ? "From " + date(a.valid_from) + " · no end date recorded" : a.valid_to ? "Until " + date(a.valid_to) + " · start date not recorded" : "Not recorded";
+      const obligations = list(a.obligations).map((o) => {
+        const oc = list(o.checks).filter((c) => !c.superseded_at);
+        const latest = oc[0] || cs.find((c) => c.obligation_id === o.id);
+        const actionIds = new Set(list(latest?.action_ids));
+        return {
+          id: o.id,
+          title: [o.code ? (a.kind === "consent" ? "Condition " + o.code : o.code) : null, o.summary || "Recorded obligation"].filter(Boolean).join(" · "),
+          check: latest ? status(latest) : "No check recorded.",
+          actions: authActions.filter((x) => actionIds.has(x.id)).map((x) => ({ text: [x.map_code, x.title].filter(Boolean).join(" "), href: href(f, "actions", x.id) })),
+        };
+      });
       return { id: a.id, href: href(f, "authorisations", a.id), text: authName(a), eligible: !!chosen || !!expiring,
         because: chosen ? status(chosen) + (chosen.obligation_id ? " for a recorded condition" : " in the recorded assessment") :
           expiring ? "expires " + date(a.valid_to) : null, due_date: expiring ? a.valid_to : chosen?.due_date,
+        group, kind: authKind(a), meta: [
+          { label: "Period", value: period },
+          { label: "Holder", value: a.holder },
+          { label: "Status as published", value: a.status ? L.enumLabel("consent_status", a.status) : null },
+        ].filter((x) => x.value), obligations,
         detail: [a.period_state || "recorded", a.valid_from ? "from " + date(a.valid_from) : "start date not recorded",
           a.valid_to ? "until " + date(a.valid_to) : null, a.holder, a.status,
           ...list(a.obligations).map((o) => [o.code, o.summary].filter(Boolean).join(": ")), ...cs.map(status)].filter(Boolean).join(" · ") };
@@ -86,7 +111,8 @@
     return {
       authorisations: make("authorisations", "Authorisations", authItems,
         auths.length ? { text: auths.length + (auths.length === 1 ? " authorisation is recorded" : " authorisations are recorded"), because: checks.some(human) ? "advisor assessments are shown with their authors" : "the checks still need an advisor\'s assessment" } : null,
-        { text: "No authorisations recorded.", startBy: "recording the farm's activities and the consents or rules they rely on." }),
+        { text: "No authorisations recorded.", startBy: "recording the farm's activities and the consents or rules they rely on." },
+        { cards: true, groups: [["current", "Current"], ["future", "Future"], ["history", "History"], ["recorded", "Period not recorded"]] }),
       actions: make("actions", "Risks & actions", actionItems,
         due.length ? { text: due.length + " actions are still recorded as planned after their due dates" + overallLine } :
           actions.length ? { text: actions.length + " actions are recorded" + overallLine, because: "they form the recorded programme; current progress has not been confirmed here" } : null,
