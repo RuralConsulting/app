@@ -7,7 +7,7 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(self)
   X-Robots-Tag: noindex, nofollow
   Strict-Transport-Security: max-age=31536000
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://basemaps.linz.govt.nz; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://basemaps.linz.govt.nz; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.supabase.co https://basemaps.linz.govt.nz; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://basemaps.linz.govt.nz; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 /
   Cache-Control: no-cache
 /index.html

@@ -9,6 +9,8 @@ FP.farmMap = (() => {
   let markers = [];    // land unit labels
   const interactive = new Map();   // MapLibre layer id -> how to describe a hit
 
+  const accent = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+
   function init() {
     if (map) return map;
     maplibregl.setWorkerUrl("vendor/maplibre-gl-csp-worker.js");
@@ -26,6 +28,17 @@ FP.farmMap = (() => {
       const poll = () => (map.style && map.style._loaded ? res() : setTimeout(poll, 50));
       poll();
     });
+    // UI colours follow the same tokens as the shell, including a live OS/theme change.
+    const syncPalette = () => ready.then(() => {
+      if (map.getLayer("bm-blank")) map.setPaintProperty("bm-blank", "background-color",
+        getComputedStyle(document.documentElement).getPropertyValue("--map-background").trim());
+      for (const [id, property] of [["portfolio-fill", "fill-color"], ["portfolio-line", "line-color"],
+        ["extent-line", "line-color"], ["action-programme-lines", "line-color"], ["action-programme-points", "circle-color"]]) {
+        if (map.getLayer(id)) map.setPaintProperty(id, property, accent());
+      }
+    });
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncPalette);
+    new MutationObserver(syncPalette).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] });
     map.on("click", onClick);
     map.on("mousemove", (e) => {
       const ids = [...interactive.keys()].filter((id) => map.getLayer(id));
@@ -124,8 +137,8 @@ FP.farmMap = (() => {
     const shown = items.filter((i) => i.extent?.coordinates);
     if (!shown.length) return;
     source("portfolio", { type: "FeatureCollection", features: shown.map((i) => ({ type: "Feature", geometry: i.extent, properties: { id: i.id } })) });
-    layer({ id: "portfolio-fill", type: "fill", source: "portfolio", paint: { "fill-color": "#fec956", "fill-opacity": 0.3 } });
-    layer({ id: "portfolio-line", type: "line", source: "portfolio", paint: { "line-color": "#fec956", "line-width": 3 } });
+    layer({ id: "portfolio-fill", type: "fill", source: "portfolio", paint: { "fill-color": accent(), "fill-opacity": 0.3 } });
+    layer({ id: "portfolio-line", type: "line", source: "portfolio", paint: { "line-color": accent(), "line-width": 3 } });
     const boxes = [];
     for (const i of shown) {
       const b = bbox(i.extent); boxes.push(b);
@@ -157,7 +170,7 @@ FP.farmMap = (() => {
     if (data.extent) {
       source("extent", { type: "Feature", geometry: data.extent, properties: {} });
       entries.push({ key: "extent", name: "Farm extent", sub: `${FP.ha(data.extent_ha)} · titles, leased land and land units`, on: true,
-        ids: [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": "#fec956", "line-width": 3 } })] });
+        ids: [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": accent(), "line-width": 3 } })] });
     }
     source("titles", data.titles);
     const titleIds = [layer({ id: "titles-line", type: "line", source: "titles",
@@ -241,8 +254,8 @@ FP.farmMap = (() => {
     source("action-programme", { type: "FeatureCollection", features });
     const describe = (f) => ({ title: (f.properties.code || "") + " " + f.properties.name, props: f.properties, layerName: "Actions" });
     const ids = [
-      layer({ id: "action-programme-lines", source: "action-programme", type: "line", paint: { "line-color": "#fec956", "line-width": 3 }, filter: ["!=", ["geometry-type"], "Point"] }, describe),
-      layer({ id: "action-programme-points", source: "action-programme", type: "circle", paint: { "circle-color": "#fec956", "circle-radius": 6, "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 }, filter: ["==", ["geometry-type"], "Point"] }, describe),
+      layer({ id: "action-programme-lines", source: "action-programme", type: "line", paint: { "line-color": accent(), "line-width": 3 }, filter: ["!=", ["geometry-type"], "Point"] }, describe),
+      layer({ id: "action-programme-points", source: "action-programme", type: "circle", paint: { "circle-color": accent(), "circle-radius": 6, "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 }, filter: ["==", ["geometry-type"], "Point"] }, describe),
     ];
     const actionMarkers = [];
     for (const { at, codes } of groups.values()) {

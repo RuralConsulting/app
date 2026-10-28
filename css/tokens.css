@@ -1,0 +1,78 @@
+/* Paddock: the only authored colour literals and type sizes (APP-STRUCTURE §5). */
+@font-face {
+  font-family: 'Source Serif 4 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-serif-4-latin-ext-wght-normal.woff2) format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Source Serif 4 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-serif-4-latin-wght-normal.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: 'Source Sans 3 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-sans-3-latin-ext-wght-normal.woff2) format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Source Sans 3 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-sans-3-latin-wght-normal.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+:root {
+  --text-small: .8125rem; --text-body: 1rem; --text-heading: 1.375rem; --text-title: 2rem;
+  --f-ui: "Source Sans 3 Variable", system-ui, sans-serif;
+  --f-display: "Source Serif 4 Variable", Georgia, serif;
+  --f-head: var(--f-ui);
+  --radius: 10px; --space: 16px;
+  --accent: #8b713d; --accent-ink: #fffdf7;
+  --brand: var(--accent); --brand-ink: var(--accent-ink);
+  --bad: var(--ink); --good: var(--ink);
+  --clear: transparent;
+  --map-label: #ffffff; --map-halo: #151a14;
+  --map-label-shadow: 0 0 3px rgba(0, 0, 0, .85), 0 1px 2px rgba(0, 0, 0, .7);
+  --map-pin-shadow: 0 0 3px rgba(0, 0, 0, .7);
+  --backdrop: rgba(21, 26, 20, .55);
+  --banner-panel: #302f28; --banner-ink: #fffdf7;
+  --print-panel: #ffffff; --print-ink: #000000;
+  --print-body: 10.5pt; --print-small: 8pt; --print-table: 9pt;
+  --reader-small: var(--text-small); --reader-body: var(--text-body);
+  --reader-heading: var(--text-heading); --reader-title: var(--text-title); --reader-gap: 1.5rem;
+  --panel: #fffdf7; --wash: #f3f0e7; --ink: #302f28; --ink-2: #615f52; --ink-3: #716d5d; --rule: #d7d0bf;
+  --shadow: 0 6px 24px rgba(48, 47, 40, .16);
+  --map-background: #e4e6da;
+  --map-icon-filter: none;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --panel: #282923; --wash: #1e201c; --ink: #eee9dc; --ink-2: #c5c0b3; --ink-3: #aaac9a; --rule: #4c4f44;
+  --shadow: 0 6px 24px rgba(0, 0, 0, .4);
+  --map-background: #363a31;
+  --map-icon-filter: invert(1);
+  color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --panel: #282923; --wash: #1e201c; --ink: #eee9dc; --ink-2: #c5c0b3; --ink-3: #aaac9a; --rule: #4c4f44;
+  --shadow: 0 6px 24px rgba(0, 0, 0, .4);
+  --map-background: #363a31;
+  --map-icon-filter: invert(1);
+  color-scheme: dark;
+}

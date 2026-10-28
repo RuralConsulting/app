@@ -1,5 +1,4 @@
 /* APP-STRUCTURE §4 reader; existing §5 colour and font tokens, four reader sizes. */
-:root { --reader-small: var(--text-small); --reader-body: var(--text-body); --reader-heading: var(--text-heading); --reader-title: var(--text-title); --reader-gap: 1.5rem; }
 #screen-plans { min-height: 100%; padding-bottom: 4rem; }
 .plan-toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--rule); }
 .plan-toolbar a { color: inherit; }
@@ -13,7 +12,7 @@
 .farm-plan a { color: inherit; text-underline-offset: 3px; }
 .plan-contents { position: sticky; top: calc(var(--demo-banner-height, 0px) + var(--farm-header-height, 0px) + var(--plan-toolbar-height, 70px) + 12px); align-self: start; max-height: calc(100dvh - var(--demo-banner-height, 0px) - var(--farm-header-height, 0px) - var(--plan-toolbar-height, 70px) - 24px); overflow: auto; padding: 0 8px; font-size: var(--reader-small); }
 .plan-contents h2 { margin-top: 0; }.contents-links { display: grid; gap: 4px; }
-.contents-links a { padding: 7px 10px; border-left: 3px solid transparent; text-decoration: none; }
+.contents-links a { padding: 7px 10px; border-left: 3px solid var(--clear); text-decoration: none; }
 .contents-links a[aria-current] { border-color: var(--accent); background: var(--panel); font-weight: 600; }
 [data-contents-toggle] { display: none; }.prose-picker { display: grid; gap: .5rem; margin-top: var(--reader-gap); }.prose-picker select { max-width: 100%; }
 .plan-section { border-top: 1px solid var(--rule); padding: var(--reader-gap) 0; scroll-margin-top: calc(var(--demo-banner-height, 0px) + var(--farm-header-height, 0px) + var(--plan-toolbar-height, 70px) + 12px); }
@@ -21,7 +20,7 @@
 .section-navigation { display: flex; justify-content: space-between; gap: var(--reader-gap); border-top: 1px solid var(--rule); padding-top: var(--reader-gap); margin-top: 2rem; font-size: var(--reader-small); }
 .section-navigation a { max-width: 48%; }
 .plan-cover { min-height: 560px; display: flex; flex-direction: column; justify-content: space-between; gap: 3rem; }
-.cover-farm { font: 600 var(--reader-heading) var(--f-head); margin-top: 1rem; }.cover-status { color: var(--ink-2); }.cover-foot { font-size: var(--reader-small); color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: 1rem; }
+.cover-farm { font: 600 var(--reader-heading) var(--f-display); margin-top: 1rem; }.cover-status { color: var(--ink-2); }.cover-foot { font-size: var(--reader-small); color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: 1rem; }
 .cover-details div, .reader-card dl > div { margin: .75rem 0; }.cover-details dt, .reader-card dt { color: var(--ink-2); font-size: var(--reader-small); }.cover-details dd, .reader-card dd { margin: 0; }
 .table-scroll { overflow: auto; }.farm-plan table { width: 100%; border-collapse: collapse; font-size: var(--reader-small); margin: 1rem 0; }
 .farm-plan th, .farm-plan td { padding: .6rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); overflow-wrap: break-word; }.farm-plan th { background: var(--wash); }.farm-plan td p { margin: .3rem 0; }
@@ -30,7 +29,7 @@
 .source-value { font: inherit; color: inherit; text-align: inherit; background: none; border: 0; padding: 3px 0; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 4px; cursor: pointer; }
 .source-note { margin-left: .4rem; }.card-action > .plan-value > .provenance > .source-value { font-weight: 600; }
 .source-value:hover, .source-value:focus-visible { background: var(--wash); }.source-dialog, .prose-dialog { border: 1px solid var(--rule); border-radius: 10px; background: var(--panel); color: var(--ink); width: min(760px, calc(100% - 2rem)); min-width: 0; max-height: 85dvh; overflow: auto; padding: var(--reader-gap); }
-.source-dialog::backdrop, .prose-dialog::backdrop { background: #0008; }.source-card { overflow-wrap: anywhere; }.source-card p { margin-top: 0; }.source-card .advisor-only { margin-bottom: 1rem; }
+.source-dialog::backdrop, .prose-dialog::backdrop { background: var(--backdrop); }.source-card { overflow-wrap: anywhere; }.source-card p { margin-top: 0; }.source-card .advisor-only { margin-bottom: 1rem; }
 .source-notes { font-size: var(--reader-small); overflow-wrap: anywhere; }.source-notes ol { padding-left: 1.3rem; }.source-notes li { margin: .8rem 0; }
 .print-ref, .print-only, .print-value { display: none; }.review-banner { font-size: var(--reader-small); color: var(--ink-2); padding: 1rem 0; }
 .prose-credit { color: var(--ink-2); font-size: var(--reader-small); }.farm-plan blockquote { margin: 1rem .5rem; padding-left: 1rem; border-left: 3px solid var(--rule); }
@@ -56,16 +55,16 @@
 }
 @page { size: A4; margin: 18mm 15mm 20mm; }
 @media print {
-  html, body { height: auto; background: white; color: black; font-size: 10.5pt; }
+  html, body { height: auto; background: var(--print-panel); color: var(--print-ink); font-size: var(--print-body); }
   body > :not(#screen-plans) { display: none !important; }
   #screen-plans, #plan-content { padding: 0; margin: 0; max-width: none; }
   .plan-toolbar, #plan-msg, .screen-only, .advisor-only, .provenance, .edit-prose, dialog, .phone-cards { display: none !important; }
-  .farm-plan { display: block; padding: 0; box-shadow: none; color: black; }.reader-body { padding: 0; background: white; }.farm-plan a { color: black; }
-  .print-only { display: inline; }.print-value { display: inline; }.print-ref { display: inline; font-size: 8pt; }
+  .farm-plan { display: block; padding: 0; box-shadow: none; color: var(--print-ink); }.reader-body { padding: 0; background: var(--print-panel); }.farm-plan a { color: var(--print-ink); }
+  .print-only { display: inline; }.print-value { display: inline; }.print-ref { display: inline; font-size: var(--print-small); }
   .plan-section { display: block; break-before: page; border: 0; padding: 0; }.plan-cover { min-height: 230mm; }
-  .table-scroll { overflow: visible; }.wide-table { display: block; }.farm-plan table { font-size: 9pt; }.wide-table table { min-width: 0; }.wide-table td:first-child { white-space: normal; }
+  .table-scroll { overflow: visible; }.wide-table { display: block; }.farm-plan table { font-size: var(--print-table); }.wide-table table { min-width: 0; }.wide-table td:first-child { white-space: normal; }
   thead { display: table-header-group; } tr, .value-box, figure { break-inside: avoid; }
-  .source-notes { font-size: 8pt; }.source-notes h3 { font-size: 9pt; }.missing-chip { color: black; background: none; }
+  .source-notes { font-size: var(--print-small); }.source-notes h3 { font-size: var(--print-table); }.missing-chip { color: var(--print-ink); background: none; }
   .document-link { text-decoration: none; }.print-expanded > :not(summary) { display: block; }
 }
 /* Audits and certification */
@@ -80,12 +79,12 @@
 /* Audit pack (R5) */
 .audit-pack-dialog { max-width: 52rem; width: calc(100% - 2rem); max-height: 90vh; overflow: auto; }
 .pack-head { color: var(--ink-2); } .pack-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
-.pack-list { list-style: none; padding: 0; margin: 0; } .pack-list li { padding: .25rem 0; } .pack-hash { font: 0.8rem ui-monospace, monospace; color: var(--ink-2); overflow-wrap: anywhere; }
+.pack-list { list-style: none; padding: 0; margin: 0; } .pack-list li { padding: .25rem 0; } .pack-hash { font: var(--text-small) var(--f-ui); color: var(--ink-2); overflow-wrap: anywhere; }
 @media print {
   body.pack-printing #screen-plans * { visibility: hidden; }
   body.pack-printing dialog.audit-pack-dialog, body.pack-printing dialog.audit-pack-dialog * { visibility: visible; }
-  dialog.audit-pack-dialog { display: block !important; position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; max-height: none; overflow: visible; border: 0; padding: 0; color: black; background: white; }
-  .audit-pack-dialog .screen-only { display: none !important; } .pack-record { break-inside: avoid; } .pack-hash { color: black; }
+  dialog.audit-pack-dialog { display: block !important; position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; max-height: none; overflow: visible; border: 0; padding: 0; color: var(--print-ink); background: var(--print-panel); }
+  .audit-pack-dialog .screen-only { display: none !important; } .pack-record { break-inside: avoid; } .pack-hash { color: var(--print-ink); }
 }
 
 .audit-differs { font: var(--reader-small) var(--f-ui); color: var(--ink-2); border-bottom: 1px dotted var(--ink-2); margin-inline-start: .5rem; }

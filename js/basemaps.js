@@ -11,7 +11,7 @@ FP.basemaps = (() => {
   const sets = key ? { aerial: { tiles: linz("aerial"), maxzoom: 22, attribution: ATTRIB } } : {};
 
   function style(initial) {
-    const s = { version: 8, sources: {}, layers: [{ id: "bm-blank", type: "background", paint: { "background-color": "#dfe6e1" } }] };
+    const s = { version: 8, sources: {}, layers: [{ id: "bm-blank", type: "background", paint: { "background-color": getComputedStyle(document.documentElement).getPropertyValue("--map-background").trim() } }] };
     for (const [k, b] of Object.entries(sets)) {
       s.sources["bm-" + k] = { type: "raster", tiles: b.tiles, tileSize: 256, maxzoom: b.maxzoom, attribution: b.attribution };
       s.layers.push({ id: "bm-" + k, type: "raster", source: "bm-" + k,

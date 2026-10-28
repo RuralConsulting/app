@@ -1,7 +1,7 @@
 .answer-panel { background: var(--panel); color: var(--ink); padding: 20px; border: 1px solid var(--rule); border-radius: 10px; }
 .answer-panel h2 { margin: 0 0 12px; font: 600 var(--text-heading)/1.2 var(--f-head); }
 .answer-panel h2 a { text-decoration: none; }
-.answer-sentence { font-size: var(--text-body); margin: 0 0 14px; line-height: 1.5; }
+.answer-sentence { font: 400 var(--text-title)/1.25 var(--f-display); margin: 0 0 14px; }
 .answer-currency { font-size: var(--text-small); color: var(--ink-2); margin-top: 14px; }
 .answer-highlights { list-style: none; margin: 12px 0; padding: 0; }
 .answer-highlights li { padding: 10px 0; border-top: 1px solid var(--rule); }
@@ -12,7 +12,7 @@
 .answer-all ul { padding-left: 20px; }.answer-all li { padding: 8px 0; scroll-margin-top: 20px; overflow-wrap: anywhere; }
 .record-detail { font-size: var(--text-small); color: var(--ink-2); margin: 4px 0; }
 .answer-start { font-size: var(--text-small); }.answer-compact { padding: 16px; }
-.answer-compact h2 { font-size: var(--text-body); margin-bottom: 8px; }.answer-compact .answer-sentence { font-size: var(--text-small); margin-bottom: 8px; }
+.answer-compact h2 { font-size: var(--text-body); margin-bottom: 8px; }.answer-compact .answer-sentence { font-size: var(--text-heading); margin-bottom: 8px; }
 .answer-compact .answer-currency { font-size: var(--text-small); margin-top: 8px; }
 .answer-all-link { font-size: var(--text-small); }.selected-record { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 .answer-compact .answer-highlights { margin: 8px 0; font-size: var(--text-small); }
