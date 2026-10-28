@@ -75,3 +75,14 @@
 #plan-audits > button, .audit-record > button { margin-top: .75rem; }
 .prose-dialog [hidden] { display: none; }.prose-dialog textarea[name=conflict_note] { min-height: 80px; }.prose-dialog fieldset { border: 1px solid var(--rule); display: grid; gap: .8rem; }
 .audit-line { display: grid; gap: .3rem; padding-bottom: .6rem; border-bottom: 1px solid var(--rule); }.prose-dialog label.inline { display: flex; gap: .5rem; align-items: center; }
+
+/* Audit pack (R5) */
+.audit-pack-dialog { max-width: 52rem; width: calc(100% - 2rem); max-height: 90vh; overflow: auto; }
+.pack-head { color: var(--ink-2); } .pack-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+.pack-list { list-style: none; padding: 0; margin: 0; } .pack-list li { padding: .25rem 0; } .pack-hash { font: 0.8rem ui-monospace, monospace; color: var(--ink-2); overflow-wrap: anywhere; }
+@media print {
+  body.pack-printing #screen-plans * { visibility: hidden; }
+  body.pack-printing dialog.audit-pack-dialog, body.pack-printing dialog.audit-pack-dialog * { visibility: visible; }
+  dialog.audit-pack-dialog { display: block !important; position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; max-height: none; overflow: visible; border: 0; padding: 0; color: black; background: white; }
+  .audit-pack-dialog .screen-only { display: none !important; } .pack-record { break-inside: avoid; } .pack-hash { color: black; }
+}

@@ -57,6 +57,25 @@
   const collection = (features) => ({ type: "FeatureCollection", features });
   // Mirrors app.can_review (0037): an advisor of the farm's organisation, or the farm's owner.
   const canReview = (d) => d.tables.org_members.length > 0 || d.tables.farm_members.some((m) => m.farm_id === FARM && m.user_id === d.user.id && m.role === "owner");
+  // Mirrors public.plan_audit_pack from the demo rows (null unless advisor or owner). Demo hashes are synthetic.
+  function auditPack(d, planId) {
+    const plan = d.tables.plans.find((p) => p.id === planId);
+    if (!plan || !canReview(d)) return null;
+    const sup = new Set(d.tables.plan_assessments.map((a) => a.supersedes_id).filter(Boolean));
+    const rows = d.tables.plan_assessments.filter((a) => a.plan_id === planId && !sup.has(a.id)).sort((a, b) => b.event_date.localeCompare(a.event_date));
+    const hash = "0123456789abcdef".repeat(4);
+    return { pack_schema_version: 1, plan_id: plan.id, farm_id: plan.farm_id, title: plan.title, status: plan.status, plan_sha256: null, as_at: "2026-10-28", assessment_count: rows.length,
+      assessments: rows.map((a) => {
+        const res = d.tables.assessment_action_results.filter((x) => x.assessment_id === a.id).map((x) => ({ result_id: x.id, action_id: x.action_id,
+          action_title: (d.pdm?.actions.programme.find((y) => y.id === x.action_id) || {}).title, outcome: x.outcome, reason: x.reason }));
+        const doc = d.tables.documents.find((x) => x.id === a.report_document_id), audit = a.kind === "audit";
+        return { id: a.id, kind: a.kind, items: { "15a_date": a.event_date, "15b_assessor_name": { name: a.assessor_name, org: a.assessor_org }, "15c_assessor_id_number": a.assessor_id_number,
+          "15d_conflict_declaration": { declaration: a.conflict_declaration, note: a.conflict_note, document: null }, "15e_next_audit_due": a.next_audit_due, "15f_recertification_due": a.recertification_due,
+          "16a_actions_on_time": audit ? res.filter((x) => x.outcome === "on_time") : null, "16b_actions_not_on_time": audit ? res.filter((x) => x.outcome !== "on_time") : null,
+          "16c_grade": { grade: a.grade, scheme: a.grade_scheme } },
+          documents: doc ? [{ role: "report", document_id: doc.id, title: doc.title, sha256: doc.sha256 || hash }] : [], supersedes_id: a.supersedes_id, entered_by_person: null, entered_at: a.entered_at, source_page: a.source_page };
+      }) };
+  }
   function dataset(fixture, { sparse = false, farmer = false, multi = false } = {}) {
     const pdm = copy(fixture);
     pdm.farm = { ...pdm.farm, id: FARM, org_id: ORG, name: "Cairnvale — synthetic demo" };
@@ -249,6 +268,7 @@
           return result({ ok: true });
         }
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 || null : null);
+        if (name === "plan_audit_pack") return result(auditPack(d, args.p));
         if (name !== "plan_document") return error("This operation is not available in the demo");
         const plan = d.tables.plans.find((p) => p.id === args.p);
         if (!plan) return result(null);

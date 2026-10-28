@@ -98,7 +98,7 @@
       host.innerHTML = rendered.html;
       mountReader(host, signal);
       if (FP.demo?.active) for (const a of host.querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
-      await mountAudits(host, pdm, advisor, token, signal);
+      await mountAudits(host, pdm, advisor, token, signal, member.data.role === "owner");
       document.title = farm.name + " — Farm Environment Plan";
       if (canEdit && ["draft", "in_review"].includes(pdm.plan.status) && (pdm.plan.status === "draft" || advisor)) {
         const keys = [...new Set([...Object.keys(pdm.sections), "land_unit_definitions", "action_method", "action_categories", "management_introduction", "risk_method"])];
@@ -165,7 +165,7 @@
     }, { signal });
   }
   // Audits and certification: read for every member, recorded by advisors only. It sits beside the plan, not inside it.
-  async function mountAudits(host, pdm, advisor, token, signal) {
+  async function mountAudits(host, pdm, advisor, token, signal, owner = false) {
     const A = FP.plan.audits, L = FP.plan.template.labels;
     const actions = (pdm.actions?.programme || []).filter((a) => !["possible", "not_doing"].includes(a.status));
     const documents = pdm.documents || [];
@@ -173,7 +173,7 @@
     try { data = await A.load(FP.sb, pdm.farm.id, pdm.plan.id); } catch (e) { error = e.message || String(e); }
     if (token !== navigation) return;
     const paint = () => {
-      const html = A.render({ ...data, actions, documents, advisor, error, statusLabel: (s) => L.enumLabel("action_status", s) });
+      const html = A.render({ ...data, actions, documents, advisor, canPack: advisor || owner, error, statusLabel: (s) => L.enumLabel("action_status", s) });
       const old = host.querySelector("#plan-audits");
       if (old) { const next = document.createElement("template"); next.innerHTML = html; const fresh = next.content.firstElementChild;
         fresh.classList.toggle("is-active", old.classList.contains("is-active")); old.replaceWith(fresh); }
@@ -185,9 +185,24 @@
     paint();
     host.addEventListener("click", (event) => {
       if (event.target.closest("[data-audit-new]")) auditForm(host, pdm, actions, documents, data, null, token, async () => { data = await A.load(FP.sb, pdm.farm.id, pdm.plan.id); paint(); });
+      if (event.target.closest("[data-audit-pack]")) auditPack(host, pdm);
       const fix = event.target.closest("[data-audit-correct]");
       if (fix) auditForm(host, pdm, actions, documents, data, data.assessments.find((r) => r.id === fix.dataset.auditCorrect), token, async () => { data = await A.load(FP.sb, pdm.farm.id, pdm.plan.id); paint(); });
     }, { signal });
+  }
+  // Audit pack: a printable page in a dialog, built from plan_audit_pack. Print uses the browser's own print, as Print plan does.
+  async function auditPack(host, pdm) {
+    const d = FP.el("dialog", { class: "prose-dialog audit-pack-dialog", "aria-label": "Audit pack" });
+    d.innerHTML = "<p>Preparing the audit pack…</p>"; host.append(d); d.showModal();
+    d.addEventListener("close", () => { document.body.classList.remove("pack-printing"); d.remove(); });
+    const r = await FP.plan.audits.loadPack(FP.sb, pdm.plan.id);
+    d.innerHTML = FP.plan.audits.renderPack(r, { farm: pdm.farm.name });
+    d.querySelector("[data-pack-close]").addEventListener("click", () => d.close());
+    d.querySelector("[data-pack-print]")?.addEventListener("click", () => { document.body.classList.add("pack-printing"); window.print(); document.body.classList.remove("pack-printing"); });
+    d.querySelector("[data-pack-json]")?.addEventListener("click", () => {
+      const a = FP.el("a", { href: URL.createObjectURL(new Blob([JSON.stringify(r.pack, null, 2)], { type: "application/json" })), download: "audit-pack-" + pdm.plan.id + ".json" });
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
   }
   function auditForm(host, pdm, actions, documents, data, previous, token, done) {
     const A = FP.plan.audits, { el } = FP;

@@ -47,9 +47,52 @@
     let body;
     if (m.error) body = "<p>Audits and certification could not be loaded. " + esc(m.error) + "</p>";
     else if (!current.length) body = "<p>No certification or audit recorded yet.</p>" + (m.advisor ? '<button type="button" data-audit-new>Record one</button>' : "");
-    else body = (m.advisor ? '<button type="button" data-audit-new>Record a certification or audit</button>' : "") + current.map((r) => record(r, m, m.advisor)).join("") +
+    else body = (m.advisor ? '<button type="button" data-audit-new>Record a certification or audit</button>' : "") +
+      (m.canPack ? ' <button type="button" class="screen-only" data-audit-pack>Audit pack</button>' : "") + current.map((r) => record(r, m, m.advisor)).join("") +
       (earlier.length ? '<details class="audit-earlier"><summary>Earlier versions (' + earlier.length + ")</summary>" + earlier.map((r) => record(r, m, false)).join("") + "</details>" : "");
     return '<section class="plan-section screen-only" id="plan-audits" aria-label="Audits and certification"><h2>Audits and certification</h2>' + body + "</section>";
+  }
+
+  // Audit pack (R5): what plan_audit_pack returns, in plain words. Nothing is worked out; a blank is shown as not recorded.
+  const NONE = "Not recorded";
+  const packDoc = (d) => "<li>" + esc(d.title || "Document") + '<br><span class="pack-hash">SHA-256 ' + esc(d.sha256 || NONE) + "</span></li>";
+  const packResult = (x) => "<li>" + esc(x.action_title || "Action") + (x.outcome === "on_time" ? "" : " (" + esc((OUTCOME[x.outcome] || x.outcome).toLowerCase()) + ")") + (x.reason ? " — " + esc(x.reason) : "") + "</li>";
+  function packRecord(a) {
+    const i = a.items || {}, audit = a.kind === "audit", docs = a.documents || [];
+    const row = (label, html) => "<div><dt>" + esc(label) + "</dt><dd>" + html + "</dd></div>";
+    const txt = (v) => v ? esc(v) : NONE;
+    const when = (v) => v ? esc(date(v)) : NONE;
+    const list = (rows, none) => rows && rows.length ? '<ul class="pack-list">' + rows.map(packResult).join("") + "</ul>" : none;
+    const who = [i["15b_assessor_name"]?.name, i["15b_assessor_name"]?.org].filter(Boolean).map(esc).join(", ") || NONE;
+    const c = i["15d_conflict_declaration"] || {};
+    const conflict = c.declaration === "conflict_declared" ? "Conflict declared: " + esc(c.note || "") : c.declaration === "no_conflict" ? "No conflict declared" : NONE;
+    const g = i["16c_grade"] || {};
+    const na = "Not asked of a certification";
+    return '<article class="audit-record pack-record"><h3>' + esc(KIND[a.kind] || a.kind) + " · " + when(i["15a_date"]) + "</h3><dl>" +
+      row("Date", when(i["15a_date"])) + row("Who did it", who) + row("Assessor ID number", txt(i["15c_assessor_id_number"])) +
+      row("Conflict of interest", conflict + (c.document ? "<br>Declaration document: " + esc(c.document.title || "attached") : "")) +
+      row("Next audit to be arranged by", when(i["15e_next_audit_due"])) + row("Plan to be resubmitted for recertification by", when(i["15f_recertification_due"])) +
+      row("Actions done within their time frames", audit ? list(i["16a_actions_on_time"], "None reported") : na) +
+      row("Actions not done within their time frames, and why", audit ? list(i["16b_actions_not_on_time"], "None reported") : na) +
+      row("Audit grade", audit ? (g.grade ? esc(g.grade) + (g.scheme ? " (" + esc(g.scheme) + ")" : "") : NONE) : na) + "</dl>" +
+      "<h4>Documents</h4>" + (docs.length ? '<ul class="pack-list">' + docs.map(packDoc).join("") + "</ul>" : "<p>No documents attached.</p>") + "</article>";
+  }
+  // r: { pack } or { message }; ctx: { farm }
+  function renderPack(r, ctx = {}) {
+    const bar = '<div class="pack-actions screen-only">' + (r.pack ? '<button type="button" data-pack-print>Print / save as PDF</button> <button type="button" data-pack-json>Download data (JSON)</button> ' : "") + '<button type="button" data-pack-close>Close</button></div>';
+    if (!r.pack) return "<h2>Audit pack</h2><p>" + esc(r.message) + "</p>" + bar;
+    const k = r.pack, list = k.assessments || [];
+    return "<h2>Audit pack</h2>" + '<p class="pack-head">' + esc(ctx.farm || "Farm") + " · " + esc(k.title || "Plan") + " · generated " + esc(date(ctx.today || new Date().toISOString().slice(0, 10))) + "</p>" + bar +
+      (list.length ? list.map(packRecord).join("") : "<p>No certification or audit recorded yet.</p>");
+  }
+  // The database returns null for anyone who is not the farm's advisor or owner.
+  async function loadPack(sb, plan) {
+    try {
+      const r = await sb.rpc("plan_audit_pack", { p: plan });
+      if (r.error) return { message: "The audit pack could not be produced. " + (r.error.message || "") };
+      if (!r.data) return { message: "Only the farm's advisor or owner can produce the audit pack." };
+      return { pack: r.data };
+    } catch (e) { return { message: "The audit pack could not be produced. " + (e.message || "") }; }
   }
 
   // Mirrors the database checks, so a mistake is caught before the save.
@@ -97,5 +140,5 @@
     }
     return made.data.id;
   }
-  return { KIND, OUTCOME, split, render, validate, rows, load, save };
+  return { KIND, OUTCOME, split, render, renderPack, loadPack, validate, rows, load, save };
 });
