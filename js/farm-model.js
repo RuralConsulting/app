@@ -23,6 +23,27 @@
     return ({ land_use: "Land use consent", water_permit: "Water permit", discharge_consent: "Discharge consent",
       discharge_permit: "Discharge consent" })[a.consent_type] || "Resource consent";
   }
+  const readings = [["met", "Met"], ["on_track", "On track"], ["worth_checking", "Worth checking"], ["gap", "Gap"], ["not_applicable", "Not applicable"], ["cant_tell_yet", "We can't tell yet"]];
+  const decisions = {
+    review_item: [["resolve", "Mark resolved"], ["dismiss", "Dismiss"]],
+    unchecked_fact: [["check", "Value is right"], ["correct", "Correct it"], ["reject", "Reject it"]],
+    unconfirmed_check: [["confirm", "Confirm"], ["disagree", "Read it differently"]],
+    conflict: [],
+  };
+  // review_queue rows (0031) -> cards. Order is the view's: dated, conflicts, AI values and checks, loader notes.
+  function reviewRows(rows, f) {
+    return [...rows].sort((a, b) => (a.priority - b.priority) || String(a.due_on || "9999").localeCompare(String(b.due_on || "9999")) ||
+      String(a.created_at).localeCompare(String(b.created_at)) || String(a.ref_id).localeCompare(String(b.ref_id))).map((r) => {
+      const d = r.detail || {}, id = r.source + "-" + r.ref_id, meta = [];
+      if (r.source === "unchecked_fact") meta.push({ label: "Source", value: [d.document_title, d.page ? "page " + d.page : null].filter(Boolean).join(", ") });
+      if (r.source === "conflict") meta.push({ label: "Values", value: list(d.values).join(" or ") });
+      if (r.due_on) meta.push({ label: "Due", value: date(r.due_on) });
+      return { id, href: href(f, "review", id), text: String(r.sentence || "").replace(/, due \d{1,2} \w{3} \d{4}(?= — )/, ""),
+        eligible: !!r.due_on, because: r.due_on ? "due " + date(r.due_on) : null, due_date: r.due_on, group: r.source,
+        meta: meta.filter((x) => x.value), note: r.source === "conflict" ? "Choosing the value to use isn't available here yet." : null,
+        review: (decisions[r.source] || []).length ? { source: r.source, refId: r.ref_id, decisions: decisions[r.source], numeric: d.value_num != null, unit: d.unit || "", readings } : null };
+    });
+  }
   function models(context) {
     const { farm, pdm: p, advisor } = context, f = farm.id;
     const checks = list(p.checks).filter((c) => !c.superseded_at), auths = list(p.authorisations);
@@ -118,25 +139,15 @@
       due_date: plan.plan_date, detail: "Plan date " + date(plan.plan_date) }));
     planItems.push(...docs.map((d) => ({ id: d.id, text: d.title || "Document", href: href(f, "plans", d.id), eligible: false,
       detail: [d.doc_type, d.author, d.author_org, d.date_prepared ? date(d.date_prepared) : null].filter(Boolean).join(" · ") })));
-    const reviewItems = [];
-    if (advisor) {
-      for (const v of list(p.values)) if (v.state === "awaiting_check" || v.flagged) {
-        const type = L.factType(v.fact_type || "Recorded value");
-        reviewItems.push({ id: "fact-" + (v.fact_id || type), text: type[0].toUpperCase() + type.slice(1), href: href(f, "review", "fact-" + (v.fact_id || type)),
-          eligible: true, because: v.state === "awaiting_check" ? "extracted value awaits an advisor check" : "recorded sources disagree", detail: "Review the source; no value is asserted here." });
-      }
-      for (const c of checks) if (c.author_kind !== "advisor" && !c.confirmed_by || c.inputs?.threshold_to_confirm) {
-        const id = "check-" + c.id;
-        reviewItems.push({ id, text: authName(auths.find((a) => a.id === c.authorisation_id) || {}) || "Recorded check",
-          href: href(f, "review", id), eligible: true, because: c.inputs?.threshold_to_confirm ? "threshold needs confirmation" : "check awaits advisor confirmation",
-          detail: status(c) });
-      }
-      for (const [key, s] of Object.entries(p.sections || {})) if (s.state === "draft" && s.body) {
-        const id = "text-" + key;
-        reviewItems.push({ id, text: L.section(key), href: href(f, "review", id), eligible: true,
-          because: "draft text has not been saved as written" });
-      }
-    }
+    const queue = advisor && Array.isArray(context.reviewQueue) ? context.reviewQueue : null;
+    const reviewItems = queue ? reviewRows(queue, f) : [];
+    const total = queue ? queue.length : context.reviewCounts?.total;
+    const dated = queue ? queue.map((r) => r.due_on).filter(Boolean).sort() : [];
+    const reviewAnswer = !advisor || context.reviewError || !Number.isInteger(total) || !total ? null : {
+      text: total + (total === 1 ? " thing is" : " things are") + " waiting for you",
+      because: dated.length ? "the earliest is due " + date(dated[0]) : "none has a due date" };
+    const reviewEmpty = !advisor ? { text: "Your farm's advisor handles review." } : context.reviewError ? { text: "The review list couldn't be read." } :
+      context.reviewCounts === null && !queue ? { text: "The review count isn't available." } : { text: "Nothing is waiting for review." };
     return {
       authorisations: make("authorisations", "Authorisations", authItems,
         auths.length ? { text: auths.length + (auths.length === 1 ? " authorisation is recorded" : " authorisations are recorded"), because: checks.some(human) ? "advisor assessments are shown with their authors" : "the checks still need an advisor\'s assessment" } : null,
@@ -156,16 +167,15 @@
         plans.length ? { text: plans.length + " plan version" + (plans.length === 1 ? "" : "s") + " and " + docs.length + (context.uncited ? (docs.length === 1 ? " document" : " documents") : (docs.length === 1 ? " cited document" : " cited documents")) + " recorded", because: plans.some((x) => ["draft", "in_review"].includes(x.status)) ? "a draft is waiting for review" : "signed versions preserve the agreed record" } : null,
         { text: "No plan yet · " + docs.length + " documents recorded.", startBy: "reading the existing documents, then starting a draft when ready." },
         { startAction: context.canEdit ? "Start a new plan version" : null }),
-      review: make("review", "Review", reviewItems,
-        advisor && reviewItems.length ? { text: reviewItems.length + (reviewItems.length === 1 ? " recorded item needs" : " recorded items need") + " an advisor's look", because: "they await checking or confirmation" } : null,
-        { text: advisor ? "No review items identified in the recorded information." : "Your farm's advisor handles review.", startBy: advisor && !plans.length ? "reading the recorded documents." : null },
-        { restricted: !advisor }),
+      review: make("review", "Review", reviewItems, reviewAnswer, reviewEmpty,
+        { restricted: !advisor || !!context.reviewError || (!!queue && !queue.length) || (!queue && total === 0), cards: true, rank: "given", noCount: !queue, openAll: !!queue, allLabel: "All review items",
+          groups: [["unconfirmed_check", "Checks to confirm"], ["unchecked_fact", "Values read from documents"], ["conflict", "Recorded more than one way"], ["review_item", "Notes from the import"]] }),
     };
   }
   function match(hash) {
     const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(authorisations|actions|plans|review)|\/plan\/([0-9a-f-]{36}))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[3] ? "reader" : m[2] || "map", plan: m[3] || null, item: m[4] ? decodeURIComponent(m[4]) : null } : null; } catch { return null; }
   }
-  return { models, match, href, views, status, date };
+  return { models, match, href, views, status, date, reviewRows };
 });
 

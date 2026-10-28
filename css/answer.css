@@ -37,3 +37,10 @@
   .record-filters { grid-template-columns: 1fr; }.record-filter-count { grid-column: 1; }
 }
 
+.review-form { display: grid; gap: 10px; border-top: 1px solid var(--rule); margin-top: 12px; padding-top: 12px; }
+.review-form label { display: grid; gap: 4px; color: var(--ink-2); font-size: 12px; }
+.review-form input, .review-form select { min-width: 0; padding: 9px; font: inherit; font-size: 14px; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+.review-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-buttons button { min-height: 44px; padding: 0 14px; }
+.review-error, .review-status { margin: 0; font-size: 14px; }
+.review-status { margin-bottom: 12px; color: var(--ink-2); }

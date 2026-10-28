@@ -1,4 +1,4 @@
-// Farm-space frame and caller-scoped reads. No writes, review-queue query, or sign-off transitions.
+// Farm-space frame and caller-scoped reads. The only write is resolve_review (0031), from the Review view.
 (function (root, factory) {
   const api = factory(typeof module === "object" && module.exports ? require("./farm-model.js") : root.FP.farmModel);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
@@ -38,7 +38,7 @@
     }
     return { farm, user, plans, pdm, frozen, canEdit, advisor, reviewCounts, assemblyMissing: !assembled, uncited: !assembled };
   }
-  let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, lastView = null;
+  let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, lastView = null, currentRoute = null, flash = null;
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
   function close() { document.body.classList.remove("farm-space-active", "farm-detail", "farm-reader"); token++; context = null; pending = null; openedMap = null; $("#farm-space-header")?.setAttribute("hidden", ""); }
   function setPortfolio(farms, person) { portfolio = farms; user = person; init(); }
@@ -87,6 +87,27 @@
         const source = context?.pdm.documents?.find((d) => d.id === doc.dataset.openDocument);
         if (source?.storage_path) FP.plan.routes.openDocument(doc, source.storage_path);
       }
+    });
+    $("#space-content").addEventListener("submit", async (e) => {
+      const form = e.target.closest(".review-form"); if (!form) return;
+      e.preventDefault();
+      const decision = e.submitter?.value, field = (n) => form.elements[n]?.value.trim() || "", fail = (m) => { const p = form.querySelector(".review-error"); p.textContent = m; p.hidden = false; };
+      const source = form.dataset.reviewSource, payload = {};
+      if (field("note")) payload.note = field("note");
+      if (decision === "reject" && !payload.note) return fail("Say why you are rejecting it.");
+      if (decision === "correct") {
+        if (!field("value")) return fail("Enter the corrected value.");
+        payload[/^-?\d+(\.\d+)?$/.test(field("value")) ? "value_num" : "value_text"] = field("value");
+      }
+      if (decision === "disagree") {
+        if (!field("status")) return fail("Choose your reading.");
+        if (!payload.note) return fail("Say why you read it differently.");
+        payload.status = field("status");
+      }
+      for (const b of form.querySelectorAll("button")) b.disabled = true;
+      const result = await FP.sb.rpc("resolve_review", { item_source: source, item_id: form.dataset.reviewId, decision, payload });
+      if (result.error) { for (const b of form.querySelectorAll("button")) b.disabled = false; return fail(result.error.message || "Couldn't save that."); }
+      flash = "Saved."; open(context.farm, currentRoute);
     });
     $("#space-content").addEventListener("change", (e) => {
       if (!e.target.matches("[data-record-filter]")) return;
@@ -179,7 +200,14 @@
     try {
       const loaded = context || await pending;
       if (current !== token) return;
-      context = loaded; header(farm, route);
+      context = loaded; currentRoute = route;
+      if (route.view === "review" && context.advisor) {
+        const queue = await FP.sb.from("review_queue").select("*").eq("farm_id", farm.id);
+        if (current !== token) return;
+        context.reviewError = !!queue.error; context.reviewQueue = queue.error ? null : queue.data || [];
+        if (!queue.error) context.reviewCounts = { ...(context.reviewCounts || {}), total: context.reviewQueue.length };
+      }
+      header(farm, route);
       document.title = farm.name + " · " + (M.views.find(([key]) => key === route.view)?.[1] || "Review") + " | Farm platform";
       try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, (route.view === "reader" ? "#/farm/" + farm.id + "/plan/" + route.plan : M.href(farm.id, route.view, route.item))); } catch {}
       if (route.view === "reader") { $("#map-msg").hidden = true; await FP.plan.routes.open({ plan: route.plan }, farm); return; }
@@ -200,6 +228,8 @@
       if (route.view !== "map") {
         const model = { ...models[route.view], selectedId: route.item };
         $("#space-content").innerHTML = FP.answer.render(model); links($("#space-content"));
+        if (flash && route.view === "review") { $("#space-content h2").after(el("p", { class: "review-status", role: "status" }, flash)); }
+        flash = null;
         const doc = route.view === "plans" && (context.pdm.documents || []).find((d) => d.id === route.item && d.storage_path);
         if (doc) $("#space-content").append(el("button", { type: "button", "data-open-document": doc.id }, "Open source document"));
         const selected = [...$("#space-content").querySelectorAll("[data-item-id]")].find((n) => n.dataset.itemId === route.item);

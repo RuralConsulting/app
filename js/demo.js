@@ -80,12 +80,25 @@
       authorisations: pdm.authorisations.map((a) => ({ ...a, farm_id: FARM })), plan_sections: sections,
       plan_section_sources: sections.flatMap((s) => (s.sources || []).map((c) => ({ section_id: s.id, farm_id: FARM, document_id: c.document_id, page: c.page, note: c.note }))),
     }, nextId: 10 };
+    const checks = pdm.checks.filter((c) => c.author_kind === "system" && !c.confirmed_by && !c.superseded_at);
+    const at = "2026-10-27T00:00:00Z";
+    data.tables.review_queue = [
+      ...checks.map((c) => ({ farm_id: FARM, plan_id: null, item_kind: "system_check", source: "unconfirmed_check", ref_id: c.id, ref: c.id,
+        sentence: "The nitrogen cap reads as \"On track\" on the recorded figures: the recorded loss is under the cap — confirm it, or put your own reading",
+        detail: { check_id: c.id, status: "on_track" }, created_at: at, state: "open", due_on: null, priority: 3 })),
+      { farm_id: FARM, plan_id: PLAN, item_kind: "fact", source: "unchecked_fact", ref_id: "de000000-0000-4000-8000-000000000101", ref: "stock_units",
+        sentence: "Sheep stock units, winter is 120 SU — check it", detail: { fact_type: "stock_units", value_num: 120, unit: "SU", document_title: "Synthetic farm notes", page: 4 },
+        created_at: at, state: "open", due_on: null, priority: 3 },
+      { farm_id: FARM, plan_id: PLAN, item_kind: "gap", source: "review_item", ref_id: "de000000-0000-4000-8000-000000000102", ref: "A3",
+        sentence: "Action A3 has no timeframe in the source document — add one or leave it as written", detail: { kind: "gap", ref: "A3" },
+        created_at: at, state: "open", due_on: null, priority: 4 },
+    ];
     if (sparse) {
       const farm = { id: FARM, org_id: ORG, name: "Example farm — sparse demo", region: "canterbury" };
       data.pdm = null; // The empty state must not depend on a plan existing.
       data.map = { ...map, farm, titles: collection([]), land_units: collection([]), layers: [], reference: [] };
       data.tables.farms = [farm]; data.tables.plans = []; data.tables.plan_sections = []; data.tables.plan_section_sources = [];
-      data.tables.authorisations = [];
+      data.tables.authorisations = []; data.tables.review_queue = [];
       data.tables.documents = [{ id: "empty-doc-1", farm_id: FARM, title: "Synthetic property notes" }, { id: "empty-doc-2", farm_id: FARM, title: "Synthetic field notes" }];
     }
     if (farmer) {
@@ -145,8 +158,15 @@
         const d = await ready;
         if (name === "review_counts") {
           if (args.farm !== FARM || !d.tables.org_members.length) return error("Advisor review only");
-          const count = d.pdm ? d.pdm.checks.filter((c) => c.author_kind === "system" && !c.confirmed_by && !c.superseded_at).length : 0;
-          return result({ total: count, by_source: { review_item: 0, unchecked_fact: 0, unconfirmed_check: count, conflict: 0 }, earliest_due: null });
+          const open = d.tables.review_queue, by = (k) => open.filter((r) => r.source === k).length;
+          return result({ total: open.length, by_source: { review_item: by("review_item"), unchecked_fact: by("unchecked_fact"), unconfirmed_check: by("unconfirmed_check"), conflict: by("conflict") }, earliest_due: null });
+        }
+        if (name === "resolve_review") {
+          if (!d.tables.org_members.length) return error("Only an advisor for this farm can resolve review items");
+          const rows = d.tables.review_queue, i = rows.findIndex((r) => r.source === args.item_source && r.ref_id === args.item_id);
+          if (i < 0) return error("That item is no longer open");
+          rows.splice(i, 1);
+          return result({ ok: true });
         }
         if (name === "farm_map") return result(args.f === FARM ? d.map : null);
         if (name !== "plan_document") return error("This operation is not available in the demo");

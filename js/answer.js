@@ -7,6 +7,7 @@
   const text = (v) => typeof v === "string" && v.trim();
   const link = (href, label, attrs = "") => text(href) && /^#\//.test(href) ? '<a href="' + esc(href) + '" ' + attrs + ">" + esc(label) + "</a>" : esc(label);
   function ranked(items, rank) {
+    if (rank === "given") return [...items];
     return [...items].sort((a, b) => (rank === "receptor_weight" ? Number(b.receptor_weight || 0) - Number(a.receptor_weight || 0) :
       (a.due_date || "9999").localeCompare(b.due_date || "9999")) || String(a.id).localeCompare(String(b.id)));
   }
@@ -27,16 +28,24 @@
       esc(item.managementArea || "") + '" data-place-ids="' + esc((item.placeIds || []).join(" ")) + '" data-item-id="' + esc(item.id) + '"' + (model.selectedId === item.id ? " open" : "") + "><summary><span>" + esc(item.text) + "</span>" +
       (item.kind && !item.text.toLowerCase().endsWith(item.kind.toLowerCase()) ? "<small>" + esc(item.kind) + "</small>" : "") + "</summary><div class=\"record-card-body\">" + ((item.meta || []).length ? "<dl>" + item.meta.map((m) => "<div><dt>" + esc(m.label) + "</dt><dd>" + esc(m.value) + "</dd></div>").join("") + "</dl>" : "") +
       (item.cardType === "authorisation" ? ((item.obligations || []).length ? '<div class="record-obligations">' + item.obligations.map(obligation).join("") + "</div>" : '<p class="record-empty">No obligations recorded.</p>') :
-        (item.sections || []).map(section).join("") + (item.note ? '<p class="record-note">' + esc(item.note) + "</p>" : "")) + "</div></details>";
+        (item.sections || []).map(section).join("") + (item.note ? '<p class="record-note">' + esc(item.note) + "</p>" : "")) + reviewForm(item.review) + "</div></details>";
+    const reviewForm = (r) => {
+      if (!r) return "";
+      const note = (label) => '<label>' + label + '<input name="note" autocomplete="off"></label>';
+      const fields = r.source === "unchecked_fact" ? '<label>Corrected value' + (r.unit ? " (" + esc(r.unit) + ")" : "") + '<input name="value" autocomplete="off" ' + (r.numeric ? 'inputmode="decimal" ' : "") + "></label>" + note("Note (needed to reject)") :
+        r.source === "unconfirmed_check" ? '<label>Your reading<select name="status"><option value="">Choose a reading</option>' + r.readings.map(([v, l]) => '<option value="' + esc(v) + '">' + esc(l) + "</option>").join("") + "</select></label>" + note("Why (needed to read it differently)") : note("Note (optional)");
+      return '<form class="review-form" data-review-source="' + esc(r.source) + '" data-review-id="' + esc(r.refId) + '">' + fields + '<div class="review-buttons">' +
+        r.decisions.map(([v, l]) => '<button type="submit" name="decision" value="' + esc(v) + '">' + esc(l) + "</button>").join("") + '</div><p class="review-error" role="alert" hidden></p></form>';
+    };
     const cards = () => (model.groups || [["recorded", "Recorded"]]).map(([key, label]) => {
       const grouped = items.filter((i) => (i.group || "recorded") === key);
       return grouped.length ? '<section class="record-group" data-record-group="' + esc(key) + '"><h3>' + esc(label) + " (" + grouped.length + ')</h3><div class="record-cards">' + grouped.map(card).join("") + "</div></section>" : "";
     }).join("");
     const options = (rows) => (rows || []).map((o) => '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>").join("");
     const filters = model.filters && items.length ? '<div class="record-filters"><label>Management area<select data-record-filter="management"><option value="">All management areas</option>' + options(model.filters.managementAreas) + '</select></label><label>Land unit<select data-record-filter="place"><option value="">All land units</option>' + options(model.filters.landUnits) + '</select></label><p class="record-filter-count" aria-live="polite">Showing all ' + items.length + " records.</p></div>" : "";
-    const allLabel = (model.allLabel || "All records") + " (" + items.length + ")";
+    const allLabel = (model.allLabel || "All records") + (model.noCount ? "" : " (" + items.length + ")");
     const all = model.compact ? link(model.href, allLabel, 'class="answer-all-link"') :
-      '<details class="answer-all"' + (model.selectedId ? " open" : "") + "><summary>" + esc(allLabel) +
+      '<details class="answer-all"' + (model.selectedId || model.openAll ? " open" : "") + "><summary>" + esc(allLabel) +
       "</summary>" + (items.length ? (model.cards ? filters + cards() : "<ul>" + items.map((i) => row(i, false)).join("") + "</ul>") : "<p>Nothing else recorded.</p>") + "</details>";
     return '<section class="answer-panel' + (model.compact ? " answer-compact" : "") + '" data-answer-key="' + esc(model.key) +
       '" data-answer-state="' + (!hasAnswer && !highlights.length ? "empty" : "recorded") + '">' +
