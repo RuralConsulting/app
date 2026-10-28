@@ -18,7 +18,7 @@
 
   const entered = (r) => {
     const p = r.entered_by_person, name = p?.by_name;
-    return name && name !== p.user_id ? name : "Not recorded";
+    return name && name !== p.user_id ? name : "Name not shown";
   };
   // Compare only explicit contradictions. Missing dates/status are unknown, never a finding.
   function differs(x, a) {

@@ -1,4 +1,4 @@
-/* Farm platform web app. Colours and type match the RCL map portal. */
+/* Farm platform web app: shared system type and the RCL colour palette. */
 :root {
   --text-small: .8125rem; --text-body: 1rem; --text-heading: 1.375rem; --text-title: 2rem;
   --radius: 10px; --space: 16px;
@@ -111,5 +111,12 @@ button, input { font: inherit; color: inherit; }
 button, input, select, textarea { font-family: var(--f-ui); }
 button, select { cursor: pointer; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
-button:not(.link):not(.source-value):not(.document-link):not(.pf-pin):not(.maplibregl-popup-close-button), select, input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
-button:not([class]):not([data-source-open]), .review-buttons button { border: 1px solid var(--rule); border-radius: 6px; background: var(--wash); color: var(--ink); padding: 8px 12px; }
+/* App controls are scoped so MapLibre retains its own dimensions and icon alignment. */
+.plan-toolbar button:not(.link), #plan-audits > button, .audit-record > button,
+.pack-actions button, .prose-dialog button, .source-dialog > button,
+.answer-panel > button, .review-buttons button, #farm-jump button {
+  font: inherit; min-height: 36px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); padding: 6px 12px;
+}
+.review-buttons button, .prose-dialog button, .source-dialog > button,
+.review-form input:not([type="radio"]), .review-form select, .record-filters select { min-height: 44px; }

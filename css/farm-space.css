@@ -86,5 +86,22 @@ body.portfolio-active #layers-open { display: none; }
 #portfolio-list .has-overdue button { border-inline-start: 3px solid var(--brand); }
 #farm-tabs a { display: flex; align-items: center; justify-content: center; min-height: 44px; }
 #space-content > .answer-panel { min-height: 0; }
-#farm-space-header button { border: 0; background: none; color: inherit; }
+#farm-jump button { border: 1px solid var(--rule); background: var(--wash); color: var(--ink); }
+@media (max-width: 800px) {
+  #farm-space-header { padding: 6px 10px 0; }
+  .farm-header-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 10px; }
+  #space-farm-name { grid-column: 1 / 3; grid-row: 1; font-size: var(--text-body); max-width: none; margin: 0; }
+  .farm-switch-label { grid-column: 1; grid-row: 2; justify-self: start; margin: 0; }
+  #space-person { grid-column: 3; grid-row: 1; min-width: 0; max-width: 90px; margin: 0; }
+  #space-review { grid-column: 2; grid-row: 2; }
+  #space-signout { grid-column: 3; grid-row: 2; }
+  #space-review, #space-signout { white-space: nowrap; }
+  .farm-header-lower { margin-top: 4px; }
+  #farm-tabs a { padding: 5px 3px; min-height: 38px; line-height: 1.25; }
+  #farm-jump { padding: 4px 0; }
+  #farm-jump input, #farm-jump button, .farm-switch-label select { min-height: 30px; padding: 4px 6px; }
+  body.farm-space-active .plan-toolbar #plan-farm-label,
+  body.farm-space-active .plan-toolbar .b-signout { display: none; }
+  body.farm-space-active .plan-toolbar { gap: 12px; padding: 6px 10px; }
+}
 @media (max-width: 800px) { #portfolio { bottom: 0; max-height: 48%; } }

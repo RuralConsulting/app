@@ -47,13 +47,14 @@
   }
   // The overview sentences, written once: the farm home (models) and the portfolio (summaryLine) both use them.
   const say = {
-    overdue: (n, overall) => ({ text: n + " actions are still recorded as planned after their due dates" + overall, because: "progress has not been confirmed here" }),
-    actions: (n, overall) => ({ text: n + " actions are recorded" + overall, because: "they form the recorded programme; current progress has not been confirmed here" }),
+    overdue: (n, overall) => ({ text: n + " actions are still recorded as planned after their due dates" + overall, because: "progress has not been confirmed here", short: n + " actions are still recorded as planned after their due dates." }),
+    actions: (n, overall) => ({ text: n + " actions are recorded" + overall, because: "they form the recorded programme; current progress has not been confirmed here", short: n + " actions are recorded." }),
     overall: (o) => o ? "; overall significance " + o.text + " (" + o.assessed_by + ", " + date(o.assessed_on) + ")" : "",
     authorisations: (n, assessed) => ({ text: n + (n === 1 ? " authorisation is recorded" : " authorisations are recorded"),
-      because: assessed ? "advisor assessments are shown with their authors" : "the checks still need an advisor\'s assessment" }),
+      because: assessed ? "advisor assessments are shown with their authors" : "the checks still need an advisor\'s assessment", short: n + (n === 1 ? " authorisation is recorded." : " authorisations are recorded.") }),
     plans: (n, docs, cited, open) => ({ text: n + " plan version" + (n === 1 ? "" : "s") + " and " + docs + (cited ? (docs === 1 ? " cited document" : " cited documents") : (docs === 1 ? " document" : " documents")) + " recorded",
-      because: open ? "a draft is waiting for review" : "signed versions preserve the agreed record" }),
+      because: open ? "a draft is waiting for review" : "signed versions preserve the agreed record",
+      short: n + " plan version" + (n === 1 ? "" : "s") + " and " + docs + (cited ? (docs === 1 ? " cited document" : " cited documents") : (docs === 1 ? " document" : " documents")) + " recorded" + (open ? " — a draft is waiting for review" : "") + "." }),
     noPlan: (docs) => "No plan yet · " + docs + " documents recorded.",
   };
   function models(context) {
@@ -189,7 +190,7 @@
     const m = models(context);
     for (const key of ["actions", "authorisations", "plans"]) {
       const a = m[key].answer;
-      if (a?.text) return a.text.split("; overall significance")[0] + (a.because?.includes("draft") ? " — " + a.because : "") + ".";
+      if (a?.short) return a.short;
     }
     return m.plans.empty.text;
   }
@@ -199,7 +200,7 @@
     for (const a of [Number(s.overdue_actions) ? say.overdue(Number(s.overdue_actions), overall) : Number(s.programme_actions) ? say.actions(Number(s.programme_actions), overall) : null,
       Number(s.authorisation_count) ? say.authorisations(Number(s.authorisation_count), !!s.advisor_checked) : null,
       Number(s.plan_count) ? say.plans(Number(s.plan_count), Number(s.document_count), true, Number(s.open_plan_count) > 0) : null])
-      if (a?.text) return a.text.split("; overall significance")[0] + (a.because?.includes("draft") ? " — " + a.because : "") + ".";
+      if (a?.short) return a.short;
     return say.noPlan(Number(s.document_count));
   }
   function match(hash) {
