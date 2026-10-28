@@ -31,7 +31,7 @@
     conflict: [["pin", "Use this value"]],
   };
   // review_queue rows (0031) -> cards. Order is the view's: dated, conflicts, AI values and checks, loader notes.
-  function reviewRows(rows, f) {
+  function reviewRows(rows, f, byOwner) {
     return [...rows].sort((a, b) => (a.priority - b.priority) || String(a.due_on || "9999").localeCompare(String(b.due_on || "9999")) ||
       String(a.created_at).localeCompare(String(b.created_at)) || String(a.ref_id).localeCompare(String(b.ref_id))).map((r) => {
       const d = r.detail || {}, id = r.source + "-" + r.ref_id, meta = [];
@@ -41,12 +41,13 @@
       return { id, href: href(f, "review", id), text: String(r.sentence || "").replace(/, due \d{1,2} \w{3} \d{4}(?= — )/, ""),
         eligible: !!r.due_on, because: r.due_on ? "due " + date(r.due_on) : null, due_date: r.due_on, group: r.source,
         meta: meta.filter((x) => x.value), note: null,
-        review: (decisions[r.source] || []).length ? { source: r.source, refId: r.ref_id, decisions: decisions[r.source], numeric: d.value_num != null, unit: d.unit || "", readings,
+        review: (decisions[r.source] || []).length ? { source: r.source, refId: r.ref_id, decisions: decisions[r.source], numeric: d.value_num != null, unit: d.unit || "", readings: byOwner ? readings.filter(([v]) => v !== "gap") : readings, ownerNote: !!byOwner,
           candidates: r.source === "conflict" ? list(d.candidates).filter((c) => c.fact_id).map((c) => ({ factId: c.fact_id, label: [c.value, c.unit].filter(Boolean).join(" ") + (c.source ? " — " + c.source : "") })) : [] } : null };
     });
   }
   function models(context) {
     const { farm, pdm: p, advisor } = context, f = farm.id;
+    const reviewer = !!advisor || !!context.owner; // advisors, and the farm's owner (0037)
     const checks = list(p.checks).filter((c) => !c.superseded_at), auths = list(p.authorisations);
     const actions = list(p.actions?.programme).filter((a) => !["possible", "not_doing"].includes(a.status));
     const risks = list(p.risks), docs = list(p.documents), plans = list(context.plans);
@@ -140,14 +141,14 @@
       due_date: plan.plan_date, detail: "Plan date " + date(plan.plan_date) }));
     planItems.push(...docs.map((d) => ({ id: d.id, text: d.title || "Document", href: href(f, "plans", d.id), eligible: false,
       detail: [d.doc_type, d.author, d.author_org, d.date_prepared ? date(d.date_prepared) : null].filter(Boolean).join(" · ") })));
-    const queue = advisor && Array.isArray(context.reviewQueue) ? context.reviewQueue : null;
-    const reviewItems = queue ? reviewRows(queue, f) : [];
+    const queue = reviewer && Array.isArray(context.reviewQueue) ? context.reviewQueue : null;
+    const reviewItems = queue ? reviewRows(queue, f, !advisor) : [];
     const total = queue ? queue.length : context.reviewCounts?.total;
     const dated = queue ? queue.map((r) => r.due_on).filter(Boolean).sort() : [];
-    const reviewAnswer = !advisor || context.reviewError || !Number.isInteger(total) || !total ? null : {
+    const reviewAnswer = !reviewer || context.reviewError || !Number.isInteger(total) || !total ? null : {
       text: total + (total === 1 ? " thing is" : " things are") + " waiting for you",
       because: dated.length ? "the earliest is due " + date(dated[0]) : "none has a due date" };
-    const reviewEmpty = !advisor ? { text: "Your farm's advisor handles review." } : context.reviewError ? { text: "The review list couldn't be read." } :
+    const reviewEmpty = !reviewer ? { text: "Your farm's advisor handles review." } : context.reviewError ? { text: "The review list couldn't be read." } :
       context.reviewCounts === null && !queue ? { text: "The review count isn't available." } : { text: "Nothing is waiting for review." };
     return {
       authorisations: make("authorisations", "Authorisations", authItems,
@@ -169,7 +170,7 @@
         { text: "No plan yet · " + docs.length + " documents recorded.", startBy: "reading the existing documents, then starting a draft when ready." },
         { startAction: context.canEdit ? "Start a new plan version" : null }),
       review: make("review", "Review", reviewItems, reviewAnswer, reviewEmpty,
-        { restricted: !advisor || !!context.reviewError || (!!queue && !queue.length) || (!queue && total === 0), cards: true, rank: "given", noCount: !queue, openAll: !!queue, allLabel: "All review items",
+        { restricted: !reviewer || !!context.reviewError || (!!queue && !queue.length) || (!queue && total === 0), cards: true, rank: "given", noCount: !queue, openAll: !!queue, allLabel: "All review items",
           groups: [["unconfirmed_check", "Checks to confirm"], ["unchecked_fact", "Values read from documents"], ["conflict", "Recorded more than one way"], ["review_item", "Notes from the import"]] }),
     };
   }

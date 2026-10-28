@@ -11,6 +11,7 @@
       read(sb.from("plans").select("id,title,status,plan_date,version_label,created_at").eq("farm_id", farm.id).order("created_at", { ascending: false })),
     ]);
     const canEdit = ["owner", "admin", "edit"].includes(member.role);
+    const owner = member.role === "owner";
     const advisor = canEdit && ["admin", "advisor", "facilitator"].includes(org?.role);
     const selected = plans.find((p) => ["draft", "in_review"].includes(p.status)) || plans[0];
     let pdm, frozen = false, assembled = false;
@@ -32,11 +33,11 @@
         actions: { programme: [], possible: [] }, land_units: [], receptors: [] };
     }
     let reviewCounts = null;
-    if (advisor) {
+    if (advisor || owner) {
       const result = await sb.rpc("review_counts", { farm: farm.id });
       if (!result.error) reviewCounts = result.data; // Optional badge: failure is unknown, never zero.
     }
-    return { farm, user, plans, pdm, frozen, canEdit, advisor, reviewCounts, assemblyMissing: !assembled, uncited: !assembled };
+    return { farm, user, plans, pdm, frozen, canEdit, advisor, owner, reviewCounts, assemblyMissing: !assembled, uncited: !assembled };
   }
   let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, lastView = null, currentRoute = null, flash = null;
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
@@ -186,7 +187,7 @@
     select.value = farm.id;
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
     $("#farm-tabs").replaceChildren(...M.views.map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key || route.view === "reader" && key === "plans" ? { "aria-current": "page" } : {}) }, label)));
-    const review = $("#space-review"); review.hidden = !context.advisor;
+    const review = $("#space-review"); review.hidden = !(context.advisor || context.owner);
     review.href = FP.href(M.href(farm.id, "review"));
     const count = context.reviewCounts?.total;
     review.textContent = "Review" + (Number.isInteger(count) && count >= 0 ? " (" + count + ")" : "");
@@ -240,7 +241,7 @@
       const loaded = context || await pending;
       if (current !== token) return;
       context = loaded; currentRoute = route;
-      if (route.view === "review" && context.advisor) {
+      if (route.view === "review" && (context.advisor || context.owner)) {
         const queue = await FP.sb.from("review_queue").select("*").eq("farm_id", farm.id);
         if (current !== token) return;
         context.reviewError = !!queue.error; context.reviewQueue = queue.error ? null : queue.data || [];
@@ -261,7 +262,7 @@
         renderLayers(view.entries); openedMap = farm.id;
       }
       FP.farmMap.resize();
-      const models = M.models(context), keys = ["authorisations", "actions", "plans", ...(context.advisor ? ["review"] : [])];
+      const models = M.models(context), keys = ["authorisations", "actions", "plans", ...(context.advisor || context.owner ? ["review"] : [])];
       $("#overview-cards").innerHTML = keys.map((key) => FP.answer.render({ ...models[key], compact: true, startAction: null })).join("");
       links($("#overview-cards"));
       if (route.view !== "map") {

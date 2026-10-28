@@ -55,6 +55,8 @@
   const polygon = (w, s, e, n) => ({ type: "Polygon", coordinates: [[[w,s],[e,s],[e,n],[w,n],[w,s]]] });
   const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
   const collection = (features) => ({ type: "FeatureCollection", features });
+  // Mirrors app.can_review (0037): an advisor of the farm's organisation, or the farm's owner.
+  const canReview = (d) => d.tables.org_members.length > 0 || d.tables.farm_members.some((m) => m.farm_id === FARM && m.user_id === d.user.id && m.role === "owner");
   function dataset(fixture, { sparse = false, farmer = false, multi = false } = {}) {
     const pdm = copy(fixture);
     pdm.farm = { ...pdm.farm, id: FARM, org_id: ORG, name: "Cairnvale — synthetic demo" };
@@ -119,7 +121,7 @@
       data.tables.documents = [{ id: "empty-doc-1", farm_id: FARM, title: "Synthetic property notes" }, { id: "empty-doc-2", farm_id: FARM, title: "Synthetic field notes" }];
     }
     if (farmer) {
-      data.tables.farm_members[0].role = "view"; data.tables.org_members = [];
+      data.tables.farm_members[0].role = "owner"; data.tables.org_members = []; // the farmer is the farm's owner (0037)
       data.user.email = "farmer@example.test";
       if (data.pdm) { data.pdm.viewer.is_advisor = false; data.pdm.actions.not_doing = []; }
     }
@@ -185,12 +187,12 @@
       async rpc(name, args) {
         const d = await ready;
         if (name === "review_counts") {
-          if (args.farm !== FARM || !d.tables.org_members.length) return error("Advisor review only");
+          if (args.farm !== FARM || !canReview(d)) return error("Advisor or owner review only");
           const open = d.tables.review_queue, by = (k) => open.filter((r) => r.source === k).length;
           return result({ total: open.length, by_source: { review_item: by("review_item"), unchecked_fact: by("unchecked_fact"), unconfirmed_check: by("unconfirmed_check"), conflict: by("conflict") }, earliest_due: null });
         }
         if (name === "resolve_review") {
-          if (!d.tables.org_members.length) return error("Only an advisor for this farm can resolve review items");
+          if (!canReview(d)) return error("Only an advisor or the owner of this farm can resolve review items");
           const rows = d.tables.review_queue, i = rows.findIndex((r) => r.source === args.item_source && r.ref_id === args.item_id);
           if (i < 0) return error("That item is no longer open");
           if (args.item_source === "conflict") {
