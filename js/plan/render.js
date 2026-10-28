@@ -352,7 +352,7 @@
     for (const v of arr(pdm.values)) if (v.flagged) completeness.push((v.fact_type || v.fact_id) + ": recorded disagreement needs acknowledgement");
     const reviewItems = [...new Set([...completeness, ...issues])];
     const panel = pdm.viewer?.is_advisor && !frozen && reviewItems.length ? '<aside class="review-banner screen-only">' + reviewItems.length +
-      ' things to review before sign-off <a href="#/farm/' + esc(pdm.farm.id) + '/review">→ Review</a></aside>' : "";
+      ' to review <a href="#/farm/' + esc(pdm.farm.id) + '/review">→ Review</a></aside>' : "";
     const html = '<article class="farm-plan" data-template="' + esc(template.key) + '"><nav class="plan-contents screen-only" aria-label="Contents"><h2>Contents</h2><div class="contents-links">' + template.sections.map(([key, label]) =>
       '<a href="#plan-' + key + '" data-plan-anchor="plan-' + key + '">' + esc(label) + '</a>').join("") + '</div></nav><div class="reader-body">' + panel + parts.join("") + '</div></article>';
     return { html, reviewItems };
