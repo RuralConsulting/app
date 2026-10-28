@@ -1,0 +1,40 @@
+{
+  "fixture": "Synthetic demo farm. Every name, number and date is invented; nothing here describes a real farm, person or consent.",
+  "as_at": "2026-10-29",
+  "farm": { "name": "Example Downs — synthetic demo", "region": "canterbury" },
+  "extent_ha": 316.7,
+  "titles": [
+    { "title_no": "DEMO/1", "estate": "Synthetic legal description", "area_ha": 259.2 }
+  ],
+  "land_units": [
+    { "code": "LU1", "name": "Irrigated light soils", "area_ha": 20.95 },
+    { "code": "LU2", "name": "Dryland river terraces", "area_ha": 229.78 },
+    { "code": "LU3", "name": "Irrigated heavy soils", "area_ha": 16.45 },
+    { "code": "LU4", "name": "Leased hill country", "area_ha": 49.52 }
+  ],
+  "documents": [
+    { "id": "doc-fep", "title": "Farm Environment Plan 2024 (synthetic)", "doc_type": "fep", "author": "Sam Example", "author_org": "Example Advisory Ltd",
+      "date_prepared": "2024-08-01", "page_count": 32, "storage_path": "demo/fep.pdf", "created_at": "2026-03-02T09:00:00Z" },
+    { "id": "doc-consent", "title": "Land use consent decision (synthetic)", "doc_type": "consent_decision", "author": null, "author_org": "Example Regional Council",
+      "date_prepared": "2025-01-14", "page_count": 9, "storage_path": "demo/consent.pdf", "created_at": "2026-03-02T09:05:00Z" },
+    { "id": "doc-nutrient", "title": "Nutrient budget 2025/26 (synthetic)", "doc_type": "overseer_report", "author": "Alex Example", "author_org": "Example Advisory Ltd",
+      "date_prepared": "2026-09-30", "page_count": 14, "storage_path": "demo/nutrient.pdf", "created_at": "2026-10-12T21:30:00Z" },
+    { "id": "doc-notes", "title": "Farm walk notes, October 2026 (synthetic)", "doc_type": "memo", "author": "Farm owner", "author_org": null,
+      "date_prepared": "2026-10-18", "page_count": 3, "storage_path": "demo/notes.pdf", "created_at": "2026-10-20T03:15:00Z" }
+  ],
+  "authorisations": [
+    { "id": "auth-land", "kind": "consent", "consent_no": "CRC000101", "rule_ref": null, "title": "Land use consent (synthetic)",
+      "valid_from": "2025-01-14", "valid_to": "2040-01-14", "created_at": "2026-03-02T09:10:00Z" },
+    { "id": "auth-water", "kind": "consent", "consent_no": "CRC000102", "rule_ref": null, "title": "Water permit (synthetic)",
+      "valid_from": "2012-06-01", "valid_to": "2027-05-31", "created_at": "2026-03-02T09:12:00Z" },
+    { "id": "auth-rule", "kind": "permitted_rule", "consent_no": null, "rule_ref": "Rule 0.0", "title": "Permitted activity rule (synthetic)",
+      "valid_from": "2021-07-01", "valid_to": null, "created_at": "2026-10-20T03:20:00Z" }
+  ],
+  "obligations": [
+    { "id": "obl-report", "authorisation_id": "auth-land", "code": "4", "summary": "Send the annual nitrogen loss report", "due_date": "2026-11-30", "recurrence": "annual by 30 November" },
+    { "id": "obl-audit", "authorisation_id": "auth-land", "code": "6", "summary": "Have the farm audited", "due_date": "2027-03-31", "recurrence": null },
+    { "id": "obl-meter", "authorisation_id": "auth-water", "code": "9", "summary": "Verify the water meter", "due_date": "2027-07-31", "recurrence": "every five years" },
+    { "id": "obl-records", "authorisation_id": "auth-water", "code": "11", "summary": "Send the season's water-use records", "due_date": "2026-07-31", "recurrence": "annual by 31 July" },
+    { "id": "obl-buffer", "authorisation_id": "auth-rule", "code": null, "summary": "Keep stock out of waterways", "due_date": null, "recurrence": null }
+  ]
+}

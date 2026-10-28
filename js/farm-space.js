@@ -1,138 +1,80 @@
-// Farm-space frame and caller-scoped reads. The only write is resolve_review (0031), from the Review view.
+// The farm space: header, map with its standing answers, and Ask, Create, Documents. Reads only; no writes.
 (function (root, factory) {
   const api = factory(typeof module === "object" && module.exports ? require("./farm-model.js") : root.FP.farmModel);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
 })(typeof window === "undefined" ? globalThis : window, function (M) {
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
+  const nzToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });
+  // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
   async function load(sb, farm, user) {
-    const [member, org, plans] = await Promise.all([
+    const [member, org, maps, documents, authorisations, obligations, today] = await Promise.all([
       read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
       read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
-      read(sb.from("plans").select("id,title,status,plan_date,version_label,created_at").eq("farm_id", farm.id).order("created_at", { ascending: false })),
+      read(sb.rpc("farm_map", { f: farm.id })),
+      read(sb.from("documents").select("id,title,doc_type,author,author_org,date_prepared,page_count,storage_path,created_at").eq("farm_id", farm.id).order("title")),
+      read(sb.from("authorisations").select("id,kind,title,consent_no,rule_ref,valid_from,valid_to,created_at").eq("farm_id", farm.id).order("title")),
+      // Optional: if the dates can't be read, "What's due" says so rather than claiming nothing is due.
+      Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,due_date,recurrence").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
+      sb.today ? sb.today() : nzToday(),
     ]);
-    const canEdit = ["owner", "admin", "edit"].includes(member.role);
-    const owner = member.role === "owner";
-    const advisor = canEdit && ["admin", "advisor", "facilitator"].includes(org?.role);
-    const selected = plans.find((p) => ["draft", "in_review"].includes(p.status)) || plans[0];
-    let pdm, frozen = false, assembled = false;
-    if (selected) {
-      pdm = await read(sb.rpc("plan_document", { p: selected.id }));
-      if (pdm && (pdm.farm?.id !== farm.id || pdm.plan?.farm_id !== farm.id)) throw Error("This plan information is unavailable for this farm.");
-      assembled = !!pdm;
-      frozen = assembled && ["signed_off", "superseded"].includes(selected.status);
-    }
-    if (!pdm) {
-      // These existing reads also serve the map and prose/source picker. Never create a plan to open a farm.
-      const [maps, documents, authorisations] = await Promise.all([
-        read(sb.rpc("farm_map", { f: farm.id })),
-        read(sb.from("documents").select("id,title").eq("farm_id", farm.id).order("title")),
-        read(sb.from("authorisations").select("id,title,consent_no,rule_ref").eq("farm_id", farm.id).order("title")),
-      ]);
-      if (!maps) throw Error("This farm isn't shared with your login.");
-      pdm = { farm, maps, documents, authorisations, values: [], checks: [], risks: [], sections: {},
-        actions: { programme: [], possible: [] }, land_units: [], receptors: [] };
-    }
-    let reviewCounts = null;
-    if (advisor || owner) {
-      const result = await sb.rpc("review_counts", { farm: farm.id });
-      if (!result.error) reviewCounts = result.data; // Optional badge: failure is unknown, never zero.
-    }
-    return { farm, user, plans, pdm, frozen, canEdit, advisor, owner, reviewCounts, assemblyMissing: !assembled, uncited: !assembled };
+    if (!maps) throw Error("This farm isn't shared with your login.");
+    const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
+    return { farm, user, role: member.role, advisor, maps, documents, authorisations, today,
+      obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error };
   }
-  let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, lastView = null, currentRoute = null, flash = null;
+  // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
+  // read (load) only when that farm is opened.
+  const summaries = (sb) => read(sb.from("farm_summaries").select("*"));
+
+  let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null;
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
-  function close() { document.body.classList.remove("farm-space-active", "farm-detail", "farm-reader", "portfolio-active"); $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null; $("#farm-space-header")?.setAttribute("hidden", ""); }
+  function close() {
+    document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
+    $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
+    $("#farm-space-header")?.setAttribute("hidden", "");
+  }
   function setPortfolio(farms, person) { portfolio = farms; user = person; init(); }
   function init() {
     if ($("#farm-space-header")) return;
     const h = el("header", { id: "farm-space-header", hidden: true });
-    h.innerHTML = '<div class="farm-header-row"><h1 id="space-farm-name"></h1><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
-      '<span id="space-person"></span><a id="space-review" hidden></a><button class="link" id="space-signout">Sign out</button></div>' +
-      '<div class="farm-header-lower"><nav id="farm-tabs" aria-label="Farm views"></nav><form id="farm-jump"><label for="jump-input">Jump to</label>' +
-      '<input id="jump-input" list="jump-options" placeholder="Consent, action, land unit or document" autocomplete="off"><datalist id="jump-options"></datalist><button>Go</button></form></div><p id="jump-message" role="status" hidden></p>';
+    h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
+      '<span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div>' +
+      '<nav id="farm-actions" aria-label="Farm"></nav>';
     document.body.prepend(h);
     const reserve = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
     new ResizeObserver(reserve).observe(h);
-    $("#farm-switch").addEventListener("change", (e) => {
-      location.hash = FP.href(farmTarget(e.target.value));
-    });
+    $("#farm-switch").addEventListener("change", (e) => { location.hash = FP.href(farmTarget(e.target.value)); });
     $("#space-signout").addEventListener("click", async () => {
       if (FP.demo?.active) location.href = location.pathname + location.search;
       else { await FP.auth.signOut(); location.hash = ""; location.reload(); }
     });
-    $("#farm-jump").addEventListener("submit", (e) => {
-      e.preventDefault(); const term = $("#jump-input").value.trim().toLowerCase();
-      const found = term && jumpItems().find((i) => i.label.toLowerCase().includes(term));
-      const msg = $("#jump-message"); msg.hidden = !!found; msg.textContent = found ? "" : "No recorded item matches that name.";
-      if (found) location.hash = FP.href(found.href);
-    });
     $("#overview-toggle").addEventListener("click", () => {
       const rail = $("#overview-rail"), expanded = rail.classList.toggle("expanded");
       $("#overview-toggle").setAttribute("aria-expanded", String(expanded));
-      $("#overview-toggle").textContent = expanded ? "Close overview" : "Farm overview";
     });
     $("#layers-open").addEventListener("click", () => { $("#layers-drawer").hidden = false; $("#layers-open").setAttribute("aria-expanded", "true"); $("#layers-close").focus(); });
     $("#layers-close").addEventListener("click", () => { $("#layers-drawer").hidden = true; $("#layers-open").setAttribute("aria-expanded", "false"); $("#layers-open").focus(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#layers-drawer").hidden = true; $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false"); $("#overview-toggle").textContent = "Farm overview"; $("#layers-open").setAttribute("aria-expanded", "false"); } });
-    $("#overview-cards").addEventListener("click", (e) => {
-      if (e.target.closest("a,button,details")) return;
-      const target = e.target.closest(".answer-panel")?.querySelector("h2 a");
-      if (target) location.hash = target.getAttribute("href");
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      $("#layers-drawer").hidden = true; $("#layers-open").setAttribute("aria-expanded", "false");
+      $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
     });
-    $("#space-content").addEventListener("click", (e) => {
-      if (e.target.closest("[data-start-plan]") && context?.canEdit) FP.plan.routes.startNew($("#space-content"), context.farm, user, context.plans, context.advisor);
-      const doc = e.target.closest("[data-open-document]");
-      if (doc) {
-        const source = context?.pdm.documents?.find((d) => d.id === doc.dataset.openDocument);
-        if (source?.storage_path) FP.plan.routes.openDocument(doc, source.storage_path);
-      }
+    $("#space-content").addEventListener("click", async (e) => {
+      const button = e.target.closest("[data-open-document]");
+      const doc = button && context?.documents.find((d) => d.id === button.dataset.openDocument);
+      if (!doc?.storage_path) return;
+      button.disabled = true;
+      const { data, error } = await FP.sb.storage.from("documents").createSignedUrl(doc.storage_path, 3600);
+      button.disabled = false;
+      if (error || !data?.signedUrl) { button.textContent = "Couldn't open it"; return; }
+      window.open(data.signedUrl, "_blank", "noopener");
     });
-    $("#space-content").addEventListener("submit", async (e) => {
-      const form = e.target.closest(".review-form"); if (!form) return;
+    $("#space-content").addEventListener("submit", (e) => {
+      if (!e.target.matches("#ask-form")) return;
       e.preventDefault();
-      const decision = e.submitter?.value, field = (n) => form.elements[n]?.value.trim() || "", fail = (m) => { const p = form.querySelector(".review-error"); p.textContent = m; p.hidden = false; };
-      const source = form.dataset.reviewSource, payload = {};
-      if (field("note")) payload.note = field("note");
-      if (decision === "reject" && !payload.note) return fail("Say why you are rejecting it.");
-      if (decision === "correct") {
-        if (!field("value")) return fail("Enter the corrected value.");
-        payload[/^-?\d+(\.\d+)?$/.test(field("value")) ? "value_num" : "value_text"] = field("value");
-      }
-      if (decision === "pin") {
-        const chosen = form.querySelector('input[name="fact"]:checked');
-        if (!chosen) return fail("Choose the value to use.");
-        if (!payload.note) return fail("Say why this one.");
-        payload.fact_id = chosen.value;
-      }
-      if (decision === "disagree") {
-        if (!field("status")) return fail("Choose your reading.");
-        if (!payload.note) return fail("Say why you read it differently.");
-        payload.status = field("status");
-      }
-      for (const b of form.querySelectorAll("button")) b.disabled = true;
-      const result = await FP.sb.rpc("resolve_review", { item_source: source, item_id: form.dataset.reviewId, decision, payload });
-      if (result.error) { for (const b of form.querySelectorAll("button")) b.disabled = false; return fail(result.error.message || "Couldn't save that."); }
-      flash = "Saved."; open(context.farm, currentRoute);
-    });
-    $("#space-content").addEventListener("change", (e) => {
-      if (!e.target.matches("[data-record-filter]")) return;
-      const host = e.target.closest(".answer-panel"), area = host.querySelector('[data-record-filter="management"]')?.value || "";
-      const place = host.querySelector('[data-record-filter="place"]')?.value || "";
-      let shown = 0, total = 0;
-      for (const card of host.querySelectorAll(".record-card")) {
-        total++;
-        const places = (card.dataset.placeIds || "").split(" ").filter(Boolean);
-        card.hidden = !!(area && card.dataset.managementArea !== area || place && !places.includes(place));
-        if (!card.hidden) shown++;
-      }
-      for (const group of host.querySelectorAll(".record-group")) {
-        const visible = [...group.querySelectorAll(".record-card")].filter((card) => !card.hidden).length;
-        group.hidden = visible === 0;
-        const heading = group.querySelector("h3");
-        if (heading) heading.textContent = heading.textContent.replace(/\s+\(\d+\)$/, "") + " (" + visible + ")";
-      }
-      const count = host.querySelector(".record-filter-count");
-      if (count) count.textContent = area || place ? "Showing " + shown + " of " + total + " records." : "";
+      const question = $("#ask-input").value.trim();
+      if (!question) { $("#ask-input").focus(); return; }
+      $("#ask-answer").replaceChildren(el("p", { class: "ask-question" }, question), el("p", { class: "answer-sentence" }, "Ask is coming — S4"));
     });
   }
   function farmTarget(id) {
@@ -140,16 +82,11 @@
     try { if (id) target = sessionStorage.getItem("fp-view-" + user.id + "-" + id) || target; } catch {}
     return target;
   }
-  // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
-  // read (load) only when that farm is opened.
-  const summaries = (sb) => read(sb.from("farm_summaries").select("*"));
-  // Portfolio: every farm with its one sentence, and a map of them all. A farm with no summary row shows its
-  // name and says so.
+  // Portfolio: every farm with its one sentence, and a map of them all (the NZ -> farm zoom starts here).
   async function showPortfolio() {
     const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
-    context = null; pending = null; openedMap = null; lastView = null; currentRoute = null;
-    FP.plan.routes.cancel();
-    document.body.classList.remove("farm-space-active", "farm-detail", "farm-reader");
+    context = null; pending = null; openedMap = null;
+    document.body.classList.remove("farm-space-active", "farm-detail");
     document.body.classList.add("portfolio-active");
     $("#farm-space-header")?.setAttribute("hidden", "");
     for (const id of ["#space-content", "#overview-rail", "#layers-drawer", "#map-msg"]) $(id).hidden = true;
@@ -171,36 +108,21 @@
       row.line = summary ? M.summaryLine(summary) : "Couldn't read this farm.";
       row.extent = summary?.extent || null;
       row.node.querySelector("span").textContent = row.line;
-      row.node.classList.toggle("has-overdue", Number(summary?.overdue_actions) > 0);
     }
     await FP.farmMap.portfolio(rows.map((r) => ({ id: r.farm.id, name: r.farm.name, extent: r.extent })), (id) => select(rows.find((r) => r.farm.id === id)));
   }
-  function jumpItems() {
-    if (!context) return [];
-    const p = context.pdm, f = context.farm.id;
-    return [
-      ...((p.authorisations || []).map((a) => ({ label: [a.consent_no || a.rule_ref, a.title].filter(Boolean).join(" "), href: M.href(f, "authorisations", a.id) }))),
-      ...((p.actions?.programme || []).map((a) => ({ label: [a.map_code, a.title].filter(Boolean).join(" "), href: M.href(f, "actions", a.id) }))),
-      ...((p.land_units || []).map((u) => ({ label: [u.code, u.name].filter(Boolean).join(" "), href: M.href(f, "map", u.id) }))),
-      ...((p.documents || []).map((d) => ({ label: d.title, href: M.href(f, "plans", d.id) }))),
-    ];
-  }
-  function links(host) { for (const a of host.querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href"))); }
   function header(farm, route) {
-    const h = $("#farm-space-header"); h.hidden = false;
-    $("#space-farm-name").textContent = farm.name; $("#space-person").textContent = FP.demo?.active ? (context.advisor ? "Demo advisor" : "Demo farmer") : user.user_metadata?.display_name || user.email;
+    $("#farm-space-header").hidden = false;
+    const name = $("#space-farm-name");
+    name.textContent = farm.name; name.href = FP.href(M.href(farm.id, "map"));
+    if (route.view === "map") name.setAttribute("aria-current", "page"); else name.removeAttribute("aria-current");
+    $("#space-person").textContent = FP.demo?.active ? (context.advisor ? "Demo advisor" : "Demo farmer") : user.user_metadata?.display_name || user.email;
     const select = $("#farm-switch");
     select.replaceChildren(el("option", { value: "" }, "All farms"), ...portfolio.map((f) => el("option", { value: f.id }, f.name)));
     select.value = farm.id;
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
-    $("#farm-tabs").replaceChildren(...M.views.map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key || route.view === "reader" && key === "plans" ? { "aria-current": "page" } : {}) }, label)));
-    const review = $("#space-review"); review.hidden = !(context.advisor || context.owner);
-    review.href = FP.href(M.href(farm.id, "review"));
-    const count = context.reviewCounts?.total;
-    review.textContent = "Review" + (Number.isInteger(count) && count >= 0 ? " (" + count + ")" : "");
-    if (route.view === "review") review.setAttribute("aria-current", "page"); else review.removeAttribute("aria-current");
+    $("#farm-actions").replaceChildren(...M.views.map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
-    $("#jump-options").replaceChildren(...jumpItems().map((i) => el("option", { value: i.label })));
   }
   function renderLayers(entries) {
     const row = (e) => el("li", {}, el("label", {}, el("input", { type: "checkbox", checked: e.on, onchange: (ev) => FP.farmMap.setVisible(e, ev.target.checked) }),
@@ -210,82 +132,58 @@
     for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group" }, "Made for: " + job.name), ...es.map(row));
     $("#layer-list").replaceChildren(...children);
   }
-  function selectGeometry(item) {
-    if (!item) return;
-    const p = context.pdm;
-    const unit = (p.land_units || []).find((u) => u.id === item);
-    const action = (p.actions?.programme || []).find((a) => a.id === item);
-    const risk = (p.risks || []).find((r) => r.id === item);
-    const auth = (p.authorisations || []).find((a) => a.id === item);
-    const activity = (p.activities || []).find((a) => (auth?.activity_ids || []).includes(a.id));
-    const geom = unit?.geom || action?.geom || action?.places?.[0]?.geom || (p.land_units || []).find((u) => u.id === (risk?.place_id || activity?.place_id))?.geom;
-    if (geom) FP.farmMap.frame(geom);
+  function askView() {
+    const form = el("form", { id: "ask-form", class: "ask-form" },
+      el("label", { for: "ask-input", class: "visually-hidden" }, "Question"),
+      el("textarea", { id: "ask-input", rows: "3", autocomplete: "off", placeholder: "When is the next audit due?" }),
+      el("button", { type: "submit" }, "Ask"));
+    return el("section", { class: "space-view", "data-view": "ask" }, el("h2", {}, "Ask"), form, el("div", { id: "ask-answer", class: "ask-answer", "aria-live": "polite" }));
+  }
+  function createView() {
+    return el("section", { class: "space-view", "data-view": "create" }, el("h2", {}, "Create"),
+      el("ul", { class: "output-list" }, ...M.outputs.map(([key, label]) => el("li", { "data-output": key }, el("span", {}, label), el("small", {}, "coming")))));
   }
   async function open(farm, route) {
     const current = ++token;
     document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
     document.body.classList.add("farm-space-active");
-    FP.plan.routes.cancel();
-    $("#layers-drawer").hidden = true;
-    $("#layers-open").setAttribute("aria-expanded", "false");
-    $("#overview-rail").classList.remove("expanded");
-    $("#overview-toggle").setAttribute("aria-expanded", "false");
-    $("#overview-toggle").textContent = "Farm overview";
-    if (lastView === "reader" && route.view !== "reader") { context = null; openedMap = null; }
-    lastView = route.view;
+    $("#layers-drawer").hidden = true; $("#layers-open").setAttribute("aria-expanded", "false");
+    $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
     if (context?.farm.id !== farm.id) {
       context = null; openedMap = null;
-      $("#space-content").replaceChildren(); $("#overview-cards").replaceChildren(); $("#space-review").hidden = true;
+      $("#space-content").replaceChildren(); $("#overview-cards").replaceChildren();
       pending = load(FP.sb, farm, user);
     }
-    FP.show(route.view === "reader" ? "screen-plans" : "screen-map");
-    document.body.classList.toggle("farm-reader", route.view === "reader");
-    document.body.classList.toggle("farm-detail", !["map", "reader"].includes(route.view));
-    $("#space-content").hidden = route.view === "map" || route.view === "reader";
+    FP.show("screen-map");
+    document.body.classList.toggle("farm-detail", route.view !== "map");
+    $("#space-content").hidden = route.view === "map";
     $("#overview-rail").hidden = route.view !== "map";
     $("#map-msg").hidden = false; $("#map-msg").textContent = "Loading the farm…";
     try {
       const loaded = context || await pending;
       if (current !== token) return;
-      context = loaded; currentRoute = route;
-      if (route.view === "review" && (context.advisor || context.owner)) {
-        const queue = await FP.sb.from("review_queue").select("*").eq("farm_id", farm.id);
-        if (current !== token) return;
-        context.reviewError = !!queue.error; context.reviewQueue = queue.error ? null : queue.data || [];
-        if (!queue.error) context.reviewCounts = { ...(context.reviewCounts || {}), total: context.reviewQueue.length };
-      }
+      context = loaded;
       header(farm, route);
-      document.title = farm.name + " · " + (M.views.find(([key]) => key === route.view)?.[1] || "Review") + " | Farm platform";
-      try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, (route.view === "reader" ? "#/farm/" + farm.id + "/plan/" + route.plan : M.href(farm.id, route.view, route.item))); } catch {}
-      if (route.view === "reader") { $("#map-msg").hidden = true; await FP.plan.routes.open({ plan: route.plan }, farm); return; }
+      document.title = farm.name + (route.view === "map" ? "" : " · " + M.views.find(([k]) => k === route.view)[1]) + " | Farm platform";
+      try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, M.href(farm.id, route.view)); } catch {}
       if (openedMap !== farm.id) {
-        const view = await FP.farmMap.open(farm.id, context.pdm.maps);
+        const view = await FP.farmMap.open(farm.id, context.maps);
         if (current !== token) return;
         if (!view) throw Error("Map unavailable for this farm.");
-        if (!view.entries.some((e) => e.key === "actions")) {
-          const entry = FP.farmMap.addActions(context.pdm.actions?.programme, context.pdm.land_units);
-          if (entry) view.entries.push(entry);
-        }
         renderLayers(view.entries); openedMap = farm.id;
       }
       FP.farmMap.resize();
-      const models = M.models(context), keys = ["authorisations", "actions", "plans", ...(context.advisor || context.owner ? ["review"] : [])];
-      $("#overview-cards").innerHTML = keys.map((key) => FP.answer.render({ ...models[key], compact: true, startAction: null })).join("");
-      links($("#overview-cards"));
-      if (route.view !== "map") {
-        const model = { ...models[route.view], selectedId: route.item };
-        $("#space-content").innerHTML = FP.answer.render(model); links($("#space-content"));
-        if (flash && route.view === "review") { $("#space-content h2").after(el("p", { class: "review-status", role: "status" }, flash)); }
-        flash = null;
-        const doc = route.view === "plans" && (context.pdm.documents || []).find((d) => d.id === route.item && d.storage_path);
-        if (doc) $("#space-content").append(el("button", { type: "button", "data-open-document": doc.id }, "Open source document"));
+      $("#overview-cards").innerHTML = M.standingAnswers(context).map((m) => FP.answer.render({ ...m, compact: true })).join("");
+      if (route.view === "documents") {
+        $("#space-content").innerHTML = FP.answer.render({ ...M.documents(context), selectedId: route.item });
         const selected = [...$("#space-content").querySelectorAll("[data-item-id]")].find((n) => n.dataset.itemId === route.item);
-        selected?.scrollIntoView({ block: "nearest" }); if (selected) selected.focus({ preventScroll: true });
-      }
-      selectGeometry(route.item);
+        if (selected) { selected.scrollIntoView({ block: "nearest" }); selected.focus({ preventScroll: true }); }
+      } else if (route.view === "ask") { $("#space-content").replaceChildren(askView()); }
+      else if (route.view === "create") { $("#space-content").replaceChildren(createView()); }
+      for (const a of $("#space-content").querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
+      for (const a of $("#overview-cards").querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }
   return { load, summaries, setPortfolio, showPortfolio, close, open };
 });
-

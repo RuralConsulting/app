@@ -92,14 +92,12 @@ button, input, select, textarea { font-family: var(--f-ui); }
 button, select { cursor: pointer; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 /* App controls are scoped so MapLibre retains its own dimensions and icon alignment. */
-.plan-toolbar button:not(.link), #plan-audits > button, .audit-record > button,
-.pack-actions button, .prose-dialog button, .source-dialog > button,
-.answer-panel > button, .review-buttons button, #farm-jump button {
+.answer-panel button, .ask-form button {
   font: inherit; min-height: 36px; border: 1px solid var(--rule); border-radius: 6px;
   background: var(--wash); color: var(--ink); padding: 6px 12px;
 }
-.review-buttons button, .prose-dialog button, .source-dialog > button,
-.review-form input:not([type="radio"]), .review-form select, .record-filters select { min-height: 44px; }
+.ask-form button { min-height: 44px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Keep the map vendor controls legible in both token sets. */
 .maplibregl-ctrl-group, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact { background: var(--panel); color: var(--ink); }

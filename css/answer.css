@@ -11,7 +11,7 @@
 .answer-all summary { cursor: pointer; font-weight: 600; }
 .answer-all ul { padding-left: 20px; }.answer-all li { padding: 8px 0; scroll-margin-top: 20px; overflow-wrap: anywhere; }
 .record-detail { font-size: var(--text-small); color: var(--ink-2); margin: 4px 0; }
-.answer-start { font-size: var(--text-small); }.answer-compact { padding: 16px; }
+.answer-compact { padding: 16px; }
 .answer-compact h2 { font-size: var(--text-body); margin-bottom: 8px; }.answer-compact .answer-sentence { font-size: var(--text-heading); margin-bottom: 8px; }
 .answer-compact .answer-currency { font-size: var(--text-small); margin-top: 8px; }
 .answer-all-link { font-size: var(--text-small); }.selected-record { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
@@ -24,29 +24,11 @@
 .record-card > summary span { font-weight: 600; }.record-card > summary small { display: block; margin: 4px 0 0 18px; color: var(--ink-2); font-size: var(--text-small); }
 .record-card-body { padding: 0 12px 12px; }.record-card dl { margin: 0; }.record-card dl div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--rule); }
 .record-card dt { color: var(--ink-2); font-size: var(--text-small); }.record-card dd { margin: 0; font-size: var(--text-small); }
-.record-obligation { border-top: 1px solid var(--rule); margin-top: 10px; padding-top: 10px; }.record-obligation h4 { margin: 0 0 6px; font: 600 var(--text-small)/1.35 var(--f-head); }
-.record-check, .record-empty, .record-actions-label { margin: 5px 0; font-size: var(--text-small); line-height: 1.4; }.record-check, .record-empty { color: var(--ink-2); }
-.record-actions { margin: 4px 0 0; padding-left: 20px; font-size: var(--text-small); }.record-actions li { padding: 3px 0; }
-.record-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
-.record-filters label { display: grid; gap: 4px; color: var(--ink-2); font-size: var(--text-small); }.record-filters select { min-width: 0; padding: 7px; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); }
-.record-filter-count { grid-column: 1 / -1; margin: 0; color: var(--ink-2); font-size: var(--text-small); }
-.record-section { border-top: 1px solid var(--rule); margin-top: 10px; padding-top: 10px; }.record-section h4 { margin: 0 0 5px; font: 600 var(--text-small)/1.35 var(--f-head); }
-.record-section ul { margin: 0; padding-left: 20px; font-size: var(--text-small); }.record-section li { padding: 3px 0; }.record-note { color: var(--ink-2); font-size: var(--text-small); line-height: 1.4; }
 @media (max-width: 800px) {
   .answer-compact .answer-highlights li:not(:first-child) { display: none; }
-  .record-filters { grid-template-columns: 1fr; }.record-filter-count { grid-column: 1; }
 }
-
-.review-form { display: grid; gap: 10px; border-top: 1px solid var(--rule); margin-top: 12px; padding-top: 12px; }
-.review-form label { display: grid; gap: 4px; color: var(--ink-2); font-size: var(--text-small); }
-.review-form input, .review-form select { min-width: 0; padding: 9px; font: inherit; font-size: var(--text-small); color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
-.review-advisor-note { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
-.review-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.review-buttons button { min-height: 44px; padding: 0 14px; }
-.review-error, .review-status { margin: 0; font-size: var(--text-small); }
-.review-status { margin-bottom: 12px; color: var(--ink-2); }
 
 .answer-panel { border-radius: var(--radius); }
 .answer-sentence, .record-card { overflow-wrap: anywhere; }
-.record-filter-count:empty { display: none; }
-.record-filters select { width: 100%; border-radius: 6px; font: var(--text-body) var(--f-ui); }
+.record-note { color: var(--ink-2); font-size: var(--text-small); line-height: 1.4; }
+.record-card-body > button { margin-top: 10px; }

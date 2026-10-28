@@ -1,5 +1,5 @@
-// Screens and routing: sign in -> the farm (or a list if there are several) -> the map.
-// Farms live at #/farm/<id> so a link opens straight to one.
+// Screens and routing: sign in -> the farm (or the portfolio if there are several) -> the farm space.
+// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents.
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [];   // farms: active ones for lists; allFarms: also archived, so a direct link still opens
@@ -23,7 +23,6 @@
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
     const route = FP.farmModel.match(hash);
     const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
-    FP.plan.routes.cancel();
     if (farm) FP.farmSpace.open(farm, route?.farm === farm.id ? route : { farm: farm.id, view: "map" });
     else listFarms();
   }
@@ -36,7 +35,6 @@
   }
 
   // ---- events --------------------------------------------------------------------------------------
-  $("#plan-print").addEventListener("click", () => window.print());
   $("#f-signin").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const btn = ev.target.querySelector("button");
@@ -92,7 +90,7 @@
     for (const b of $$(".b-signout")) b.textContent = "Exit demo";
     const banner = el("aside", { class: "demo-banner", "aria-label": "Demonstration" },
       el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Illustrative map"),
-      ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"]].map(([href, label]) => el("a", { href }, label)),
+      ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"]].map(([href, label]) => el("a", { href }, label)),
       el("a", { href: location.pathname + location.search }, "Exit"));
     document.body.prepend(banner);
     const reserveBanner = () => document.documentElement.style.setProperty("--demo-banner-height", banner.getBoundingClientRect().height + "px");
