@@ -73,7 +73,7 @@
           "15d_conflict_declaration": { declaration: a.conflict_declaration, note: a.conflict_note, document: null }, "15e_next_audit_due": a.next_audit_due, "15f_recertification_due": a.recertification_due,
           "16a_actions_on_time": audit ? res.filter((x) => x.outcome === "on_time") : null, "16b_actions_not_on_time": audit ? res.filter((x) => x.outcome !== "on_time") : null,
           "16c_grade": { grade: a.grade, scheme: a.grade_scheme } },
-          documents: doc ? [{ role: "report", document_id: doc.id, title: doc.title, sha256: doc.sha256 || hash }] : [], supersedes_id: a.supersedes_id, entered_by_person: null, entered_at: a.entered_at, source_page: a.source_page };
+          documents: doc ? [{ role: "report", document_id: doc.id, title: doc.title, sha256: doc.sha256 || hash }] : [], supersedes_id: a.supersedes_id, entered_by_person: { by_name: "Taylor Example", user_id: USER }, entered_at: a.entered_at, source_page: a.source_page };
       }) };
   }
   function dataset(fixture, { sparse = false, farmer = false, multi = false } = {}) {
@@ -117,10 +117,10 @@
     data.tables.plan_assessments = [
       { id: aid(1), farm_id: FARM, plan_id: PLAN, kind: "certification", event_date: "2025-09-10", assessor_name: "Sam Example", assessor_org: "Example Certifiers Ltd",
         assessor_id_number: "CERT-0001", conflict_declaration: "no_conflict", conflict_note: null, report_document_id: "d-fep", grade: null, grade_scheme: null,
-        next_audit_due: "2027-09-10", recertification_due: "2030-09-10", source_page: 3, supersedes_id: null, entered_at: "2025-09-12T00:00:00Z" },
+        next_audit_due: "2027-09-10", recertification_due: "2030-09-10", source_page: 3, supersedes_id: null, entered_by_person: { by_name: "Taylor Example", user_id: USER }, entered_at: "2025-09-12T00:00:00Z" },
       { id: aid(2), farm_id: FARM, plan_id: PLAN, kind: "audit", event_date: "2026-09-18", assessor_name: "Alex Example", assessor_org: "Example Audits Ltd",
         assessor_id_number: "AUD-0042", conflict_declaration: "conflict_declared", conflict_note: "Advised the farm on a different matter in 2023.",
-        report_document_id: "d-fep", grade: "B", grade_scheme: "A to D", next_audit_due: "2028-09-18", recertification_due: null, source_page: 5, supersedes_id: null, entered_at: "2026-09-20T00:00:00Z" },
+        report_document_id: "d-fep", grade: "B", grade_scheme: "A to D", next_audit_due: "2028-09-18", recertification_due: null, source_page: 5, supersedes_id: null, entered_by_person: { by_name: "Taylor Example", user_id: USER }, entered_at: "2026-09-20T00:00:00Z" },
     ];
     data.tables.assessment_action_results = [
       { id: aid(11), farm_id: FARM, assessment_id: aid(2), action_id: progs[0].id, outcome: "late", reason: "Plan was finished in April, after the March date." },

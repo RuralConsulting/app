@@ -47,7 +47,7 @@
   }
   // The overview sentences, written once: the farm home (models) and the portfolio (summaryLine) both use them.
   const say = {
-    overdue: (n, overall) => ({ text: n + " actions are still recorded as planned after their due dates" + overall }),
+    overdue: (n, overall) => ({ text: n + " actions are still recorded as planned after their due dates" + overall, because: "progress has not been confirmed here" }),
     actions: (n, overall) => ({ text: n + " actions are recorded" + overall, because: "they form the recorded programme; current progress has not been confirmed here" }),
     overall: (o) => o ? "; overall significance " + o.text + " (" + o.assessed_by + ", " + date(o.assessed_on) + ")" : "",
     authorisations: (n, assessed) => ({ text: n + (n === 1 ? " authorisation is recorded" : " authorisations are recorded"),
@@ -126,7 +126,7 @@
         due_date: a.due_date, group: possible ? "possible" : "programme", cardType: "action", kind: L.managementArea(a.management_area), managementArea: a.management_area,
         placeIds: places.map((x) => x.id).filter(Boolean), meta: [
           { label: "Land units", value: placeText || "Not recorded" },
-          { label: "Implementation timeframe", value: a.due_date ? date(a.due_date) : a.timeframe_text || "Not recorded" },
+          { label: "Timeframe", value: a.due_date ? date(a.due_date) : a.timeframe_text || "Not recorded" },
           { label: "Status", value: L.enumLabel("action_status", a.status || (possible ? "possible" : "planned")) },
           { label: "Evidence", value: Number(a.evidence_count) ? a.evidence_count + " linked record" + (a.evidence_count === 1 ? "" : "s") : "None linked" },
         ], sections: [
@@ -170,7 +170,7 @@
         due.length ? say.overdue(due.length, overallLine) : actions.length ? say.actions(actions.length, overallLine) : null,
         { text: context.assemblyMissing ? "No risks or actions recorded yet." : "No risks or actions recorded.", startBy: "looking at the farm's activities with its advisor." },
         { rank: due.length ? "due_date" : "receptor_weight", cards: true,
-          groups: [["programme", "Five-year programme"], ["possible", "Possible actions"], ["risks", "Recorded risks"]],
+          groups: [["programme", "Programme"], ["possible", "Possible actions"], ["risks", "Recorded risks"]],
           filters: {
             managementAreas: [...new Set(actionItems.map((x) => x.managementArea).filter(Boolean))].sort().map((key) => ({ value: key, label: L.managementArea(key) })),
             landUnits: landUnits.map((u) => ({ value: u.id, label: [u.code, u.name].filter(Boolean).join(" · ") || "Recorded land unit" })),
@@ -189,7 +189,7 @@
     const m = models(context);
     for (const key of ["actions", "authorisations", "plans"]) {
       const a = m[key].answer;
-      if (a?.text) return a.text + (a.because ? " — " + a.because : "");
+      if (a?.text) return a.text.split("; overall significance")[0] + (a.because?.includes("draft") ? " — " + a.because : "") + ".";
     }
     return m.plans.empty.text;
   }
@@ -199,7 +199,7 @@
     for (const a of [Number(s.overdue_actions) ? say.overdue(Number(s.overdue_actions), overall) : Number(s.programme_actions) ? say.actions(Number(s.programme_actions), overall) : null,
       Number(s.authorisation_count) ? say.authorisations(Number(s.authorisation_count), !!s.advisor_checked) : null,
       Number(s.plan_count) ? say.plans(Number(s.plan_count), Number(s.document_count), true, Number(s.open_plan_count) > 0) : null])
-      if (a?.text) return a.text + (a.because ? " — " + a.because : "");
+      if (a?.text) return a.text.split("; overall significance")[0] + (a.because?.includes("draft") ? " — " + a.because : "") + ".";
     return say.noPlan(Number(s.document_count));
   }
   function match(hash) {

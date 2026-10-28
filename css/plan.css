@@ -1,5 +1,5 @@
 /* APP-STRUCTURE §4 reader; existing §5 colour and font tokens, four reader sizes. */
-:root { --reader-small: .8rem; --reader-body: 1rem; --reader-heading: 1.4rem; --reader-title: 2rem; --reader-gap: 1.5rem; }
+:root { --reader-small: var(--text-small); --reader-body: var(--text-body); --reader-heading: var(--text-heading); --reader-title: var(--text-title); --reader-gap: 1.5rem; }
 #screen-plans { min-height: 100%; padding-bottom: 4rem; }
 .plan-toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--rule); }
 .plan-toolbar a { color: inherit; }
@@ -86,3 +86,5 @@
   dialog.audit-pack-dialog { display: block !important; position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; max-height: none; overflow: visible; border: 0; padding: 0; color: black; background: white; }
   .audit-pack-dialog .screen-only { display: none !important; } .pack-record { break-inside: avoid; } .pack-hash { color: black; }
 }
+
+.audit-differs { font: var(--reader-small) var(--f-ui); color: var(--ink-2); border-bottom: 1px dotted var(--ink-2); margin-inline-start: .5rem; }

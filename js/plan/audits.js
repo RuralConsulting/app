@@ -16,6 +16,18 @@
   }
   const conflictText = (r) => r.conflict_declaration === "conflict_declared" ? "Conflict declared: " + (r.conflict_note || "") : "No conflict declared";
 
+  const entered = (r) => {
+    const p = r.entered_by_person, name = p?.by_name;
+    return name && name !== p.user_id ? name : "Not recorded";
+  };
+  // Compare only explicit contradictions. Missing dates/status are unknown, never a finding.
+  function differs(x, a) {
+    if (!a) return false;
+    if (x.outcome === "not_done") return a.status === "done";
+    if (["on_time", "late"].includes(x.outcome) && ["planned", "in_progress", "not_doing"].includes(a.status)) return true;
+    if (a.status !== "done" || !a.completed_on || !a.due_date) return false;
+    return x.outcome === "on_time" ? a.completed_on > a.due_date : x.outcome === "late" && a.completed_on <= a.due_date;
+  }
   function record(r, m, actionable) {
     const results = m.results.filter((x) => x.assessment_id === r.id);
     const doc = r.report_document_id && m.documents.find((d) => d.id === r.report_document_id);
@@ -28,12 +40,12 @@
     const lines = results.map((x) => {
       const a = m.actions.find((y) => y.id === x.action_id);
       const ours = a ? m.statusLabel(a.status) + (a.completed_on ? ", " + date(a.completed_on) : a.due_date ? ", due " + date(a.due_date) : "") : "";
-      return "<li><b>" + esc(a ? a.map_code : "Action") + "</b> " + esc(a ? a.title : "No longer in the plan") +
+      return "<li><b>" + esc(a ? a.map_code : "Action") + "</b> " + esc(a ? a.title : "No longer in the plan") + (differs(x, a) ? ' <span class="audit-differs">Differs</span>' : "") +
         "<br>Auditor: " + esc(OUTCOME[x.outcome] || x.outcome) + (x.reason ? " — " + esc(x.reason) : "") +
         (a ? '<br><span class="audit-ours">Our record: ' + esc(ours) + "</span>" : "") + "</li>";
     });
     return '<article class="audit-record" data-assessment="' + esc(r.id) + '"><h3>' + esc(KIND[r.kind] || r.kind) + " · " + esc(date(r.event_date)) + "</h3><dl>" +
-      row("Assessor", assessor) + row("Assessor ID number", r.assessor_id_number ? esc(r.assessor_id_number) : "Not recorded") +
+      row("Entered by", esc(entered(r))) + row("Assessor", assessor) + row("Assessor ID number", r.assessor_id_number ? esc(r.assessor_id_number) : "Not recorded") +
       (r.kind === "audit" ? row("Grade", grade) : "") + row("Conflict", esc(conflictText(r))) +
       row("Next audit due", r.next_audit_due ? esc(date(r.next_audit_due)) : "Not recorded") +
       row("Recertification due", r.recertification_due ? esc(date(r.recertification_due)) : "Not recorded") + row("Report", reportCell) + "</dl>" +
@@ -69,7 +81,7 @@
     const g = i["16c_grade"] || {};
     const na = "Not asked of a certification";
     return '<article class="audit-record pack-record"><h3>' + esc(KIND[a.kind] || a.kind) + " · " + when(i["15a_date"]) + "</h3><dl>" +
-      row("Date", when(i["15a_date"])) + row("Who did it", who) + row("Assessor ID number", txt(i["15c_assessor_id_number"])) +
+      row("Entered by", esc(entered(a))) + row("Date", when(i["15a_date"])) + row("Who did it", who) + row("Assessor ID number", txt(i["15c_assessor_id_number"])) +
       row("Conflict of interest", conflict + (c.document ? "<br>Declaration document: " + esc(c.document.title || "attached") : "")) +
       row("Next audit to be arranged by", when(i["15e_next_audit_due"])) + row("Plan to be resubmitted for recertification by", when(i["15f_recertification_due"])) +
       row("Actions done within their time frames", audit ? list(i["16a_actions_on_time"], "None reported") : na) +
@@ -79,7 +91,7 @@
   }
   // r: { pack } or { message }; ctx: { farm }
   function renderPack(r, ctx = {}) {
-    const bar = '<div class="pack-actions screen-only">' + (r.pack ? '<button type="button" data-pack-print>Print / save as PDF</button> <button type="button" data-pack-json>Download data (JSON)</button> ' : "") + '<button type="button" data-pack-close>Close</button></div>';
+    const bar = '<div class="pack-actions screen-only">' + (r.pack ? '<button type="button" data-pack-print>Print / save as PDF</button> <button type="button" data-pack-json>Download data</button> ' : "") + '<button type="button" data-pack-close>Close</button></div>';
     if (!r.pack) return "<h2>Audit pack</h2><p>" + esc(r.message) + "</p>" + bar;
     const k = r.pack, list = k.assessments || [];
     return "<h2>Audit pack</h2>" + '<p class="pack-head">' + esc(ctx.farm || "Farm") + " · " + esc(k.title || "Plan") + " · generated " + esc(date(ctx.today || new Date().toISOString().slice(0, 10))) + "</p>" + bar +

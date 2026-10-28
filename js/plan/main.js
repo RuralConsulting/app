@@ -173,7 +173,7 @@
     try { data = await A.load(FP.sb, pdm.farm.id, pdm.plan.id); } catch (e) { error = e.message || String(e); }
     if (token !== navigation) return;
     const paint = () => {
-      const html = A.render({ ...data, actions, documents, advisor, canPack: advisor || owner, error, statusLabel: (s) => L.enumLabel("action_status", s) });
+      const html = A.render({ ...data, assessments: data.assessments.map((r) => ({ ...r, entered_by_person: pdm.assessments?.find((p) => p.id === r.id)?.entered_by_person || r.entered_by_person })), actions, documents, advisor, canPack: advisor || owner, error, statusLabel: (s) => L.enumLabel("action_status", s) });
       const old = host.querySelector("#plan-audits");
       if (old) { const next = document.createElement("template"); next.innerHTML = html; const fresh = next.content.firstElementChild;
         fresh.classList.toggle("is-active", old.classList.contains("is-active")); old.replaceWith(fresh); }

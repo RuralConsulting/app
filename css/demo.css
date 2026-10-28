@@ -1,12 +1,12 @@
 /* The demo label remains visible in every view, including print. */
 .demo-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 10; min-height: 38px; padding: 7px 14px;
-  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; background: #231f20; color: white; font: 13px/1.5 system-ui, sans-serif; }
+  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; background: #231f20; color: white; font: var(--text-small)/1.5 system-ui, sans-serif; }
 .demo-banner a { color: #fec956; }.demo-banner span { margin-right: auto; }
 body.demo-mode #screen-map { top: var(--demo-banner-height, 64px); }
 body.demo-mode #screen-plans { padding-top: var(--demo-banner-height, 64px); }
 body.demo-mode .plan-toolbar { top: var(--demo-banner-height, 64px); }
 body.demo-mode #screen-farms { padding-top: calc(var(--demo-banner-height, 64px) + 24px); }
-body.demo-mode .b-password { display: none; }
+body.demo-mode .password-link { display: none; }
 @media print {
   body.demo-mode > aside.demo-banner:not(#screen-plans) { display: flex !important; position: static; background: white; color: black; border-bottom: 1px solid; }
   .demo-banner a { display: none; }

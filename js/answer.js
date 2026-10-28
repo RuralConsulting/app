@@ -22,7 +22,7 @@
     const action = (a) => '<li>' + link(a.href, a.text) + "</li>";
     const obligation = (o) => '<section class="record-obligation"><h4>' + esc(o.title || "Recorded obligation") + '</h4><p class="record-check">' +
       esc(o.check || "No check recorded.") + "</p>" + ((o.actions || []).length ? '<p class="record-actions-label">Actions recorded against this condition</p><ul class="record-actions">' +
-      o.actions.map(action).join("") + "</ul>" : '<p class="record-empty">No action is linked to this condition.</p>') + "</section>";
+      o.actions.map(action).join("") + "</ul>" : "") + "</section>";
     const section = (s) => '<section class="record-section"><h4>' + esc(s.title) + '</h4><ul>' + (s.items || []).map(action).join("") + "</ul></section>";
     const card = (item) => '<details class="record-card' + (model.selectedId === item.id ? " selected-record" : "") + '" tabindex="-1" data-management-area="' +
       esc(item.managementArea || "") + '" data-place-ids="' + esc((item.placeIds || []).join(" ")) + '" data-item-id="' + esc(item.id) + '"' + (model.selectedId === item.id ? " open" : "") + "><summary><span>" + esc(item.text) + "</span>" +
@@ -45,7 +45,7 @@
       return grouped.length ? '<section class="record-group" data-record-group="' + esc(key) + '"><h3>' + esc(label) + " (" + grouped.length + ')</h3><div class="record-cards">' + grouped.map(card).join("") + "</div></section>" : "";
     }).join("");
     const options = (rows) => (rows || []).map((o) => '<option value="' + esc(o.value) + '">' + esc(o.label) + "</option>").join("");
-    const filters = model.filters && items.length ? '<div class="record-filters"><label>Management area<select data-record-filter="management"><option value="">All management areas</option>' + options(model.filters.managementAreas) + '</select></label><label>Land unit<select data-record-filter="place"><option value="">All land units</option>' + options(model.filters.landUnits) + '</select></label><p class="record-filter-count" aria-live="polite">Showing all ' + items.length + " records.</p></div>" : "";
+    const filters = model.filters && items.length ? '<div class="record-filters"><label>Management area<select data-record-filter="management"><option value="">All areas</option>' + options(model.filters.managementAreas) + '</select></label><label>Land unit<select data-record-filter="place"><option value="">All land units</option>' + options(model.filters.landUnits) + '</select></label><p class="record-filter-count" aria-live="polite"></p></div>' : "";
     const allLabel = (model.allLabel || "All records") + (model.noCount ? "" : " (" + items.length + ")");
     const all = model.compact ? link(model.href, allLabel, 'class="answer-all-link"') :
       '<details class="answer-all"' + (model.selectedId || model.openAll ? " open" : "") + "><summary>" + esc(allLabel) +

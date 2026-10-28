@@ -132,7 +132,7 @@
         if (heading) heading.textContent = heading.textContent.replace(/\s+\(\d+\)$/, "") + " (" + visible + ")";
       }
       const count = host.querySelector(".record-filter-count");
-      if (count) count.textContent = area || place ? "Showing " + shown + " of " + total + " records." : "Showing all " + total + " records.";
+      if (count) count.textContent = area || place ? "Showing " + shown + " of " + total + " records." : "";
     });
   }
   function farmTarget(id) {
@@ -171,6 +171,7 @@
       row.line = summary ? M.summaryLine(summary) : "Couldn't read this farm.";
       row.extent = summary?.extent || null;
       row.node.querySelector("span").textContent = row.line;
+      row.node.classList.toggle("has-overdue", Number(summary?.overdue_actions) > 0);
     }
     await FP.farmMap.portfolio(rows.map((r) => ({ id: r.farm.id, name: r.farm.name, extent: r.extent })), (id) => select(rows.find((r) => r.farm.id === id)));
   }
