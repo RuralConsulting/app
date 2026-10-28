@@ -40,7 +40,7 @@
   }
   let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, lastView = null, currentRoute = null, flash = null;
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
-  function close() { document.body.classList.remove("farm-space-active", "farm-detail", "farm-reader"); token++; context = null; pending = null; openedMap = null; $("#farm-space-header")?.setAttribute("hidden", ""); }
+  function close() { document.body.classList.remove("farm-space-active", "farm-detail", "farm-reader", "portfolio-active"); $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null; $("#farm-space-header")?.setAttribute("hidden", ""); }
   function setPortfolio(farms, person) { portfolio = farms; user = person; init(); }
   function init() {
     if ($("#farm-space-header")) return;
@@ -53,9 +53,7 @@
     const reserve = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
     new ResizeObserver(reserve).observe(h);
     $("#farm-switch").addEventListener("change", (e) => {
-      const id = e.target.value; let target = id ? M.href(id, "map") : "";
-      try { if (id) target = sessionStorage.getItem("fp-view-" + user.id + "-" + id) || target; } catch {}
-      location.hash = FP.href(target);
+      location.hash = FP.href(farmTarget(e.target.value));
     });
     $("#space-signout").addEventListener("click", async () => {
       if (FP.demo?.active) location.href = location.pathname + location.search;
@@ -130,6 +128,39 @@
       if (count) count.textContent = area || place ? "Showing " + shown + " of " + total + " records." : "Showing all " + total + " records.";
     });
   }
+  function farmTarget(id) {
+    let target = id ? M.href(id, "map") : "";
+    try { if (id) target = sessionStorage.getItem("fp-view-" + user.id + "-" + id) || target; } catch {}
+    return target;
+  }
+  // Portfolio: every farm with its one sentence, and a map of them all. Reads are the same caller-scoped
+  // ones a farm opens with; a farm that can't be read shows its name and says so.
+  async function showPortfolio() {
+    const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
+    context = null; pending = null; openedMap = null; lastView = null; currentRoute = null;
+    FP.plan.routes.cancel();
+    document.body.classList.remove("farm-space-active", "farm-detail", "farm-reader");
+    document.body.classList.add("portfolio-active");
+    $("#farm-space-header")?.setAttribute("hidden", "");
+    for (const id of ["#space-content", "#overview-rail", "#layers-drawer", "#map-msg"]) $(id).hidden = true;
+    document.title = "Farms | Farm platform";
+    FP.show("screen-map");
+    $("#portfolio").hidden = false;
+    const select = (row) => { if (row.extent) FP.farmMap.zoomTo(row.extent); location.hash = FP.href(farmTarget(row.farm.id)); };
+    const items = rows.map((row) => {
+      row.node = el("li", {}, el("button", { type: "button", onclick: () => select(row) }, el("b", {}, row.farm.name),
+        row.farm.region ? el("small", {}, row.farm.region[0].toUpperCase() + row.farm.region.slice(1)) : null, el("span", {})));
+      return row.node;
+    });
+    $("#portfolio-list").replaceChildren(...items);
+    await Promise.all(rows.map(async (row) => {
+      try { const c = await load(FP.sb, row.farm, user); row.line = M.portfolioLine(c); row.extent = c.pdm.maps?.extent || null; }
+      catch { row.line = "Couldn't read this farm."; }
+      if (current === token) row.node.querySelector("span").textContent = row.line;
+    }));
+    if (current !== token) return;
+    await FP.farmMap.portfolio(rows.map((r) => ({ id: r.farm.id, name: r.farm.name, extent: r.extent })), (id) => select(rows.find((r) => r.farm.id === id)));
+  }
   function jumpItems() {
     if (!context) return [];
     const p = context.pdm, f = context.farm.id;
@@ -147,6 +178,7 @@
     const select = $("#farm-switch");
     select.replaceChildren(el("option", { value: "" }, "All farms"), ...portfolio.map((f) => el("option", { value: f.id }, f.name)));
     select.value = farm.id;
+    $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
     $("#farm-tabs").replaceChildren(...M.views.map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key || route.view === "reader" && key === "plans" ? { "aria-current": "page" } : {}) }, label)));
     const review = $("#space-review"); review.hidden = !context.advisor;
     review.href = FP.href(M.href(farm.id, "review"));
@@ -177,6 +209,7 @@
   }
   async function open(farm, route) {
     const current = ++token;
+    document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
     document.body.classList.add("farm-space-active");
     FP.plan.routes.cancel();
     $("#layers-drawer").hidden = true;
@@ -239,6 +272,6 @@
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }
-  return { load, setPortfolio, close, open };
+  return { load, setPortfolio, showPortfolio, close, open };
 });
 

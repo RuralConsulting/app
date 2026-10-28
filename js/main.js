@@ -22,18 +22,16 @@
   function route() {
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
     const route = FP.farmModel.match(hash);
-    const farm = route ? farms.find((f) => f.id === route.farm) : (!hash && !FP.demo?.active && farms.length === 1 ? farms[0] : null);
+    const farm = (route && farms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
     FP.plan.routes.cancel();
-    if (farm) FP.farmSpace.open(farm, route || { farm: farm.id, view: "map" });
+    if (farm) FP.farmSpace.open(farm, route?.farm === farm.id ? route : { farm: farm.id, view: "map" });
     else listFarms();
   }
 
   function listFarms() {
+    if (farms.length) { FP.farmSpace.showPortfolio(); return; }
     FP.farmSpace.close();
-    const ul = $("#farm-list");
-    ul.replaceChildren(...farms.map((f) => el("li", {}, el("button", { type: "button", onclick: () => { location.hash = FP.href(`#/farm/${f.id}`); } },
-      el("b", {}, f.name), el("span", {}, f.region ? f.region[0].toUpperCase() + f.region.slice(1) : "")))));
-    msg("#farms-msg", farms.length ? "" : "No farms are shared with this login yet. Ask RCL to give you access.");
+    msg("#farms-msg", "No farms are shared with this login yet. Ask RCL to give you access.");
     show("screen-farms");
   }
 

@@ -172,10 +172,19 @@
           groups: [["unconfirmed_check", "Checks to confirm"], ["unchecked_fact", "Values read from documents"], ["conflict", "Recorded more than one way"], ["review_item", "Notes from the import"]] }),
     };
   }
+  // One sentence per farm for the portfolio, from the same overview models the farm home uses.
+  function portfolioLine(context) {
+    const m = models(context);
+    for (const key of ["actions", "authorisations", "plans"]) {
+      const a = m[key].answer;
+      if (a?.text) return a.text + (a.because ? " — " + a.because : "");
+    }
+    return m.plans.empty.text;
+  }
   function match(hash) {
     const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(authorisations|actions|plans|review)|\/plan\/([0-9a-f-]{36}))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[3] ? "reader" : m[2] || "map", plan: m[3] || null, item: m[4] ? decodeURIComponent(m[4]) : null } : null; } catch { return null; }
   }
-  return { models, match, href, views, status, date, reviewRows };
+  return { models, portfolioLine, match, href, views, status, date, reviewRows };
 });
 

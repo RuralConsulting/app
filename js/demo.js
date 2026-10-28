@@ -4,15 +4,15 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else {
     root.FP = root.FP || {};
-    const active = api.isRoute(root.location.hash), sparse = api.isSparse(root.location.hash), farmer = api.isFarmer(root.location.hash);
+    const active = api.isRoute(root.location.hash), sparse = api.isSparse(root.location.hash), farmer = api.isFarmer(root.location.hash), multi = api.isMulti(root.location.hash);
     const ready = active ? fetch("demo/cairnvale-pdm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }).then((pdm) => api.dataset(pdm, { sparse, farmer })) : null;
-    root.FP.demo = { ...api, active, sparse, farmer, href: (hash) => api.href(hash, sparse, farmer), ready, client: active ? api.client(ready) : null };
+    }).then((pdm) => api.dataset(pdm, { sparse, farmer, multi })) : null;
+    root.FP.demo = { ...api, active, sparse, farmer, href: (hash) => api.href(hash, sparse, farmer, multi), ready, client: active ? api.client(ready) : null };
     // Entering/leaving demo always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
-      if (api.isRoute(root.location.hash) !== active || api.isSparse(root.location.hash) !== sparse || api.isFarmer(root.location.hash) !== farmer) { event.stopImmediatePropagation(); root.location.reload(); }
+      if (api.isRoute(root.location.hash) !== active || api.isSparse(root.location.hash) !== sparse || api.isFarmer(root.location.hash) !== farmer || api.isMulti(root.location.hash) !== multi) { event.stopImmediatePropagation(); root.location.reload(); }
     });
   }
 })(typeof window === "undefined" ? globalThis : window, function () {
@@ -20,31 +20,42 @@
   const PLAN = "de000000-0000-4000-8000-000000000002";
   const USER = "de000000-0000-4000-8000-000000000003";
   const ORG = "de000000-0000-4000-8000-000000000004";
+  const FARM2 = "de000000-0000-4000-8000-000000000005";
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|$)/.test(hash);
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|$)/.test(hash);
   const isFarmer = (hash) => /^#\/demo\/farmer(?:\/|$)/.test(hash);
+  const isMulti = (hash) => /^#\/demo\/multi(?:\/|$)/.test(hash);
   function routeHash(hash) {
-    hash = hash.replace(/^#\/demo\/(empty|farmer)(?=\/|$)/, "#/demo");
+    const multi = isMulti(hash);
+    hash = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|$)/, "#/demo");
     const [path, query] = hash.split("?");
-    let suffix = path.slice("#/demo".length);
+    let suffix = path.slice("#/demo".length), farm = FARM;
     if (suffix === "/pattern" || suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
-    if (suffix === "/plan") suffix = "/plan/" + PLAN;
+    // Two farms: "#/demo/multi" is the portfolio; "#/demo/multi/farm-1" and ".../farm-2" open one.
+    if (multi) {
+      if (suffix === "") return "";
+      const m = suffix.match(/^\/farm-([12])(?=\/|$)/);
+      if (!m) return null;
+      farm = m[1] === "2" ? FARM2 : FARM; suffix = suffix.slice(7);
+    }
+    if (suffix === "/plan" && farm === FARM) suffix = "/plan/" + PLAN;
     if (!/^$|^\/(authorisations|actions|plans|review)$|^\/plan\/[0-9a-f-]{36}$/.test(suffix)) return null;
-    return "#/farm/" + FARM + suffix + (query ? "?" + query : "");
+    return "#/farm/" + farm + suffix + (query ? "?" + query : "");
   }
-  function href(hash, sparse = false, farmer = false) {
-    const prefix = "#/farm/" + FARM;
-    if (!hash.startsWith(prefix)) return hash;
-    let suffix = hash.slice(prefix.length);
+  function href(hash, sparse = false, farmer = false, multi = false) {
+    if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
+    const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
+    if (!farm) return hash;
+    let suffix = hash.slice(("#/farm/" + farm).length);
     if (suffix === "/plan/" + PLAN) suffix = "/plan";
-    return "#/demo" + (sparse ? "/empty" : farmer ? "/farmer" : "") + suffix;
+    return "#/demo" + (multi ? "/multi/farm-" + (farm === FARM2 ? 2 : 1) : sparse ? "/empty" : farmer ? "/farmer" : "") + suffix;
   }
   const polygon = (w, s, e, n) => ({ type: "Polygon", coordinates: [[[w,s],[e,s],[e,n],[w,n],[w,s]]] });
   const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
   const collection = (features) => ({ type: "FeatureCollection", features });
-  function dataset(fixture, { sparse = false, farmer = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false } = {}) {
     const pdm = copy(fixture);
     pdm.farm = { ...pdm.farm, id: FARM, org_id: ORG, name: "Cairnvale — synthetic demo" };
     pdm.plan = { ...pdm.plan, id: PLAN, farm_id: FARM, status: "draft", title: "Farm Environment Plan", created_at: "2026-10-27T00:00:00Z" };
@@ -105,6 +116,17 @@
       data.tables.farm_members[0].role = "view"; data.tables.org_members = [];
       data.user.email = "farmer@example.test";
       if (data.pdm) { data.pdm.viewer.is_advisor = false; data.pdm.actions.not_doing = []; }
+    }
+    if (multi) {
+      // A second, small farm so the portfolio can be exercised: a map extent, one authorisation, two documents.
+      const farm = { id: FARM2, org_id: ORG, name: "Waiau Flats — synthetic demo", region: "canterbury" };
+      data.tables.farms[0].region = "canterbury";
+      data.tables.farms.push(farm);
+      data.tables.farm_members.push({ farm_id: FARM2, user_id: USER, role: "admin" });
+      data.tables.documents.push({ id: "demo2-doc-1", farm_id: FARM2, title: "Synthetic property notes" }, { id: "demo2-doc-2", farm_id: FARM2, title: "Synthetic field notes" });
+      data.tables.authorisations.push({ id: "demo2-auth-1", farm_id: FARM2, title: "Water permit (synthetic)", consent_no: "CRC000001", rule_ref: null });
+      const extent = polygon(172.62, -42.78, 172.64, -42.765);
+      data.map2 = { farm: { id: FARM2, name: farm.name }, extent, extent_ha: 220, titles: collection([]), land_units: collection([]), layers: [], reference: [] };
     }
     return data;
   }
@@ -168,7 +190,7 @@
           rows.splice(i, 1);
           return result({ ok: true });
         }
-        if (name === "farm_map") return result(args.f === FARM ? d.map : null);
+        if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 || null : null);
         if (name !== "plan_document") return error("This operation is not available in the demo");
         const plan = d.tables.plans.find((p) => p.id === args.p);
         if (!plan) return result(null);
@@ -191,6 +213,6 @@
       storage: { from: () => ({ createSignedUrl: async () => result({ signedUrl: new URL("demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }) }) },
     };
   }
-  return { FARM, PLAN, USER, ORG, isRoute, isSparse, isFarmer, routeHash, href, dataset, client };
+  return { FARM, FARM2, PLAN, USER, ORG, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };
 });
 

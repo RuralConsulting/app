@@ -96,6 +96,46 @@ FP.farmMap = (() => {
     }
   }
 
+  // The NZ -> farm zoom: a smooth fly, or a jump when the person asks their device for reduced motion.
+  let flightKey = null;
+  const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function fit(bounds, padding) {
+    map.fitBounds(bounds, { padding, duration: reduced() ? 0 : 2600, maxZoom: 17 });
+  }
+  function union(boxes) {
+    return boxes.reduce((a, b) => [[Math.min(a[0][0], b[0][0]), Math.min(a[0][1], b[0][1])], [Math.max(a[1][0], b[1][0]), Math.max(a[1][1], b[1][1])]]);
+  }
+  // Where a farm will sit once its view opens: clear of the overview rail (desktop) or sheet (phone).
+  function farmPadding() {
+    const wide = window.innerWidth > 800, rail = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rail-width")) || 370;
+    return { top: 40, left: 40, bottom: wide ? 40 : 94, right: wide ? 40 + rail : 40 };
+  }
+  function zoomTo(geom) {
+    if (!map || !geom?.coordinates) return;
+    const b = bbox(geom); flightKey = JSON.stringify(b); fit(b, farmPadding());
+  }
+  // Every farm the person can see, fitted to their extents; each pin opens its farm.
+  async function portfolio(items, onSelect) {
+    const request = ++opening;
+    init(); await loaded();
+    if (request !== opening) return;
+    clear(); flightKey = null;
+    map.resize();
+    const shown = items.filter((i) => i.extent?.coordinates);
+    if (!shown.length) return;
+    source("portfolio", { type: "FeatureCollection", features: shown.map((i) => ({ type: "Feature", geometry: i.extent, properties: { id: i.id } })) });
+    layer({ id: "portfolio-fill", type: "fill", source: "portfolio", paint: { "fill-color": "#fec956", "fill-opacity": 0.3 } });
+    layer({ id: "portfolio-line", type: "line", source: "portfolio", paint: { "line-color": "#fec956", "line-width": 3 } });
+    const boxes = [];
+    for (const i of shown) {
+      const b = bbox(i.extent); boxes.push(b);
+      const pin = FP.el("button", { type: "button", class: "pf-pin", onclick: () => onSelect(i.id) }, FP.el("i"), FP.el("span", {}, i.name));
+      markers.push(new maplibregl.Marker({ element: pin, anchor: "top" }).setLngLat([(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2]).addTo(map));
+    }
+    const wide = window.innerWidth > 800;
+    fit(union(boxes), wide ? { top: 90, left: 480, bottom: 90, right: 110 } : { top: 80, left: 85, bottom: Math.round(window.innerHeight * 0.5), right: 85 });
+  }
+
   function bbox(geom) {
     let w = 180, s = 90, e = -180, n = -90;
     const walk = (c) => (typeof c[0] === "number" ? ([w, s, e, n] = [Math.min(w, c[0]), Math.min(s, c[1]), Math.max(e, c[0]), Math.max(n, c[1])]) : c.forEach(walk));
@@ -173,7 +213,12 @@ FP.farmMap = (() => {
     const defaultOn = new Set([...(FP_CONFIG.farmView?.defaultOn || []), ...(FP.demo?.active ? ["actions"] : [])]);
     for (const e of entries) setVisible(e, defaultOn.has(e.key));
 
-    if (data.extent) map.fitBounds(bbox(data.extent), { padding: 40, duration: 0 });
+    if (data.extent) {
+      map.resize();
+      const b = bbox(data.extent);
+      if (flightKey === JSON.stringify(b)) flightKey = null;   // the portfolio already started this zoom
+      else fit(b, 40);
+    }
     return { farm: data.farm, extentHa: data.extent_ha, entries };
   }
 
@@ -233,7 +278,7 @@ FP.farmMap = (() => {
 
   // Wait for a painted, idle map before capturing a view (DOM readiness alone is too early for WebGL).
   const whenIdle = () => new Promise((resolve) => { if (!map) return resolve(); map.once("idle", resolve); map.triggerRepaint(); });
-  return { open, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+  return { open, portfolio, zoomTo, camera: () => map && { zoom: map.getZoom(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
     resize: () => map && map.resize() };
 })();
 

@@ -59,3 +59,24 @@ body.farm-space-active #screen-plans { padding-top: calc(var(--demo-banner-heigh
 body.farm-space-active .plan-toolbar { top: calc(var(--demo-banner-height) + var(--farm-header-height)); }
 #overview-cards .answer-panel { cursor: pointer; }
 @media print { body.farm-space-active #screen-plans { padding-top: 0; } }
+
+/* Portfolio: the map of every farm, with the list beside it (desktop) or under it (phone). */
+body.portfolio-active #screen-map #map { right: 0; bottom: 0; }
+body.portfolio-active #layers-open { display: none; }
+#portfolio { position: absolute; z-index: 4; top: 16px; left: 16px; bottom: 16px; width: 380px; overflow: auto; padding: 18px 16px; background: var(--panel); color: var(--ink); border-radius: 12px; box-shadow: var(--shadow); }
+#portfolio h1 { font: 600 22px/1.2 var(--f-head); margin: 0 0 12px; }
+#portfolio-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+#portfolio-list button { width: 100%; text-align: left; font: inherit; color: inherit; border: 1px solid var(--rule); background: var(--panel); border-radius: 10px; padding: 12px 14px; cursor: pointer; display: grid; gap: 3px; }
+#portfolio-list button:hover, #portfolio-list button:focus-visible { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+#portfolio-list b { font: 650 18px/1.2 var(--f-head); }
+#portfolio-list small { font-size: 12.5px; color: var(--ink-3); }
+#portfolio-list span { font-size: 14px; color: var(--ink-2); line-height: 1.35; min-height: 1.35em; }
+.pf-pin { display: flex; flex-direction: column; align-items: center; gap: 3px; border: 0; background: none; padding: 4px; cursor: pointer; color: #fff; font: 600 14px var(--f-head); text-shadow: 0 0 3px #000, 0 1px 2px #000; }
+.pf-pin span { max-width: 130px; text-align: center; line-height: 1.15; }
+.pf-pin i { width: 14px; height: 14px; border-radius: 50%; background: #fec956; border: 2px solid #fff; box-shadow: 0 0 3px rgba(0,0,0,.7); }
+@media (max-width: 800px) {
+  #portfolio { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 48%; border-radius: 14px 14px 0 0; padding: 14px 12px; }
+  #portfolio h1 { font-size: 19px; margin-bottom: 8px; }
+  #portfolio-list button { padding: 10px 12px; }
+}
+@media print { #portfolio { display: none !important; } }
