@@ -57,7 +57,7 @@
   const owned = (rows, farm) => rows.map((r) => ({ ...r, farm_id: farm }));
   function dataset(fixture, { sparse = false, farmer = false, multi = false } = {}) {
     const f = copy(fixture);
-    const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null, archived_at: null };
+    const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
     const extent = polygon(172, -43, 172.025, -42.98);
     const units = f.land_units.map((u, i) => {
@@ -87,7 +87,7 @@
     }
     if (multi) {
       // A second, small farm so the portfolio can be exercised: its own extent, one authorisation, two documents.
-      const second = { id: FARM2, org_id: ORG, name: "Waiau Flats — synthetic demo", region: "canterbury", archived_at: null };
+      const second = { id: FARM2, org_id: ORG, name: "Waiau Flats — synthetic demo", region: "canterbury" };
       data.tables.farms.push(second);
       data.tables.farm_members.push({ farm_id: FARM2, user_id: USER, role: "admin" });
       data.tables.documents.push(

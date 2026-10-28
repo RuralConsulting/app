@@ -2,7 +2,7 @@
 // Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents.
 (() => {
   const { $, $$, el, show, sb } = FP;
-  let farms = [], allFarms = [];   // farms: active ones for lists; allFarms: also archived, so a direct link still opens
+  let farms = [], allFarms = [];
   let afterPassword = "farms";
 
   function msg(id, text) { $(id).textContent = text || ""; }
@@ -12,9 +12,9 @@
     if (!user) { show("screen-signin"); $("#email").focus(); return; }
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
     $("#pw-email").value = user.email;
-    const { data, error } = await sb.from("farms").select("id, name, region, org_id, archived_at").order("name");
+    const { data, error } = await sb.from("farms").select("id, name, region, org_id").order("name");
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
-    allFarms = data; farms = data.filter((f) => !f.archived_at);   // archived farms (0040) leave the switcher
+    allFarms = data; farms = data;
     FP.farmSpace.setPortfolio(farms, user);
     route();
   }
