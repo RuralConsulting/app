@@ -100,6 +100,12 @@
       { farm_id: FARM, plan_id: PLAN, item_kind: "fact", source: "unchecked_fact", ref_id: "de000000-0000-4000-8000-000000000101", ref: "stock_units",
         sentence: "Sheep stock units, winter is 120 SU — check it", detail: { fact_type: "stock_units", value_num: 120, unit: "SU", document_title: "Synthetic farm notes", page: 4 },
         created_at: at, state: "open", due_on: null, priority: 3 },
+      { farm_id: FARM, plan_id: null, item_kind: "fact_conflict", source: "conflict", ref_id: "de000000-0000-4000-8000-000000000103", ref: "stock_numbers",
+        sentence: "Stock numbers (dairy cows), 2025/26 has been recorded as 480 or 520 head — pick the one to use",
+        detail: { fact_ids: ["de000000-0000-4000-8000-000000000103", "de000000-0000-4000-8000-000000000104"], fact_type: "stock_numbers", item: "dairy_cows", season: "2025/26", scope: "farm", as_at: null, values: ["480", "520"],
+          candidates: [{ fact_id: "de000000-0000-4000-8000-000000000103", value: "480", unit: "head", source: "Synthetic farm notes p3" },
+            { fact_id: "de000000-0000-4000-8000-000000000104", value: "520", unit: "head", source: "Entered directly" }] },
+        created_at: at, state: "open", due_on: null, priority: 2 },
       { farm_id: FARM, plan_id: PLAN, item_kind: "gap", source: "review_item", ref_id: "de000000-0000-4000-8000-000000000102", ref: "A3",
         sentence: "Action A3 has no timeframe in the source document — add one or leave it as written", detail: { kind: "gap", ref: "A3" },
         created_at: at, state: "open", due_on: null, priority: 4 },
@@ -187,6 +193,10 @@
           if (!d.tables.org_members.length) return error("Only an advisor for this farm can resolve review items");
           const rows = d.tables.review_queue, i = rows.findIndex((r) => r.source === args.item_source && r.ref_id === args.item_id);
           if (i < 0) return error("That item is no longer open");
+          if (args.item_source === "conflict") {
+            if (!String(args.payload?.note || "").trim()) return error("Say why this value is the one to use (note)");
+            if (!rows[i].detail.fact_ids.includes(args.payload?.fact_id)) return error("fact_id must be one of the conflicting facts");
+          }
           rows.splice(i, 1);
           return result({ ok: true });
         }

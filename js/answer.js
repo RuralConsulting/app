@@ -32,7 +32,9 @@
     const reviewForm = (r) => {
       if (!r) return "";
       const note = (label) => '<label>' + label + '<input name="note" autocomplete="off"></label>';
-      const fields = r.source === "unchecked_fact" ? '<label>Corrected value' + (r.unit ? " (" + esc(r.unit) + ")" : "") + '<input name="value" autocomplete="off" ' + (r.numeric ? 'inputmode="decimal" ' : "") + "></label>" + note("Note (needed to reject)") :
+      if (r.source === "conflict" && !(r.candidates || []).length) return "";
+      const fields = r.source === "conflict" ? '<fieldset><legend>Which value should be used?</legend>' + r.candidates.map((c) => '<label class="review-choice"><input type="radio" name="fact" value="' + esc(c.factId) + '"> ' + esc(c.label) + "</label>").join("") + "</fieldset>" + note("Why this one?") :
+        r.source === "unchecked_fact" ? '<label>Corrected value' + (r.unit ? " (" + esc(r.unit) + ")" : "") + '<input name="value" autocomplete="off" ' + (r.numeric ? 'inputmode="decimal" ' : "") + "></label>" + note("Note (needed to reject)") :
         r.source === "unconfirmed_check" ? '<label>Your reading<select name="status"><option value="">Choose a reading</option>' + r.readings.map(([v, l]) => '<option value="' + esc(v) + '">' + esc(l) + "</option>").join("") + "</select></label>" + note("Why (needed to read it differently)") : note("Note (optional)");
       return '<form class="review-form" data-review-source="' + esc(r.source) + '" data-review-id="' + esc(r.refId) + '">' + fields + '<div class="review-buttons">' +
         r.decisions.map(([v, l]) => '<button type="submit" name="decision" value="' + esc(v) + '">' + esc(l) + "</button>").join("") + '</div><p class="review-error" role="alert" hidden></p></form>';

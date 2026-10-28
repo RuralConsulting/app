@@ -28,7 +28,7 @@
     review_item: [["resolve", "Mark resolved"], ["dismiss", "Dismiss"]],
     unchecked_fact: [["check", "Value is right"], ["correct", "Correct it"], ["reject", "Reject it"]],
     unconfirmed_check: [["confirm", "Confirm"], ["disagree", "Read it differently"]],
-    conflict: [],
+    conflict: [["pin", "Use this value"]],
   };
   // review_queue rows (0031) -> cards. Order is the view's: dated, conflicts, AI values and checks, loader notes.
   function reviewRows(rows, f) {
@@ -40,8 +40,9 @@
       if (r.due_on) meta.push({ label: "Due", value: date(r.due_on) });
       return { id, href: href(f, "review", id), text: String(r.sentence || "").replace(/, due \d{1,2} \w{3} \d{4}(?= — )/, ""),
         eligible: !!r.due_on, because: r.due_on ? "due " + date(r.due_on) : null, due_date: r.due_on, group: r.source,
-        meta: meta.filter((x) => x.value), note: r.source === "conflict" ? "Choosing the value to use isn't available here yet." : null,
-        review: (decisions[r.source] || []).length ? { source: r.source, refId: r.ref_id, decisions: decisions[r.source], numeric: d.value_num != null, unit: d.unit || "", readings } : null };
+        meta: meta.filter((x) => x.value), note: null,
+        review: (decisions[r.source] || []).length ? { source: r.source, refId: r.ref_id, decisions: decisions[r.source], numeric: d.value_num != null, unit: d.unit || "", readings,
+          candidates: r.source === "conflict" ? list(d.candidates).filter((c) => c.fact_id).map((c) => ({ factId: c.fact_id, label: [c.value, c.unit].filter(Boolean).join(" ") + (c.source ? " — " + c.source : "") })) : [] } : null };
     });
   }
   function models(context) {

@@ -97,6 +97,12 @@
         if (!field("value")) return fail("Enter the corrected value.");
         payload[/^-?\d+(\.\d+)?$/.test(field("value")) ? "value_num" : "value_text"] = field("value");
       }
+      if (decision === "pin") {
+        const chosen = form.querySelector('input[name="fact"]:checked');
+        if (!chosen) return fail("Choose the value to use.");
+        if (!payload.note) return fail("Say why this one.");
+        payload.fact_id = chosen.value;
+      }
       if (decision === "disagree") {
         if (!field("status")) return fail("Choose your reading.");
         if (!payload.note) return fail("Say why you read it differently.");
