@@ -136,7 +136,22 @@
       const extent = polygon(172.62, -42.78, 172.64, -42.765);
       data.map2 = { farm: { id: FARM2, name: farm.name }, extent, extent_ha: 220, titles: collection([]), land_units: collection([]), layers: [], reference: [] };
     }
+    data.tables.farm_summaries = data.tables.farms.map((farm) => summary(data, farm));
     return data;
+  }
+  // Mirrors public.farm_summaries (0038): what the database counts for the portfolio, from the same fixtures.
+  function summary(d, farm) {
+    const p = farm.id === FARM ? d.pdm : null, plans = d.tables.plans.filter((x) => x.farm_id === farm.id || (!x.farm_id && farm.id === FARM));
+    const actions = p ? p.actions.programme : [], at = p?.as_at || "2026-10-27", overall = p?.values.find((v) => v.fact_type === "overall_risk_significance" &&
+      v.state === "recorded" && v.class === "assessment" && v.checked?.at && v.assessed_by && v.assessed_on);
+    return { id: farm.id, name: farm.name, region: farm.region || null, extent: (farm.id === FARM2 ? d.map2 : d.map).extent, as_at: at,
+      plan_count: plans.length, open_plan_count: plans.filter((x) => ["draft", "in_review"].includes(x.status)).length,
+      programme_actions: plans.length ? actions.length : 0,
+      overdue_actions: plans.length ? actions.filter((a) => a.due_date && a.due_date < at && a.status !== "done").length : 0,
+      authorisation_count: d.tables.authorisations.filter((x) => x.farm_id === farm.id).length,
+      advisor_checked: !!plans.length && !!p?.checks.some((c) => c.author_kind === "advisor" && !c.superseded_at),
+      document_count: p && plans.length ? p.documents.length : d.tables.documents.filter((x) => x.farm_id === farm.id).length,
+      overall_significance: plans.length && overall ? { text: overall.text || String(overall.v), assessed_by: overall.assessed_by, assessed_on: overall.assessed_on } : null };
   }
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });

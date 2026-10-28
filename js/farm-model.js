@@ -45,6 +45,17 @@
           candidates: r.source === "conflict" ? list(d.candidates).filter((c) => c.fact_id).map((c) => ({ factId: c.fact_id, label: [c.value, c.unit].filter(Boolean).join(" ") + (c.source ? " — " + c.source : "") })) : [] } : null };
     });
   }
+  // The overview sentences, written once: the farm home (models) and the portfolio (summaryLine) both use them.
+  const say = {
+    overdue: (n, overall) => ({ text: n + " actions are still recorded as planned after their due dates" + overall }),
+    actions: (n, overall) => ({ text: n + " actions are recorded" + overall, because: "they form the recorded programme; current progress has not been confirmed here" }),
+    overall: (o) => o ? "; overall significance " + o.text + " (" + o.assessed_by + ", " + date(o.assessed_on) + ")" : "",
+    authorisations: (n, assessed) => ({ text: n + (n === 1 ? " authorisation is recorded" : " authorisations are recorded"),
+      because: assessed ? "advisor assessments are shown with their authors" : "the checks still need an advisor\'s assessment" }),
+    plans: (n, docs, cited, open) => ({ text: n + " plan version" + (n === 1 ? "" : "s") + " and " + docs + (cited ? (docs === 1 ? " cited document" : " cited documents") : (docs === 1 ? " document" : " documents")) + " recorded",
+      because: open ? "a draft is waiting for review" : "signed versions preserve the agreed record" }),
+    noPlan: (docs) => "No plan yet · " + docs + " documents recorded.",
+  };
   function models(context) {
     const { farm, pdm: p, advisor } = context, f = farm.id;
     const reviewer = !!advisor || !!context.owner; // advisors, and the farm's owner (0037)
@@ -152,12 +163,11 @@
       context.reviewCounts === null && !queue ? { text: "The review count isn't available." } : { text: "Nothing is waiting for review." };
     return {
       authorisations: make("authorisations", "Authorisations", authItems,
-        auths.length ? { text: auths.length + (auths.length === 1 ? " authorisation is recorded" : " authorisations are recorded"), because: checks.some(human) ? "advisor assessments are shown with their authors" : "the checks still need an advisor\'s assessment" } : null,
+        auths.length ? say.authorisations(auths.length, checks.some(human)) : null,
         { text: "No authorisations recorded.", startBy: "recording the farm's activities and the consents or rules they rely on." },
         { cards: true, groups: [["current", "Current"], ["future", "Future"], ["history", "History"], ["recorded", "Period not recorded"]] }),
       actions: make("actions", "Risks & actions", actionItems,
-        due.length ? { text: due.length + " actions are still recorded as planned after their due dates" + overallLine } :
-          actions.length ? { text: actions.length + " actions are recorded" + overallLine, because: "they form the recorded programme; current progress has not been confirmed here" } : null,
+        due.length ? say.overdue(due.length, overallLine) : actions.length ? say.actions(actions.length, overallLine) : null,
         { text: context.assemblyMissing ? "No risks or actions recorded yet." : "No risks or actions recorded.", startBy: "looking at the farm's activities with its advisor." },
         { rank: due.length ? "due_date" : "receptor_weight", cards: true,
           groups: [["programme", "Five-year programme"], ["possible", "Possible actions"], ["risks", "Recorded risks"]],
@@ -166,8 +176,8 @@
             landUnits: landUnits.map((u) => ({ value: u.id, label: [u.code, u.name].filter(Boolean).join(" · ") || "Recorded land unit" })),
           } }),
       plans: make("plans", "Plans & documents", planItems,
-        plans.length ? { text: plans.length + " plan version" + (plans.length === 1 ? "" : "s") + " and " + docs.length + (context.uncited ? (docs.length === 1 ? " document" : " documents") : (docs.length === 1 ? " cited document" : " cited documents")) + " recorded", because: plans.some((x) => ["draft", "in_review"].includes(x.status)) ? "a draft is waiting for review" : "signed versions preserve the agreed record" } : null,
-        { text: "No plan yet · " + docs.length + " documents recorded.", startBy: "reading the existing documents, then starting a draft when ready." },
+        plans.length ? say.plans(plans.length, docs.length, !context.uncited, plans.some((x) => ["draft", "in_review"].includes(x.status))) : null,
+        { text: say.noPlan(docs.length), startBy: "reading the existing documents, then starting a draft when ready." },
         { startAction: context.canEdit ? "Start a new plan version" : null }),
       review: make("review", "Review", reviewItems, reviewAnswer, reviewEmpty,
         { restricted: !reviewer || !!context.reviewError || (!!queue && !queue.length) || (!queue && total === 0), cards: true, rank: "given", noCount: !queue, openAll: !!queue, allLabel: "All review items",
@@ -183,10 +193,19 @@
     }
     return m.plans.empty.text;
   }
+  // The same sentence from a farm_summaries row (0038), so the portfolio needn't open each farm's full record.
+  function summaryLine(s) {
+    const overall = say.overall(s.overall_significance);
+    for (const a of [Number(s.overdue_actions) ? say.overdue(Number(s.overdue_actions), overall) : Number(s.programme_actions) ? say.actions(Number(s.programme_actions), overall) : null,
+      Number(s.authorisation_count) ? say.authorisations(Number(s.authorisation_count), !!s.advisor_checked) : null,
+      Number(s.plan_count) ? say.plans(Number(s.plan_count), Number(s.document_count), true, Number(s.open_plan_count) > 0) : null])
+      if (a?.text) return a.text + (a.because ? " — " + a.because : "");
+    return say.noPlan(Number(s.document_count));
+  }
   function match(hash) {
     const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(authorisations|actions|plans|review)|\/plan\/([0-9a-f-]{36}))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[3] ? "reader" : m[2] || "map", plan: m[3] || null, item: m[4] ? decodeURIComponent(m[4]) : null } : null; } catch { return null; }
   }
-  return { models, portfolioLine, match, href, views, status, date, reviewRows };
+  return { models, portfolioLine, summaryLine, match, href, views, status, date, reviewRows };
 });
 

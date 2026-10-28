@@ -140,8 +140,11 @@
     try { if (id) target = sessionStorage.getItem("fp-view-" + user.id + "-" + id) || target; } catch {}
     return target;
   }
-  // Portfolio: every farm with its one sentence, and a map of them all. Reads are the same caller-scoped
-  // ones a farm opens with; a farm that can't be read shows its name and says so.
+  // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
+  // read (load) only when that farm is opened.
+  const summaries = (sb) => read(sb.from("farm_summaries").select("*"));
+  // Portfolio: every farm with its one sentence, and a map of them all. A farm with no summary row shows its
+  // name and says so.
   async function showPortfolio() {
     const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
     context = null; pending = null; openedMap = null; lastView = null; currentRoute = null;
@@ -160,12 +163,15 @@
       return row.node;
     });
     $("#portfolio-list").replaceChildren(...items);
-    await Promise.all(rows.map(async (row) => {
-      try { const c = await load(FP.sb, row.farm, user); row.line = M.portfolioLine(c); row.extent = c.pdm.maps?.extent || null; }
-      catch { row.line = "Couldn't read this farm."; }
-      if (current === token) row.node.querySelector("span").textContent = row.line;
-    }));
+    let found;
+    try { found = new Map((await summaries(FP.sb)).map((r) => [r.id, r])); } catch { found = new Map(); }
     if (current !== token) return;
+    for (const row of rows) {
+      const summary = found.get(row.farm.id);
+      row.line = summary ? M.summaryLine(summary) : "Couldn't read this farm.";
+      row.extent = summary?.extent || null;
+      row.node.querySelector("span").textContent = row.line;
+    }
     await FP.farmMap.portfolio(rows.map((r) => ({ id: r.farm.id, name: r.farm.name, extent: r.extent })), (id) => select(rows.find((r) => r.farm.id === id)));
   }
   function jumpItems() {
@@ -279,6 +285,6 @@
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }
-  return { load, setPortfolio, showPortfolio, close, open };
+  return { load, summaries, setPortfolio, showPortfolio, close, open };
 });
 
