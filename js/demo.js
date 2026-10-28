@@ -93,6 +93,21 @@
       authorisations: pdm.authorisations.map((a) => ({ ...a, farm_id: FARM })), plan_sections: sections,
       plan_section_sources: sections.flatMap((s) => (s.sources || []).map((c) => ({ section_id: s.id, farm_id: FARM, document_id: c.document_id, page: c.page, note: c.note }))),
     }, nextId: 10 };
+    // One certification and one audit with results, so the Audits and certification panel has something to show. Synthetic people.
+    const progs = pdm.actions.programme, aid = (i) => "de000000-0000-4000-8000-0000000002" + String(i).padStart(2, "0");
+    data.tables.plan_assessments = [
+      { id: aid(1), farm_id: FARM, plan_id: PLAN, kind: "certification", event_date: "2025-09-10", assessor_name: "Sam Example", assessor_org: "Example Certifiers Ltd",
+        assessor_id_number: "CERT-0001", conflict_declaration: "no_conflict", conflict_note: null, report_document_id: "d-fep", grade: null, grade_scheme: null,
+        next_audit_due: "2027-09-10", recertification_due: "2030-09-10", source_page: 3, supersedes_id: null, entered_at: "2025-09-12T00:00:00Z" },
+      { id: aid(2), farm_id: FARM, plan_id: PLAN, kind: "audit", event_date: "2026-09-18", assessor_name: "Alex Example", assessor_org: "Example Audits Ltd",
+        assessor_id_number: "AUD-0042", conflict_declaration: "conflict_declared", conflict_note: "Advised the farm on a different matter in 2023.",
+        report_document_id: "d-fep", grade: "B", grade_scheme: "A to D", next_audit_due: "2028-09-18", recertification_due: null, source_page: 5, supersedes_id: null, entered_at: "2026-09-20T00:00:00Z" },
+    ];
+    data.tables.assessment_action_results = [
+      { id: aid(11), farm_id: FARM, assessment_id: aid(2), action_id: progs[0].id, outcome: "late", reason: "Plan was finished in April, after the March date." },
+      { id: aid(12), farm_id: FARM, assessment_id: aid(2), action_id: progs[1].id, outcome: "on_time", reason: null },
+      { id: aid(13), farm_id: FARM, assessment_id: aid(2), action_id: progs[2].id, outcome: "not_done", reason: "Fencing delayed by the wet winter." },
+    ];
     const checks = pdm.checks.filter((c) => c.author_kind === "system" && !c.confirmed_by && !c.superseded_at);
     const at = "2026-10-27T00:00:00Z";
     data.tables.review_queue = [
@@ -117,7 +132,7 @@
       data.pdm = null; // The empty state must not depend on a plan existing.
       data.map = { ...map, farm, titles: collection([]), land_units: collection([]), layers: [], reference: [] };
       data.tables.farms = [farm]; data.tables.plans = []; data.tables.plan_sections = []; data.tables.plan_section_sources = [];
-      data.tables.authorisations = []; data.tables.review_queue = [];
+      data.tables.authorisations = []; data.tables.review_queue = []; data.tables.plan_assessments = []; data.tables.assessment_action_results = [];
       data.tables.documents = [{ id: "empty-doc-1", farm_id: FARM, title: "Synthetic property notes" }, { id: "empty-doc-2", farm_id: FARM, title: "Synthetic field notes" }];
     }
     if (farmer) {
@@ -156,6 +171,21 @@
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
+    // Mirrors 0039: advisors insert; nothing is updated or deleted; a record is replaced once only; a reason is needed unless on time.
+    function recordAssessment(d, table, operation, input) {
+      if (operation !== "insert") return error("Assessment records cannot be changed. Record a correction instead");
+      if (!d.tables.org_members.length) return error("new row violates row-level security policy for table \"" + table + "\"");
+      const rows = (Array.isArray(input) ? input : [input]).map((row) => ({ ...row, id: "de000000-0000-4000-8000-" + String(d.nextId++).padStart(12, "0"), entered_at: new Date().toISOString() }));
+      for (const row of rows) {
+        if (table === "plan_assessments") {
+          if (row.conflict_declaration === "conflict_declared" && !String(row.conflict_note || "").trim()) return error("A declared conflict needs a note");
+          if (!String(row.assessor_name || "").trim()) return error("The assessor's name is required");
+          if (row.supersedes_id && d.tables.plan_assessments.some((r) => r.supersedes_id === row.supersedes_id)) return error("That record has already been replaced");
+        } else if (row.outcome !== "on_time" && !String(row.reason || "").trim()) return error("A reason is needed when an action was late or not done");
+      }
+      d.tables[table].push(...rows);
+      return result(rows[0]);
+    }
     function query(table) {
       const filters = [], orders = []; let operation = "select", input, singular = false, maybe = false;
       const q = {
@@ -171,6 +201,7 @@
         if (!rows) return error("This demo does not provide " + table);
         let selected = rows.filter((row) => filters.every(([key, val]) => row[key] === val));
         if (operation !== "select") {
+          if (["plan_assessments", "assessment_action_results"].includes(table)) return recordAssessment(d, table, operation, input);
           if (!["plans", "plan_sections", "plan_section_sources"].includes(table)) return error("Demo writes are limited to draft plan text");
           const values = operation === "insert" ? (Array.isArray(input) ? input : [input]) : [input];
           const planId = values[0]?.plan_id || (table === "plans" ? selected[0]?.id : null);

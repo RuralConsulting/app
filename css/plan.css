@@ -67,3 +67,11 @@
   .source-notes { font-size: 8pt; }.source-notes h3 { font-size: 9pt; }.missing-chip { color: black; background: none; }
   .document-link { text-decoration: none; }.print-expanded > :not(summary) { display: block; }
 }
+/* Audits and certification */
+.audit-record { border-top: 1px solid var(--rule); padding: 1rem 0; }.audit-record h3 { margin: 0 0 .5rem; }.audit-record h4 { margin: 1rem 0 .4rem; }
+.audit-record dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .5rem 1.5rem; margin: 0; }.audit-record dt { color: var(--ink-2); font-size: var(--reader-small); }.audit-record dd { margin: 0; overflow-wrap: anywhere; }
+.audit-results { list-style: none; padding: 0; margin: 0; }.audit-results li { padding: .5rem 0; border-bottom: 1px solid var(--rule); }.audit-ours { color: var(--ink-2); font-size: var(--reader-small); }
+.audit-earlier { margin-top: 1rem; color: var(--ink-2); }.audit-earlier summary { cursor: pointer; }
+#plan-audits > button, .audit-record > button { margin-top: .75rem; }
+.prose-dialog [hidden] { display: none; }.prose-dialog textarea[name=conflict_note] { min-height: 80px; }.prose-dialog fieldset { border: 1px solid var(--rule); display: grid; gap: .8rem; }
+.audit-line { display: grid; gap: .3rem; padding-bottom: .6rem; border-bottom: 1px solid var(--rule); }.prose-dialog label.inline { display: flex; gap: .5rem; align-items: center; }

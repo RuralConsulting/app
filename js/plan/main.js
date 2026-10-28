@@ -98,6 +98,7 @@
       host.innerHTML = rendered.html;
       mountReader(host, signal);
       if (FP.demo?.active) for (const a of host.querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
+      await mountAudits(host, pdm, advisor, token, signal);
       document.title = farm.name + " — Farm Environment Plan";
       if (canEdit && ["draft", "in_review"].includes(pdm.plan.status) && (pdm.plan.status === "draft" || advisor)) {
         const keys = [...new Set([...Object.keys(pdm.sections), "land_unit_definitions", "action_method", "action_categories", "management_introduction", "risk_method"])];
@@ -162,6 +163,87 @@
         modal.addEventListener("close", () => { modal.remove(); trigger.focus(); }); host.append(modal); modal.showModal();
       }
     }, { signal });
+  }
+  // Audits and certification: read for every member, recorded by advisors only. It sits beside the plan, not inside it.
+  async function mountAudits(host, pdm, advisor, token, signal) {
+    const A = FP.plan.audits, L = FP.plan.template.labels;
+    const actions = (pdm.actions?.programme || []).filter((a) => !["possible", "not_doing"].includes(a.status));
+    const documents = pdm.documents || [];
+    let data = { assessments: [], results: [] }, error = null;
+    try { data = await A.load(FP.sb, pdm.farm.id, pdm.plan.id); } catch (e) { error = e.message || String(e); }
+    if (token !== navigation) return;
+    const paint = () => {
+      const html = A.render({ ...data, actions, documents, advisor, error, statusLabel: (s) => L.enumLabel("action_status", s) });
+      const old = host.querySelector("#plan-audits");
+      if (old) { const next = document.createElement("template"); next.innerHTML = html; const fresh = next.content.firstElementChild;
+        fresh.classList.toggle("is-active", old.classList.contains("is-active")); old.replaceWith(fresh); }
+      else {
+        host.querySelector(".reader-body").insertAdjacentHTML("beforeend", html);
+        host.querySelector(".contents-links").insertAdjacentHTML("beforeend", '<a href="#plan-audits" data-plan-anchor="plan-audits">Audits and certification</a>');
+      }
+    };
+    paint();
+    host.addEventListener("click", (event) => {
+      if (event.target.closest("[data-audit-new]")) auditForm(host, pdm, actions, documents, data, null, token, async () => { data = await A.load(FP.sb, pdm.farm.id, pdm.plan.id); paint(); });
+      const fix = event.target.closest("[data-audit-correct]");
+      if (fix) auditForm(host, pdm, actions, documents, data, data.assessments.find((r) => r.id === fix.dataset.auditCorrect), token, async () => { data = await A.load(FP.sb, pdm.farm.id, pdm.plan.id); paint(); });
+    }, { signal });
+  }
+  function auditForm(host, pdm, actions, documents, data, previous, token, done) {
+    const A = FP.plan.audits, { el } = FP;
+    const { d, form, note, finish } = dialog(host, previous ? "Correct this " + A.KIND[previous.kind].toLowerCase() : "Record a certification or audit");
+    const kind = el("select", { name: "kind" }, el("option", { value: "certification" }, "Certification"), el("option", { value: "audit" }, "Audit"));
+    form.append(el("label", {}, "What was recorded", kind));
+    if (previous) { kind.value = previous.kind; kind.disabled = true; }
+    const val = (k) => previous?.[k] || "";
+    const eventDate = field(form, "Date", "date", "event_date", val("event_date"), true);
+    const name = field(form, "Assessor's name", "text", "assessor_name", val("assessor_name"), true);
+    const org = field(form, "Assessor's organisation", "text", "assessor_org", val("assessor_org"));
+    const idNumber = field(form, "Assessor's ID number", "text", "assessor_id_number", val("assessor_id_number"));
+    const conflict = el("select", { name: "conflict_declaration" }, el("option", { value: "no_conflict" }, "No conflict declared"), el("option", { value: "conflict_declared" }, "A conflict is declared"));
+    conflict.value = previous?.conflict_declaration || "no_conflict";
+    form.append(el("label", {}, "Conflict", conflict));
+    const conflictNote = field(form, "Note on the conflict", "textarea", "conflict_note", val("conflict_note"));
+    const nextAudit = field(form, "Next audit due", "date", "next_audit_due", val("next_audit_due"));
+    const recert = field(form, "Plan recertification due", "date", "recertification_due", val("recertification_due"));
+    const report = el("select", { name: "report" }, el("option", { value: "" }, "No report attached"), ...documents.map((x) => el("option", { value: x.id }, x.title)));
+    report.value = val("report_document_id"); form.append(el("label", {}, "Report", report));
+    const auditOnly = el("div", { class: "audit-only" });
+    const grade = field(auditOnly, "Grade", "text", "grade", val("grade")), scheme = field(auditOnly, "Grading scheme (optional)", "text", "grade_scheme", val("grade_scheme"));
+    const carry = previous?.kind === "audit" && data.results.some((r) => r.assessment_id === previous.id);
+    const copy = el("input", { type: "checkbox", name: "copy_results" }); copy.checked = carry;
+    if (carry) auditOnly.append(el("label", { class: "inline" }, copy, "Start from the earlier results"));
+    const fieldset = el("fieldset", {}, el("legend", {}, "The auditor's finding for each action (leave blank if not reported)"));
+    const lines = actions.map((a) => {
+      const outcome = el("select", { "aria-label": a.map_code + " " + a.title }, el("option", { value: "" }, "Not reported"), ...Object.entries(A.OUTCOME).map(([v, t]) => el("option", { value: v }, t)));
+      const reason = el("input", { type: "text", placeholder: "Auditor's reason", "aria-label": "Reason for " + a.map_code });
+      fieldset.append(el("div", { class: "audit-line" }, el("span", {}, a.map_code + " " + a.title), outcome, reason));
+      return { a, outcome, reason };
+    });
+    const fill = () => { for (const l of lines) {
+      const r = copy.checked && data.results.find((x) => x.assessment_id === previous?.id && x.action_id === l.a.id);
+      l.outcome.value = r?.outcome || ""; l.reason.value = r?.reason || ""; } };
+    fill(); copy.addEventListener("change", fill);
+    auditOnly.append(actions.length ? fieldset : el("p", {}, "This plan has no actions to report on."));
+    form.append(auditOnly);
+    const sync = () => { auditOnly.hidden = kind.value !== "audit"; conflictNote.closest("label").hidden = conflict.value !== "conflict_declared"; };
+    kind.addEventListener("change", sync); conflict.addEventListener("change", sync); sync();
+    if (previous) form.append(el("p", {}, "Saving adds a corrected record. The earlier one stays under Earlier versions."));
+    form.noValidate = true;
+    finish();
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); const button = form.querySelector("[type=submit]");
+      const input = { kind: kind.value, event_date: eventDate.value, assessor_name: name.value, assessor_org: org.value, assessor_id_number: idNumber.value,
+        conflict_declaration: conflict.value, conflict_note: conflictNote.value, next_audit_due: nextAudit.value, recertification_due: recert.value,
+        report_document_id: report.value, grade: grade.value, grade_scheme: scheme.value,
+        results: lines.filter((l) => l.outcome.value).map((l) => ({ action_id: l.a.id, outcome: l.outcome.value, reason: l.reason.value })) };
+      const problems = A.validate(input);
+      if (problems.length) { note.textContent = problems.join(" "); return; }
+      button.disabled = true; note.textContent = "Saving…";
+      try { await A.save(FP.sb, pdm.farm.id, pdm.plan.id, input, previous?.id); d.close(); if (token === navigation) await done(); }
+      catch (e) { note.textContent = e.message; button.disabled = false; if (/was saved/.test(e.message)) done(); }
+    });
+    form.querySelector("[type=submit]").disabled = false;
   }
   let pageController;
   function pageSignal() { pageController?.abort(); pageController = new AbortController(); return pageController.signal; }
