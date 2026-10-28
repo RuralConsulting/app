@@ -1,6 +1,6 @@
 // Service worker: makes the app installable and quick to start. Caches only the app's own files (this site);
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
-const VERSION = "202610280423-4353a8e";
+const VERSION = "202610280431-a4a8774";
 const CACHE = `fp-app-${VERSION}`;
 const SHELL = ["./", "index.html", "css/app.css", "manifest.webmanifest",
   "js/demo.js", "css/demo.css", "demo/cairnvale-pdm.json", "demo/source.html",

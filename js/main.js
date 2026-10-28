@@ -2,7 +2,7 @@
 // Farms live at #/farm/<id> so a link opens straight to one.
 (() => {
   const { $, $$, el, show, sb } = FP;
-  let farms = [];
+  let farms = [], allFarms = [];   // farms: active ones for lists; allFarms: also archived, so a direct link still opens
   let afterPassword = "farms";
 
   function msg(id, text) { $(id).textContent = text || ""; }
@@ -12,9 +12,9 @@
     if (!user) { show("screen-signin"); $("#email").focus(); return; }
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
     $("#pw-email").value = user.email;
-    const { data, error } = await sb.from("farms").select("id, name, region, org_id").order("name");
+    const { data, error } = await sb.from("farms").select("id, name, region, org_id, archived_at").order("name");
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
-    farms = data;
+    allFarms = data; farms = data.filter((f) => !f.archived_at);   // archived farms (0040) leave the switcher
     FP.farmSpace.setPortfolio(farms, user);
     route();
   }
@@ -22,7 +22,7 @@
   function route() {
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
     const route = FP.farmModel.match(hash);
-    const farm = (route && farms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
+    const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
     FP.plan.routes.cancel();
     if (farm) FP.farmSpace.open(farm, route?.farm === farm.id ? route : { farm: farm.id, view: "map" });
     else listFarms();
