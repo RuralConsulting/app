@@ -45,7 +45,7 @@
   function listFarms() {
     if (farms.length) { FP.farmSpace.showPortfolio(); return; }
     FP.farmSpace.close();
-    msg("#farms-msg", "No farms are shared with this login yet. Ask RCL to give you access.");
+    msg("#farms-msg", FP.brand.no_farms_note);
     show("screen-farms");
   }
 

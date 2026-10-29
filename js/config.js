@@ -5,8 +5,8 @@ window.FP_CONFIG = {
   supabaseKey: "sb_publishable_ezMJPCuTFBl3wQAVeOJPXg_BoXxVY8A",
 
   // LINZ Basemaps API key (basemaps.linz.govt.nz): the aerial background. Browser keys are public by design.
-  // A standard key expires after 90 days; a developer key (free, from LINZ) doesn't and can be limited to
-  // app.ruralconsulting.co.nz. With no key the map has a plain background. No other tile provider is used.
+  // A standard key expires after 90 days; a developer key (free, from LINZ) doesn't and can be limited to the
+  // app's domain (brand.json): moving domain means updating the key's allowed site at LINZ. With no key the map has a plain background. No other tile provider is used.
   linzKey: "c01m5yfbymwg7qgabe7w20kkx7p",
 
   // What the farm view shows when it opens. Keys: "extent", "titles", a layer's theme (e.g. "land_units"),

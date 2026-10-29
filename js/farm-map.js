@@ -17,7 +17,7 @@ FP.farmMap = (() => {
     map = new maplibregl.Map({
       container: "map", style: FP.basemaps.style("aerial"),
       bounds: [[166.3, -47.4], [178.6, -34.3]], maxZoom: 21,
-      attributionControl: { compact: true, customAttribution: "Rural Consulting Limited" },
+      attributionControl: { compact: true, customAttribution: FP.brand.org_legal },
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }), "top-right");

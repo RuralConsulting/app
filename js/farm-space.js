@@ -110,7 +110,7 @@
     document.body.classList.add("portfolio-active");
     $("#farm-space-header")?.setAttribute("hidden", "");
     for (const id of ["#space-content", "#overview-rail", "#layers-drawer", "#map-msg"]) $(id).hidden = true;
-    document.title = "Farms | Farm platform";
+    document.title = "Farms | " + FP.brand?.product;
     FP.show("screen-map");
     $("#portfolio").hidden = false;
     const select = (row) => { if (row.extent) FP.farmMap.zoomTo(row.extent); location.hash = FP.href(farmTarget(row.farm.id)); };
@@ -166,7 +166,7 @@
           el("label", {}, el("span", {}, "Email address"), el("input", { id: "people-email", type: "email", autocomplete: "off", inputmode: "email", autocapitalize: "none", spellcheck: "false", required: true })),
           el("label", {}, el("span", {}, "Access"), roleSelect("people-role", "view")),
           el("button", { type: "submit" }, "Add")),
-        el("p", { class: "people-help" }, "View sees the farm. Edit can also add and change records. Admin can also add people. For now, only RCL colleagues and named testers can be added.")));
+        el("p", { class: "people-help" }, "View sees the farm. Edit can also add and change records. Admin can also add people. For now, only " + (FP.brand?.org_short || "") + " colleagues and named testers can be added.")));
     return section;
   }
   function renderPeople() {
@@ -261,7 +261,7 @@
       if (current !== token) return;
       context = loaded;
       header(farm, route);
-      document.title = farm.name + (route.view === "map" ? "" : " · " + M.viewLabel(route.view)) + " | Farm platform";
+      document.title = farm.name + (route.view === "map" ? "" : " · " + M.viewLabel(route.view)) + " | " + FP.brand?.product;
       try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, M.href(farm.id, route.view)); } catch {}
       if (openedMap !== farm.id) {
         const view = await FP.farmMap.open(farm.id, context.maps);
