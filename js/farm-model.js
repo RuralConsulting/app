@@ -12,9 +12,12 @@
   const date = (d) => isDate(d) ? new Date(d.slice(0, 10) + "T12:00:00Z").toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "date not recorded";
   const day = (d) => isDate(d) ? d.slice(0, 10) : null;
   const addDays = (d, n) => new Date(Date.parse(d.slice(0, 10) + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  // Places reached from the header rather than the three actions: People is for a farm's owner and admins.
+  const otherViews = [["people", "People"]];
+  const viewLabel = (key) => [...views, ...otherViews].find(([k]) => k === key)?.[1] || null;
   const href = (f, view, id) => "#/farm/" + f + (view && view !== "map" ? "/" + view : "") + (id ? "?item=" + encodeURIComponent(id) : "");
   function match(hash) {
-    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(ask|create|documents))?(?:\?item=([^&#]+))?$/);
+    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(ask|create|documents|people))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[2] || "map", item: m[3] ? decodeURIComponent(m[3]) : null } : null; } catch { return null; }
   }
   const authName = (a) => [a.consent_no || a.rule_ref, a.title].filter(Boolean).join(" · ") || "Recorded authorisation";
@@ -101,5 +104,19 @@
   // The same sentence from an opened farm's own reads.
   const portfolioLine = (context) => summaryLine({ authorisation_count: list(context.authorisations).length, document_count: list(context.documents).length });
 
-  return { views, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine };
+  // People on a farm (farm_people rows), for its owner and admins. Owners are changed through RCL (A1), and
+  // nobody changes or removes themselves here, so neither row offers those controls.
+  const roles = [["view", "View"], ["edit", "Edit"], ["admin", "Admin"]];
+  const roleNames = { owner: "Owner", admin: "Admin", edit: "Edit", view: "View" };
+  const canManage = (role) => role === "owner" || role === "admin";
+  function people(rows, today) {
+    return list(rows).map((r) => ({
+      id: r.user_id, email: r.email || "No email recorded", name: r.display_name || null, role: r.role, roleName: roleNames[r.role] || r.role,
+      you: !!r.is_you, editable: r.role !== "owner" && !r.is_you,
+      note: [r.is_you ? "you" : null, r.signed_in === false ? "hasn't signed in yet" : null,
+        isDate(r.added_at) && day(r.added_at) !== today ? "added " + date(r.added_at) : isDate(r.added_at) ? "added today" : null].filter(Boolean).join(" · "),
+    }));
+  }
+
+  return { views, otherViews, viewLabel, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine, roles, canManage, people };
 });

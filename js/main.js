@@ -8,6 +8,21 @@
   function msg(id, text) { $(id).textContent = text || ""; }
 
   async function start() {
+    // Arriving from an emailed link: take the sign-in it carries, clear it from the address bar, and (for an
+    // invitation) ask for a password before anything else.
+    const link = FP.demo?.active ? null : FP.auth.fromLink(location.hash);
+    if (link) {
+      history.replaceState(null, "", location.pathname + location.search);
+      if (link.error) { show("screen-signin"); msg("#signin-msg", link.error); return; }
+      const err = await FP.auth.acceptLink(link);
+      if (err) { show("screen-signin"); msg("#signin-msg", err); return; }
+      if (link.type === "invite" || link.type === "recovery") {
+        const invited = await FP.auth.user();
+        $("#welcome-email").value = invited?.email || "";
+        $("#welcome-who").textContent = invited?.email ? "Signing in as " + invited.email + "." : "";
+        show("screen-welcome"); $("#wp1").focus(); return;
+      }
+    }
     const user = await FP.auth.user();
     if (!user) { show("screen-signin"); $("#email").focus(); return; }
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
@@ -43,6 +58,17 @@
     btn.disabled = false;
     if (err) { msg("#signin-msg", err); return; }
     $("#password").value = "";
+    start();
+  });
+
+  $("#f-welcome").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const btn = ev.target.querySelector("button[type=submit]");
+    btn.disabled = true; msg("#welcome-msg", "");
+    const err = await FP.auth.setPassword($("#wp1").value, $("#wp2").value);
+    btn.disabled = false;
+    if (err) { msg("#welcome-msg", err); return; }
+    $("#wp1").value = ""; $("#wp2").value = "";
     start();
   });
 

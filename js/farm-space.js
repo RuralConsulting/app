@@ -1,4 +1,5 @@
-// The farm space: header, map with its standing answers, and Ask, Create, Documents. Reads only; no writes.
+// The farm space: header, map with its standing answers, and Ask, Create, Documents. Reads only, except People
+// (owners and admins add, change and remove people; the farm_members policies decide what is allowed).
 (function (root, factory) {
   const api = factory(typeof module === "object" && module.exports ? require("./farm-model.js") : root.FP.farmModel);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
@@ -38,7 +39,7 @@
     if ($("#farm-space-header")) return;
     const h = el("header", { id: "farm-space-header", hidden: true });
     h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
-      '<span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div>' +
+      '<a id="space-people" class="link" hidden>People</a><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div>' +
       '<nav id="farm-actions" aria-label="Farm"></nav>';
     document.body.prepend(h);
     const reserve = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
@@ -70,11 +71,30 @@
       window.open(data.signedUrl, "_blank", "noopener");
     });
     $("#space-content").addEventListener("submit", (e) => {
+      if (e.target.matches("#people-add")) { e.preventDefault(); addPerson(); return; }
       if (!e.target.matches("#ask-form")) return;
       e.preventDefault();
       const question = $("#ask-input").value.trim();
       if (!question) { $("#ask-input").focus(); return; }
       $("#ask-answer").replaceChildren(el("p", { class: "ask-question" }, question), el("p", { class: "answer-sentence" }, "Ask is coming — S4"));
+    });
+    $("#space-content").addEventListener("change", (e) => {
+      const select = e.target.closest("[data-role-for]");
+      if (select) changeRole(select.dataset.roleFor, select.value, select);
+    });
+    $("#space-content").addEventListener("click", (e) => {
+      const button = e.target.closest("[data-remove]");
+      if (!button) return;
+      // Two steps: the first press asks, the second removes.
+      if (!button.dataset.confirm) {
+        button.dataset.confirm = "1"; button.textContent = "Remove access?"; button.classList.add("confirm");
+        return;
+      }
+      removePerson(button.dataset.remove, button);
+    });
+    $("#space-content").addEventListener("focusout", (e) => {
+      const button = e.target.closest?.("[data-remove][data-confirm]");
+      if (button) { delete button.dataset.confirm; button.textContent = "Remove"; button.classList.remove("confirm"); }
     });
   }
   function farmTarget(id) {
@@ -123,6 +143,83 @@
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
     $("#farm-actions").replaceChildren(...M.views.map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
+    const people = $("#space-people");
+    people.hidden = !M.canManage(context.role); people.href = FP.href(M.href(farm.id, "people"));
+    if (route.view === "people") people.setAttribute("aria-current", "page"); else people.removeAttribute("aria-current");
+  }
+
+  // ---- People: who can open the farm, for its owner and admins (A0) -----------------------------------
+  let people = [];
+  const peopleMsg = (text, kind) => { const p = $("#people-msg"); if (!p) return; p.textContent = text || ""; p.dataset.kind = kind || ""; };
+  function roleSelect(id, value, label) {
+    return el("select", { id, ...(label ? { "aria-label": label } : {}) }, ...M.roles.map(([k, name]) => el("option", { value: k, ...(k === value ? { selected: true } : {}) }, name)));
+  }
+  function peopleView() {
+    const section = el("section", { class: "space-view people-view", "data-view": "people" }, el("h2", {}, "People"));
+    if (!M.canManage(context.role)) return section.append(el("p", { class: "people-count" }, "Only the farm's owner or an admin can see who has access.")), section;
+    section.append(el("p", { id: "people-count", class: "people-count" }, "Reading who has access…"),
+      el("ul", { id: "people-list", class: "people-list" }),
+      el("p", { id: "people-msg", class: "people-msg", role: "status", "aria-live": "polite" }),
+      el("form", { id: "people-add", class: "people-add", novalidate: true },
+        el("h3", {}, "Add a person"),
+        el("div", { class: "people-add-row" },
+          el("label", {}, el("span", {}, "Email address"), el("input", { id: "people-email", type: "email", autocomplete: "off", inputmode: "email", autocapitalize: "none", spellcheck: "false", required: true })),
+          el("label", {}, el("span", {}, "Access"), roleSelect("people-role", "view")),
+          el("button", { type: "submit" }, "Add")),
+        el("p", { class: "people-help" }, "View sees the farm. Edit can also add and change records. Admin can also add people. For now, only RCL colleagues and named testers can be added.")));
+    return section;
+  }
+  function renderPeople() {
+    const list = $("#people-list");
+    if (!list) return;
+    const n = people.length;
+    $("#people-count").textContent = n === 1 ? "One person can open this farm." : n + " people can open this farm.";
+    list.replaceChildren(...people.map((p) => el("li", { "data-person-id": p.id },
+      el("div", { class: "person" }, el("b", {}, p.name || p.email), el("small", {}, [p.name ? p.email : null, p.note || null].filter(Boolean).join(" · "))),
+      p.editable ? el("div", { class: "person-controls" }, roleSelect("role-" + p.id, p.role, "Access for " + p.email), el("button", { type: "button", class: "link", "data-remove": p.id }, "Remove"))
+        : el("div", { class: "person-controls" }, el("span", { class: "role-name" }, p.roleName)))));
+    for (const s of list.querySelectorAll("select")) s.dataset.roleFor = s.id.slice(5);
+  }
+  async function loadPeople() {
+    const farm = context.farm.id, { data, error } = await FP.sb.rpc("farm_people", { f: farm });
+    if (context?.farm.id !== farm) return;
+    if (error) { $("#people-count").textContent = "Couldn't read who has access: " + error.message; return; }
+    people = M.people(data, context.today); renderPeople();
+  }
+  const who = (id) => people.find((p) => p.id === id)?.email || "They";
+  async function changeRole(id, role, select) {
+    const before = people.find((p) => p.id === id)?.role;
+    select.disabled = true; peopleMsg("");
+    const { data, error } = await FP.sb.from("farm_members").update({ role }).eq("farm_id", context.farm.id).eq("user_id", id).select("user_id");
+    select.disabled = false;
+    if (error || !data?.length) { select.value = before; peopleMsg(error?.message || "That change wasn't allowed.", "error"); return; }
+    peopleMsg(who(id) + " now has " + M.roles.find(([k]) => k === role)[1] + " access.", "ok");
+    await loadPeople();
+  }
+  async function removePerson(id, button) {
+    button.disabled = true; peopleMsg("");
+    const email = who(id);
+    const { data, error } = await FP.sb.from("farm_members").delete().eq("farm_id", context.farm.id).eq("user_id", id).select("user_id");
+    if (error || !data?.length) { button.disabled = false; peopleMsg(error?.message || "That change wasn't allowed.", "error"); return; }
+    peopleMsg(email + " no longer has access.", "ok");
+    await loadPeople();
+  }
+  async function addPerson() {
+    const input = $("#people-email"), button = $("#people-add button[type=submit]"), email = input.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { peopleMsg("Enter their email address.", "error"); input.focus(); return; }
+    button.disabled = true; peopleMsg("Adding " + email + "…");
+    const { data, error } = await FP.sb.functions.invoke("invite", { body: { farm_id: context.farm.id, email, role: $("#people-role").value } });
+    button.disabled = false;
+    if (error) {
+      let message = error.message;
+      try { message = (await error.context.json()).error || message; } catch {}
+      peopleMsg(message, "error"); return;
+    }
+    input.value = "";
+    // One reply whether or not they already had a login (the server says nothing about that either).
+    peopleMsg(data.resent ? data.email + " hasn't signed in yet, so the email was sent again."
+      : "Added " + data.email + ". Anyone new gets an email with a link to set a password.", "ok");
+    await loadPeople();
   }
   function renderLayers(entries) {
     const row = (e) => el("li", {}, el("label", {}, el("input", { type: "checkbox", checked: e.on, onchange: (ev) => FP.farmMap.setVisible(e, ev.target.checked) }),
@@ -164,7 +261,7 @@
       if (current !== token) return;
       context = loaded;
       header(farm, route);
-      document.title = farm.name + (route.view === "map" ? "" : " · " + M.views.find(([k]) => k === route.view)[1]) + " | Farm platform";
+      document.title = farm.name + (route.view === "map" ? "" : " · " + M.viewLabel(route.view)) + " | Farm platform";
       try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, M.href(farm.id, route.view)); } catch {}
       if (openedMap !== farm.id) {
         const view = await FP.farmMap.open(farm.id, context.maps);
@@ -180,6 +277,7 @@
         if (selected) { selected.scrollIntoView({ block: "nearest" }); selected.focus({ preventScroll: true }); }
       } else if (route.view === "ask") { $("#space-content").replaceChildren(askView()); }
       else if (route.view === "create") { $("#space-content").replaceChildren(createView()); }
+      else if (route.view === "people") { $("#space-content").replaceChildren(peopleView()); if (M.canManage(context.role)) await loadPeople(); }
       for (const a of $("#space-content").querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
       for (const a of $("#overview-cards").querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
       $("#map-msg").hidden = true;

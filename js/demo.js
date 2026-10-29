@@ -22,7 +22,7 @@
   const USER = "de000000-0000-4000-8000-000000000003";
   const ORG = "de000000-0000-4000-8000-000000000004";
   const FARM2 = "de000000-0000-4000-8000-000000000005";
-  const VIEWS = /^$|^\/(ask|create|documents)$/;
+  const VIEWS = /^$|^\/(ask|create|documents|people)$/;
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|\?|$)/.test(hash);
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|\?|$)/.test(hash);
@@ -99,7 +99,20 @@
         titles: collection([]), land_units: collection([]), layers: [], reference: [] };
     }
     data.tables.farm_summaries = data.tables.farms.map((x) => summary(data, x));
+    data.people = people(data, { sparse, farmer });
     return data;
+  }
+  // Who can open each demo farm, as farm_people (20261029000021) returns it. Invented people only.
+  function people(d, { sparse, farmer }) {
+    const person = (n, email, role, extra = {}) => ({ user_id: "de000000-0000-4000-8000-0000000001" + n, email, display_name: null, role,
+      added_at: "2026-03-02T09:00:00+13:00", is_you: false, signed_in: true, ...extra });
+    const you = { user_id: USER, email: d.user.email, display_name: farmer ? null : "Demo advisor", is_you: true, signed_in: true, added_at: "2026-03-02T09:00:00+13:00" };
+    const one = farmer
+      ? [{ ...you, role: "owner" }, person("01", "advisor@example.test", "admin", { display_name: "Demo advisor" })]
+      : [person("02", "owner@example.test", "owner"), { ...you, role: "admin" }];
+    if (!sparse) one.push(person("03", "manager@example.test", "edit", { display_name: "Farm manager (synthetic)" }),
+      person("04", "relief.milker@example.test", "view", { signed_in: false, added_at: d.asAt + "T08:00:00+13:00" }));
+    return { [FARM]: one, [FARM2]: [{ ...you, role: "admin" }] };
   }
   // What farm_summaries (0038) gives the portfolio, counted from the same rows.
   function summary(d, farm) {
@@ -144,8 +157,11 @@
       async rpc(name, args) {
         const d = await ready;
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
+        if (name === "farm_people") return result(d.people[args.f] || []);
         return error("This operation is not available in the demo");
       },
+      // The demo never sends invitations or saves changes.
+      functions: { invoke: async () => error("The demo does not save changes") },
       storage: { from: () => ({ createSignedUrl: async () => result({ signedUrl: new URL("demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }) }) },
     };
   }

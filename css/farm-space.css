@@ -9,6 +9,8 @@
 .farm-switch-label { grid-column: 1; grid-row: 2; justify-self: start; font-size: var(--text-small); display: flex; align-items: center; gap: 6px; }
 .farm-switch-label select { width: 120px; min-height: 30px; padding: 4px 6px; }
 #space-person { grid-column: 3; grid-row: 1; min-width: 0; max-width: 110px; font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#space-people { grid-column: 2; grid-row: 2; justify-self: end; font-size: var(--text-small); color: inherit; white-space: nowrap; }
+#space-people[aria-current] { text-decoration-thickness: 2px; text-decoration-color: var(--brand); }
 #space-signout { grid-column: 3; grid-row: 2; font-size: var(--text-small); white-space: nowrap; justify-self: end; }
 #farm-space-header select { font: inherit; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
 #farm-space-header button, #screen-map > button, .drawer-heading button { font: inherit; cursor: pointer; }
@@ -44,6 +46,30 @@ body.farm-detail #layers-open { display: none; }
 .output-list li span { font-weight: 600; }
 .output-list small { color: var(--ink-3); font-size: var(--text-small); }
 
+/* People: who can open the farm, for its owner and admins. */
+.people-count { margin: 0 0 12px; font: var(--text-body)/1.35 var(--f-display); }
+.people-list { list-style: none; margin: 0; padding: 0; }
+.people-list li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding: 10px 0; border-top: 1px solid var(--rule); }
+.people-list .person { display: grid; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.people-list .person b { font-weight: 600; overflow-wrap: anywhere; }
+.people-list .person small { color: var(--ink-3); font-size: var(--text-small); overflow-wrap: anywhere; }
+.person-controls { display: flex; align-items: center; gap: 12px; }
+.person-controls select, .people-add select, .people-add input { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; min-height: 40px; padding: 6px 8px; }
+.person-controls .role-name { color: var(--ink-2); font-size: var(--text-small); }
+.person-controls .link.confirm { color: var(--ink); font-weight: 600; }
+.people-msg:not(:empty) { margin: 10px 0 0; font-size: var(--text-small); }
+.people-msg[data-kind="error"] { color: var(--bad); }
+.people-msg[data-kind="ok"] { color: var(--good); }
+.people-add { border-top: 1px solid var(--rule); margin-top: 16px; padding-top: 14px; }
+.people-add h3 { margin: 0 0 10px; font: 600 var(--text-body) var(--f-head); }
+.people-add-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.people-add-row label { display: grid; gap: 4px; font-size: var(--text-small); color: var(--ink-2); }
+.people-add-row input { width: 100%; box-sizing: border-box; }
+.people-add button[type=submit] { justify-self: start; min-height: 44px; padding: 0 20px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: 600 var(--text-body) var(--f-ui); cursor: pointer; }
+.people-add button[disabled] { opacity: .6; cursor: default; }
+.people-help { margin: 10px 0 0; color: var(--ink-3); font-size: var(--text-small); line-height: 1.4; }
+@media (min-width: 520px) { .people-add-row { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; } }
+
 /* Layers stay a secondary drawer. */
 #layers-open { position: absolute; z-index: 3; top: 14px; left: 14px; border: 1px solid var(--rule); border-radius: 6px; padding: 9px 16px; background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
 .layers-drawer { position: absolute; z-index: 5; top: 12px; left: 12px; width: 310px; max-width: calc(100% - 30px); max-height: calc(100% - 24px); overflow: auto; padding: 16px; border-radius: 10px; background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
@@ -56,6 +82,7 @@ body.farm-detail #layers-open { display: none; }
   #farm-space-header h1 { margin-right: auto; font-size: var(--text-heading); }
   .farm-switch-label select { width: 180px; }
   #space-person { max-width: 220px; }
+  #space-people { align-self: center; }
   #farm-actions { margin-top: 8px; gap: 4px; }
   #farm-actions a { flex: 0 0 auto; padding: 0 16px; }
   body #screen-map #map { right: var(--rail-width); bottom: 0; }

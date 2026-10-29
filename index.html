@@ -8,7 +8,7 @@
 <!-- GitHub Pages can't send security headers, so the page carries its own policy (same as _headers) -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.supabase.co https://basemaps.linz.govt.nz; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://basemaps.linz.govt.nz; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#231f20">
-<script src="js/guard.js?v=202610282259-1c7ed35"></script>
+<script src="js/guard.js?v=202610290814-2607cfe"></script>
 <title>Farm platform | Rural Consulting</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="brand/icon.png">
@@ -16,11 +16,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RCL Farms">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
-<link rel="stylesheet" href="css/tokens.css?v=202610282259-1c7ed35">
-<link rel="stylesheet" href="css/app.css?v=202610282259-1c7ed35">
-<link rel="stylesheet" href="css/demo.css?v=202610282259-1c7ed35">
-<link rel="stylesheet" href="css/answer.css?v=202610282259-1c7ed35">
-<link rel="stylesheet" href="css/farm-space.css?v=202610282259-1c7ed35">
+<link rel="stylesheet" href="css/tokens.css?v=202610290814-2607cfe">
+<link rel="stylesheet" href="css/app.css?v=202610290814-2607cfe">
+<link rel="stylesheet" href="css/demo.css?v=202610290814-2607cfe">
+<link rel="stylesheet" href="css/answer.css?v=202610290814-2607cfe">
+<link rel="stylesheet" href="css/farm-space.css?v=202610290814-2607cfe">
 </head>
 <body>
 <p id="loading" class="loading">Loading…</p>
@@ -62,6 +62,24 @@
   </div>
 </main>
 
+<main id="screen-welcome" class="screen" hidden>
+  <div class="card">
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.png" alt="Rural Consulting"></span></div>
+    <h1>Choose a password</h1>
+    <form id="f-welcome" novalidate>
+      <input type="email" id="welcome-email" autocomplete="username" hidden>
+      <p class="help" id="welcome-who"></p>
+      <label for="wp1">Password</label>
+      <input id="wp1" type="password" autocomplete="new-password" minlength="10" required>
+      <label for="wp2">Type it again</label>
+      <input id="wp2" type="password" autocomplete="new-password" minlength="10" required>
+      <p class="help">At least 10 characters. A few words strung together are easy to remember and hard to guess.</p>
+      <button type="submit">Save and open the farm</button>
+    </form>
+    <p id="welcome-msg" class="msg" role="alert"></p>
+  </div>
+</main>
+
 <main id="screen-farms" class="screen" hidden>
   <div class="card wide">
     <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.png" alt="Rural Consulting"></span></div>
@@ -97,19 +115,19 @@
 
 <script src="vendor/supabase.js"></script>
 <script src="vendor/maplibre-gl-csp.js"></script>
-<script src="js/config.js?v=202610282259-1c7ed35"></script>
+<script src="js/config.js?v=202610290814-2607cfe"></script>
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
-<script src="js/demo.js?v=202610282259-1c7ed35"></script>
-<script src="js/util.js?v=202610282259-1c7ed35"></script>
-<script src="js/answer.js?v=202610282259-1c7ed35"></script>
-<script src="js/qml.js?v=202610282259-1c7ed35"></script>
-<script src="js/basemaps.js?v=202610282259-1c7ed35"></script>
-<script src="js/auth.js?v=202610282259-1c7ed35"></script>
-<script src="js/popup.js?v=202610282259-1c7ed35"></script>
-<script src="js/farm-map.js?v=202610282259-1c7ed35"></script>
-<script src="js/farm-model.js?v=202610282259-1c7ed35"></script>
-<script src="js/farm-space.js?v=202610282259-1c7ed35"></script>
-<script src="js/main.js?v=202610282259-1c7ed35"></script>
+<script src="js/demo.js?v=202610290814-2607cfe"></script>
+<script src="js/util.js?v=202610290814-2607cfe"></script>
+<script src="js/answer.js?v=202610290814-2607cfe"></script>
+<script src="js/qml.js?v=202610290814-2607cfe"></script>
+<script src="js/basemaps.js?v=202610290814-2607cfe"></script>
+<script src="js/auth.js?v=202610290814-2607cfe"></script>
+<script src="js/popup.js?v=202610290814-2607cfe"></script>
+<script src="js/farm-map.js?v=202610290814-2607cfe"></script>
+<script src="js/farm-model.js?v=202610290814-2607cfe"></script>
+<script src="js/farm-space.js?v=202610290814-2607cfe"></script>
+<script src="js/main.js?v=202610290814-2607cfe"></script>
 </body>
 </html>
 
