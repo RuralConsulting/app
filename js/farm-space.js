@@ -165,8 +165,7 @@
         el("div", { class: "people-add-row" },
           el("label", {}, el("span", {}, "Email address"), el("input", { id: "people-email", type: "email", autocomplete: "off", inputmode: "email", autocapitalize: "none", spellcheck: "false", required: true })),
           el("label", {}, el("span", {}, "Access"), roleSelect("people-role", "view")),
-          el("button", { type: "submit" }, "Add")),
-        el("p", { class: "people-help" }, "View sees the farm. Edit can also add and change records. Admin can also add people. For now, only " + (FP.brand?.org_short || "") + " colleagues and named testers can be added.")));
+          el("button", { type: "submit" }, "Add"))));
     return section;
   }
   function renderPeople() {
