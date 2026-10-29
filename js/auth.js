@@ -46,8 +46,14 @@ FP.auth = (() => {
     const { error } = await sb.auth.updateUser({ password: next });
     if (!error) return null;
     if (/weak|pwned|leaked|known/i.test(error.message)) return "That password has appeared in a data breach somewhere. Choose a different one.";
-    if (/reauth|recent/i.test(error.message)) return "This link is too old to set a password with. Ask whoever added you to add you again.";
+    if (/reauth|recent|current.*password|session.*missing|jwt.*expired/i.test(error.message)) return "This link is too old to set a password with. Ask whoever added you to add you again.";
     return error.message;
+  }
+
+  async function needsPassword() {
+    const { data, error } = await sb.rpc("password_setup_required");
+    if (error || typeof data !== "boolean") throw new Error("Could not check password setup. Reload to try again.");
+    return data;
   }
 
   async function user() {
@@ -59,5 +65,5 @@ FP.auth = (() => {
     await sb.auth.signOut();
   }
 
-  return { signIn, signOut, changePassword, setPassword, fromLink, acceptLink, user };
+  return { signIn, signOut, changePassword, setPassword, fromLink, acceptLink, needsPassword, user };
 })();

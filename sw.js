@@ -1,6 +1,6 @@
 // Service worker: makes the app installable and quick to start. Caches only the app's own files (this site);
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
-const VERSION = "202610291115-7344d49";
+const VERSION = "202610291821-0901ae7";
 const CACHE = `fp-app-${VERSION}`;
 const SHELL = ["./", "index.html", "css/tokens.css", "css/app.css", "manifest.webmanifest",
   "js/demo.js", "css/demo.css", "demo/demo-farm.json", "demo/source.html",

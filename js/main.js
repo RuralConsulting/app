@@ -3,11 +3,18 @@
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [];
-  let afterPassword = "farms";
+  let readyToRoute = false;
 
   function msg(id, text) { $(id).textContent = text || ""; }
 
+  function welcome(user) {
+    $("#welcome-email").value = user?.email || "";
+    $("#welcome-who").textContent = user?.email ? "Signing in as " + user.email + "." : "";
+    show("screen-welcome"); $("#wp1").focus();
+  }
+
   async function start() {
+    readyToRoute = false;
     // Arriving from an emailed link: take the sign-in it carries, clear it from the address bar, and (for an
     // invitation) ask for a password before anything else.
     const link = FP.demo?.active ? null : FP.auth.fromLink(location.hash);
@@ -17,24 +24,26 @@
       const err = await FP.auth.acceptLink(link);
       if (err) { show("screen-signin"); msg("#signin-msg", err); return; }
       if (link.type === "invite" || link.type === "recovery") {
-        const invited = await FP.auth.user();
-        $("#welcome-email").value = invited?.email || "";
-        $("#welcome-who").textContent = invited?.email ? "Signing in as " + invited.email + "." : "";
-        show("screen-welcome"); $("#wp1").focus(); return;
+        welcome(await FP.auth.user()); return;
       }
     }
     const user = await FP.auth.user();
     if (!user) { show("screen-signin"); $("#email").focus(); return; }
+    if (!FP.demo?.active) {
+      try { if (await FP.auth.needsPassword()) { welcome(user); return; } }
+      catch (e) { show("screen-signin"); msg("#signin-msg", e.message); return; }
+    }
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
     $("#pw-email").value = user.email;
     const { data, error } = await sb.from("farms").select("id, name, region, org_id").order("name");
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     allFarms = data; farms = data;
     FP.farmSpace.setPortfolio(farms, user);
-    route();
+    readyToRoute = true; route();
   }
 
   function route() {
+    if (!readyToRoute) return;
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
     const route = FP.farmModel.match(hash);
     const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
@@ -104,7 +113,7 @@
   }
 
   window.addEventListener("hashchange", () => { if (farms.length) route(); });
-  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { FP.farmSpace.close(); show("screen-signin"); } });
+  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.farmSpace.close(); show("screen-signin"); } });
 
   // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts
   if (!FP.demo?.active && "serviceWorker" in navigator && location.protocol === "https:") {
