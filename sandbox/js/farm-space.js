@@ -130,14 +130,23 @@
     });
     // Choosing a What's due line whose condition records a place frames the map on it and marks it; choosing it
     // again goes back to the farm. A line with no place moves nothing and claims nothing.
-    $("#overview-cards").addEventListener("click", (e) => {
-      if (e.target.closest("a, button")) return;
-      const id = e.target.closest("[data-item-id]")?.dataset.itemId, place = id && standing.find((m) => m.places?.[id])?.places[id];
-      if (!place) return;
+    const choose = (id) => {
+      const place = id && standing.find((m) => m.places?.[id])?.places[id];
+      if (!place) return false;
       const again = focused === id;
-      if (!FP.farmMap.focus(again ? null : place)) return;
+      if (!FP.farmMap.focus(again ? null : place)) return true;
       focused = again ? null : id;
       markFocused();
+      return true;
+    };
+    $("#overview-cards").addEventListener("click", (e) => {
+      if (e.target.closest("a, button")) return;
+      choose(e.target.closest("[data-item-id]")?.dataset.itemId);
+    });
+    // A promoted line with a place is a toggle button: Enter or Space chooses it, as a tap does.
+    $("#overview-cards").addEventListener("keydown", (e) => {
+      if ((e.key !== "Enter" && e.key !== " ") || !e.target.matches?.(".answer-place")) return;
+      if (choose(e.target.closest("[data-item-id]")?.dataset.itemId)) e.preventDefault();
     });
     $("#space-content").addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");
@@ -185,6 +194,7 @@
     for (const n of $("#overview-cards").querySelectorAll("[data-item-id]")) {
       const place = standing.some((m) => m.places?.[n.dataset.itemId]);
       n.classList.toggle("has-place", place); n.classList.toggle("framed-record", place && n.dataset.itemId === focused);
+      n.querySelector(":scope > .answer-place")?.setAttribute("aria-pressed", String(place && n.dataset.itemId === focused));
     }
   }
   // Phone: how far the open sheet covers the map (--sheet-overlap, read by the map when it frames the farm).
@@ -415,7 +425,7 @@
     if (context?.farm.id !== farm.id) {
       context = null; openedMap = null;
       unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
-      $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren();
+      $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren(); $("#overview-peek").textContent = "";
       pending = load(FP.sb, farm, user);
     }
     FP.show("screen-map");
@@ -447,6 +457,8 @@
       standing = M.standingAnswers(context);
       answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true }));
       markFocused();
+      // Phone: the closed sheet shows the What's due sentence (its first line) over the handle, so the answer is there on load
+      $("#overview-peek").textContent = $('#overview-cards [data-answer-key="due"] .answer-sentence')?.textContent || "";
       $("#space-body").scrollTop = 0;   // the sheet's scroller outlasts the view: each view opens at its top
       if (route.view === "documents") {
         $("#space-body").replaceChildren();

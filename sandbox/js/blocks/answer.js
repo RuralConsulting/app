@@ -38,9 +38,20 @@
     const link = (href, label, attrs = "") => text(href) && /^#\//.test(href) ? '<a href="' + esc(ctx.href ? ctx.href(href) : href) + '" ' + attrs + ">" + esc(label) + "</a>" : esc(label);
     const items = ranked(list(model.items), model.rank), highlights = promoted(items), hasAnswer = answered(model);
     const said = sentence(model), lines = highlights.filter((i) => i !== said.carried);
+    // An empty answer may say where to look (empty.link: { text, href }): that word of its sentence is the link.
+    const emptyLinked = (said) => {
+      const l = !hasAnswer && model.empty?.link, at = l && text(l.text) ? said.indexOf(l.text) : -1;
+      return at < 0 ? esc(said) : esc(said.slice(0, at)) + link(l.href, l.text) + esc(said.slice(at + l.text.length));
+    };
     const selected = (item) => o.selected != null && o.selected === item.id;
-    const row = (item, lead) => '<li tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? ' class="selected-record"' : "") + ">" + link(item.href, item.text) +
-      (lead ? '<span class="answer-reason"> — ' + esc(item.because) + "</span>" : item.detail ? '<p class="record-detail">' + esc(item.detail) + "</p>" : "") + "</li>";
+    // A promoted line whose record has a place on the map (model.places, What's due) is a toggle: choosing it frames
+    // the map there and marks it, choosing it again goes back (the host wires it; aria-pressed says which is chosen).
+    const choosable = (item) => !!model.places?.[item.id] && !text(item.href);
+    const row = (item, lead) => {
+      const said = link(item.href, item.text) + (lead ? '<span class="answer-reason"> — ' + esc(item.because) + "</span>" : item.detail ? '<p class="record-detail">' + esc(item.detail) + "</p>" : "");
+      return '<li tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? ' class="selected-record"' : "") + ">" +
+        (lead && choosable(item) ? '<span class="answer-place" role="button" tabindex="0" aria-pressed="false">' + said + "</span>" : said) + "</li>";
+    };
     // A model may hand its All to another block (the List for Documents, the Timeline for What's changed). It is
     // drawn without a title of its own, one heading level down; without that block loaded, All is the plain list.
     const body = () => {
@@ -56,7 +67,7 @@
       "</summary>" + (items.length ? (body() || "<ul>" + items.map((i) => row(i, false)).join("") + "</ul>") : "<p>Nothing else recorded.</p>") + "</details>";
     return '<section class="answer-panel' + (o.compact ? " answer-compact" : "") + '" data-answer-key="' + esc(model.key) +
       '" data-answer-state="' + (!hasAnswer && !highlights.length ? "empty" : "recorded") + '">' +
-      "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + (said.carried ? esc(model.answer.text) + " — " + link(said.carried.href, said.carried.text) + esc(", " + said.carried.because) : esc(said.text)) + "</p>" +
+      "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + (said.carried ? esc(model.answer.text) + " — " + link(said.carried.href, said.carried.text) + esc(", " + said.carried.because) : emptyLinked(said.text)) + "</p>" +
       (lines.length ? '<ul class="answer-highlights">' + lines.map((i) => row(i, true)).join("") + "</ul>" : "") +
       (model.restricted ? "" : all) +
       (text(model.currency) ? '<footer class="answer-currency">' + esc(model.currency) + "</footer>" : "") + "</section>";

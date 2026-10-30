@@ -132,5 +132,47 @@
   // easeTo's offset (px from the canvas centre) that puts the point at the centre of the padded frame.
   const offset = (pad) => [Math.round((pad.left - pad.right) / 2), Math.round((pad.top - pad.bottom) / 2)];
 
-  return { direction, compass, takenAt, line, inTimeOrder, inside, unitAt, unitLine, card, cone, metresPerPixel, camera, padding, offset };
+  // ---- The camera under terrain (#229). MapLibre places a camera at its zoom's distance from a reference height at the
+  // centre of the map. With "Hills in 3D" on, an ease keeps the reference it started with (sea level, on a farm flown in
+  // from NZ), so a camera asked for zoom 17 over ground at 320 m (x 1.3 as drawn) lands that much lower: in the hillside,
+  // far too close, its pin off the frame. The map sets the reference to the ground at the photo before it moves; these
+  // say what happens when it does not, and how the map knows, once the camera is at rest, that it landed where it asked.
+  const FOV = Math.atan(0.75);   // MapLibre's field of view (36.87°): the camera is 1.5 map heights from the centre
+  // How far the camera is from the ground at the point it looks at (metres, along the view), for a zoom, pitch and map
+  // height (px), when its height is measured from `reference` and the ground there is at `ground` (both as drawn,
+  // exaggeration in). 0: the camera is in the ground.
+  function cameraGap(zoom, lat, pitch, height, reference = 0, ground = 0) {
+    const cos = Math.cos(((Number(pitch) || 0) * Math.PI) / 180), along = (height / 2 / Math.tan(FOV / 2)) * metresPerPixel(zoom, lat);
+    const above = along * cos - ((Number(ground) || 0) - (Number(reference) || 0));
+    return above > 0 ? above / cos : 0;
+  }
+  // How many times closer the ground looks than the zoom asked for (1: as asked; Infinity: the camera is in the ground).
+  function closer(zoom, lat, pitch, height, reference, ground) {
+    const gap = cameraGap(zoom, lat, pitch, height, reference, ground);
+    return gap > 0 ? cameraGap(zoom, lat, pitch, height) / gap : Infinity;
+  }
+  // A camera that sees the ground this much closer or further than its zoom says did not land where it was asked
+  // (the tilt alone puts a photo's point up to a fifth closer than the centre of the map).
+  const TOO_CLOSE = 1.6;
+  // Once the camera is at rest on a photo: the point (canvas px), the far edge of its view cone, the canvas size and the
+  // padding the point and cone must sit inside, and how much closer the ground looks than the zoom says (seen). Back:
+  // { ok } when all is in frame; { zoom } (log2, never in) to take the cone back inside by zooming out about the point;
+  // { lost } when the point itself is off the frame or the ground is not at the distance asked: the camera is wrong.
+  function frameCheck(pin, far, size, pad, seen = 1, slack = 2) {
+    const r = { left: pad.left - slack, top: pad.top - slack, right: size.width - pad.right + slack, bottom: size.height - pad.bottom + slack };
+    const fine = (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+    const inside = (p) => p[0] >= r.left && p[0] <= r.right && p[1] >= r.top && p[1] <= r.bottom;
+    if (!fine(pin) || !inside(pin) || !(seen > 1 / TOO_CLOSE && seen < TOO_CLOSE)) return { lost: true };
+    let scale = 1;
+    for (const [x, y] of (far || []).filter(fine)) {
+      if (x > r.right) scale = Math.min(scale, (r.right - pin[0]) / (x - pin[0]));
+      if (x < r.left) scale = Math.min(scale, (pin[0] - r.left) / (pin[0] - x));
+      if (y > r.bottom) scale = Math.min(scale, (r.bottom - pin[1]) / (y - pin[1]));
+      if (y < r.top) scale = Math.min(scale, (pin[1] - r.top) / (pin[1] - y));
+    }
+    return scale >= 1 ? { ok: true } : { zoom: Math.log2(Math.max(scale, 0.25)) };
+  }
+
+  return { direction, compass, takenAt, line, inTimeOrder, inside, unitAt, unitLine, card, cone, metresPerPixel, camera, padding, offset,
+    cameraGap, closer, TOO_CLOSE, frameCheck };
 });

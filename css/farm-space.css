@@ -32,11 +32,24 @@ body #screen-map #map { right: 0; bottom: var(--peek-height); }
   border-top: 1px solid var(--rule); border-radius: 14px 14px 0 0; }
 #overview-toggle { display: block; width: 100%; height: var(--peek-height); border: 0; background: var(--panel); color: var(--ink); font: 600 var(--text-body) var(--f-ui); cursor: pointer; }
 #overview-toggle::before { content: ""; display: block; width: 32px; height: 3px; background: var(--ink-3); border-radius: 3px; margin: 0 auto 7px; }
+/* Walk #3: the closed sheet shows the answer. The What's due sentence's first line sits over the handle's label, so the
+   farm home opens on the answer; opening the sheet shows it whole (the line then gives way to the label alone). */
+body.farm-space-active:not(.farm-detail) { --peek-height: 82px; }
+#overview-toggle { padding: 0 16px; }
+.overview-peek { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font: 400 var(--text-body)/1.35 var(--f-display); color: var(--ink); }
+.overview-peek:empty { display: none; }
+.overview-label { display: block; margin-top: 3px; font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink-2); }
+.overview-peek:empty + .overview-label { font: 600 var(--text-body) var(--f-ui); color: var(--ink); }
+#overview-rail.expanded .overview-peek { display: none; }
+#overview-rail.expanded #overview-toggle { height: 54px; }
+#overview-rail.expanded .overview-label { font: 600 var(--text-body) var(--f-ui); color: var(--ink); }
 #overview-cards { display: none; gap: 10px; padding: 10px; }
 #overview-rail.expanded { height: var(--sheet-height); overflow: auto; }
 #overview-rail.expanded #overview-cards { display: grid; }
 /* A What's due line whose condition records its place: choosing it frames the map there (farm-space.js focus). */
 #overview-cards .has-place { cursor: pointer; }
+#overview-cards .answer-place { display: block; border-radius: 4px; }
+#overview-cards .answer-place:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 #overview-cards .framed-record { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 
 /* Ask, Create, Documents and People. Phone: the same bottom sheet as the standing answers, so a strip of the map stays

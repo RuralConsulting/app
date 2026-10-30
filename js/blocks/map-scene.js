@@ -86,8 +86,7 @@
       if (map.getLayer("bm-blank")) map.setPaintProperty("bm-blank", "background-color",
         getComputedStyle(document.documentElement).getPropertyValue("--map-background").trim());
       for (const [id, property] of [["portfolio-fill", "fill-color"], ["portfolio-line", "line-color"],
-        ["extent-line", "line-color"], ["action-programme-lines", "line-color"], ["action-programme-points", "circle-color"],
-        ["focus-fill", "fill-color"], ["focus-line", "line-color"], ["focus-point", "circle-color"]]) {
+        ["extent-line", "line-color"], ["action-programme-lines", "line-color"], ["action-programme-points", "circle-color"]]) {
         if (map.getLayer(id)) map.setPaintProperty(id, property, accent());
       }
     });
@@ -96,6 +95,8 @@
     for (const ev of ["dragstart", "zoomstart", "rotatestart", "pitchstart"]) map.on(ev, (e) => { if (e.originalEvent) { settling++; touched = true; } });   // the person has taken the camera
     window.addEventListener("resize", onResize);
     map.on("click", onClick);
+    map.on("moveend", reground);
+    map.on("data", (e) => { if (e.sourceId && e.sourceId === map?.getTerrain?.()?.source) reground(); });
     map.on("mousemove", (e) => {
       const ids = [...interactive.keys()].filter((id) => map.getLayer(id));
       map.getCanvas().style.cursor = ids.length && map.queryRenderedFeatures(e.point, { layers: ids }).length ? "pointer" : "";
@@ -106,8 +107,10 @@
   const loaded = () => ready;
 
   function clear() {
+    if (photo) closePhoto();   // (and the hills come back if a photo had flattened them)
     photo?.card.remove(); photo = null; photoSets.clear(); units = null; featurePopup?.remove(); featurePopup = null;
     if (declutter) { for (const ev of ["move", "resize"]) map.off(ev, declutter); declutter = null; }
+    if (offLine) { map.off("move", offLine); offLine = null; }
     for (const m of markers) m.remove();
     markers = [];
     for (const { kind, id } of [...added].reverse()) {
@@ -202,7 +205,8 @@
       const said = FP.photoModel.line(f.properties);
       const pin = FP.el("button", { type: "button", class: "photo-pin", title: said, "aria-label": said, onclick: () => showPhoto(i, k) });
       pin.innerHTML = CAMERA;
-      const marker = new maplibregl.Marker({ element: pin }).setLngLat(f.geometry.coordinates).addTo(map);
+      // under 3D terrain a pin on a slope can read as behind the hill: it stays fully drawn (#229)
+      const marker = new maplibregl.Marker({ element: pin, opacityWhenCovered: "1" }).setLngLat(f.geometry.coordinates).addTo(map);
       markers.push(marker); own.push(marker);
     });
     photoSets.set(i, { layer: l, list, markers: own });
@@ -212,7 +216,7 @@
     const set = photoSets.get(i), f = set?.list[k];
     if (!map || !f) return;
     featurePopup?.remove(); featurePopup = null;
-    map.getSource("focus")?.setData(NONE);   // the photo wins: a chosen line's mark goes (the host is told by fp-photo)
+    unfocus();   // the photo wins: a chosen line's mark, the dim round it and its tucked-away labels go (the host is told by fp-photo)
     const c = map.getContainer(), sheet = c.clientWidth < 640, model = FP.photoModel.card(f, set.layer, units, FP.farmModel.sourceLine);
     const focused = photo?.card.contains(document.activeElement) ? document.activeElement.getAttribute("aria-label") : null;
     photo?.card.remove();
@@ -226,14 +230,40 @@
     if (focused) card.querySelector('[aria-label="' + focused + '"]:not([disabled])')?.focus();
     framePhoto(f, model.direction);
   }
-  function framePhoto(f, deg) {
+  function framePhoto(f, deg, flattened = false) {
+    const mine = ++photoMoves;   // first: a move this stops (the last photo's, or the farm's) is not checked as this one
     const P = FP.photoModel, at = f.geometry.coordinates, c = map.getContainer(), box = photo.card.getBoundingClientRect(), size = { width: c.clientWidth, height: c.clientHeight };
     const directed = Number.isFinite(deg), cam = P.camera(deg, { zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() });
-    const pad = P.padding(size, box, photo.card.classList.contains("sheet"), directed);
+    const sheet = photo.card.classList.contains("sheet"), pad = P.padding(size, box, sheet, directed);
     const shape = directed ? P.cone(at, deg, P.metresPerPixel(cam.zoom, at[1]) * Math.min(150, size.height * 0.3)) : null;
     map.getSource("photo-cone")?.setData(shape ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: shape, properties: {} }] } : NONE);
     settling++; touched = false; framedWidth = window.innerWidth;   // a farm frame still settling gives way to the photo
+    // #229: with the hills in 3D the camera is measured from the ground at the photo; where the map has no ground
+    // there yet, the hills go flat while the photo is open (they come back when it closes)
+    if (map.getTerrain?.() && stand(at) == null) holdTerrain();
+    map.stop();
+    // once at rest: the point, and the far edge of its cone, inside the frame (the cone in the room above the point)
+    map.once("moveend", () => checkPhoto(mine, f, deg, at, shape, P.padding(size, box, sheet, false), size, flattened, 0));
     map.easeTo({ center: at, ...cam, offset: P.offset(pad), duration: reduced() ? 0 : 1400 });
+  }
+  let photoMoves = 0;
+  function checkPhoto(mine, f, deg, at, shape, pad, size, flattened, tries) {
+    if (mine !== photoMoves || !photo || !map || touched) return;   // another photo, closed, or the person has the camera
+    const P = FP.photoModel, pt = (p) => { const q = map.project(p); return [q.x, q.y]; };
+    // how much closer the ground looks than the zoom says: 20 m across the view at the point, against the zoom's scale
+    const k = Math.PI / 180, b = (map.getBearing() + 90) * k, m = 20, side = [at[0] + (m * Math.sin(b)) / (111320 * Math.cos(at[1] * k)), at[1] + (m * Math.cos(b)) / 111320];
+    const here = pt(at), across = Math.hypot(...pt(side).map((v, n) => v - here[n])), seen = across > 0 ? (P.metresPerPixel(map.getZoom(), at[1]) * across) / m : Infinity;
+    const check = P.frameCheck(here, shape ? shape.coordinates[0].slice(1, -1).map(pt) : [], size, pad, seen);
+    if (check.ok) return;
+    if (check.lost || tries >= 2) {
+      // the camera under terrain could not be made right: the hills go flat for this photo, and it is framed again
+      if (!flattened && map.getTerrain?.()) { holdTerrain(); framePhoto(f, deg, true); }
+      return;
+    }
+    const next = ++photoMoves;
+    map.stop();
+    map.once("moveend", () => checkPhoto(next, f, deg, at, shape, pad, size, flattened, tries + 1));
+    map.easeTo({ zoom: map.getZoom() + check.zoom, around: at, duration: reduced() ? 0 : 300 });
   }
   // The person closes the photo (×, Escape): the map swings back to the farm's frame, flat and north up.
   function dismissPhoto() {
@@ -241,17 +271,40 @@
   }
   function closePhoto() {
     if (!photo) return;
-    photo.card.remove(); photo = null;
+    photo.card.remove(); photo = null; photoMoves++;
     for (const s of photoSets.values()) for (const m of s.markers) m.getElement().classList.remove("selected");
     map?.getSource("photo-cone")?.setData(NONE);
+    releaseTerrain();
   }
+
+  // ---- Terrain (#229). MapLibre measures the camera's height from a reference height that an ease leaves where it
+  // started (sea level, after the flight in from NZ), so every frame first sets it to the ground under what it frames.
+  function stand(at) {
+    const ground = groundAt(at);
+    if (ground != null) map.jumpTo({ elevation: ground });
+    return ground;
+  }
+  // The ground (as drawn) at a point, or null when terrain is off or no terrain tile there has loaded yet (MapLibre
+  // then says 0, which is read as not known: a farm exactly at sea level is framed as if terrain were flat there).
+  function groundAt(at) {
+    if (!map?.getTerrain?.()) return null;
+    const ground = map.queryTerrainElevation(at);
+    return Number.isFinite(ground) && ground !== 0 ? ground : null;
+  }
+  // The fallback: the hills flattened while a photo is open, and back (as the person had them) when it closes.
+  let heldTerrain = false;
+  function holdTerrain() { if (!map?.getTerrain?.()) return; FP.basemaps.setTerrain(map, false); heldTerrain = !map.getTerrain(); }
+  function releaseTerrain() { if (!heldTerrain) return; heldTerrain = false; if (map) FP.basemaps.setTerrain(map, true); }
 
   // The NZ -> farm zoom: a smooth fly, or a jump when the person asks their device for reduced motion.
   let flightKey = null, settling = 0, framed = null, touched = false, resizing = 0, framedWidth = 0;   // framed: the extent last fitted; touched: the person has moved the map since
   const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wide = () => window.innerWidth > 800;
   function fit(bounds, padding, geom, duration = reduced() ? 0 : 2600) {
+    const mid = [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2];
+    stand(mid);   // measured from the ground there (#229)
     map.fitBounds(bounds, { padding, duration, maxZoom: 17, pitch: 0 });   // flat: a photo's tilt never carries into a frame
+    if (!map.isMoving()) stand(mid);   // a jump (reduced motion) measures the height itself, from tiles it may not have
     if (geom) { framed = geom; touched = false; framedWidth = window.innerWidth; settle(geom); }
   }
   // The window (or the pane the app sits in) changed size: frame the farm again for the new map, unless the person has moved it.
@@ -276,6 +329,26 @@
       const c = map.getContainer(), fix = FP.farmModel.frameFix(project(geom), { width: c.clientWidth, height: c.clientHeight }, FP.farmModel.framePadding(inset(), wide()));
       if (fix) map.easeTo({ zoom: map.getZoom() + fix.zoom, center: map.unproject(fix.at), duration: reduced() ? 0 : 400 });
     });
+  }
+  // #229: the ground under a frame becomes known as terrain tiles arrive (after the flight in from NZ, or as finer tiles
+  // load). A frame or photo measured from a height that was a guess is framed again from the ground, once the camera
+  // is at rest and the person has not moved it.
+  let regroundQueued = false, regrounded = { key: null, n: 0 };
+  function reground() {
+    if (regroundQueued || !map?.getTerrain?.()) return;
+    regroundQueued = true;
+    setTimeout(() => {
+      regroundQueued = false;
+      if (!map?.getTerrain?.() || map.isMoving() || touched || (!photo && !framed)) return;
+      const f = photo && photoSets.get(photo.i)?.list[photo.k], b = framed && bbox(framed);
+      const at = f ? f.geometry.coordinates : [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2], ground = groundAt(at);
+      if (ground == null || Math.abs(ground - map.getCameraTargetElevation()) <= 25) return;
+      // twice at most for one frame: tiles that never finish loading must not keep the camera moving
+      const key = f ? "photo " + photo.i + " " + photo.k : JSON.stringify(b);
+      if (regrounded.key === key && regrounded.n >= 2) return;
+      regrounded = { key, n: regrounded.key === key ? regrounded.n + 1 : 1 };
+      if (f) showPhoto(photo.i, photo.k); else fit(b, FP.farmModel.framePadding(inset(), wide()), framed, reduced() ? 0 : 400);
+    }, 250);
   }
   function union(boxes) {
     return boxes.reduce((a, b) => [[Math.min(a[0][0], b[0][0]), Math.min(a[0][1], b[0][1])], [Math.max(a[1][0], b[1][0]), Math.max(a[1][1], b[1][1])]]);
@@ -306,15 +379,53 @@
     const hits = place ? FP.farmModel.placeFeatures(drawn, place) : [];
     if (place && !hits.length) return false;
     closePhoto();   // a chosen line's frame wins over an open photo
+    if (!place) { unfocus(); reframe(drawn.extent); return true; }
     map.getSource("focus")?.setData({ type: "FeatureCollection", features: hits });
-    if (!place) { reframe(drawn.extent); return true; }
+    map.getSource("focus-dim")?.setData({ type: "Feature", properties: {}, geometry: FP.farmModel.dimAround(hits, drawn.extent) });
+    dimmed = true;
+    keepLabelsOff(hits.filter((f) => /LineString$/.test(f.geometry.type)));
     let [[w, s], [e, n]] = union(hits.map((f) => bbox(f.geometry)));
     const min = 0.002;   // a single bore is framed with its surroundings (about 200 m)
     if (e - w < min) [w, e] = [(w + e) / 2 - min / 2, (w + e) / 2 + min / 2];
     if (n - s < min) [s, n] = [(s + n) / 2 - min / 2, (s + n) / 2 + min / 2];
     flightKey = null;
+    const c = map.getContainer(), pad = FP.farmModel.framePadding(inset(), wide());
+    // a place that would fill most of the farm's own frame (LU1 and LU3, half the farm) keeps the farm frame, marked in it
+    if (!FP.farmModel.framesPlace([[w, s], [e, n]], bbox(drawn.extent), { width: c.clientWidth, height: c.clientHeight }, pad)) {
+      fit(bbox(drawn.extent), pad, drawn.extent, reduced() ? 0 : 900); return true;
+    }
     fit([[w, s], [e, n]], FP.farmModel.framePadding(inset(), wide()), { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] }, reduced() ? 0 : 900);
     return true;
+  }
+  // Every path that drops a chosen place goes through here: its mark, the dim round it, and any label tucked off it.
+  let dimmed = false;
+  function unfocus() {
+    if (!map) return;
+    map.getSource("focus")?.setData(NONE);
+    map.getSource("focus-dim")?.setData(NONE);
+    dimmed = false;
+    keepLabelsOff([]);
+  }
+  // While a line (the creek) is chosen, no land unit label sits on it: a label it runs under is tucked away until it
+  // is unchosen (screen boxes against the line as drawn, after every move).
+  let offLine = null;
+  function keepLabelsOff(lines) {
+    if (offLine) { map.off("move", offLine); offLine = null; }
+    for (const el of map.getContainer().querySelectorAll(".lu-label.on-line")) el.classList.remove("on-line");
+    if (!lines.length) return;
+    let queued = false;
+    const place = () => {
+      queued = false;
+      if (!map) return;
+      const r = map.getContainer().getBoundingClientRect(), at = (p) => { const q = map.project(p); return [q.x + r.left, q.y + r.top]; };
+      const paths = lines.flatMap((f) => (f.geometry.type === "MultiLineString" ? f.geometry.coordinates : [f.geometry.coordinates]).map((path) => path.map(at)));
+      const els = [...map.getContainer().querySelectorAll(".lu-label")];
+      const hit = FP.farmModel.labelsOnLine(els.map((el) => { const b = el.getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; }), paths);
+      els.forEach((el, n) => el.classList.toggle("on-line", hit[n]));
+    };
+    offLine = () => { if (!queued) { queued = true; requestAnimationFrame(place); } };
+    map.on("move", offLine);
+    offLine();
   }
   // Where an extent sits on the map canvas, in px from its top-left corner (for checks that it is in view).
   function project(geom) {
@@ -441,11 +552,17 @@
       entries.push({ key: "reference", name: r.theme === "wells" ? "Bores on the farm" : FP.farmModel.layerName(r), sub: null, section: "reference", ids: [id] });
     }
 
-    // What an answer is about, drawn over everything when one of its lines is chosen (focus).
+    // What an answer is about, when one of its lines is chosen (focus, #224): the rest of the farm dims, and the chosen
+    // place is drawn over everything, bright: areas lit (a faint white wash: the dim around them does the work) and outlined in white, a line (the creek) wide and light.
+    const AREAS = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], LINES = ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString"]]];
+    source("focus-dim", NONE);
+    layer({ id: "focus-dim", type: "fill", source: "focus-dim", paint: { "fill-color": "#000000", "fill-opacity": 0.45 } });
     source("focus", { type: "FeatureCollection", features: [] });
-    layer({ id: "focus-fill", type: "fill", source: "focus", filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], paint: { "fill-color": accent(), "fill-opacity": 0.2 } });
-    layer({ id: "focus-line", type: "line", source: "focus", filter: ["!", ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]]], paint: { "line-color": accent(), "line-width": 4 } });
-    layer({ id: "focus-point", type: "circle", source: "focus", filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]], paint: { "circle-color": accent(), "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+    layer({ id: "focus-fill", type: "fill", source: "focus", filter: AREAS, paint: { "fill-color": "#ffffff", "fill-opacity": 0.08 } });
+    layer({ id: "focus-casing", type: "line", source: "focus", filter: ["any", AREAS, LINES], paint: { "line-color": "#000000", "line-opacity": 0.5, "line-width": ["case", LINES, 9, 5] } });
+    layer({ id: "focus-line", type: "line", source: "focus", filter: AREAS, paint: { "line-color": "#ffffff", "line-width": 2.5 } });
+    layer({ id: "focus-water", type: "line", source: "focus", filter: LINES, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bfe8ff", "line-width": 5 } });
+    layer({ id: "focus-point", type: "circle", source: "focus", filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]], paint: { "circle-color": "#ffffff", "circle-radius": 8, "circle-stroke-color": "#000000", "circle-stroke-width": 2 } });
     drawn = data;
 
     // what's on when the farm opens comes from config.js (farmView.defaultOn); the rest is a tick away
@@ -546,11 +663,11 @@
   // A block's own surface goes when the block does: listeners, labels and the WebGL context with it.
   function remove() {
     if (!map) return;
-    opening++; resizing++; framed = null; photo?.card.remove(); photo = null; photoSets.clear(); window.removeEventListener("resize", onResize); scheme?.removeEventListener("change", syncPalette); observer?.disconnect();
+    opening++; resizing++; framed = null; photo?.card.remove(); photo = null; heldTerrain = false; photoSets.clear(); window.removeEventListener("resize", onResize); scheme?.removeEventListener("change", syncPalette); observer?.disconnect();
     for (const m of markers) m.remove();
     markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
   }
-  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => FP.basemaps.setTerrain(init(), on), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving(), terrain: !!map.getTerrain?.(), elevation: map.getCameraTargetElevation?.() ?? 0, dimmed, labelsOff: map.getContainer().querySelectorAll(".lu-label.on-line").length }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => { heldTerrain = false; return FP.basemaps.setTerrain(init(), on); }, frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
     resize: () => map && map.resize(), closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
   }
 

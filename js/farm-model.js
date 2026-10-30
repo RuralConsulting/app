@@ -259,7 +259,9 @@
     const model = { key: "due", title: "What's due", rank: "given", items, answer, body, places, audience: farmer ? "farmer" : "advisor",
       total: checklist.length, scene: { farm: f, frame: "extent", area: null }, href: null, allLabel: "Everything recorded",
       // A farm with a consent decision on file but no conditions read in says that, not "nothing recorded".
-      empty: { text: context.obligationsError ? "The condition dates couldn't be read." : decision ? "The consent's conditions haven't been read in yet; its decision is in Documents." : "Nothing recorded yet." },
+      empty: { text: context.obligationsError ? "The condition dates couldn't be read." : decision ? "The consent's conditions haven't been read in yet; its decision is in Documents." : "Nothing recorded yet.",
+        // "Documents" opens the decision itself (walk #3)
+        ...(!context.obligationsError && decision ? { link: { text: "Documents", href: href(f, "documents", decision.id) } } : {}) },
       restricted: !checklist.length, currency: "As at " + date(today), farm: f };
     return farmer ? unmarked(model) : model;
   }
@@ -318,6 +320,48 @@
     return [...drawn(s.land_units).filter((x) => codes.has(x.properties?.code)),
       ...list(s.layers).filter((l) => l.theme !== "land_units" && themes.has(l.theme)).flatMap((l) => drawn(l.features)),
       ...list(s.reference).filter((r) => themes.has(r.theme)).flatMap((r) => drawn(r.features))];
+  }
+
+  // #224 What dims when a line's place is chosen: everything on the map around the farm but the chosen areas, as one
+  // polygon (a wide box about the farm with each chosen area's outline as a hole). A chosen line or point dims all
+  // around it and is drawn over the dim. GeoJSON geometry, lng/lat.
+  function dimAround(features, extent) {
+    const corners = [];
+    const walk = (c) => (typeof c[0] === "number" ? corners.push(c) : c.forEach(walk));
+    if (extent?.coordinates) walk(extent.coordinates);
+    for (const f of list(features)) if (f?.geometry?.coordinates) walk(f.geometry.coordinates);
+    if (!corners.length) return null;
+    const xs = corners.map((c) => c[0]), ys = corners.map((c) => c[1]), m = 1;   // a degree beyond: past the edge of any farm frame
+    const [w, s, e, n] = [Math.min(...xs) - m, Math.min(...ys) - m, Math.max(...xs) + m, Math.max(...ys) + m];
+    const holes = list(features).flatMap((f) => f?.geometry?.type === "Polygon" ? [f.geometry.coordinates[0]] :
+      f?.geometry?.type === "MultiPolygon" ? f.geometry.coordinates.map((p) => p[0]) : []).filter((r) => Array.isArray(r) && r.length >= 4);
+    return { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]], ...holes] };
+  }
+  // #224 Is a chosen place framed on its own, or marked in the farm's frame? On its own only when framing it zooms in
+  // well past the farm's frame: by 1/0.6 or more, i.e. the place fills less than about 60% of what the farm frame shows
+  // (LU1 and LU3 run the farm's full height: framing them would move the map without bringing them closer).
+  // Boxes are [[w, s], [e, n]] in lng/lat; size and pad are the map canvas and its frame padding in px.
+  const PLACE_SHARE = 0.6;
+  function framesPlace(place, farm, size, pad) {
+    const metres = (b) => { const k = Math.cos((((b[0][1] + b[1][1]) / 2) * Math.PI) / 180); return [Math.max((b[1][0] - b[0][0]) * k, 1e-9), Math.max(b[1][1] - b[0][1], 1e-9)]; };
+    const w = (size?.width || 0) - (pad?.left || 0) - (pad?.right || 0), h = (size?.height || 0) - (pad?.top || 0) - (pad?.bottom || 0);
+    if (!(w > 0 && h > 0)) return true;
+    const scale = ([x, y]) => Math.min(w / x, h / y);
+    return scale(metres(place)) / scale(metres(farm)) >= 1 / PLACE_SHARE - 1e-9;
+  }
+  // #224 Which labels a drawn line runs under: boxes ({ x, y, w, h }, screen px) against paths (lists of [x, y] screen
+  // points); a label within `margin` px of the line counts. True for each label the line touches.
+  function labelsOnLine(boxes, paths, margin = 3) {
+    const cross = (a, b, c, d) => {
+      const o = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+      return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
+    };
+    return list(boxes).map((b) => {
+      const l = b.x - margin, t = b.y - margin, r = b.x + b.w + margin, btm = b.y + b.h + margin;
+      const inside = (p) => p[0] >= l && p[0] <= r && p[1] >= t && p[1] <= btm;
+      const edges = [[[l, t], [r, t]], [[r, t], [r, btm]], [[r, btm], [l, btm]], [[l, btm], [l, t]]];
+      return list(paths).some((path) => path.some(inside) || path.slice(1).some((q, i) => edges.some(([c, d]) => cross(path[i], q, c, d))));
+    });
   }
 
   // Documents: the one sentence over the Documents block (blocks/documents.js). It names the first document in the
@@ -487,5 +531,5 @@
     return letters.toUpperCase();
   };
 
-  return { views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  return { dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });

@@ -93,19 +93,23 @@
     const n = p.children.length;
     return rowHtml(p, o, data) + foldHtml(p.children, o, data, plural(n, "supporting document", "supporting documents")) + "</li>";
   }
-  const searchHtml = (value = "", results = "") => '<div class="doc-search"><label><span class="visually-hidden">Search documents</span>' +
-    '<input type="search" data-doc-search autocomplete="off" spellcheck="false" placeholder="Search documents" value="' + esc(value) + '"></label>' +
+  // The search field's label is shown (a placeholder is not a label); the placeholder gives an example instead.
+  const searchHtml = (value = "", results = "") => '<div class="doc-search"><label><span class="doc-search-label">Search documents</span>' +
+    '<input type="search" data-doc-search autocomplete="off" spellcheck="false" placeholder="e.g. S-map, consent, 2024" value="' + esc(value) + '"></label>' +
     '<div class="doc-results" aria-live="polite">' + results + "</div></div>";
   const addHtml = () => '<div class="doc-add"><label class="doc-drop"><input type="file" multiple data-doc-file class="visually-hidden"><span>Add documents</span></label>' +
     '<div class="doc-confirm" hidden></div></div>';
 
-  // Search across every tier, archive included: every word must match the title, kind, author or file name.
+  // Search across every tier, archive included: every word must match the title, kind, author or file name. Spaces,
+  // hyphens, dots, underscores and the like are not read ("smap" finds "S-map", "eyre 3a1" finds "Eyre_3a.1"); the
+  // whole query run together counts too ("s map").
+  const squash = (v) => String(v || "").toLowerCase().replace(/[\s\-\u2010-\u2015_.,:;'\u2018\u2019"\u201c\u201d/\\()[\]]+/g, "");
   function search(docs, q) {
-    const words = String(q || "").toLowerCase().split(/\s+/).filter(Boolean);
+    const words = String(q || "").toLowerCase().split(/\s+/).map(squash).filter(Boolean), whole = squash(q);
     if (!words.length) return [];
     return arrange(docs).all.filter(({ doc: d }) => {
-      const hay = [M.docTitle(d), d.title, M.docKind(d.doc_type), d.author, d.author_org, d.original_name].filter(Boolean).join(" ").toLowerCase();
-      return words.every((w) => hay.includes(w));
+      const hay = squash([M.docTitle(d), d.title, M.docKind(d.doc_type), d.author, d.author_org, d.original_name].filter(Boolean).join(" "));
+      return words.every((w) => hay.includes(w)) || hay.includes(whole);
     }).sort((a, b) => (a.tier.tier === "archive") - (b.tier.tier === "archive") || newest(a.doc, b.doc));
   }
   function resultsHtml(data, o, q) {
