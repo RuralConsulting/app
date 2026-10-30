@@ -28,6 +28,9 @@
       { id: "entry-note", kind: "entries", date: "2026-10-12", what: "Note on the effluent pond level (synthetic)", did: "was captured", by: "Demo farmer", source: "Note · Dairy shed" },
     ];
     const changes = (rows) => { const body = M.standingAnswers(context(rows))[1].body.data; return { ...body, title: "What's changed" }; };
+    // The checklist: the demo farm's conditions; sparse is one water permit with one recorded condition.
+    const checks = (rows) => ({ ...M.standingAnswers(context(rows))[0].body.data, title: "What's due" });
+    const onePractice = t.obligations.filter((o) => o.id === "obl-meter");
     return {
       answer: {
         options: {},
@@ -46,6 +49,12 @@
         full: (() => { const base = changes({ documents: t.documents, authorisations: t.authorisations }); return { ...base, items: [...base.items, ...more] }; })(),
         sparse: changes({ authorisations: oneConsent }),
         empty: changes(),
+      },
+      checklist: {
+        options: {},
+        full: checks({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations }),
+        sparse: checks({ authorisations: oneConsent, obligations: onePractice }),
+        empty: checks(),
       },
       "map-scene": {
         options: {},

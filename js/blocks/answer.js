@@ -1,6 +1,6 @@
 // Answer block: one sentence -> up to three promoted lines, each with its reason -> All behind a tap.
 // Data is an answer model (farm-model.js builds them): { key, title, answer: {text, because}, items, rank, empty,
-// allLabel, href, groups, restricted, currency }. Pure: data in, HTML out (APP-STRUCTURE §3.1–3.4).
+// allLabel, href, groups, restricted, currency, total? }. Pure: data in, HTML out (APP-STRUCTURE §3.1–3.4).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -58,7 +58,8 @@
       const opts = { ...(b.options || {}), ...(o.selected != null && "selected" in blocks.get(b.block).options ? { selected: o.selected } : {}) };
       return blocks.html(b.block, b.data, opts, { level: sub, nested: true, href: ctx.href }).html;
     };
-    const allLabel = (model.allLabel || "All records") + " (" + items.length + ")";
+    // A model whose promoted lines include a summary (What's due's practice line) gives its own count of records.
+    const allLabel = (model.allLabel || "All records") + " (" + (Number.isInteger(model.total) ? model.total : items.length) + ")";
     const all = o.compact && text(model.href) ? link(model.href, allLabel, 'class="answer-all-link"') :
       '<details class="answer-all"' + (o.selected != null || o.open ? " open" : "") + "><summary>" + esc(allLabel) +
       "</summary>" + (items.length ? (body() || (o.cards ? cards() : "<ul>" + items.map((i) => row(i, false)).join("") + "</ul>")) : "<p>Nothing else recorded.</p>") + "</details>";

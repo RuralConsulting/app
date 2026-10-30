@@ -2,14 +2,14 @@
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
 // APP names this app's caches; the sandbox build (sandbox.cjs) changes it, so the app at / and the one at /sandbox/
 // (same site, so same cache storage) never read or delete each other's caches.
-const VERSION = "202610301158-e568b35";
+const VERSION = "202610301220-1cbc9b6";
 const APP = "fp-sandbox";
 const CACHE = `${APP}-${VERSION}`;
 // The sandbox app lives under this one's folder; its own service worker handles it, this one never does.
 const NESTED = new URL("sandbox/", self.registration.scope).pathname;
 const SHELL = ["./", "index.html", "css/tokens.css", "css/app.css", "manifest.webmanifest",
   "js/demo.js", "css/demo.css", "demo/demo-farm.json", "demo/source.html",
-  "js/blocks/registry.js", "js/blocks/answer.js", "js/blocks/map-scene.js", "js/blocks/list.js", "js/blocks/timeline.js", "js/blocks/gallery.js", "css/blocks.css", "css/gallery.css", "js/plans/render.js", "js/plans/demo.js", "css/plan-print.css", "css/plans-demo.css", "js/farm-model.js", "js/farm-space.js", "css/farm-space.css",
+  "js/blocks/registry.js", "js/blocks/answer.js", "js/blocks/map-scene.js", "js/blocks/list.js", "js/blocks/timeline.js", "js/blocks/checklist.js", "js/blocks/gallery.js", "css/blocks.css", "css/gallery.css", "js/plans/render.js", "js/plans/demo.js", "css/plan-print.css", "css/plans-demo.css", "js/farm-model.js", "js/farm-space.js", "css/farm-space.css",
   "js/guard.js", "js/config.js", "js/brand.js", "js/util.js", "js/qml.js", "js/basemaps.js", "js/auth.js", "js/popup.js", "js/ops-model.js", "js/ops.js", "css/ops.css", "css/sandbox.css", "js/main.js",
   "vendor/supabase.js", "vendor/maplibre-gl-csp.js", "vendor/maplibre-gl-csp-worker.js", "vendor/maplibre-gl.css",
   "fonts/source-sans-3-latin-ext-wght-normal.woff2", "fonts/source-sans-3-latin-wght-normal.woff2", "fonts/source-serif-4-latin-ext-wght-normal.woff2", "fonts/source-serif-4-latin-wght-normal.woff2",

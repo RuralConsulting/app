@@ -24,7 +24,7 @@
       readDocuments(sb, farm),
       read(sb.from("authorisations").select("id,kind,title,consent_no,rule_ref,valid_from,valid_to,created_at").eq("farm_id", farm.id).order("title")),
       // Optional: if the dates can't be read, "What's due" says so rather than claiming nothing is due.
-      Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,due_date,recurrence").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
+      Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,full_text,kind,parameters,due_date,recurrence,source_document_id,source_page").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
       sb.today ? sb.today() : nzToday(),
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");

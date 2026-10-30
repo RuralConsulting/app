@@ -76,40 +76,113 @@
   }
 
   // Why a condition is on the list, in the words of the record: the consent or rule that requires it and the condition
-  // number. A condition the record doesn't link to an authorisation says so instead of leaving the line bare.
+  // number. A condition the record doesn't link to an authorisation says so instead of leaving the line bare. A code
+  // that isn't a condition number (a consent's lapse date) names the consent alone.
+  const conditionCode = (o) => (o.code && /^\d/.test(o.code) ? o.code : null);
   const obligationReason = (o, a) => {
-    const code = o.code ? "condition " + o.code : null;
+    const code = conditionCode(o) ? "condition " + o.code : null;
     if (a) return "required by " + (a.consent_no || a.rule_ref || a.title || "a recorded authorisation") + (code ? ", " + code : "");
     return (code ? "from " + code : "from a recorded condition") + ", consent not recorded";
   };
+  const params = (o) => (o.parameters && typeof o.parameters === "object" && !Array.isArray(o.parameters) ? o.parameters : {});
+  const words = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const and = (xs) => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
+  // Where a condition stands from what is recorded, never from what ought to be true: ongoing practice; a date
+  // (coming up or passed); or unknown until there is a record (an audit repeating on its last grade, a report after
+  // each audit). Rows loaded before schedules were recorded fall back on their date, repeat rule and kind.
+  function schedule(o) {
+    const p = params(o), when = day(o.due_date);
+    if (p.schedule === "continuous") return { state: "ongoing" };
+    if (when) return { state: "dated", due: when };
+    if (p.schedule === "recurring" || p.schedule === "dated" || words(o.recurrence) || ["date", "reporting"].includes(o.kind)) return { state: "unknown" };
+    return { state: "ongoing" };
+  }
 
-  // "What's due": dated obligations and authorisation expiry dates, as recorded. Nothing is inferred.
-  // Dates in the next twelve months are promoted; later, undated and earlier ones stay in All.
+  // "What's due": the farm's conditions as a checklist (ongoing practice, dates coming up, and what needs a record
+  // before anything can be said), with authorisation expiry dates and consents whose conditions aren't recorded.
+  // The sentence names the next recorded date; promoted lines are the nearest date, the first thing that needs a
+  // record and a summary of the practice to keep up, each with its reason. Nothing is inferred or asserted.
   function due(context) {
-    const f = context.farm.id, today = context.today, horizon = addDays(today, 365), auths = list(context.authorisations);
-    const byId = new Map(auths.map((a) => [a.id, a]));
-    const items = [];
-    for (const o of list(context.obligations)) {
-      const a = byId.get(o.authorisation_id), when = day(o.due_date);
-      items.push({ id: "obligation-" + o.id, text: o.summary || "Recorded condition", due_date: when, verb: "due", reason: obligationReason(o, a),
-        detail: [a ? authName(a) : null, o.code ? "condition " + o.code : null, when ? (when < today ? "was due " : "due ") + date(when) : null, o.recurrence].filter(Boolean).join(" · ") });
+    const f = context.farm.id, today = context.today, horizon = addDays(today, 365), auths = list(context.authorisations), obligations = list(context.obligations);
+    const byId = new Map(auths.map((a) => [a.id, a])), docs = new Map(list(context.documents).map((d) => [d.id, d]));
+    const source = (o) => {
+      const d = o.source_document_id && docs.get(o.source_document_id), page = Number.isInteger(o.source_page) ? "page " + o.source_page : null;
+      return d ? [d.title || "Source document", page].filter(Boolean).join(", ") : page ? "Source " + page : null;
+    };
+    // Plan content listed under its condition (Appendix B under condition 7) folds into that condition's line.
+    const codeOf = (o) => (o.authorisation_id || "") + "|" + (o.code || "");
+    const parents = new Set(obligations.map(codeOf)), parts = new Map();
+    const partOf = (o) => { const p = words(params(o).part_of); return p && parents.has((o.authorisation_id || "") + "|" + p) ? (o.authorisation_id || "") + "|" + p : null; };
+    for (const o of obligations) if (partOf(o)) { const k = partOf(o); if (!parts.has(k)) parts.set(k, []); parts.get(k).push(o); }
+    const checklist = [];
+    for (const o of obligations) {
+      if (partOf(o)) continue;
+      const a = byId.get(o.authorisation_id), p = params(o), s = schedule(o);
+      const kids = (parts.get(codeOf(o)) || []).sort((x, y) => String(x.code).localeCompare(String(y.code), "en", { numeric: true }));
+      checklist.push({ id: "obligation-" + o.id, text: o.summary || "Recorded condition", reason: obligationReason(o, a),
+        state: s.state === "dated" ? undefined : s.state, due: s.due || null, verb: o.code === "lapse" ? "lapses" : "due",
+        repeats: words(o.recurrence), needs: words(p.needs_record), basis: s.due ? words(p.due_basis) : null,
+        note: [s.due ? words(p.due_basis) : null, words(p.note), words(p.flag)].filter(Boolean).join(" ") || null,
+        wording: words(o.full_text), source: source(o), parts: kids.map((k) => k.summary).filter(Boolean),
+        detail: [a ? authName(a) : null, conditionCode(o) ? "condition " + o.code : null, s.due ? (s.due < today ? "was due " : "due ") + date(s.due) : null, o.recurrence].filter(Boolean).join(" · ") });
     }
     for (const a of auths) {
       const when = day(a.valid_to);
-      if (when) items.push({ id: "expiry-" + a.id, text: authName(a), due_date: when, verb: "expires",
-        detail: (when < today ? "expired " : "expires ") + date(when) });
+      // A consent with none of its conditions recorded says so: on its expiry line, or on a line of its own.
+      const bare = a.kind === "consent" && !obligations.some((o) => o.authorisation_id === a.id), unrecorded = "Its conditions aren't recorded yet.";
+      if (when) checklist.push({ id: "expiry-" + a.id, text: authName(a), reason: "the consent's expiry date", due: when, verb: "expires",
+        note: bare ? unrecorded : null, detail: (when < today ? "expired " : "expires ") + date(when) });
+      else if (bare) checklist.push({ id: "conditions-" + a.id, text: "Conditions of " + authName(a), reason: "the consent is recorded, its conditions aren't yet", state: "unknown",
+        needs: "the consent's conditions", detail: "conditions not recorded" });
     }
-    const soon = (i) => i.due_date && i.due_date >= today && i.due_date <= horizon, byDate = (a, b) => a.due_date.localeCompare(b.due_date) || a.id.localeCompare(b.id);
-    const upcoming = items.filter(soon).sort(byDate), later = items.filter((i) => i.due_date && i.due_date > horizon).sort(byDate);
-    const earlier = items.filter((i) => i.due_date && i.due_date < today).sort((a, b) => b.due_date.localeCompare(a.due_date));
-    const undated = items.filter((i) => !i.due_date);
-    for (const i of upcoming) { i.eligible = true; i.because = i.verb + " " + date(i.due_date) + (i.reason ? ", " + i.reason : ""); }
+    const stateOf = (i) => (i.state === "ongoing" ? "ongoing" : i.due ? (i.due < today ? "passed" : "due") : "unknown");
+    const byDate = (a, b) => a.due.localeCompare(b.due) || a.id.localeCompare(b.id), byText = (a, b) => a.text.localeCompare(b.text) || a.id.localeCompare(b.id);
+    const upcoming = checklist.filter((i) => stateOf(i) === "due" && i.due <= horizon).sort(byDate);
+    const later = checklist.filter((i) => stateOf(i) === "due" && i.due > horizon).sort(byDate);
+    const passed = checklist.filter((i) => stateOf(i) === "passed").sort(byDate);
+    const needs = [...passed.filter((i) => i.verb === "due"), ...checklist.filter((i) => stateOf(i) === "unknown").sort(byText)];
+    const ended = passed.filter((i) => i.verb !== "due");
+    const ongoing = checklist.filter((i) => stateOf(i) === "ongoing");
+    for (const i of upcoming) i.because = i.verb + " " + date(i.due) + (i.verb === "due" && i.reason ? ", " + i.reason : "");
+    for (const i of needs) i.because = "needs a record" + (i.needs ? " of " + i.needs : "") + (i.due ? " (due by " + date(i.due) + (i.basis ? ", calculated" : "") + ")" : "") + (i.reason ? ", " + i.reason : "");
+    // The practice to keep up, in one line: how many, and the consents and conditions that require it.
+    let summary = null;
+    if (ongoing.length) {
+      const by = new Map();
+      for (const o of obligations.filter((x) => ongoing.some((i) => i.id === "obligation-" + x.id))) {
+        const a = byId.get(o.authorisation_id), key = a ? a.consent_no || a.rule_ref || a.title || "a recorded authorisation" : "conditions with no consent recorded";
+        if (!by.has(key)) by.set(key, []);
+        if (conditionCode(o)) by.get(key).push(o.code);
+      }
+      const named = [...by].map(([k, codes]) => {
+        codes.sort((x, y) => x.localeCompare(y, "en", { numeric: true }));
+        const shown = codes.length > 6 ? [...codes.slice(0, 5), codes.length - 5 + " more"] : codes;
+        return k + (codes.length ? (codes.length === 1 ? ", condition " : ", conditions ") + and(shown) : "");
+      });
+      summary = { id: "ongoing", text: count(ongoing.length, "practice to keep up", "practices to keep up"), because: "required by " + named.join("; "), eligible: true };
+    }
+    // Promoted, at most three: the nearest date, the first thing that needs a record, the practice; then more dates.
+    for (const i of later.slice(0, 1)) if (!upcoming.length) i.because = i.verb + " " + date(i.due) + (i.verb === "due" && i.reason ? ", " + i.reason : "");
+    const promoted = (upcoming.length ? [upcoming[0], needs[0], summary, ...upcoming.slice(1), ...needs.slice(1)] : [needs[0], later[0], summary, ...needs.slice(1)])
+      .filter((i) => i && i.because).slice(0, 3);
+    for (const i of promoted) i.eligible = true;
+    const items = [...new Set([...promoted, ...upcoming, ...later, ...needs, ...ended, ...ongoing])].map(({ id, text, because, eligible, detail }) => ({ id, text, because, eligible: !!eligible, detail }));
     const next = upcoming[0];
-    const answer = context.obligationsError ? null : next ? { text: count(upcoming.length, "recorded date is coming up", "recorded dates are coming up"), because: "the next is " + next.text + ", " + next.verb + " " + date(next.due_date) } :
-      items.length ? { text: "No recorded dates are coming up", because: earlier.length ? count(earlier.length, "earlier date is on record", "earlier dates are on record") : "the recorded conditions have no dates" } : null;
-    return { key: "due", title: "What's due", rank: "given", items: [...upcoming, ...later, ...undated, ...earlier], answer, href: null, allLabel: "Everything recorded",
+    // With a date in the next twelve months, the sentence names it. Without one, it leads with the one thing that
+    // matters: the first item that needs a record and why (no count), then the next date on record, if any.
+    const nextOnRecord = later[0] ? "the next date on record is " + (later[0].verb === "lapses" ? "the lapse date" : later[0].verb === "expires" ? "the expiry of " + later[0].text : later[0].text) + ", " + date(later[0].due) : null;
+    const first = needs[0];
+    const answer = context.obligationsError ? null : next ? { text: count(upcoming.length, "recorded date is coming up", "recorded dates are coming up"), because: "the next is " + next.text + ", " + next.verb + " " + date(next.due) } :
+      first ? { text: first.text + ": " + (first.due ? "was due " + date(first.due) + (first.basis ? " (calculated)" : "") + ", " : "") + "no record of " + (first.needs || "it") + " yet",
+        because: [first.reason, nextOnRecord].filter(Boolean).join("; ") || "nothing else is dated" } :
+      checklist.length ? { text: "No recorded dates are coming up", because: nextOnRecord || (ongoing.length ? "what is recorded is practice to keep up" : ended.length ? "the dates on record have passed" : "the recorded conditions have no dates") } : null;
+    // The body of All is the Checklist block; the map is handed the farm (the plan-map area of a condition, once it
+    // is placed, is the next scene).
+    const body = { block: "checklist", data: { today, items: checklist.map(({ detail, because, eligible, ...rest }) => rest) } };
+    return { key: "due", title: "What's due", rank: "given", items, answer, body,
+      total: checklist.length, scene: { farm: f, frame: "extent", area: null }, href: null, allLabel: "Everything recorded",
       empty: { text: context.obligationsError ? "The condition dates couldn't be read." : "Nothing recorded yet." },
-      restricted: !items.length, currency: "As at " + date(today), farm: f };
+      restricted: !checklist.length, currency: "As at " + date(today), farm: f };
   }
 
   // "What's changed": records added to the farm, newest first, from their recorded creation time. Records loaded

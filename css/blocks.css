@@ -101,3 +101,30 @@
 .answer-all .list-dense .list-card { padding: 8px 10px; }
 .answer-all .timeline-item { padding: 0 0 14px 16px; }
 .answer-all .timeline-item:last-child { padding-bottom: 2px; }
+
+/* Checklist (js/blocks/checklist.js): one line per item, its reason under it, where it stands in words. The mark is
+   shape only (an open ring for ongoing, a dot for a date, a dashed ring for what needs a record, a tick for done):
+   status is carried by words and position, never colour. */
+.checklist-block { color: var(--ink); }
+.checklist-block > .block-title { margin: 0 0 12px; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.checklist-group + .checklist-group { margin-top: 18px; }
+.checklist-group > :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 6px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.checklist-list { list-style: none; margin: 0; padding: 0; }
+.checklist-item { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--rule); overflow-wrap: anywhere; scroll-margin-top: 20px; }
+.checklist-mark { width: 12px; height: 12px; margin-top: .3em; border: 1.5px solid var(--ink-3); border-radius: 50%; box-sizing: border-box; }
+[data-check-state="due"] > .checklist-mark { background: var(--ink-3); }
+:is([data-check-state="overdue"], [data-check-state="unknown"]) > .checklist-mark { border-style: dashed; }
+[data-check-state="done"] > .checklist-mark { border: 0; border-radius: 0; width: 12px; height: 7px; margin-top: .35em; border-left: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(-45deg); }
+.checklist-line { margin: 0; font-weight: 600; }
+.checklist-line a { color: inherit; text-underline-offset: 2px; }
+.checklist-reason, .checklist-standing, .checklist-note { margin: 2px 0 0; font-size: var(--text-small); }
+.checklist-reason { color: var(--ink-2); }
+.checklist-standing { color: var(--ink); font-variant-numeric: tabular-nums; }
+.checklist-note { color: var(--ink-2); line-height: 1.4; }
+.checklist-more { margin-top: 6px; font-size: var(--text-small); }
+.checklist-more > summary { cursor: pointer; color: var(--ink-2); min-height: 28px; display: flex; align-items: center; }
+.checklist-parts { margin: 4px 0 0; padding-left: 18px; }.checklist-parts li { padding: 2px 0; }
+.checklist-wording { margin: 6px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--rule); color: var(--ink); font: 400 var(--text-small)/1.45 var(--f-display); }
+.checklist-source { margin: 6px 0 0; color: var(--ink-2); }
+.checklist-more-count { margin: 12px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.answer-all .checklist-list { padding-left: 0; }.answer-all .checklist-item { padding: 10px 0; }.answer-all .checklist-parts li { padding: 2px 0; }
