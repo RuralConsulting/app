@@ -1,0 +1,17 @@
+/* The SANDBOX label: only in the build published at /sandbox/ (app/sandbox.cjs links this file; the production
+   build leaves it out). A strip above everything, in every view and in print, so a sandbox screen or screenshot
+   can never be mistaken for the live app. Everything else moves down by its height. */
+:root { --sandbox-height: 24px; }
+.sandbox-label { position: fixed; top: 0; left: 0; right: 0; z-index: 11; height: var(--sandbox-height); margin: 0; padding: 0 12px;
+  display: flex; align-items: center; justify-content: center; gap: 8px; overflow: hidden; white-space: nowrap;
+  background: var(--accent); color: var(--accent-ink); font: var(--text-small)/1 var(--f-ui); pointer-events: none; }
+.sandbox-label b { letter-spacing: .08em; }
+.sandbox-label span { overflow: hidden; text-overflow: ellipsis; }
+body.sandbox { padding-top: var(--sandbox-height); }
+body.sandbox .demo-banner { top: var(--sandbox-height); }
+body.sandbox #farm-space-header { top: calc(var(--sandbox-height) + var(--demo-banner-height)); }
+html body.sandbox #screen-map { top: calc(var(--sandbox-height) + var(--demo-banner-height) + var(--farm-header-height)); }
+@media print {
+  .sandbox-label { position: static; background: var(--print-panel); color: var(--print-ink); border-bottom: 1px solid; }
+  body.sandbox { padding-top: 0; }
+}

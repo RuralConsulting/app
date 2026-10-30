@@ -1,0 +1,11 @@
+/* The demo label remains visible in every view, including print. */
+.demo-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 10; min-height: 38px; padding: 7px 14px;
+  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; background: var(--banner-panel); color: var(--banner-ink); font: var(--text-small)/1.5 var(--f-ui); }
+.demo-banner a { color: inherit; }.demo-banner span { margin-right: auto; }
+body.demo-mode #screen-map { top: var(--demo-banner-height, 64px); }
+body.demo-mode #screen-farms, body.demo-mode #screen-ops { padding-top: calc(var(--demo-banner-height, 64px) + 24px); }
+body.demo-mode .password-link { display: none; }
+@media print {
+  body.demo-mode > aside.demo-banner { display: flex !important; position: static; background: var(--print-panel); color: var(--print-ink); border-bottom: 1px solid; }
+  .demo-banner a { display: none; }
+}

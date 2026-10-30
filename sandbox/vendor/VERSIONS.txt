@@ -1,0 +1,3 @@
+maplibre-gl 5.24.0 (CSP build)
+supabase-js 2.117.3 (UMD)
+Copied from rcl-map-portal so both apps run the same versions.
