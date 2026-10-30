@@ -3,8 +3,9 @@
 //   aerial       raster imagery, in the style from the start (the default)
 //   topographic  LINZ vector style, fetched and merged in as sources + layers when picked
 //   topolite     the lighter LINZ vector style, merged the same way
-//   elevation    terrain-rgb raster-dem for 3D terrain and a client-side hillshade; the pre-rendered
-//                elevation.hillshade raster set is shown instead where terrain is off
+//   elevation    terrain-rgb raster-dem (MapLibre encoding "mapbox") for 3D terrain and a client-side hillshade;
+//                LINZ's pre-rendered hillshade-igor raster is shown instead where terrain is off
+// Tile URLs, zooms and the hillshade opacity follow LINZ's own topographic-v2 / topolite-v2 styles (checked 30 Oct 2026).
 // Everything is added under the farm layers (the farm's own layers are added later, on top), never a style swap.
 // With no key (and always in demo mode) there are no sets and no requests: a plain background.
 FP.basemaps = (() => {
@@ -36,10 +37,10 @@ FP.basemaps = (() => {
     if (!key) return s;
     s.sources["bm-aerial"] = { type: "raster", tiles: tiles("aerial", "webp"), tileSize: 256, maxzoom: 22, attribution: ATTRIB };
     s.layers.push({ id: "bm-aerial", type: "raster", source: "bm-aerial", layout: { visibility: initial === "aerial" ? "visible" : "none" } });
-    s.sources["bm-dem"] = { type: "raster-dem", tiles: tiles("elevation", "png", "&pipeline=terrain-rgb"), tileSize: 256, maxzoom: 18, encoding: "terrain-rgb", attribution: ATTRIB };
-    s.sources["bm-hillshade"] = { type: "raster", tiles: tiles("elevation.hillshade", "png"), tileSize: 256, maxzoom: 18, attribution: ATTRIB };
+    s.sources["bm-dem"] = { type: "raster-dem", tiles: tiles("elevation", "png", "&pipeline=terrain-rgb"), tileSize: 256, maxzoom: 18, encoding: "mapbox", attribution: ATTRIB };
+    s.sources["bm-hillshade"] = { type: "raster", tiles: tiles("hillshade-igor", "webp", "&pipeline=color-ramp-opacity"), tileSize: 256, maxzoom: 18, attribution: ATTRIB };
     // pre-rendered hillshade where terrain is off; client-side hillshade where it is on (swapped by setTerrain)
-    s.layers.push({ id: "bm-hillshade-raster", type: "raster", source: "bm-hillshade", layout: { visibility: "visible" }, paint: { "raster-opacity": 0.35 } });
+    s.layers.push({ id: "bm-hillshade-raster", type: "raster", source: "bm-hillshade", layout: { visibility: "visible" }, paint: { "raster-opacity": { stops: [[0, 0.25], [5, 0.25], [8, 0.3], [12, 0.4], [16, 0.5]] } } });
     s.layers.push({ id: "bm-hillshade", type: "hillshade", source: "bm-dem", layout: { visibility: "none" },
       paint: { "hillshade-exaggeration": 0.5, "hillshade-shadow-color": "#2b2b2b", "hillshade-highlight-color": "#ffffff", "hillshade-accent-color": "#555555" } });
     return s;
