@@ -13,6 +13,12 @@
     { "code": "LU4", "name": "Leased hill country", "area_ha": 49.52 }
   ],
   "waterways": { "name": "Creek and drain (synthetic)", "source": "the 2024 farm plan map" },
+  "photos": [
+    { "id": "demo-photo-3", "at": [0.78, 0.7], "Name": "Example-Oct24_014.jpg", "Date": "2024-10-02T00:00:00", "Time": "15:12:40", "Title": "default", "Altitude": 341.6, "Azimuth": 300 },
+    { "id": "demo-photo-1", "at": [0.2, 0.3], "Name": "Example-Oct24_003.jpg", "Date": "2024-10-02T00:00:00", "Time": "10:48:05", "Title": "default", "Altitude": 318.2, "Azimuth": 12 },
+    { "id": "demo-photo-2", "at": [0.62, 0.36], "Name": "Example-Oct24_008.jpg", "Date": "2024-10-02T00:00:00", "Time": "13:37:29", "Title": "default", "Altitude": 323.1, "Azimuth": 47.5 },
+    { "id": "demo-photo-4", "at": [0.3, 0.8], "Name": "Example-Oct24_021.jpg", "Date": "2024-10-02T00:00:00", "Time": "16:05:02", "Title": "default", "Altitude": 336.9, "Azimuth": null }
+  ],
   "documents": [
     { "id": "doc-fep", "title": "Farm Environment Plan 2024 (synthetic)", "doc_type": "fep", "author": "Sam Example", "author_org": "Example Advisory Ltd",
       "date_prepared": "2024-08-01", "page_count": 32, "storage_path": "demo/fep.pdf", "created_at": "2026-03-02T09:00:00Z" },

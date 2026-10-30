@@ -46,5 +46,31 @@ FP.popup = (() => {
     return box;
   }
 
-  return { content };
+  // A photo's card (E3): the photo first, then one plain line (when, and which way it looked), the land unit it sits
+  // in and where the layer came from; Earlier and Later step through the layer's photos in the order they were taken.
+  // model: FP.photoModel.card(); step: { at, of, earlier(), later(), close() }.
+  // Only the original is stored today, so it is fetched once the card is shown, at most once per path (the signed
+  // link is cached), and drawn no larger than the card. A smaller server-side copy is a follow-up.
+  function photo(model, step) {
+    const box = FP.el("div", { class: "pop photo-pop" });
+    box.append(FP.el("button", { type: "button", class: "photo-close", "aria-label": "Close the photo", onclick: step.close }, "×"));
+    if (model.image) {
+      const img = FP.el("img", { class: "pop-photo", alt: model.line, loading: "lazy", decoding: "async" });
+      box.append(img);
+      photoUrl(model.image).then((u) => { if (u) img.src = u; else img.remove(); });
+      img.addEventListener("error", () => img.remove());
+    }
+    box.append(FP.el("h3", {}, model.line));
+    if (model.place) box.append(FP.el("p", { class: "photo-place" }, model.place));
+    if (model.source) box.append(FP.el("p", { class: "pop-q" }, model.source));
+    if (step.of > 1) {
+      box.append(FP.el("div", { class: "photo-step" },
+        FP.el("button", { type: "button", "aria-label": "Earlier photo", onclick: step.earlier, ...(step.at === 0 ? { disabled: true } : {}) }, "‹ Earlier"),
+        FP.el("span", {}, step.at + 1 + " of " + step.of),
+        FP.el("button", { type: "button", "aria-label": "Later photo", onclick: step.later, ...(step.at === step.of - 1 ? { disabled: true } : {}) }, "Later ›")));
+    }
+    return box;
+  }
+
+  return { content, photo };
 })();

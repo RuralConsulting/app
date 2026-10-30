@@ -22,6 +22,7 @@
   const USER = "de000000-0000-4000-8000-000000000003";
   const ORG = "de000000-0000-4000-8000-000000000004";
   const FARM2 = "de000000-0000-4000-8000-000000000005";
+  const PHOTO = "demo/photo-synthetic.svg";   // a drawn stand-in: no real photo is in the demo
   const VIEWS = /^$|^\/(ask|create|documents|people)$/;
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|\?|$)/.test(hash);
@@ -71,6 +72,10 @@
         shown_as: "Example Advisory Ltd, Aug 2024", label_at: [w + .00625, s + .005] });
     });
     const landUnits = collection(units);
+    // Photo points as the photo import shapes them (file name, EXIF date and time, altitude, the camera's direction when
+    // it wrote one), placed by their share of the illustrative extent.
+    const photos = (f.photos || []).map(({ id, at, ...props }) => ({ type: "Feature", id, geometry: { type: "Point", coordinates: [172 + at[0] * .025, -43 + at[1] * .02] },
+      properties: { ...props, storage_path: PHOTO } }));
     // An illustrative creek and drain across the rectangles (what a setback condition is about), not a survey.
     const water = f.waterways ? [{ id: "demo-waterways", name: f.waterways.name, theme: "waterways", geometry_type: "line", epistemic_class: "assessment",
       source: f.waterways.source, as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: collection([
@@ -81,7 +86,9 @@
       titles: collection(f.titles.map((t) => feature(extent, { title_no: t.title_no, estate: t.estate, source: "Synthetic title", area_ha: t.area_ha }))),
       land_units: landUnits, reference: [],
       layers: [{ id: "demo-units", name: "Land units (synthetic)", theme: "land_units", geometry_type: "polygon",
-        epistemic_class: "assessment", source: "the 2024 farm plan map", as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: landUnits }, ...water],
+        epistemic_class: "assessment", source: "the 2024 farm plan map", as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: landUnits }, ...water,
+      ...(photos.length ? [{ id: "demo-photos", name: "Photos (synthetic)", theme: "photos", geometry_type: "point", epistemic_class: "observation",
+        source: "a farm walk", as_at: "2024-10-02", shown_as: null, features: collection(photos) }] : [])],
     };
     const data = { asAt: f.as_at, map, map2: null, user: { id: USER, email: "advisor@example.test" }, tables: {
       farms: [farm], farm_members: [{ farm_id: FARM, user_id: USER, role: "admin" }], org_members: [{ org_id: ORG, user_id: USER, role: "advisor" }],
@@ -184,7 +191,8 @@
       },
       // The demo never sends invitations or saves changes.
       functions: { invoke: async () => error("The demo does not save changes") },
-      storage: { from: () => ({ createSignedUrl: async () => result({ signedUrl: new URL("demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
+      // Every document opens the one stand-in page; the demo's photo points name the one stand-in picture.
+      storage: { from: () => ({ createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
         upload: async () => error("The demo does not save changes") }) },
     };
   }

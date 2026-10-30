@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <title>Synthetic stand-in photo: a drawn paddock and hills, not a real photo</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc3df"/><stop offset="1" stop-color="#dfeaf0"/></linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa860"/><stop offset="1" stop-color="#6f7e3b"/></linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#sky)"/>
+  <path d="M0 300 L120 230 L230 270 L360 190 L470 250 L590 205 L700 260 L800 225 V360 H0 Z" fill="#8193a0"/>
+  <path d="M0 340 L150 290 L300 320 L450 280 L620 315 L800 290 V380 H0 Z" fill="#7d8a55"/>
+  <rect y="360" width="800" height="240" fill="url(#grass)"/>
+  <path d="M0 470 C200 440 520 430 800 400" stroke="#5b4a33" stroke-width="3" fill="none"/>
+  <g stroke="#5b4a33" stroke-width="6" stroke-linecap="round">
+    <path d="M60 468 v-46"/><path d="M200 449 v-40"/><path d="M340 437 v-36"/><path d="M480 428 v-32"/><path d="M620 418 v-28"/><path d="M760 405 v-24"/>
+  </g>
+  <rect x="16" y="556" width="196" height="30" rx="6" fill="#000" fill-opacity=".45"/>
+  <text x="28" y="577" font-family="sans-serif" font-size="17" fill="#fff">Synthetic stand-in photo</text>
+</svg>

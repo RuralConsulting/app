@@ -109,6 +109,15 @@
       $("#space-handle").setAttribute("aria-expanded", String(!peeked));
       settleFrame();
     });
+    // A photo opened on a phone's map takes the bottom of the map as its sheet: the other sheets fold to their peek
+    // first (without re-framing the farm), so the photo is framed in the map left above it.
+    $("#map").addEventListener("fp-photo", () => {
+      if (focused) { focused = null; markFocused(); }   // the photo's frame replaces a chosen line's: its mark is gone too
+      if (window.innerWidth > 800) return;
+      $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
+      if (!$("#space-content").hidden) { $("#space-content").classList.add("peeked"); $("#space-handle").setAttribute("aria-expanded", "false"); }
+      framedOverlap = measureSheet();
+    });
     $("#more-open").addEventListener("click", () => { $("#layers-drawer").hidden = false; $("#more-open").setAttribute("aria-expanded", "true"); $("#layers-close").focus(); });
     $("#layers-close").addEventListener("click", () => { $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false"); $("#more-open").focus(); });
     document.addEventListener("keydown", (e) => {
@@ -116,6 +125,7 @@
       if ($("#account-menu").classList.contains("open")) { $("#account-menu").classList.remove("open"); $("#account-open").setAttribute("aria-expanded", "false"); $("#account-open").focus(); }
       $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false");
       $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
+      if (FP.farmMap.photoOpen()) FP.farmMap.dismissPhoto();
       settleFrame();
     });
     // Choosing a What's due line whose condition records a place frames the map on it and marks it; choosing it

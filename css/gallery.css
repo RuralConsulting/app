@@ -16,5 +16,8 @@
 .gallery-frame { min-width: 0; }
 .gallery-frame[data-block="map-scene"] { height: 300px; }
 .gallery[data-width="desktop"] .gallery-frame[data-block="map-scene"] { height: 420px; }
+/* the full scene opens on a photo: on a phone its card is the map's sheet, so the frame is taller */
+.gallery-cell[data-state="full"] .gallery-frame[data-block="map-scene"] { height: 560px; }
+.gallery[data-width="desktop"] .gallery-cell[data-state="full"] .gallery-frame[data-block="map-scene"] { height: 460px; }
 .gallery-frame .map-scene, .gallery-frame .map-scene-empty { height: 100%; }
 @media (max-width: 430px) { .gallery-cell { flex-basis: 100%; } }

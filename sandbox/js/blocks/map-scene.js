@@ -26,18 +26,19 @@
   }
   // Draws the scene: on the host's surface when there is one, else on a map made in this block's own frame.
   function mounted(host, scene, o, ctx) {
-    if (ctx.surface) return ctx.surface.open(scene?.farm?.id ?? null, scene || emptyScene, { show: o.show });
+    if (ctx.surface) return ctx.surface.open(scene?.farm?.id ?? null, scene || emptyScene, { show: o.show, photo: o.photo });
     const canvas = host.querySelector(".map-scene-canvas");
     if (!canvas) return null;
     const surface = engine(canvas);
     ctx.onDestroy(() => surface.remove());
-    return surface.open(scene.farm?.id ?? null, scene, { show: o.show }).then((view) => view && { ...view, surface });
+    return surface.open(scene.farm?.id ?? null, scene, { show: o.show, photo: o.photo }).then((view) => view && { ...view, surface });
   }
   const emptyScene = { extent: null, titles: { type: "FeatureCollection", features: [] }, land_units: { type: "FeatureCollection", features: [] }, layers: [], reference: [] };
   const block = blocks.define({
     id: "map-scene", title: "Map scene", empty: "No boundary recorded yet.",
     // show: what is drawn when the scene opens (extent, titles, a layer's theme, reference, actions); null keeps the farm's default.
-    options: { show: { type: "list", default: null } },
+    // photo: a photo point (its feature id) to open framed on, with its card and view cone (the gallery shows one).
+    options: { show: { type: "list", default: null }, photo: { type: "string", default: null } },
     state, render, mounted,
   });
 
@@ -51,6 +52,10 @@
   let markers = [];    // land unit labels
   const interactive = new Map();   // MapLibre layer id -> how to describe a hit
   let declutter = null;            // the label-collision handler for what is drawn (portfolio pins, or a farm's land unit labels)
+  const photoSets = new Map();     // farm layer index -> { layer, list (its photos in time order), markers }
+  let photo = null;                // the photo open on the map: { i, k, card }
+  let units = null;                // the scene's land units (a photo's card says which one it sits in)
+  let featurePopup = null;         // the feature popup open on the map, if any
   let drawn = null;                // the farm payload on the map now, for focus()
 
   const accent = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
@@ -101,6 +106,7 @@
   const loaded = () => ready;
 
   function clear() {
+    photo?.card.remove(); photo = null; photoSets.clear(); units = null; featurePopup?.remove(); featurePopup = null;
     if (declutter) { for (const ev of ["move", "resize"]) map.off(ev, declutter); declutter = null; }
     for (const m of markers) m.remove();
     markers = [];
@@ -145,10 +151,11 @@
       ids.push(layer({ id: sid + "-casing", type: "line", source: sid, paint: { "line-color": "#000", "line-opacity": 0.35, "line-width": st.lineWidth + 2 } }));
       ids.push(layer({ id: sid + "-line", type: "line", source: sid, paint }, describe));
     }
-    if (pass === "point" && l.geometry_type === "point") {
+    // photo points are camera markers (photoPins), not circles
+    if (pass === "point" && l.geometry_type === "point" && l.theme !== "photos") {
       ids.push(layer({ id: sid + "-pt", type: "circle", source: sid, paint: {
         "circle-color": st.fill, "circle-radius": Math.min(st.radius, 9),
-        "circle-stroke-color": l.theme === "photos" ? "#231f20" : st.line, "circle-stroke-width": 1.5 } }, describe));
+        "circle-stroke-color": st.line, "circle-stroke-width": 1.5 } }, describe));
     }
     return ids;
   }
@@ -183,12 +190,67 @@
     declutter();
   }
 
+  // ---- Photos (E3, #221): a small white camera on each photo point; a tap eases the map to it, turned to look the way
+  // the camera did, with a view cone ahead of it, and opens its card beside the frame (wide) or as the sheet (narrow).
+  const CAMERA = '<svg viewBox="0 0 20 16" width="18" height="15" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" ' +
+    'd="M7 1h6l1.6 2.2H18a1.5 1.5 0 0 1 1.5 1.5v8.8A1.5 1.5 0 0 1 18 15H2a1.5 1.5 0 0 1-1.5-1.5V4.7A1.5 1.5 0 0 1 2 3.2h3.4zM10 5.3a3.7 3.7 0 1 0 0 7.4a3.7 3.7 0 1 0 0-7.4z"/></svg>';
+  const NONE = { type: "FeatureCollection", features: [] };
+  function photoPins(l, i) {
+    const list = FP.photoModel.inTimeOrder(l.features?.features), own = [];
+    list.forEach((f, k) => {
+      const said = FP.photoModel.line(f.properties);
+      const pin = FP.el("button", { type: "button", class: "photo-pin", title: said, "aria-label": said, onclick: () => showPhoto(i, k) });
+      pin.innerHTML = CAMERA;
+      const marker = new maplibregl.Marker({ element: pin }).setLngLat(f.geometry.coordinates).addTo(map);
+      markers.push(marker); own.push(marker);
+    });
+    photoSets.set(i, { layer: l, list, markers: own });
+    return own;
+  }
+  function showPhoto(i, k) {
+    const set = photoSets.get(i), f = set?.list[k];
+    if (!map || !f) return;
+    featurePopup?.remove(); featurePopup = null;
+    map.getSource("focus")?.setData(NONE);   // the photo wins: a chosen line's mark goes (the host is told by fp-photo)
+    const c = map.getContainer(), sheet = c.clientWidth < 640, model = FP.photoModel.card(f, set.layer, units, FP.farmModel.sourceLine);
+    const focused = photo?.card.contains(document.activeElement) ? document.activeElement.getAttribute("aria-label") : null;
+    photo?.card.remove();
+    for (const s of photoSets.values()) s.markers.forEach((m, n) => m.getElement().classList.toggle("selected", s === set && n === k));
+    // a host with sheets over the map (the farm space on a phone) folds them first: the photo takes that place
+    c.dispatchEvent(new CustomEvent("fp-photo", { bubbles: true }));
+    const card = FP.el("aside", { class: "photo-card" + (sheet ? " sheet" : ""), "aria-label": "Photo" }, FP.popup.photo(model,
+      { at: k, of: set.list.length, earlier: () => showPhoto(i, k - 1), later: () => showPhoto(i, k + 1), close: dismissPhoto }));
+    c.append(card);
+    photo = { i, k, card };
+    if (focused) card.querySelector('[aria-label="' + focused + '"]:not([disabled])')?.focus();
+    framePhoto(f, model.direction);
+  }
+  function framePhoto(f, deg) {
+    const P = FP.photoModel, at = f.geometry.coordinates, c = map.getContainer(), box = photo.card.getBoundingClientRect(), size = { width: c.clientWidth, height: c.clientHeight };
+    const directed = Number.isFinite(deg), cam = P.camera(deg, { zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() });
+    const pad = P.padding(size, box, photo.card.classList.contains("sheet"), directed);
+    const shape = directed ? P.cone(at, deg, P.metresPerPixel(cam.zoom, at[1]) * Math.min(150, size.height * 0.3)) : null;
+    map.getSource("photo-cone")?.setData(shape ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: shape, properties: {} }] } : NONE);
+    settling++; touched = false; framedWidth = window.innerWidth;   // a farm frame still settling gives way to the photo
+    map.easeTo({ center: at, ...cam, offset: P.offset(pad), duration: reduced() ? 0 : 1400 });
+  }
+  // The person closes the photo (×, Escape): the map swings back to the farm's frame, flat and north up.
+  function dismissPhoto() {
+    if (drawn?.extent) reframe(drawn.extent); else closePhoto();
+  }
+  function closePhoto() {
+    if (!photo) return;
+    photo.card.remove(); photo = null;
+    for (const s of photoSets.values()) for (const m of s.markers) m.getElement().classList.remove("selected");
+    map?.getSource("photo-cone")?.setData(NONE);
+  }
+
   // The NZ -> farm zoom: a smooth fly, or a jump when the person asks their device for reduced motion.
   let flightKey = null, settling = 0, framed = null, touched = false, resizing = 0, framedWidth = 0;   // framed: the extent last fitted; touched: the person has moved the map since
   const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wide = () => window.innerWidth > 800;
   function fit(bounds, padding, geom, duration = reduced() ? 0 : 2600) {
-    map.fitBounds(bounds, { padding, duration, maxZoom: 17 });
+    map.fitBounds(bounds, { padding, duration, maxZoom: 17, pitch: 0 });   // flat: a photo's tilt never carries into a frame
     if (geom) { framed = geom; touched = false; framedWidth = window.innerWidth; settle(geom); }
   }
   // The window (or the pane the app sits in) changed size: frame the farm again for the new map, unless the person has moved it.
@@ -196,7 +258,9 @@
   function onResize() {
     const mine = ++resizing, width = window.innerWidth;
     setTimeout(() => {
-      if (mine !== resizing || !map || !framed || touched || (!wide() && width === framedWidth)) return;
+      if (mine !== resizing || !map || touched || (!wide() && width === framedWidth)) return;
+      if (photo) { map.resize(); showPhoto(photo.i, photo.k); return; }   // an open photo is framed again, not the farm
+      if (!framed) return;
       framedWidth = width;
       map.resize();
       fit(bbox(framed), FP.farmModel.framePadding(inset(), wide()), framed, reduced() ? 0 : 300);
@@ -229,6 +293,7 @@
   // Frame a farm extent in the part of the map the sheet leaves visible (or the whole map when no sheet covers it).
   function reframe(geom) {
     if (!map || !geom?.coordinates) return;
+    closePhoto();   // the farm is framed again: an open photo gives way
     flightKey = null;
     fit(bbox(geom), FP.farmModel.framePadding(inset(), wide()), geom, reduced() ? 0 : 500);
   }
@@ -239,6 +304,7 @@
     if (!map || !drawn?.extent) return false;
     const hits = place ? FP.farmModel.placeFeatures(drawn, place) : [];
     if (place && !hits.length) return false;
+    closePhoto();   // a chosen line's frame wins over an open photo
     map.getSource("focus")?.setData({ type: "FeatureCollection", features: hits });
     if (!place) { reframe(drawn.extent); return true; }
     let [[w, s], [e, n]] = union(hits.map((f) => bbox(f.geometry)));
@@ -303,7 +369,7 @@
     return [[w, s], [e, n]];
   }
 
-  async function open(farmId, supplied = null, { show = null } = {}) {
+  async function open(farmId, supplied = null, { show = null, photo: wanted = null } = {}) {
     const request = ++opening;
     init();
     const { data, error } = supplied ? { data: supplied, error: null } : await FP.sb.rpc("farm_map", { f: farmId });
@@ -330,6 +396,7 @@
 
     data.layers.forEach((l, i) => source(`fl-${i}`, l.features));
     source("land-units", data.land_units);
+    units = data.land_units;
     const layerIds = data.layers.map(() => []);
     for (const pass of ["polygon", "line", "point"]) {
       data.layers.forEach((l, i) => layerIds[i].push(...farmLayer(l, i, pass)));
@@ -344,6 +411,7 @@
           (f) => ({ title: `${f.properties.code} ${f.properties.name || ""}`.trim(), qualifier: FP.farmModel.sourceLine(l),
                     props: { area_ha: f.properties.area_ha } })));
       }
+      if (l.theme === "photos") { e.markers = photoPins(l, i); e.photoLayer = i; }
       if (l.theme === "actions") {
         e.markers = [];
         for (const f of l.features.features) if (f.geometry?.type === "Point" && f.properties.map_code) {
@@ -354,6 +422,12 @@
       }
       entries.push(e);
     });
+
+    // the open photo's view cone: a white wedge (no fill box), over the farm's layers
+    source("photo-cone", NONE);
+    layer({ id: "photo-cone-fill", type: "fill", source: "photo-cone", paint: { "fill-color": "#ffffff", "fill-opacity": 0.16 } });
+    layer({ id: "photo-cone-casing", type: "line", source: "photo-cone", paint: { "line-color": "#000", "line-opacity": 0.35, "line-width": 3.5 } });
+    layer({ id: "photo-cone-line", type: "line", source: "photo-cone", paint: { "line-color": "#ffffff", "line-width": 1.5 } });
 
     for (const [i, r] of data.reference.entries()) {
       const sid = `ref-${i}`;
@@ -376,7 +450,9 @@
     // what's on when the farm opens comes from config.js (farmView.defaultOn); the rest is a tick away
     // (or from the block's show option, when its host chose)
     const defaultOn = new Set(show || [...(FP_CONFIG.farmView?.defaultOn || []), ...(FP.demo?.active ? ["actions"] : [])]);
-    for (const e of entries) setVisible(e, defaultOn.has(e.key));
+    // a photo asked for by the host is on show, with its layer
+    const asked = wanted == null ? null : [...photoSets].map(([i, s]) => [i, s.list.findIndex((f) => String(f.id) === String(wanted))]).find(([, k]) => k >= 0);
+    for (const e of entries) setVisible(e, defaultOn.has(e.key) || (!!asked && e.photoLayer === asked[0]));
 
     if (data.extent) {
       map.resize();
@@ -386,6 +462,7 @@
       if (flightKey === JSON.stringify(b) && !sheet) { flightKey = null; framed = data.extent; touched = false; framedWidth = window.innerWidth; settle(data.extent); }
       else { flightKey = null; fit(b, FP.farmModel.framePadding(sheet, wide()), data.extent); }
     }
+    if (asked) showPhoto(...asked);
     return { farm: data.farm, extentHa: data.extent_ha, entries };
   }
 
@@ -422,12 +499,14 @@
 
   function setVisible(entry, on) {
     entry.on = on;
+    if (!on && photo && entry.photoLayer === photo.i) closePhoto();
     for (const id of entry.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
     for (const m of entry.markers || []) m.getElement().style.display = on ? "" : "none";
     if (entry.markers?.length && declutter) declutter();
   }
 
   function onClick(e) {
+    if (e.originalEvent?.target?.closest?.(".photo-pin")) return;   // a camera marker opens its photo itself
     const ids = [...interactive.keys()].filter((id) => map.getLayer(id));
     const hits = map.queryRenderedFeatures(e.point, { layers: ids });
     if (!hits.length) return;
@@ -441,7 +520,9 @@
     }
     const hit = interactive.get(f.layer.id)({ ...f, properties: props });
     if (props.authorisations && !hit.permits) hit.permits = props.authorisations;
+    closePhoto();
     const popup = new maplibregl.Popup({ maxWidth: Math.min(320, map.getContainer().clientWidth - 24) + "px" }).setLngLat(e.lngLat).setDOMContent(FP.popup.content(hit)).addTo(map);
+    featurePopup = popup; popup.on("close", () => { if (featurePopup === popup) featurePopup = null; });
     keepInside(popup);
   }
 
@@ -464,12 +545,12 @@
   // A block's own surface goes when the block does: listeners, labels and the WebGL context with it.
   function remove() {
     if (!map) return;
-    opening++; resizing++; framed = null; window.removeEventListener("resize", onResize); scheme?.removeEventListener("change", syncPalette); observer?.disconnect();
+    opening++; resizing++; framed = null; photo?.card.remove(); photo = null; photoSets.clear(); window.removeEventListener("resize", onResize); scheme?.removeEventListener("change", syncPalette); observer?.disconnect();
     for (const m of markers) m.remove();
     markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
   }
-  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => FP.basemaps.setTerrain(init(), on), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
-    resize: () => map && map.resize(), remove };
+  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => FP.basemaps.setTerrain(init(), on), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+    resize: () => map && map.resize(), closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
   }
 
   return { block, state, engine };

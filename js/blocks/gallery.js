@@ -71,7 +71,8 @@
         empty: checks(),
       },
       "map-scene": {
-        options: {},
+        // the full scene opens on a photo, framed the way its camera looked, with its card and view cone
+        options: { photo: scene.layers.find((l) => l.theme === "photos")?.features.features.find((f) => f.properties.Azimuth != null)?.id ?? null },
         full: scene,
         sparse: { ...scene, titles: none(), land_units: none(), layers: [], reference: [] },
         empty: { ...scene, extent: null, extent_ha: null, titles: none(), land_units: none(), layers: [], reference: [] },
