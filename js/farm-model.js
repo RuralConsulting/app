@@ -25,7 +25,8 @@
   const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", consent_decision: "Consent decision", consent_application: "Consent application",
     overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
     ghg_report: "Greenhouse gas report", consent_correspondence: "Consent correspondence", correspondence: "Correspondence",
-    smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract" };
+    smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract", nzfap_checklist: "NZFAP+ checklist", land_unit_map: "Land unit map",
+    image: "Photo or image", other: "Other" };
   const docKind = (k) => docKinds[k] || (k ? String(k).replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()) : null);
 
   // ---- Documents: what matters first --------------------------------------------------------------------
@@ -37,11 +38,11 @@
   const DOC_TIERS = [["primary", "Main documents"], ["supporting", "Supporting"], ["other", "Other"]];
   const DOC_TYPES = {
     fep: ["primary", 0], fwfp: ["primary", 0], farm_environment_plan: ["primary", 0], freshwater_farm_plan: ["primary", 0],
-    consent_decision: ["primary", 1], consent_application: ["primary", 1], consent: ["primary", 1], aee: ["primary", 1],
+    consent_decision: ["primary", 1], consent_application: ["primary", 1], consent: ["primary", 1], aee: ["primary", 1], nzfap_checklist: ["primary", 1],
     overseer_report: ["primary", 2], nutrient_budget: ["primary", 2], land_unit_map: ["primary", 3], farm_map: ["primary", 3],
     luc_report: ["primary", 4], ghg_report: ["primary", 4],
     consent_correspondence: ["supporting", 0], correspondence: ["supporting", 0], memo: ["supporting", 1],
-    smap_factsheet: ["supporting", 2], gis_artifact: ["supporting", 3],
+    smap_factsheet: ["supporting", 2], gis_artifact: ["supporting", 3], image: ["supporting", 4],
   };
   const DOC_FOLDS = { smap_factsheet: "S-map soil fact sheets", gis_artifact: "map extracts" };
   const TITLE_RULES = [   // for a document whose type says nothing: [pattern, tier, rank]
@@ -64,6 +65,20 @@
     if (given === "archive") [tier, rank] = ["other", 9];
     else if (given === "supporting" && tier !== "supporting") [tier, rank] = ["supporting", 5];
     return { tier, rank, kind: docKind(row.doc_type), fold: tier === "supporting" ? DOC_FOLDS[type] || null : null };
+  }
+  // B3: the tier a document is shown in. A tier a person chose is kept: archive and supporting always are (nothing
+  // sets them but a person or a loader told to), and primary is when someone chose it (tiered_at, stamped by the
+  // database when a person sets or confirms a tier) or a supporting document sits under it. A "primary" nobody chose
+  // (F1e gave every existing document that tier) and a row from before tiers still go by docClass, with "other"
+  // shown as supporting: a guess never hides a document in the archive. A superseded document is archived.
+  // Returns { tier: "primary" | "supporting" | "archive", weight (kind order among primaries, lower first), fold, chosen }.
+  function docTier(d, hasChildren = false) {
+    const row = d || {}, stored = String(row.tier || "").toLowerCase(), c = docClass({ ...row, tier: null });
+    const weight = c.tier === "primary" ? c.rank : 5, fold = DOC_FOLDS[String(row.doc_type || "").toLowerCase().trim().replace(/[\s-]+/g, "_")] || null;
+    if (stored === "archive" || row.status === "superseded") return { tier: "archive", weight, fold, chosen: stored === "archive" };
+    if (stored === "supporting") return { tier: "supporting", weight, fold, chosen: true };
+    if (stored === "primary" && (row.tiered_at || hasChildren)) return { tier: "primary", weight, fold: null, chosen: true };
+    return { tier: c.tier === "primary" ? "primary" : "supporting", weight, fold: c.tier === "primary" ? null : fold, chosen: false };
   }
   // A correspondence record titled only by a code ("<consent no> information 3") is shown as what it is: its kind,
   // the consent it is about and the date it was prepared (or its number in the run when it has no date).
@@ -193,7 +208,7 @@
     const f = context.farm.id, today = context.today, since = addDays(today, -30);
     const records = [
       ...list(context.documents).map((d) => ({ id: "document-" + d.id, text: docTitle(d), href: href(f, "documents", d.id), added: day(d.created_at), kind: "document",
-        primary: docClass(d).tier === "primary", source: ["Document", d.author_org || d.author].filter(Boolean).join(" · ") })),
+        primary: docTier(d).tier === "primary", source: ["Document", d.author_org || d.author].filter(Boolean).join(" · ") })),
       ...list(context.authorisations).map((a) => ({ id: "authorisation-" + a.id, text: authName(a), added: day(a.created_at), kind: "authorisation", primary: true, source: "Consent record" })),
     ];
     const perDay = new Map();
@@ -230,30 +245,27 @@
   // The standing questions whose answers show when a farm opens.
   const standingAnswers = (context) => [due(context), changed(context)];
 
-  // Documents: the main ones first (the farm's plan, its consents, its nutrient budgets, its map), the supporting ones
-  // folded behind them, anything else last. Within a tier: by kind, then newest first.
-  function documents(context) {
-    const f = context.farm.id, docs = list(context.documents), tiers = DOC_TIERS.map(([key]) => key);
-    const items = docs.map((d) => {
-      const c = docClass(d);
-      return { id: d.id, text: docTitle(d), href: href(f, "documents", d.id), group: c.tier, rank: c.rank, fold: c.fold, kind: c.kind,
-        prepared: day(d.date_prepared), open: !!d.storage_path, author: [d.author, d.author_org].filter(Boolean).join(", ") || null, pages: d.page_count || null,
-        meta: [{ label: "Prepared by", value: [d.author, d.author_org].filter(Boolean).join(", ") || "Not recorded" },
-          { label: "Date", value: d.date_prepared ? date(d.date_prepared) : "Not recorded" },
-          { label: "Pages", value: d.page_count ? String(d.page_count) : null }].filter((m) => m.value) };
-    });
-    const newest = (a, b) => String(b.prepared || "").localeCompare(String(a.prepared || "")) || a.text.localeCompare(b.text);
-    // The sentence names the newest main document; the newest of any kind only when no main document has a date.
-    const dated = items.filter((i) => i.prepared), mainDated = dated.filter((i) => i.group === "primary");
-    const latest = [...(mainDated.length ? mainDated : dated)].sort(newest)[0];
-    items.sort((a, b) => tiers.indexOf(a.group) - tiers.indexOf(b.group) || a.rank - b.rank || newest(a, b));
-    const answer = items.length ? { text: count(items.length, "document is recorded", "documents are recorded"),
-      because: latest ? (mainDated.length ? "the latest main document is " : "the most recent is ") + latest.text + ", dated " + date(latest.prepared) : "none has a recorded date" } : null;
-    // The body of All is the List block, in the order given: one row per document, the supporting ones folded away.
-    const body = { block: "list", options: { sort: "given" }, data: { kind: "documents", groups: DOC_TIERS, collapsed: ["supporting"],
-      rows: items.map((i) => ({ id: i.id, title: i.text, type: i.kind, author: i.author, date: i.prepared, pages: i.pages, group: i.group, fold: i.fold, open: i.open })) } };
-    return { key: "documents", title: "Documents", items, answer, body, rank: "given", allLabel: "All documents",
-      groups: DOC_TIERS, empty: { text: "Nothing recorded yet." }, restricted: !items.length };
+  // Documents: the one sentence over the Documents block (blocks/documents.js). It names the first document in the
+  // block's own order (on most farms, its environment plan) and counts the rest, so the headline and the list never
+  // disagree; it says "main document", never "plan" (APP-STRUCTURE §3.6). arranged is that block's arrange() of the
+  // same documents: the order is never worked out twice. Without it (the block not loaded) the sentence only counts.
+  function documents(context, arranged) {
+    const docs = list(context.documents), items = docs.map((d) => ({ id: d.id, text: docTitle(d) }));
+    const n = (k) => list(arranged?.[k]).length;
+    let answer = null;
+    if (docs.length && arranged) {
+      const mains = [...list(arranged.primaries), ...list(arranged.more)], first = mains[0];
+      const supporting = mains.reduce((t, p) => t + list(p.children).length, 0) + n("loose"), archived = n("archive");
+      if (first) {
+        const d = first.doc, when = monthYear(d.date_prepared);
+        const rest = [mains.length > 1 ? (mains.length - 1) + " more main " + (mains.length === 2 ? "document" : "documents") : null,
+          supporting ? supporting + " supporting" : null].filter(Boolean);
+        answer = { text: "The main document is " + docTitle(d) + (when ? ", " + when : ""),
+          because: rest.length ? rest.join(" and ") : archived ? "the rest " + (archived === 1 ? "is" : "are") + " archived" : "nothing else is recorded" };
+      } else answer = { text: count(docs.length, "document is recorded", "documents are recorded"), because: "none is a main document yet" };
+    } else if (docs.length) answer = { text: count(docs.length, "document is recorded", "documents are recorded"), because: "the main ones lead the list" };
+    // No All: the Documents block under the sentence is the list.
+    return { key: "documents", title: "Documents", items, answer, rank: "given", empty: { text: "Nothing recorded yet." }, restricted: true };
   }
 
   // The one plain line under a land unit's name and area on the map: where the map came from, who drew it and when.
@@ -389,5 +401,5 @@
     return letters.toUpperCase();
   };
 
-  return { views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTitle, DOC_TIERS, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine, sourceLine, labelsToShow, unitNames, roles, canManage, people };
+  return { views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine, sourceLine, labelsToShow, unitNames, roles, canManage, people };
 });

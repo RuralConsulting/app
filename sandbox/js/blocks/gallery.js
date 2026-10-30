@@ -3,9 +3,10 @@
 // screenshots against APP-STRUCTURE §5. fixtures() is pure, so the tests check it covers every block and state.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
-  const api = factory(node ? require("./registry.js") : root.FP.blocks, node ? require("../farm-model.js") : root.FP.farmModel);
+  const api = factory(node ? require("./registry.js") : root.FP.blocks, node ? require("../farm-model.js") : root.FP.farmModel,
+    node ? require("../demo-documents.js") : root.FP.demoDocuments);
   if (node) module.exports = api; else root.FP.gallery = api;
-})(typeof window === "undefined" ? globalThis : window, function (blocks, M) {
+})(typeof window === "undefined" ? globalThis : window, function (blocks, M, demoDocuments) {
   const root = typeof window === "undefined" ? globalThis : window;
   const STATES = blocks.STATES;
   const LABELS = { full: "Full", sparse: "Sparse", empty: "Empty" };
@@ -20,7 +21,9 @@
     // sparse: the one consent that runs out soonest (a farm with a single permit and nothing else)
     const t = data.tables, oneConsent = t.authorisations.filter((a) => a.valid_to && a.valid_to >= today).sort((a, b) => a.valid_to.localeCompare(b.valid_to)).slice(0, 1);
     const scene = data.map;
-    const docs = { ...M.documents(context({ documents: t.documents })).body.data, title: "Documents" };
+    // The List block shown with the demo farm's documents, newest first (the Documents block is their curated view).
+    const docs = { kind: "documents", title: "Documents", rows: t.documents.map((d) => ({ id: d.id, title: M.docTitle(d), type: M.docKind(d.doc_type),
+      author: [d.author, d.author_org].filter(Boolean).join(", ") || null, date: d.date_prepared || null, pages: d.page_count || null, open: !!d.storage_path })) };
     // A few more kinds than the demo farm holds, so the timeline shows entries and actions interleaving with documents and consents.
     const more = [
       { id: "entry-trough", kind: "entries", date: "2026-10-27", what: "Photo of the trough repair, Back paddock (synthetic)", did: "was captured", by: "Demo farmer", source: "Photo · Back paddock" },
@@ -41,14 +44,25 @@
       list: {
         options: {},
         full: docs,
-        sparse: { ...docs, rows: docs.rows.slice(0, 1), groups: docs.groups.slice(0, 1) },
-        empty: { ...docs, rows: [], groups: [] },
+        sparse: { ...docs, rows: docs.rows.slice(0, 1) },
+        empty: { ...docs, rows: [] },
       },
       timeline: {
         options: {},
         full: (() => { const base = changes({ documents: t.documents, authorisations: t.authorisations }); return { ...base, items: [...base.items, ...more] }; })(),
         sparse: changes({ authorisations: oneConsent }),
         empty: changes(),
+      },
+      // Full: a farm loaded before tiers existed (shaped on Cairnvale: 29 documents, every one "primary" by default),
+      // which the Documents block brings down to its main documents. The HDLG member folder is the same block once
+      // a person has tiered it: one main plan with its other format and background under it, an NZFAP+ checklist,
+      // working drafts in the archive. Sparse: one consent decision. Empty: an editor's farm with nothing yet.
+      documents: {
+        options: {},
+        full: { documents: demoDocuments().cairnvale },
+        sparse: { documents: demoDocuments().cairnvale.filter((d) => d.doc_type === "consent_decision") },
+        empty: { documents: [], canAdd: true },
+        variants: [["hdlg", "HDLG member folder", { documents: demoDocuments().hdlg, canEdit: true, canAdd: true }]],
       },
       checklist: {
         options: {},
@@ -101,10 +115,12 @@
     for (const b of screen.querySelectorAll('[aria-label="Width"] button')) b.setAttribute("aria-pressed", String(b.dataset.value === settings.width));
     const sections = blocks.list().map((id) => {
       const block = blocks.get(id), f = all[id] || {};
-      const cells = STATES.map((state) => {
+      // The three states, then any further fixtures the block is reviewed on (the Documents block's HDLG folder).
+      const shown = [...STATES.map((state) => [state, LABELS[state], f[state]]), ...(f.variants || [])];
+      const cells = shown.map(([state, label, data]) => {
         const frame = el("div", { class: "gallery-frame" });
-        const cell = el("figure", { class: "gallery-cell", "data-state": state }, el("figcaption", {}, LABELS[state]), frame);
-        cell.frame = frame; cell.spec = { block: id, options: f.options || {} }; cell.data = f[state];
+        const cell = el("figure", { class: "gallery-cell", "data-state": state }, el("figcaption", {}, label), frame);
+        cell.frame = frame; cell.spec = { block: id, options: f.options || {} }; cell.data = data;
         return cell;
       });
       return { cells, node: el("section", { class: "gallery-block", "data-gallery-block": id }, el("h2", {}, block.title), el("div", { class: "gallery-states" }, ...cells)) };

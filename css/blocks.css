@@ -17,21 +17,12 @@
 .answer-all-link { font-size: var(--text-small); }.selected-record { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 .answer-compact .answer-highlights { margin: 8px 0; font-size: var(--text-small); }
 .answer-compact .answer-highlights li { padding: 8px 0; }
-.record-group { margin-top: 18px; }.record-group > :is(h2, h3, h4, h5, h6) { margin: 0 0 8px; font: 600 var(--text-body)/1.3 var(--f-head); }
-.record-cards { display: grid; gap: 10px; }
-.record-card { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); overflow: hidden; }
-.record-card > summary { cursor: pointer; list-style-position: inside; padding: 12px; }
-.record-card > summary span { font-weight: 600; }.record-card > summary small { display: block; margin: 4px 0 0 18px; color: var(--ink-2); font-size: var(--text-small); }
-.record-card-body { padding: 0 12px 12px; }.record-card dl { margin: 0; }.record-card dl div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--rule); }
-.record-card dt { color: var(--ink-2); font-size: var(--text-small); }.record-card dd { margin: 0; font-size: var(--text-small); }
 @media (max-width: 800px) {
   .answer-compact .answer-highlights li:not(:first-child) { display: none; }
 }
 
 .answer-panel { border-radius: var(--radius); }
-.answer-sentence, .record-card { overflow-wrap: anywhere; }
-.record-note { color: var(--ink-2); font-size: var(--text-small); line-height: 1.4; }
-.record-card-body > button { margin-top: 10px; }
+.answer-sentence { overflow-wrap: anywhere; }
 
 /* The block contract's own states (js/blocks/registry.js): empty is designed, loading is quiet, never a blank. */
 .block-empty { background: var(--panel); color: var(--ink); padding: 20px; border: 1px solid var(--rule); border-radius: var(--radius); }
@@ -102,6 +93,60 @@
 .answer-all .timeline-item { padding: 0 0 14px 16px; }
 .answer-all .timeline-item:last-child { padding-bottom: 2px; }
 
+/* Documents: the main documents as plain rows, their supporting ones folded under each, a quiet search, and the
+   editor's drop-zone and one-step confirm. Status is carried by words and position, never colour. */
+.documents-block { background: var(--panel); color: var(--ink); padding: 8px 20px 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.documents-block > .block-title:not(.visually-hidden) { margin: 12px 0 4px; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.doc-list { list-style: none; margin: 0; padding: 0; }
+.doc { padding: 12px 0; border-top: 1px solid var(--rule); scroll-margin-top: 20px; overflow-wrap: anywhere; }
+.doc-main > .doc:first-child { border-top: 0; }
+.doc-head { display: flex; align-items: flex-start; gap: 8px; }
+.doc-title { flex: 1; margin: 0; font-weight: 600; line-height: 1.3; }
+.doc-open { all: unset; cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.doc-open:hover { text-decoration-color: currentColor; }
+.doc-open:focus-visible, .doc-move:focus-visible, .doc-fold > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+.doc-source { margin: 3px 0 0; color: var(--ink-2); font-size: var(--text-small); line-height: 1.35; }
+.doc-move { flex: none; min-width: 44px; min-height: 32px; margin: -6px -10px 0 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; font-size: var(--text-small); letter-spacing: 1px; }
+.doc-fold { margin-top: 8px; }
+.doc-fold > summary { cursor: pointer; padding: 6px 0; color: var(--ink-2); font-size: var(--text-small); list-style-position: outside; margin-left: 16px; }
+.doc-fold > summary span { color: var(--ink); font-weight: 600; }
+.doc-fold > summary small { display: block; font-size: var(--text-small); color: var(--ink-3); }
+.doc-sub { margin-left: 2px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.doc-sub .doc { padding: 9px 0; }
+.doc-sub > .doc:first-child, .doc-run .doc-list > .doc:first-child { border-top: 0; }
+.doc-sub .doc-title { font-weight: 500; }
+.doc-run > details > summary { cursor: pointer; padding: 9px 0; font-size: var(--text-small); border-top: 1px solid var(--rule); margin-left: 16px; }
+.doc-loose, .doc-more, .doc-archive { border-top: 1px solid var(--rule); margin-top: 0; padding-top: 6px; }
+.doc-menu { list-style: none; margin: 8px 0 0; padding: 4px; border: 1px solid var(--rule); border-radius: 8px; background: var(--wash); }
+.doc-menu button { display: block; width: 100%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 6px; background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.doc-menu button:hover { background: var(--panel); }
+.doc-menu button[aria-current="true"] { font-weight: 600; }
+.doc-menu button[aria-current="true"]::after { content: " ✓"; }
+.doc-search { margin-top: 10px; }
+.doc-search input { width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--wash); color: var(--ink); font: inherit; }
+.doc-search input::placeholder { color: var(--ink-3); }
+.doc-results .doc:first-child { border-top: 0; }
+.doc-none, .doc-msg, .doc-notice { margin: 8px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.doc-add { margin-top: 12px; }
+.doc-drop { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px; border: 1px dashed var(--rule); border-radius: 8px; color: var(--ink-2); cursor: pointer; }
+.doc-drop:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.doc-drop span { font-weight: 600; }
+.doc-drop-over { border-style: solid; border-color: var(--brand); color: var(--ink); background: var(--wash); }
+.doc-drop[hidden] { display: none; }
+.doc-confirm-form { display: grid; gap: 12px; }
+.doc-item { margin: 0; padding: 10px 12px 12px; border: 1px solid var(--rule); border-radius: 8px; display: grid; gap: 8px; min-width: 0; }
+.doc-item legend { padding: 0 4px; font-size: var(--text-small); color: var(--ink-2); overflow-wrap: anywhere; }
+.doc-field { display: grid; gap: 3px; font-size: var(--text-small); color: var(--ink-2); }
+.doc-field[hidden] { display: none; }
+.doc-field :is(input, select) { min-height: 40px; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--wash); color: var(--ink); font: inherit; font-size: var(--text-body); min-width: 0; }
+.doc-tiers { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.doc-tiers label { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; }
+.doc-tiers input { accent-color: var(--brand); }
+.doc-actions { display: flex; align-items: center; gap: 16px; }
+.doc-actions button[type="submit"] { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; font-size: var(--text-body); }
+.doc-actions button[type="submit"]:disabled { opacity: .6; cursor: progress; }
+/* The Documents view: its sentence, then the block, as two panels with the standing answers' gap. */
+.documents-view { display: grid; gap: 10px; }
 /* Checklist (js/blocks/checklist.js): one line per item, its reason under it, where it stands in words. The mark is
    shape only (an open ring for ongoing, a dot for a date, a dashed ring for what needs a record, a tick for done):
    status is carried by words and position, never colour. */

@@ -5,14 +5,27 @@
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
 })(typeof window === "undefined" ? globalThis : window, function (M) {
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
-  // The tier a document sits in is read once the database has the column (F1e); until then the plain list is read.
-  const DOCUMENT_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,page_count,storage_path,created_at";
+  // Tiers (F1e) and who chose one (B3's tiered_at) are read when the database has them. relates_to is read through
+  // document_relations, which withholds a relationship whose other end the reader can't see. context.documentTiers
+  // says what the database holds, so the view offers only what it can save: "chosen" (tier and tiered_at), "tiers" (F1e only)
+  // or "none" (F1e not deployed yet: no tier is read, documents go by docClass, nothing is added or moved, no error).
+  // It is learnt once per client (page), so a database without the columns costs one refused read, not one per farm.
+  const learnt = new WeakMap();
+  const DOCUMENT_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,page_count,storage_path,original_name,sha256,status,created_at";
+  const TIER_COLUMNS = { chosen: ",tier,tiered_at", tiers: ",tier", none: "" };
+  const missingColumn = (e) => e && (e.code === "42703" || e.code === "PGRST204" || /column|tier/i.test(e.message || ""));
   async function readDocuments(sb, farm) {
-    const query = (columns) => sb.from("documents").select(columns).eq("farm_id", farm.id).order("title");
-    const { data, error } = await query(DOCUMENT_COLUMNS + ",tier");
-    if (!error) return data;
-    if (!/tier/i.test(error.message || "") && error.code !== "42703") throw error;
-    return read(query(DOCUMENT_COLUMNS));
+    const query = (columns) => sb.from("documents").select(DOCUMENT_COLUMNS + columns).eq("farm_id", farm.id).order("title");
+    let rows = null;
+    for (const level of learnt.has(sb) ? [learnt.get(sb)] : ["chosen", "tiers", "none"]) {
+      const { data, error } = await query(TIER_COLUMNS[level]);
+      if (!error) { rows = data; learnt.set(sb, level); break; }
+      if (!missingColumn(error) || level === "none") throw error;
+    }
+    if (learnt.get(sb) === "none" || !rows.length) return rows;
+    const { data: relations, error } = await sb.from("document_relations").select("id,relates_to").in("id", rows.map((d) => d.id));
+    const parent = new Map((error ? [] : relations || []).map((r) => [r.id, r.relates_to]));
+    return rows.map((d) => ({ ...d, relates_to: parent.get(d.id) ?? null }));
   }
   const nzToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });
   // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
@@ -29,7 +42,7 @@
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
-    return { farm, user, role: member.role, advisor, maps, documents, authorisations, today,
+    return { farm, user, role: member.role, advisor, maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
       obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error };
   }
   // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
@@ -303,6 +316,52 @@
     }
     $("#layer-list").replaceChildren(...children);
   }
+  // ---- Documents (B3): the sentence, then the Documents block; editors add documents and move them between tiers --
+  const editor = () => ["owner", "admin", "edit"].includes(context?.role) && context.documentTiers === "chosen";
+  let documentsNotice = null;
+  function documentsView(host, item) {
+    const sentence = el("div", { class: "block-host" }), list = el("div", { class: "block-host documents-host" });
+    const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, list);
+    host.append(wrap);
+    const farm = context.farm.id, handles = [];
+    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), notice: documentsNotice });
+    handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => M.documents(context, FP.documentsBlock.arrange(context.documents)), level: 2, href: FP.href }));
+    if (context.documents.length || editor())
+      handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null } },
+        { read: () => { const d = data(); documentsNotice = null; return d; }, level: 3, nested: true, href: FP.href, store: documentStore(farm, () => handles) }));
+    return { destroy: () => unmount(handles) };
+  }
+  // Upload, register and move, as the signed-in person: storage and documents policies decide (F1e, B3).
+  function documentStore(farm, handles) {
+    const D = FP.documentsBlock;
+    return {
+      async add({ file, title, doc_type, tier, relates_to }) {
+        const bytes = await file.arrayBuffer(), sha = await D.sha256Hex(bytes);
+        const same = context.documents.find((d) => d.sha256 === sha);
+        if (same) throw Error("already here as " + M.docTitle(same));
+        const path = D.storagePath(farm, sha, file.name), mime = file.type || "application/octet-stream";
+        const up = await FP.sb.storage.from("documents").upload(path, file, { contentType: mime, upsert: false });
+        // The same bytes uploaded before but never described: describe them now (the database checks they are yours).
+        if (up.error && !/exist|duplicate|409/i.test(String(up.error.message || "") + (up.error.statusCode || ""))) throw up.error;
+        const { data, error } = await FP.sb.from("documents").insert({ farm_id: farm, title, doc_type, original_name: file.name, mime_type: mime,
+          sha256: sha, size_bytes: file.size, storage_path: path, tier, relates_to: relates_to || null, tiered_at: new Date().toISOString() }).select("id").single();
+        if (error) throw error;
+        return data.id;
+      },
+      async move(id, change) {
+        const { data, error } = await FP.sb.from("documents").update({ ...change, tiered_at: new Date().toISOString() }).eq("id", id).select("id");
+        if (error) throw error;
+        if (!data?.length) throw Error("That change wasn't allowed.");
+      },
+      // Read the farm's documents again and redraw, with one line saying what happened.
+      async changed(notice) {
+        if (context?.farm.id !== farm) return;
+        context.documents = await readDocuments(FP.sb, context.farm);
+        documentsNotice = notice || null;
+        for (const h of handles()) h.refresh();
+      },
+    };
+  }
   function askView() {
     const form = el("form", { id: "ask-form", class: "ask-form" },
       el("label", { for: "ask-input", class: "visually-hidden" }, "Question"),
@@ -358,9 +417,8 @@
       $("#space-body").scrollTop = 0;   // the sheet's scroller outlasts the view: each view opens at its top
       if (route.view === "documents") {
         $("#space-body").replaceChildren();
-        view = answer($("#space-body"), M.documents(context), { open: true, selected: route.item });
-        // The list holds each row as a card and as a table row; the host's width shows one, so take the one on screen.
-        const selected = [...$("#space-body").querySelectorAll("[data-item-id]")].find((n) => n.dataset.itemId === route.item && (n.checkVisibility?.() ?? true));
+        view = documentsView($("#space-body"), route.item);
+        const selected = $("#space-body").querySelector('[data-item-id="' + CSS.escape(route.item || "") + '"]');
         if (selected) { selected.scrollIntoView({ block: "nearest" }); selected.focus({ preventScroll: true }); }
       } else if (route.view === "ask") { $("#space-body").replaceChildren(askView()); }
       else if (route.view === "create") { $("#space-body").replaceChildren(createView()); }

@@ -1,6 +1,6 @@
 // Answer block: one sentence -> up to three promoted lines, each with its reason -> All behind a tap.
 // Data is an answer model (farm-model.js builds them): { key, title, answer: {text, because}, items, rank, empty,
-// allLabel, href, groups, restricted, currency, total? }. Pure: data in, HTML out (APP-STRUCTURE §3.1–3.4).
+// allLabel, href, body?, restricted, currency, total? }. Pure: data in, HTML out (APP-STRUCTURE §3.1–3.4).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -41,15 +41,6 @@
     const selected = (item) => o.selected != null && o.selected === item.id;
     const row = (item, lead) => '<li tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? ' class="selected-record"' : "") + ">" + link(item.href, item.text) +
       (lead ? '<span class="answer-reason"> — ' + esc(item.because) + "</span>" : item.detail ? '<p class="record-detail">' + esc(item.detail) + "</p>" : "") + "</li>";
-    const card = (item) => '<details class="record-card' + (selected(item) ? " selected-record" : "") + '" tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? " open" : "") +
-      "><summary><span>" + esc(item.text) + "</span>" + (item.kind && !String(item.text).toLowerCase().includes(item.kind.toLowerCase()) ? "<small>" + esc(item.kind) + "</small>" : "") +
-      '</summary><div class="record-card-body">' + (list(item.meta).length ? "<dl>" + item.meta.map((m) => "<div><dt>" + esc(m.label) + "</dt><dd>" + esc(m.value) + "</dd></div>").join("") + "</dl>" : "") +
-      (item.note ? '<p class="record-note">' + esc(item.note) + "</p>" : "") + (item.open ? '<button type="button" data-open-document="' + esc(item.id) + '">Open</button>' : "") + "</div></details>";
-    const cards = () => (list(model.groups).length ? model.groups : [["recorded", "Recorded"]]).map(([key, label]) => {
-      const grouped = items.filter((i) => (i.group || "recorded") === key);
-      return grouped.length ? '<section class="record-group" data-record-group="' + esc(key) + '"><h' + sub + ">" + esc(label) + " (" + grouped.length + ")</h" + sub +
-        '><div class="record-cards">' + grouped.map(card).join("") + "</div></section>" : "";
-    }).join("");
     // A model may hand its All to another block (the List for Documents, the Timeline for What's changed). It is
     // drawn without a title of its own, one heading level down; without that block loaded, All is the plain list.
     const body = () => {
@@ -62,7 +53,7 @@
     const allLabel = (model.allLabel || "All records") + " (" + (Number.isInteger(model.total) ? model.total : items.length) + ")";
     const all = o.compact && text(model.href) ? link(model.href, allLabel, 'class="answer-all-link"') :
       '<details class="answer-all"' + (o.selected != null || o.open ? " open" : "") + "><summary>" + esc(allLabel) +
-      "</summary>" + (items.length ? (body() || (o.cards ? cards() : "<ul>" + items.map((i) => row(i, false)).join("") + "</ul>")) : "<p>Nothing else recorded.</p>") + "</details>";
+      "</summary>" + (items.length ? (body() || "<ul>" + items.map((i) => row(i, false)).join("") + "</ul>") : "<p>Nothing else recorded.</p>") + "</details>";
     return '<section class="answer-panel' + (o.compact ? " answer-compact" : "") + '" data-answer-key="' + esc(model.key) +
       '" data-answer-state="' + (!hasAnswer && !highlights.length ? "empty" : "recorded") + '">' +
       "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + (said.carried ? esc(model.answer.text) + " — " + link(said.carried.href, said.carried.text) + esc(", " + said.carried.because) : esc(said.text)) + "</p>" +
@@ -75,7 +66,6 @@
     id: "answer", title: "Answer", empty: "Nothing recorded yet.",
     options: {
       compact: { type: "boolean", default: false },   // the standing answers beside the map: All becomes a link when there is somewhere to go
-      cards: { type: "boolean", default: false },     // All as grouped record cards (Documents)
       open: { type: "boolean", default: false },      // All starts open
       selected: { type: "string", default: null },    // the record to open and mark (a route's ?item=)
     },

@@ -107,6 +107,14 @@
       data.map2 = { farm: { id: FARM2, name: second.name, region: second.region }, extent: polygon(172.62, -42.78, 172.64, -42.765), extent_ha: 220,
         titles: collection([]), land_units: collection([]), layers: [], reference: [] };
     }
+    // Documents as F1e and B3 leave them: every one primary by default, and the walk notes filed with the plan by a
+    // person (so the demo shows a supporting document folded under its main one). relates_to is read through the view.
+    const plan = data.tables.documents.find((d) => d.doc_type === "fep");
+    for (const d of data.tables.documents) {
+      d.tier = d.tier || "primary";
+      if (plan && d.doc_type === "memo" && d.farm_id === FARM) Object.assign(d, { tier: "supporting", relates_to: plan.id, tiered_at: f.as_at + "T09:00:00+13:00" });
+    }
+    data.tables.document_relations = data.tables.documents.map((d) => ({ id: d.id, tier: d.tier, relates_to: d.relates_to || null, superseded_by: null }));
     data.tables.farm_summaries = data.tables.farms.map((x) => summary(data, x));
     data.people = people(data, { sparse, farmer });
     return data;
@@ -136,7 +144,7 @@
     function query(table) {
       const filters = [], orders = []; let write = false, singular = false, maybe = false;
       const q = {
-        select() { return q; }, eq(key, val) { filters.push([key, val]); return q; },
+        select() { return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
         order(key, options) { orders.push([key, options?.ascending !== false]); return q; },
         insert() { write = true; return q; }, update() { write = true; return q; }, delete() { write = true; return q; },
         single() { singular = true; return execute(); }, maybeSingle() { singular = true; maybe = true; return execute(); },
@@ -146,7 +154,7 @@
         const d = await ready, rows = d.tables[table];
         if (write) return error("The demo does not save changes");
         if (!rows) return error("This demo does not provide " + table);
-        let selected = rows.filter((row) => filters.every(([key, val]) => row[key] === val));
+        let selected = rows.filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : row[key] === val)));
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
         if (singular && selected.length !== 1) return maybe && !selected.length ? result(null) : error("Demo row not found");
         return result(singular ? selected[0] : selected);
@@ -171,7 +179,8 @@
       },
       // The demo never sends invitations or saves changes.
       functions: { invoke: async () => error("The demo does not save changes") },
-      storage: { from: () => ({ createSignedUrl: async () => result({ signedUrl: new URL("demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }) }) },
+      storage: { from: () => ({ createSignedUrl: async () => result({ signedUrl: new URL("demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
+        upload: async () => error("The demo does not save changes") }) },
     };
   }
   return { FARM, FARM2, USER, ORG, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };
