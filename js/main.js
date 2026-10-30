@@ -1,5 +1,5 @@
 // Screens and routing: sign in -> the farm (or the portfolio if there are several) -> the farm space.
-// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents.
+// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops (RCL staff).
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [];
@@ -39,12 +39,16 @@
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     allFarms = data; farms = data;
     FP.farmSpace.setPortfolio(farms, user);
+    await FP.ops.checkStaff(user);
     readyToRoute = true; route();
   }
 
   function route() {
     if (!readyToRoute) return;
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
+    // Operations: RCL staff only. Anyone else asking for it is simply taken to their farms.
+    if (hash === "#/ops" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.ops.open(); return; }
+    FP.ops.close();
     const route = FP.farmModel.match(hash);
     const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
     if (farm) FP.farmSpace.open(farm, route?.farm === farm.id ? route : { farm: farm.id, view: "map" });
@@ -125,7 +129,7 @@
     for (const b of $$(".b-signout")) b.textContent = "Exit demo";
     const banner = el("aside", { class: "demo-banner", "aria-label": "Demonstration" },
       el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Illustrative map"),
-      ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"]].map(([href, label]) => el("a", { href }, label)),
+      ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"], ["#/demo/ops", "Operations"]].map(([href, label]) => el("a", { href }, label)),
       el("a", { href: location.pathname + location.search }, "Exit"));
     document.body.prepend(banner);
     const reserveBanner = () => document.documentElement.style.setProperty("--demo-banner-height", banner.getBoundingClientRect().height + "px");

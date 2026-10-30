@@ -35,6 +35,7 @@
     let suffix = path.slice("#/demo".length), farm = FARM;
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
+    if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
     // Two farms: "#/demo/multi" is the portfolio; "#/demo/multi/farm-1" and ".../farm-2" open one.
     if (multi) {
       if (suffix === "") return "";
@@ -47,6 +48,7 @@
   }
   function href(hash, sparse = false, farmer = false, multi = false) {
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
+    if (hash === "#/ops") return "#/demo/ops";
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
     if (!farm) return hash;
     return "#/demo" + (multi ? "/multi/farm-" + (farm === FARM2 ? 2 : 1) : sparse ? "/empty" : farmer ? "/farmer" : "") + hash.slice(("#/farm/" + farm).length);
@@ -75,7 +77,9 @@
     const data = { asAt: f.as_at, map, map2: null, user: { id: USER, email: "advisor@example.test" }, tables: {
       farms: [farm], farm_members: [{ farm_id: FARM, user_id: USER, role: "admin" }], org_members: [{ org_id: ORG, user_id: USER, role: "advisor" }],
       documents: owned(f.documents, FARM), authorisations: owned(f.authorisations, FARM), obligations: owned(f.obligations, FARM),
-    } };
+      // The staff Operations page: invented job records, one failing and one late. The farmer demo is not staff.
+      profiles: [{ user_id: USER, is_staff: true }], ops_job_status: f.ops.jobs, ops_reference_status: f.ops.references,
+    }, build: f.ops.build };
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
@@ -84,6 +88,7 @@
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
       data.user.email = "farmer@example.test";
+      data.tables.profiles = [{ user_id: USER, is_staff: false }]; data.tables.ops_job_status = []; data.tables.ops_reference_status = [];
     }
     if (multi) {
       // A second, small farm so the portfolio can be exercised: its own extent, one authorisation, two documents.

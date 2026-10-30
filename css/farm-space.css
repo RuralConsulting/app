@@ -9,7 +9,8 @@
 .farm-switch-label { grid-column: 1; grid-row: 2; justify-self: start; font-size: var(--text-small); display: flex; align-items: center; gap: 6px; }
 .farm-switch-label select { width: 120px; min-height: 30px; padding: 4px 6px; }
 #space-person { grid-column: 3; grid-row: 1; min-width: 0; max-width: 110px; font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#space-people { grid-column: 2; grid-row: 2; justify-self: end; font-size: var(--text-small); color: inherit; white-space: nowrap; }
+.farm-links { grid-column: 2; grid-row: 2; justify-self: end; display: flex; align-items: center; gap: 12px; }
+#space-people, #space-ops { font-size: var(--text-small); color: inherit; white-space: nowrap; }
 #space-people[aria-current] { text-decoration-thickness: 2px; text-decoration-color: var(--brand); }
 #space-signout { grid-column: 3; grid-row: 2; font-size: var(--text-small); white-space: nowrap; justify-self: end; }
 #farm-space-header select { font: inherit; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; }
@@ -82,7 +83,7 @@ body.farm-detail #layers-open { display: none; }
   #farm-space-header h1 { margin-right: auto; font-size: var(--text-heading); }
   .farm-switch-label select { width: 180px; }
   #space-person { max-width: 220px; }
-  #space-people { align-self: center; }
+  .farm-links { align-self: center; }
   #farm-actions { margin-top: 8px; gap: 4px; }
   #farm-actions a { flex: 0 0 auto; padding: 0 16px; }
   body #screen-map #map { right: var(--rail-width); bottom: 0; }

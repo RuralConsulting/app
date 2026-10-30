@@ -1,11 +1,11 @@
 // Service worker: makes the app installable and quick to start. Caches only the app's own files (this site);
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
-const VERSION = "202610291821-0901ae7";
+const VERSION = "202610300101-d127bec";
 const CACHE = `fp-app-${VERSION}`;
 const SHELL = ["./", "index.html", "css/tokens.css", "css/app.css", "manifest.webmanifest",
   "js/demo.js", "css/demo.css", "demo/demo-farm.json", "demo/source.html",
   "js/answer.js", "css/answer.css", "js/farm-model.js", "js/farm-space.js", "css/farm-space.css",
-  "js/guard.js", "js/config.js", "js/brand.js", "js/util.js", "js/qml.js", "js/basemaps.js", "js/auth.js", "js/popup.js", "js/farm-map.js", "js/main.js",
+  "js/guard.js", "js/config.js", "js/brand.js", "js/util.js", "js/qml.js", "js/basemaps.js", "js/auth.js", "js/popup.js", "js/farm-map.js", "js/ops-model.js", "js/ops.js", "css/ops.css", "js/main.js",
   "vendor/supabase.js", "vendor/maplibre-gl-csp.js", "vendor/maplibre-gl-csp-worker.js", "vendor/maplibre-gl.css",
   "fonts/source-sans-3-latin-ext-wght-normal.woff2", "fonts/source-sans-3-latin-wght-normal.woff2", "fonts/source-serif-4-latin-ext-wght-normal.woff2", "fonts/source-serif-4-latin-wght-normal.woff2",
   "brand/logo.png", "brand/logo-dark.png", "brand/icon.png", "brand/icon-192.png"];

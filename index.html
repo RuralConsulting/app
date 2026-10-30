@@ -8,7 +8,7 @@
 <!-- GitHub Pages can't send security headers, so the page carries its own policy (same as _headers) -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.supabase.co https://basemaps.linz.govt.nz; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://basemaps.linz.govt.nz; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#231f20">
-<script src="js/guard.js?v=202610291821-0901ae7"></script>
+<script src="js/guard.js?v=202610300101-d127bec"></script>
 <title>Farm platform | Rural Consulting</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="brand/icon.png">
@@ -16,11 +16,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RCL Farms">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
-<link rel="stylesheet" href="css/tokens.css?v=202610291821-0901ae7">
-<link rel="stylesheet" href="css/app.css?v=202610291821-0901ae7">
-<link rel="stylesheet" href="css/demo.css?v=202610291821-0901ae7">
-<link rel="stylesheet" href="css/answer.css?v=202610291821-0901ae7">
-<link rel="stylesheet" href="css/farm-space.css?v=202610291821-0901ae7">
+<link rel="stylesheet" href="css/tokens.css?v=202610300101-d127bec">
+<link rel="stylesheet" href="css/app.css?v=202610300101-d127bec">
+<link rel="stylesheet" href="css/demo.css?v=202610300101-d127bec">
+<link rel="stylesheet" href="css/answer.css?v=202610300101-d127bec">
+<link rel="stylesheet" href="css/farm-space.css?v=202610300101-d127bec">
+<link rel="stylesheet" href="css/ops.css?v=202610300101-d127bec">
 </head>
 <body>
 <p id="loading" class="loading">Loading…</p>
@@ -78,12 +79,22 @@
   </div>
 </main>
 
+<main id="screen-ops" class="screen ops" hidden>
+  <div class="ops-wrap">
+    <header class="ops-head">
+      <h1>Operations</h1>
+      <p class="fine"><a id="ops-back" href="#/">Farms</a> · <span class="who"></span> · <button type="button" class="link b-signout">Sign out</button></p>
+    </header>
+    <div id="ops-panels" aria-live="polite"></div>
+  </div>
+</main>
+
 <main id="screen-farms" class="screen" hidden>
   <div class="card wide">
     <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.png" alt="Rural Consulting"></span></div>
     <h1>Farms</h1>
     <p id="farms-msg" class="msg"></p>
-    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span> · <button type="button" class="link b-signout">Sign out</button></p>
+    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button></p>
   </div>
 </main>
 
@@ -92,7 +103,7 @@
   <aside id="portfolio" aria-label="Farms" hidden>
     <h1>Farms</h1>
     <ul id="portfolio-list"></ul>
-    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span> · <button type="button" class="link b-signout">Sign out</button></p>
+    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button></p>
   </aside>
   <button type="button" id="layers-open" aria-controls="layers-drawer" aria-expanded="false">Layers</button>
   <aside id="layers-drawer" class="layers-drawer" aria-label="Map layers" hidden>
@@ -113,20 +124,22 @@
 
 <script src="vendor/supabase.js"></script>
 <script src="vendor/maplibre-gl-csp.js"></script>
-<script src="js/config.js?v=202610291821-0901ae7"></script>
+<script src="js/config.js?v=202610300101-d127bec"></script>
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
-<script src="js/brand.js?v=202610291821-0901ae7"></script>
-<script src="js/demo.js?v=202610291821-0901ae7"></script>
-<script src="js/util.js?v=202610291821-0901ae7"></script>
-<script src="js/answer.js?v=202610291821-0901ae7"></script>
-<script src="js/qml.js?v=202610291821-0901ae7"></script>
-<script src="js/basemaps.js?v=202610291821-0901ae7"></script>
-<script src="js/auth.js?v=202610291821-0901ae7"></script>
-<script src="js/popup.js?v=202610291821-0901ae7"></script>
-<script src="js/farm-map.js?v=202610291821-0901ae7"></script>
-<script src="js/farm-model.js?v=202610291821-0901ae7"></script>
-<script src="js/farm-space.js?v=202610291821-0901ae7"></script>
-<script src="js/main.js?v=202610291821-0901ae7"></script>
+<script src="js/brand.js?v=202610300101-d127bec"></script>
+<script src="js/demo.js?v=202610300101-d127bec"></script>
+<script src="js/util.js?v=202610300101-d127bec"></script>
+<script src="js/answer.js?v=202610300101-d127bec"></script>
+<script src="js/qml.js?v=202610300101-d127bec"></script>
+<script src="js/basemaps.js?v=202610300101-d127bec"></script>
+<script src="js/auth.js?v=202610300101-d127bec"></script>
+<script src="js/popup.js?v=202610300101-d127bec"></script>
+<script src="js/farm-map.js?v=202610300101-d127bec"></script>
+<script src="js/farm-model.js?v=202610300101-d127bec"></script>
+<script src="js/farm-space.js?v=202610300101-d127bec"></script>
+<script src="js/ops-model.js?v=202610300101-d127bec"></script>
+<script src="js/ops.js?v=202610300101-d127bec"></script>
+<script src="js/main.js?v=202610300101-d127bec"></script>
 </body>
 </html>
 

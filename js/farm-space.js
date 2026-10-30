@@ -39,7 +39,7 @@
     if ($("#farm-space-header")) return;
     const h = el("header", { id: "farm-space-header", hidden: true });
     h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
-      '<a id="space-people" class="link" hidden>People</a><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div>' +
+      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-ops" class="link ops-link" hidden>Operations</a></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div>' +
       '<nav id="farm-actions" aria-label="Farm"></nav>';
     document.body.prepend(h);
     const reserve = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
