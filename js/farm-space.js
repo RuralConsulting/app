@@ -76,7 +76,7 @@
       e.preventDefault();
       const question = $("#ask-input").value.trim();
       if (!question) { $("#ask-input").focus(); return; }
-      $("#ask-answer").replaceChildren(el("p", { class: "ask-question" }, question), el("p", { class: "answer-sentence" }, "Ask is coming — S4"));
+      $("#ask-answer").replaceChildren(el("p", { class: "ask-question" }, question), el("p", { class: "answer-sentence" }, "Questions can't be answered here yet."));
     });
     $("#space-content").addEventListener("change", (e) => {
       const select = e.target.closest("[data-role-for]");
@@ -237,7 +237,8 @@
   }
   function createView() {
     return el("section", { class: "space-view", "data-view": "create" }, el("h2", {}, "Create"),
-      el("ul", { class: "output-list" }, ...M.outputs.map(([key, label]) => el("li", { "data-output": key }, el("span", {}, label), el("small", {}, "coming")))));
+      el("p", {}, "These can't be made here yet."),
+      el("ul", { class: "output-list" }, ...M.outputs.map(([key, label]) => el("li", { "data-output": key }, el("span", {}, label)))));
   }
   async function open(farm, route) {
     const current = ++token;
