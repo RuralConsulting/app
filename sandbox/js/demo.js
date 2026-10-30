@@ -37,6 +37,7 @@
     if (suffix === "/farms") return "";
     if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
     if (suffix === "/blocks" && !multi) return "#/blocks" + (query ? "?" + query : "");   // the block gallery
+    if (suffix === "/plans" && !multi) return "#/plans" + (query ? "?" + query : "");     // the FEP and FWFP documents
     // Two farms: "#/demo/multi" is the portfolio; "#/demo/multi/farm-1" and ".../farm-2" open one.
     if (multi) {
       if (suffix === "") return "";
@@ -50,7 +51,7 @@
   function href(hash, sparse = false, farmer = false, multi = false) {
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/ops") return "#/demo/ops";
-    if (/^#\/blocks(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
+    if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
     if (!farm) return hash;
     return "#/demo" + (multi ? "/multi/farm-" + (farm === FARM2 ? 2 : 1) : sparse ? "/empty" : farmer ? "/farmer" : "") + hash.slice(("#/farm/" + farm).length);

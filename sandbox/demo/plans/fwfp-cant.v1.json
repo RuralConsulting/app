@@ -1,0 +1,1698 @@
+{
+  "schema": "plan/1",
+  "family": "fwfp-cant",
+  "version": 1,
+  "title": "Freshwater Farm Plan (Canterbury)",
+  "description": "Freshwater Farm Plan (Canterbury) (Canterbury), draft as at 2026-10-30. RCL platform template (draft, Claude research agent 30 Oct 2026); needs Josh's content approval (PLANS.md §11). Sources: [FR] Resource Management (Freshwater Farm Plans) Regulations 2023 (SL 2023/113), version as at 26 May 2026 <https://www.legislation.govt.nz/secondary-legislation/pco-drafted/2023/113/en/latest/>; [RMA217E] Resource Management Act 1991 s 217E (as amended 21 August 2025) <https://mail.nzlii.org/nz/legis/consol_act/rma1991200/s217e.html>; [LWRP] Canterbury Land and Water Regional Plan (operative, incl. PC7 from 10 March 2025) <https://www.ecan.govt.nz/your-region/plans-strategies-and-bylaws/canterbury-land-and-water-regional-plan/canterbury-land-and-water-regional-plan>; [ECANAUD] ECan: Information for auditors (Certified FEP Auditor Manual, November 2022) <https://www.ecan.govt.nz/your-region/farmers-hub/farming-plans-and-consenting/farm-environment-plans/information-for-auditors>. Before publishing: Part 9A of the RMA has never been applied to Canterbury by Order in Council, so no Canterbury farm has a legal freshwater farm plan duty today; ECan says FEP obligations continue under consents and rules (27 Jan 2026). CWMS zone list and LWRP nutrient allocation zone names are from general knowledge; check against ECan planning maps. ECan has not published FWFP catchment context information; cant.catchment.* guidance tells the preparer what to use meanwhile.",
+  "extends": {
+    "family": "fwfp-nz",
+    "version": 1
+  },
+  "parts": [
+    {
+      "key": "nz.part.about",
+      "origin": "fwfp-nz",
+      "title": "About this plan and the farm",
+      "guidance": "The basic facts about who runs the farm, where it is and what consents it holds. A certifier checks every item here, so leave nothing blank: write 'none' where something does not apply.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.admin.operator",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Farm operator",
+          "guidance": "The farm operator is the person or business with final responsibility for running the farm (often the owner, sometimes a lessee or sharemilker company). Give the NZ Business Number if the business has one.",
+          "fields": [
+            {
+              "key": "operator_name",
+              "type": "text",
+              "label": "Operator name",
+              "required": true
+            },
+            {
+              "key": "contact_phone",
+              "type": "text",
+              "label": "Phone",
+              "required": true
+            },
+            {
+              "key": "contact_email",
+              "type": "text",
+              "label": "Email",
+              "required": true
+            },
+            {
+              "key": "nzbn",
+              "type": "text",
+              "label": "NZ Business Number (if any)"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.a",
+            "rma.s217E.1"
+          ]
+        },
+        {
+          "key": "nz.admin.other_parties",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Other owners, leaseholders and licence holders",
+          "guidance": "Anyone else who owns, leases or holds a licence over land in this farm. Add a row for each. Needed when anyone other than the operator owns, leases or licenses land in the farm.",
+          "fields": [
+            {
+              "key": "name",
+              "type": "text",
+              "label": "Name",
+              "required": true
+            },
+            {
+              "key": "role",
+              "type": "select",
+              "label": "Role",
+              "required": true,
+              "options": [
+                "Owner",
+                "Leaseholder",
+                "Licence holder"
+              ]
+            },
+            {
+              "key": "contact",
+              "type": "text",
+              "label": "Contact details",
+              "required": true
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r13.b"
+          ]
+        },
+        {
+          "key": "nz.admin.preparer",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Plan prepared by",
+          "guidance": "Who wrote this plan and when. If you wrote it yourself, put your own name.",
+          "fields": [
+            {
+              "key": "preparer_name",
+              "type": "text",
+              "label": "Prepared by",
+              "required": true
+            },
+            {
+              "key": "organisation",
+              "type": "text",
+              "label": "Organisation"
+            },
+            {
+              "key": "prepared_on",
+              "type": "date",
+              "label": "Date prepared",
+              "required": true
+            },
+            {
+              "key": "version_label",
+              "type": "text",
+              "label": "Version (e.g. Draft, Final)"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.c"
+          ]
+        },
+        {
+          "key": "nz.admin.address",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Physical address",
+          "guidance": "The farm's road address (the one a certifier or auditor would drive to).",
+          "fields": [
+            {
+              "key": "property_name",
+              "type": "text",
+              "label": "Property name"
+            },
+            {
+              "key": "physical_address",
+              "type": "text",
+              "label": "Physical address",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.d"
+          ]
+        },
+        {
+          "key": "nz.admin.titles",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Land titles and parcels",
+          "guidance": "Every record of title and legal parcel the farm is made up of, including leased or licensed land. Copy them from LINZ titles.",
+          "fields": [
+            {
+              "key": "title_ref",
+              "type": "text",
+              "label": "Record of title",
+              "required": true
+            },
+            {
+              "key": "parcel",
+              "type": "text",
+              "label": "Legal description (parcel)",
+              "required": true
+            },
+            {
+              "key": "tenure",
+              "type": "select",
+              "label": "Owned or leased",
+              "required": true,
+              "options": [
+                "Owned",
+                "Leased",
+                "Licensed"
+              ]
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.e"
+          ]
+        },
+        {
+          "key": "nz.admin.areas",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Farm area",
+          "guidance": "Total area of the farm in hectares, and how much of it is leased or licensed.",
+          "fields": [
+            {
+              "key": "total_area_ha",
+              "type": "number",
+              "label": "Total farm area",
+              "required": true,
+              "unit": "ha"
+            },
+            {
+              "key": "leased_area_ha",
+              "type": "number",
+              "label": "Leased or licensed area",
+              "unit": "ha"
+            },
+            {
+              "key": "effective_area_ha",
+              "type": "number",
+              "label": "Effective (grazable or cropped) area",
+              "unit": "ha"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.f",
+            "fwfp.r13.g"
+          ]
+        },
+        {
+          "key": "nz.admin.land_use",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Land use",
+          "guidance": "What the farm is used for, e.g. 'Sheep and beef with dairy grazing' or 'Dairy, 450 cows'. List each land use if there are several.",
+          "fields": [
+            {
+              "key": "land_use",
+              "type": "text",
+              "label": "Land use",
+              "required": true
+            },
+            {
+              "key": "dairy_supply_number",
+              "type": "text",
+              "label": "Dairy supply number (if any)"
+            },
+            {
+              "key": "stock_summary",
+              "type": "text",
+              "label": "Stock carried (summary)"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.i"
+          ]
+        },
+        {
+          "key": "nz.admin.consents",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Current resource consents",
+          "guidance": "Each current resource consent that relates to farming on this land: water takes, discharges, land use. Give the consent number as the council writes it.",
+          "fields": [
+            {
+              "key": "consent_number",
+              "type": "text",
+              "label": "Consent number",
+              "required": true
+            },
+            {
+              "key": "consent_type",
+              "type": "select",
+              "label": "Type",
+              "required": true,
+              "options": [
+                "Water permit",
+                "Discharge permit",
+                "Land use consent",
+                "Other"
+              ]
+            },
+            {
+              "key": "purpose",
+              "type": "text",
+              "label": "What it is for",
+              "required": true
+            },
+            {
+              "key": "status",
+              "type": "text",
+              "label": "Status (e.g. Issued - Active)"
+            },
+            {
+              "key": "expires_on",
+              "type": "date",
+              "label": "Expiry date"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.h"
+          ]
+        },
+        {
+          "key": "nz.admin.reliance",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Other rules this plan is used to meet",
+          "guidance": "If a rule or national standard lets a certified farm plan stand in for another requirement (for example the stock exclusion or winter grazing rules), and you intend to rely on that, name the requirement here. Needed when the operator intends to rely on the certified plan to meet another requirement.",
+          "fields": [
+            {
+              "key": "requirement",
+              "type": "text",
+              "label": "Requirement",
+              "required": true
+            },
+            {
+              "key": "instrument",
+              "type": "text",
+              "label": "Rule or regulation it comes from",
+              "required": true
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r14"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.land_units",
+      "origin": "fwfp-nz",
+      "title": "Land units and their inherent vulnerabilities",
+      "guidance": "Split the farm into land units: areas with similar soils, slope and drainage. For each one say how naturally vulnerable it is to losing contaminants to water, before thinking about how it is farmed.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.land_units.unit",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Land unit",
+          "guidance": "Give the land unit a short code and name (LU1 - Irrigated light soils), its area, and a description of its soils, slope, drainage and whether it is irrigated. A land unit can be in more than one piece.",
+          "fields": [
+            {
+              "key": "code",
+              "type": "text",
+              "label": "Code (e.g. LU1)",
+              "required": true
+            },
+            {
+              "key": "name",
+              "type": "text",
+              "label": "Name",
+              "required": true
+            },
+            {
+              "key": "area_ha",
+              "type": "number",
+              "label": "Area",
+              "required": true,
+              "unit": "ha"
+            },
+            {
+              "key": "description",
+              "type": "text",
+              "label": "Description",
+              "required": true
+            },
+            {
+              "key": "soils",
+              "type": "text",
+              "label": "Main soils"
+            },
+            {
+              "key": "irrigated",
+              "type": "boolean",
+              "label": "Irrigated"
+            },
+            {
+              "key": "drained",
+              "type": "boolean",
+              "label": "Artificially drained"
+            }
+          ],
+          "required": true,
+          "repeat": "lmu",
+          "binds": {
+            "places": "land_unit"
+          },
+          "satisfies": [
+            "fwfp.r8.1a"
+          ]
+        },
+        {
+          "key": "nz.land_units.vulnerability",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Inherent vulnerabilities",
+          "guidance": "How vulnerable this land unit is, by nature, to each pathway. Use the same scale for every land unit. Add anything else that matters here, such as erosion-prone slopes or a high water table.",
+          "fields": [
+            {
+              "key": "waterlogging",
+              "type": "select",
+              "label": "Waterlogging",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "p_sediment_runoff",
+              "type": "select",
+              "label": "Phosphorus and sediment runoff",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "n_leaching",
+              "type": "select",
+              "label": "Nitrogen leaching",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "structural",
+              "type": "select",
+              "label": "Soil structural damage",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "erosion",
+              "type": "select",
+              "label": "Erosion",
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "other",
+              "type": "text",
+              "label": "Other inherent vulnerabilities"
+            }
+          ],
+          "required": true,
+          "repeat": "lmu",
+          "binds": {
+            "fact_type": "inherent_vulnerability"
+          },
+          "satisfies": [
+            "fwfp.r8.1b.i"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.catchment",
+      "origin": "fwfp-nz",
+      "title": "Catchment context, challenges and values",
+      "guidance": "What the regional council says matters in your catchment: the state of its water, what tangata whenua value, and the plan objectives that apply. Your plan has to show it has taken this into account. If the council has not published this information yet, say so.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.catchment.context",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "The catchment and its water",
+          "guidance": "Name the catchment or freshwater management unit and summarise the condition of its rivers, lakes, wetlands and groundwater, and the main contaminants of concern downstream of the farm.",
+          "fields": [
+            {
+              "key": "council_info_available",
+              "type": "boolean",
+              "label": "Council has published catchment context information",
+              "required": true
+            },
+            {
+              "key": "catchment_name",
+              "type": "text",
+              "label": "Catchment or freshwater management unit",
+              "required": true
+            },
+            {
+              "key": "summary",
+              "type": "text",
+              "label": "Condition and main challenges",
+              "required": true
+            },
+            {
+              "key": "receiving_environment",
+              "type": "text",
+              "label": "Where water from the farm ends up"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r9",
+            "fwfp.r4"
+          ]
+        },
+        {
+          "key": "nz.catchment.tangata_whenua",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Tangata whenua values",
+          "guidance": "Values, sites and species important to tangata whenua in the catchment, including traditional names for waterbodies, from the council's information and any iwi management plan lodged with the council. Needed when council catchment context information is available.",
+          "fields": [
+            {
+              "key": "values",
+              "type": "text",
+              "label": "Values, sites and species",
+              "required": true
+            },
+            {
+              "key": "iwi_plan",
+              "type": "text",
+              "label": "Iwi management plan referred to"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r4"
+          ]
+        },
+        {
+          "key": "nz.catchment.plan_provisions",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Plan objectives and limits that apply",
+          "guidance": "The regional plan objectives, limits and any council action plan that apply to this catchment.",
+          "fields": [
+            {
+              "key": "provisions",
+              "type": "text",
+              "label": "Objectives, limits and action plans",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r4"
+          ]
+        },
+        {
+          "key": "nz.catchment.regard",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "How this plan responds",
+          "guidance": "In a few sentences, how your actions respond to the catchment's challenges (for example: 'fencing and planting the stream reduces sediment, the catchment's main issue'). Actions that respond directly to catchment values are 'Catchment' actions in the action plan.",
+          "fields": [
+            {
+              "key": "response",
+              "type": "text",
+              "label": "How the plan has regard to the catchment",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r9"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.risks",
+      "origin": "fwfp-nz",
+      "title": "Farming activities and risks to freshwater",
+      "guidance": "For each activity on the farm, what could go wrong for water and how serious it is on each land unit. Forestry, packhouses and processing sites, houses and commercial buildings, and visitor accommodation do not need assessing.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.risk.activity",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Activity and its risks",
+          "guidance": "Describe the activity (e.g. 'Cultivation for winter crop') and each way it could harm freshwater (the pathway: sediment runoff, nitrogen leaching, direct stock access).",
+          "fields": [
+            {
+              "key": "management_area",
+              "type": "select",
+              "label": "Activity group",
+              "required": true,
+              "options": [
+                "Land and soil",
+                "Waterways and wetlands",
+                "Nutrients",
+                "Irrigation",
+                "Animal effluent",
+                "Point sources",
+                "Intensive winter grazing",
+                "Other farming activity"
+              ]
+            },
+            {
+              "key": "activities",
+              "type": "text",
+              "label": "Activities",
+              "required": true
+            },
+            {
+              "key": "description",
+              "type": "text",
+              "label": "How the activity is carried out",
+              "required": true
+            },
+            {
+              "key": "risks",
+              "type": "text",
+              "label": "Risks to freshwater",
+              "required": true
+            }
+          ],
+          "required": true,
+          "repeat": "management_area",
+          "satisfies": [
+            "fwfp.r8.1b.ii",
+            "fwfp.r12"
+          ]
+        },
+        {
+          "key": "nz.risk.significance",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Significance of each risk by land unit",
+          "guidance": "Rate each risk on each land unit as Minor, Moderate or Major (or Not applicable). The rating weighs the land unit's inherent vulnerability against how intensively it is farmed. Higher ratings need stronger or sooner actions.",
+          "fields": [
+            {
+              "key": "risk_label",
+              "type": "text",
+              "label": "Risk (activity - pathway)",
+              "required": true
+            },
+            {
+              "key": "management_area",
+              "type": "select",
+              "label": "Activity group",
+              "required": true,
+              "options": [
+                "Land and soil",
+                "Waterways and wetlands",
+                "Nutrients",
+                "Irrigation",
+                "Animal effluent",
+                "Point sources",
+                "Intensive winter grazing",
+                "Other farming activity"
+              ]
+            },
+            {
+              "key": "land_unit",
+              "type": "text",
+              "label": "Land unit code",
+              "required": true
+            },
+            {
+              "key": "significance",
+              "type": "select",
+              "label": "Significance",
+              "required": true,
+              "options": [
+                "Minor",
+                "Moderate",
+                "Major",
+                "Not applicable"
+              ]
+            },
+            {
+              "key": "assessed_by",
+              "type": "text",
+              "label": "Assessed by"
+            },
+            {
+              "key": "assessed_on",
+              "type": "date",
+              "label": "Assessed on"
+            }
+          ],
+          "required": true,
+          "print": {
+            "orientation": "landscape"
+          },
+          "satisfies": [
+            "fwfp.r8.3a",
+            "fwfp.r8.1b.ii"
+          ]
+        },
+        {
+          "key": "nz.risk.method",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "How risks were assessed",
+          "guidance": "A short note on the method used to rate the risks (for example a vulnerability-by-intensity matrix).",
+          "fields": [
+            {
+              "key": "method",
+              "type": "text",
+              "label": "Method"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r8.3a"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.actions",
+      "origin": "fwfp-nz",
+      "title": "Action plan",
+      "guidance": "What you already do and what you will do to look after water, when each new thing will be done, and which land units it covers. An auditor checks that each action was done by its date, so set dates you can meet.",
+      "print": {
+        "break_before": true,
+        "orientation": "landscape"
+      },
+      "nodes": [
+        {
+          "key": "nz.actions.overview",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Action plan overview",
+          "guidance": "A short summary of the main actions and why they were chosen.",
+          "fields": [
+            {
+              "key": "overview",
+              "type": "text",
+              "label": "Overview"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r10.1"
+          ]
+        },
+        {
+          "key": "nz.actions.table",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Action table",
+          "guidance": "One row per action. 'Existing' means you already do it; 'New' means you will start it within the next five years. Category: Regulated (needed to meet a rule, consent or regulation), Catchment (responds to the catchment's challenges and values), or Supplementary (anything else that reduces a risk).",
+          "fields": [
+            {
+              "key": "management_area",
+              "type": "select",
+              "label": "Activity group",
+              "required": true,
+              "options": [
+                "Land and soil",
+                "Waterways and wetlands",
+                "Nutrients",
+                "Irrigation",
+                "Animal effluent",
+                "Point sources",
+                "Intensive winter grazing",
+                "Other farming activity"
+              ]
+            },
+            {
+              "key": "activity",
+              "type": "text",
+              "label": "Activity",
+              "required": true
+            },
+            {
+              "key": "risk_addressed",
+              "type": "text",
+              "label": "Risk it addresses",
+              "required": true
+            },
+            {
+              "key": "land_units",
+              "type": "text",
+              "label": "Land units (e.g. 1, 2, 3)",
+              "required": true
+            },
+            {
+              "key": "action",
+              "type": "text",
+              "label": "Action",
+              "required": true
+            },
+            {
+              "key": "how_addresses_risk",
+              "type": "text",
+              "label": "How it reduces the risk"
+            },
+            {
+              "key": "category",
+              "type": "select",
+              "label": "Category",
+              "required": true,
+              "options": [
+                "Regulated",
+                "Catchment",
+                "Supplementary"
+              ]
+            },
+            {
+              "key": "existing_or_new",
+              "type": "select",
+              "label": "Existing or new",
+              "required": true,
+              "options": [
+                "Existing",
+                "New"
+              ]
+            },
+            {
+              "key": "timeframe",
+              "type": "text",
+              "label": "Timeframe (e.g. On-going, by 1 March 2027)",
+              "required": true
+            },
+            {
+              "key": "due_on",
+              "type": "date",
+              "label": "Due date"
+            },
+            {
+              "key": "instrument_ref",
+              "type": "text",
+              "label": "Rule or consent condition (Regulated actions)"
+            }
+          ],
+          "required": true,
+          "binds": {
+            "actions": true
+          },
+          "print": {
+            "orientation": "landscape",
+            "break_before": true
+          },
+          "satisfies": [
+            "fwfp.r8.2a",
+            "fwfp.r8.2b",
+            "fwfp.r10.2a",
+            "fwfp.r10.2b",
+            "fwfp.r10.2c",
+            "fwfp.r10.2d",
+            "fwfp.r10.2e",
+            "fwfp.r10.3",
+            "fwfp.r30"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.maps",
+      "origin": "fwfp-nz",
+      "title": "Maps",
+      "guidance": "The regulations list what the maps must show. Several items can share one map. Mark 'none on this farm' for anything that is not present rather than leaving it off.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.map.vulnerabilities",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: farm, land units and inherent vulnerabilities",
+          "guidance": "Boundaries, land units, water and the natural features behind each land unit's vulnerabilities.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            },
+            {
+              "key": "boundary",
+              "type": "select",
+              "label": "Farm boundary, showing leased or licensed land",
+              "guidance": "FR reg 11(1)(a)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "land_use_areas",
+              "type": "select",
+              "label": "Land use areas (where uses are clearly distinct)",
+              "guidance": "FR reg 11(1)(b)",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "land_units",
+              "type": "select",
+              "label": "Land units",
+              "guidance": "FR reg 11(1)(c)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "natural_water",
+              "type": "select",
+              "label": "Natural waterbodies (rivers, streams, lakes, wetlands)",
+              "guidance": "FR reg 11(1)(d)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "artificial_water",
+              "type": "select",
+              "label": "Artificial waterbodies (drains, races, ponds)",
+              "guidance": "FR reg 11(1)(e)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "soils",
+              "type": "select",
+              "label": "Soil types",
+              "guidance": "FR reg 11(1)(f)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "landform_slope",
+              "type": "select",
+              "label": "Landform, including slope",
+              "guidance": "FR reg 11(1)(g)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "iwg_areas",
+              "type": "select",
+              "label": "Potential intensive winter grazing areas and their critical source areas",
+              "guidance": "FR reg 11(1)(h)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "csa",
+              "type": "select",
+              "label": "Other critical source areas",
+              "guidance": "FR reg 11(1)(i)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "drainage",
+              "type": "select",
+              "label": "Drainage systems and drained areas",
+              "guidance": "FR reg 11(1)(j)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "irrigation_frost",
+              "type": "select",
+              "label": "Irrigated and frost-protection areas",
+              "guidance": "FR reg 11(1)(k)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            }
+          ],
+          "required": true,
+          "print": {
+            "break_before": true
+          },
+          "satisfies": [
+            "fwfp.r11.1"
+          ]
+        },
+        {
+          "key": "nz.map.farming_features",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: farming features",
+          "guidance": "The farm infrastructure that relates to the risks and actions.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            },
+            {
+              "key": "stock_exclusion_fencing",
+              "type": "select",
+              "label": "Fencing that keeps stock out of waterbodies",
+              "guidance": "FR reg 11(2)(a)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "riparian_planting",
+              "type": "select",
+              "label": "Planted riparian areas",
+              "guidance": "FR reg 11(2)(b)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "erosion_works",
+              "type": "select",
+              "label": "Erosion control plantings or works",
+              "guidance": "FR reg 11(2)(c)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "effluent",
+              "type": "select",
+              "label": "Effluent systems and application areas",
+              "guidance": "FR reg 11(2)(d)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "water_takes",
+              "type": "select",
+              "label": "Bores, surface water takes and intakes (with fish screens)",
+              "guidance": "FR reg 11(2)(e)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "crossings",
+              "type": "select",
+              "label": "Freshwater crossings, formed and unformed",
+              "guidance": "FR reg 11(2)(f)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "stockholding",
+              "type": "select",
+              "label": "Stockholding areas (feed, winter, stand-off and loafing pads)",
+              "guidance": "FR reg 11(2)(g)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "stock_infrastructure",
+              "type": "select",
+              "label": "Other stock infrastructure (dairy shed, barns, yards)",
+              "guidance": "FR reg 11(2)(h)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "accessways",
+              "type": "select",
+              "label": "Farm accessways (roads, tracks, races, underpasses)",
+              "guidance": "FR reg 11(2)(i)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "point_sources",
+              "type": "select",
+              "label": "Rubbish dumps, offal and silage pits, feed stores, agrichemical, fertiliser and fuel stores, washdown areas",
+              "guidance": "FR reg 11(2)(j)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "drinking_water",
+              "type": "select",
+              "label": "Private drinking water supply points",
+              "guidance": "FR reg 11(2)(k)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            }
+          ],
+          "required": true,
+          "print": {
+            "break_before": true
+          },
+          "satisfies": [
+            "fwfp.r11.2"
+          ]
+        },
+        {
+          "key": "nz.map.catchment",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: catchment information",
+          "guidance": "Catchment features from the council's catchment context information that are relevant to this farm. Needed when the council holds relevant catchment context information.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r11.3"
+          ]
+        },
+        {
+          "key": "nz.map.actions",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: new physical works",
+          "guidance": "Where each new physical work in the action plan will go (new fences, plantings, crossings). Needed when the action plan includes new physical works.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            }
+          ],
+          "required": false,
+          "binds": {
+            "actions": true
+          },
+          "satisfies": [
+            "fwfp.r11.4"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.records",
+      "origin": "fwfp-nz",
+      "title": "Certification and audit record",
+      "guidance": "Filled in from what your certifier and auditor give you. Keep it current: it tells anyone reading the plan when it was certified, how the last audit went and when the next one is due.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.records.certification",
+          "kind": "records",
+          "origin": "fwfp-nz",
+          "title": "Certification",
+          "guidance": "Copy these from the certifier's decision. Needed when the plan has been certified.",
+          "fields": [
+            {
+              "key": "certified_on",
+              "type": "date",
+              "label": "Date certified",
+              "required": true
+            },
+            {
+              "key": "certifier_name",
+              "type": "text",
+              "label": "Certifier",
+              "required": true
+            },
+            {
+              "key": "certifier_id",
+              "type": "text",
+              "label": "Certifier identification number",
+              "required": true
+            },
+            {
+              "key": "certifier_coi",
+              "type": "text",
+              "label": "Certifier's conflict of interest declaration",
+              "required": true
+            },
+            {
+              "key": "recertify_by",
+              "type": "date",
+              "label": "Recertification due by",
+              "required": true
+            },
+            {
+              "key": "next_audit_by",
+              "type": "date",
+              "label": "Next audit due by",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r15"
+          ]
+        },
+        {
+          "key": "nz.records.audit",
+          "kind": "records",
+          "origin": "fwfp-nz",
+          "title": "Audits",
+          "guidance": "One entry per audit, copied from the auditor's final report. Needed when the farm has been audited.",
+          "fields": [
+            {
+              "key": "audited_on",
+              "type": "date",
+              "label": "Audit date",
+              "required": true
+            },
+            {
+              "key": "auditor_name",
+              "type": "text",
+              "label": "Auditor",
+              "required": true
+            },
+            {
+              "key": "auditor_id",
+              "type": "text",
+              "label": "Auditor identification number",
+              "required": true
+            },
+            {
+              "key": "auditor_coi",
+              "type": "text",
+              "label": "Auditor's conflict of interest declaration",
+              "required": true
+            },
+            {
+              "key": "grade",
+              "type": "select",
+              "label": "Audit grade",
+              "required": true,
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            {
+              "key": "on_time",
+              "type": "text",
+              "label": "Actions implemented on time",
+              "required": true
+            },
+            {
+              "key": "late",
+              "type": "text",
+              "label": "Actions not implemented on time, and why",
+              "required": true
+            },
+            {
+              "key": "next_audit_by",
+              "type": "date",
+              "label": "Next audit due by",
+              "required": true
+            }
+          ],
+          "required": false,
+          "binds": {
+            "actions": true
+          },
+          "print": {
+            "orientation": "landscape"
+          },
+          "satisfies": [
+            "fwfp.r15",
+            "fwfp.r16",
+            "fwfp.s3"
+          ]
+        },
+        {
+          "key": "nz.records.evidence",
+          "kind": "records",
+          "origin": "fwfp-nz",
+          "title": "Evidence of actions done",
+          "guidance": "Photos, invoices and notes that show each action was done. The regulations do not require you to keep these, but the auditor checks each action was done on time, so this is the easiest way to show it.",
+          "fields": [
+            {
+              "key": "summary",
+              "type": "text",
+              "label": "Where evidence is kept"
+            }
+          ],
+          "required": false,
+          "binds": {
+            "actions": true
+          },
+          "satisfies": [
+            "fwfp.r36"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.part.catchment",
+      "origin": "fwfp-cant",
+      "title": "Canterbury catchment context",
+      "guidance": "Canterbury detail that sits alongside the catchment context: the water zone, the regional plan rules that apply, and Ngāi Tahu values. ECan had not published freshwater farm plan catchment context information when this template was written; until it does, use the zone's implementation programme and the regional plan.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.catchment.zone",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "Water zone and regional plans",
+          "guidance": "The Canterbury Water Management Strategy zone the farm is in, and the regional plans that apply (the Land and Water Regional Plan everywhere; the Hurunui and Waiau River Regional Plan or Waimakariri River Regional Plan as well where they apply).",
+          "fields": [
+            {
+              "key": "zone",
+              "type": "select",
+              "label": "CWMS water zone",
+              "required": true,
+              "options": [
+                "Kaikōura",
+                "Hurunui Waiau Uwha",
+                "Waimakariri",
+                "Christchurch West Melton",
+                "Banks Peninsula",
+                "Selwyn Waihora",
+                "Ashburton",
+                "Orari Temuka Opihi Pareora",
+                "Upper Waitaki",
+                "Lower Waitaki South Coastal Canterbury"
+              ]
+            },
+            {
+              "key": "regional_plans",
+              "type": "text",
+              "label": "Regional plans that apply",
+              "required": true
+            },
+            {
+              "key": "lwrp_sub_region",
+              "type": "text",
+              "label": "LWRP sub-region section"
+            },
+            {
+              "key": "nutrient_zone",
+              "type": "select",
+              "label": "LWRP nutrient allocation zone",
+              "options": [
+                "Red",
+                "Orange",
+                "Lake",
+                "Green/Light Blue",
+                "Not in a mapped zone",
+                "Not checked"
+              ]
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r4",
+            "cant.ctx.zone"
+          ]
+        },
+        {
+          "key": "cant.catchment.zone_outcomes",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "Zone committee outcomes",
+          "guidance": "The zone committee's vision and outcomes for water in this zone, and any targets in its implementation programme.",
+          "fields": [
+            {
+              "key": "outcomes",
+              "type": "text",
+              "label": "Vision and outcomes",
+              "required": true
+            },
+            {
+              "key": "source",
+              "type": "text",
+              "label": "Document referred to"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r4",
+            "cant.ctx.zone"
+          ]
+        },
+        {
+          "key": "cant.catchment.ngai_tahu",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "Ngāi Tahu values",
+          "guidance": "Values, sites and mahinga kai important to the Papatipu Rūnanga for this area, with extracts from the iwi management plan that applies (for example the Mahaanui Iwi Management Plan in central Canterbury).",
+          "fields": [
+            {
+              "key": "runanga",
+              "type": "text",
+              "label": "Papatipu Rūnanga"
+            },
+            {
+              "key": "iwi_plan",
+              "type": "text",
+              "label": "Iwi management plan and sections referred to"
+            },
+            {
+              "key": "values",
+              "type": "text",
+              "label": "Values and how the farm affects them",
+              "required": true
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r4",
+            "cant.ctx.mahinga_kai"
+          ]
+        },
+        {
+          "key": "cant.catchment.ecan_cccv",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "ECan catchment context information",
+          "guidance": "Whether ECan has published catchment context, challenges and values information for this catchment, and the version used.",
+          "fields": [
+            {
+              "key": "published",
+              "type": "boolean",
+              "label": "ECan has published it",
+              "required": true
+            },
+            {
+              "key": "reference",
+              "type": "text",
+              "label": "Title and date of the information used"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r9",
+            "fwfp.r46"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.part.maps",
+      "origin": "fwfp-cant",
+      "title": "Canterbury map layers",
+      "guidance": "Regional plan zones shown on the farm. These are the catchment features most Canterbury certifiers will expect to see.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.map.regional_zones",
+          "kind": "map",
+          "origin": "fwfp-cant",
+          "title": "Map: regional plan zones",
+          "guidance": "Regional plan zones that cross or adjoin the farm.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            },
+            {
+              "key": "nutrient_zone",
+              "type": "select",
+              "label": "LWRP nutrient allocation zone",
+              "guidance": "LWRP planning maps",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "hrrpz",
+              "type": "select",
+              "label": "High Runoff Risk Phosphorus Zone",
+              "guidance": "LWRP planning maps; Sch 7 Pt B 2(g)",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "cdwpz",
+              "type": "select",
+              "label": "Community drinking-water protection zone",
+              "guidance": "LWRP Sch 1 / planning maps",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "clvma",
+              "type": "select",
+              "label": "Cultural Landscape/Values Management Area (Selwyn Te Waihora)",
+              "guidance": "LWRP section 11; Sch 7 item 7.1",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "npa",
+              "type": "select",
+              "label": "Nitrate Priority Area (Waimakariri, PC7)",
+              "guidance": "LWRP section 8 (PC7)",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r11.3"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.part.history",
+      "origin": "fwfp-cant",
+      "title": "Earlier farm environment plans",
+      "guidance": "If the farm had a Farm Environment Plan, its audit history helps the certifier. This part is for reference only.",
+      "switchable": true,
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.records.fep_history",
+          "kind": "table",
+          "origin": "fwfp-cant",
+          "title": "FEP audit history",
+          "guidance": "One row per earlier FEP audit.",
+          "fields": [
+            {
+              "key": "audited_on",
+              "type": "date",
+              "label": "Audit date",
+              "required": true
+            },
+            {
+              "key": "grade",
+              "type": "select",
+              "label": "Grade",
+              "required": true,
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            {
+              "key": "auditor",
+              "type": "text",
+              "label": "Auditor"
+            },
+            {
+              "key": "trigger",
+              "type": "text",
+              "label": "Rule or consent that required the FEP"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "cant.fep.history"
+          ]
+        }
+      ]
+    }
+  ]
+}

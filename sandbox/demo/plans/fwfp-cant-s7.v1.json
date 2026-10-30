@@ -1,0 +1,3819 @@
+{
+  "schema": "plan/1",
+  "family": "fwfp-cant-s7",
+  "version": 1,
+  "title": "Freshwater Farm Plan (Canterbury, with Schedule 7)",
+  "description": "Freshwater Farm Plan (Canterbury, with Schedule 7) (Canterbury (LWRP Schedule 7 kept)), draft as at 2026-10-30. RCL platform template (draft, Claude research agent 30 Oct 2026); needs Josh's content approval (PLANS.md §11). Sources: [FR] Resource Management (Freshwater Farm Plans) Regulations 2023 (SL 2023/113), version as at 26 May 2026 <https://www.legislation.govt.nz/secondary-legislation/pco-drafted/2023/113/en/latest/>; [RMA217E] Resource Management Act 1991 s 217E (as amended 21 August 2025) <https://mail.nzlii.org/nz/legis/consol_act/rma1991200/s217e.html>; [S7a] Canterbury Land and Water Regional Plan, Schedule 7 Farm Environment Plan (printed pp. 435-440), copy hosted by MHV Water <https://mhvwater.nz/images/Schedule_7_LWRP.pdf>; [S7b] Schedule 7 Farm Environment Plan - PC 5 (copy hosted by MHV Water) <https://www.mhvwater.nz/images/Schedule_7_Farm_Environment_Plan.pdf>; [LWRP] Canterbury Land and Water Regional Plan (operative, incl. PC7 from 10 March 2025) <https://www.ecan.govt.nz/your-region/plans-strategies-and-bylaws/canterbury-land-and-water-regional-plan/canterbury-land-and-water-regional-plan>; [ECANAUD] ECan: Information for auditors (Certified FEP Auditor Manual, November 2022) <https://www.ecan.govt.nz/your-region/farmers-hub/farming-plans-and-consenting/farm-environment-plans/information-for-auditors>; [PAC] HDLG/ECan FEP pre-audit check form (two versions, sprint drops) (sprint drop, not in the repository). Before publishing: Objective and target wording is from a secondary copy of LWRP Schedule 7 [S7a]; ECan's operative consolidated plan was not reachable from the sandbox. Plan Change 7 (operative 10 March 2025) amended Schedule 7 (springs added as a receptor; Waimakariri and OTOP nitrogen-reduction additions). Read the operative Schedule 7, correct any wording (notably 5E, which may now name springs), fill cant.s7.sub.waimakariri and cant.s7.sub.otop from it, then publish v2 with this flag removed. Part C sets the auditor and audit criteria only. Grades A-D and audit frequency come from the Certified FEP Auditor Manual (Nov 2022) and consent conditions, not from Schedule 7. Proposed fact types named in binds (risk_significance, fep_audit_grade, fep_audit_loc) do not exist yet; PL8/PL10 add them or bind elsewhere. Part 9A of the RMA has never been applied to Canterbury by Order in Council, so no Canterbury farm has a legal freshwater farm plan duty today; ECan says FEP obligations continue under consents and rules (27 Jan 2026). Crosswalk from fep-cant-s7 v1: Schedule 7 nodes carry unchanged; new input needed for cant.catchment.ecan_cccv, cant.catchment.ngai_tahu, cant.catchment.zone, cant.catchment.zone_outcomes, cant.map.regional_zones, cant.records.fep_history, nz.admin.reliance, nz.catchment.context, nz.catchment.plan_provisions, nz.catchment.regard, nz.catchment.tangata_whenua, nz.map.actions, nz.map.catchment, nz.records.audit, nz.records.certification, nz.records.evidence, nz.risk.method; no longer used: cant.s7.plan.meta.route, cant.s7.plan.meta.approved_template, cant.s7.plan.summary.vision, cant.s7.plan.summary.farm_story, cant.s7.lmu.unit.land_use.",
+  "extends": {
+    "family": "fwfp-cant",
+    "version": 1
+  },
+  "crosswalk_from": [
+    {
+      "family": "fep-cant-s7",
+      "version": 1,
+      "map": {
+        "cant.s7.property.contact": "cant.s7.property.contact",
+        "cant.s7.property.identifier": "cant.s7.property.identifier",
+        "cant.s7.property.responsible": "cant.s7.property.responsible",
+        "cant.s7.nutrient_budget.summary": "cant.s7.nutrient_budget.summary",
+        "cant.s7.nutrient_budget.lmu": "cant.s7.nutrient_budget.lmu",
+        "cant.s7.nutrients.obj1": "cant.s7.nutrients.obj1",
+        "cant.s7.nutrients.t1": "cant.s7.nutrients.t1",
+        "cant.s7.nutrients.t2": "cant.s7.nutrients.t2",
+        "cant.s7.nutrients.t3": "cant.s7.nutrients.t3",
+        "cant.s7.nutrients.t4": "cant.s7.nutrients.t4",
+        "cant.s7.nutrients.t5": "cant.s7.nutrients.t5",
+        "cant.s7.irrigation.obj1": "cant.s7.irrigation.obj1",
+        "cant.s7.irrigation.t1": "cant.s7.irrigation.t1",
+        "cant.s7.irrigation.t2": "cant.s7.irrigation.t2",
+        "cant.s7.irrigation.t3": "cant.s7.irrigation.t3",
+        "cant.s7.irrigation.t4": "cant.s7.irrigation.t4",
+        "cant.s7.soils.obj1": "cant.s7.soils.obj1",
+        "cant.s7.soils.t1": "cant.s7.soils.t1",
+        "cant.s7.soils.t2": "cant.s7.soils.t2",
+        "cant.s7.effluent.obj1": "cant.s7.effluent.obj1",
+        "cant.s7.effluent.t1": "cant.s7.effluent.t1",
+        "cant.s7.effluent.t2": "cant.s7.effluent.t2",
+        "cant.s7.effluent.t3": "cant.s7.effluent.t3",
+        "cant.s7.effluent.t4": "cant.s7.effluent.t4",
+        "cant.s7.waterbodies.obj1": "cant.s7.waterbodies.obj1",
+        "cant.s7.waterbodies.t1": "cant.s7.waterbodies.t1",
+        "cant.s7.waterbodies.t2": "cant.s7.waterbodies.t2",
+        "cant.s7.waterbodies.t3": "cant.s7.waterbodies.t3",
+        "cant.s7.waterbodies.t4": "cant.s7.waterbodies.t4",
+        "cant.s7.point_sources.obj1": "cant.s7.point_sources.obj1",
+        "cant.s7.point_sources.t1": "cant.s7.point_sources.t1",
+        "cant.s7.water_use.obj1": "cant.s7.water_use.obj1",
+        "cant.s7.water_use.t1": "cant.s7.water_use.t1",
+        "cant.s7.sub.selwyn": "cant.s7.sub.selwyn",
+        "cant.s7.sub.hinds": "cant.s7.sub.hinds",
+        "cant.s7.sub.waitaki": "cant.s7.sub.waitaki",
+        "cant.s7.sub.waimakariri": "cant.s7.sub.waimakariri",
+        "cant.s7.sub.otop": "cant.s7.sub.otop",
+        "cant.s7.sub.hurunui_waiau": "cant.s7.sub.hurunui_waiau",
+        "cant.s7.audit.history": "cant.s7.audit.history",
+        "cant.s7.audit.loc": "cant.s7.audit.loc",
+        "cant.s7.audit.actions": "cant.s7.audit.actions",
+        "cant.s7.extra.mahinga_kai": "cant.s7.extra.mahinga_kai",
+        "cant.s7.extra.ghg": "cant.s7.extra.ghg",
+        "cant.s7.plan.meta": {
+          "to": "nz.admin.preparer",
+          "transform": "fields: prepared_by -> preparer_name; organisation -> organisation; prepared_on -> prepared_on; version_label -> version_label | route and approved_template are no longer used (the FWFP replaces the Part A route choice)"
+        },
+        "cant.s7.plan.summary": {
+          "to": "nz.actions.overview",
+          "transform": "fields: summary -> overview | vision and farm_story are not carried (no FWFP node); kept in the FEP issue"
+        },
+        "cant.s7.property.address": "nz.admin.address",
+        "cant.s7.property.owner": {
+          "to": "nz.admin.operator",
+          "transform": "also to nz.admin.other_parties | fields: owner_name -> nz.admin.operator.operator_name; lessee_name -> nz.admin.other_parties.name | a person confirms who the farm operator is (the person with final responsibility; may be the lessee); a lessee becomes an other-parties row with role Leaseholder; contact_phone and contact_email come from cant.s7.property.contact; nzbn needs new input"
+        },
+        "cant.s7.property.legal": {
+          "to": "nz.admin.titles",
+          "transform": "fields: parcel -> parcel; title_ref -> title_ref; tenure -> tenure | title_ref needs input where the FEP gave only a legal description"
+        },
+        "cant.s7.property.areas": {
+          "to": "nz.admin.areas",
+          "transform": "also to nz.admin.land_use | fields: total_area_ha -> nz.admin.areas.total_area_ha; effective_area_ha -> nz.admin.areas.effective_area_ha; leased_area_ha -> nz.admin.areas.leased_area_ha; land_use -> nz.admin.land_use.land_use; stock_summary -> nz.admin.land_use.stock_summary | irrigated_area_ha and winter_grazing_ha stay as facts (bound) and feed the irrigation and winter grazing map layers"
+        },
+        "cant.s7.consents": {
+          "to": "nz.admin.consents",
+          "transform": "fields: consent_number -> consent_number; consent_type -> consent_type; purpose -> purpose; status -> status; expires_on -> expires_on"
+        },
+        "cant.s7.map.property": {
+          "to": "nz.map.vulnerabilities",
+          "transform": "also to nz.map.farming_features, cant.s7.map.extra | layers: boundary -> nz.map.vulnerabilities.boundary; land_units -> nz.map.vulnerabilities.land_units; water -> nz.map.vulnerabilities.natural_water; csa -> nz.map.vulnerabilities.csa; riparian_vegetation -> cant.s7.map.extra.riparian_vegetation; stock_access -> cant.s7.map.extra.stock_access; sig_biodiversity -> cant.s7.map.extra.sig_biodiversity; hrrpz -> cant.s7.map.extra.hrrpz; flood_assets -> cant.s7.map.extra.flood_assets; access_routes -> cant.s7.map.extra.access_routes | Schedule 7 'water' splits into natural and artificial waterbodies: a person assigns drains and ponds to artificial_water"
+        },
+        "cant.s7.lmu.unit": {
+          "to": "nz.land_units.unit",
+          "transform": "fields: code -> code; name -> name; area_ha -> area_ha; description -> description; soils -> soils; irrigated -> irrigated | land_use is not carried; drained needs input"
+        },
+        "cant.s7.lmu.vulnerability": {
+          "to": "nz.land_units.vulnerability",
+          "transform": "fields: waterlogging -> waterlogging; p_sediment_runoff -> p_sediment_runoff; n_leaching -> n_leaching; structural -> structural; erosion -> erosion; other -> other | blank or 'Not stated' values become new input because the four core vulnerabilities are required in the FWFP"
+        },
+        "cant.s7.risk.assessment": {
+          "to": "nz.risk.significance",
+          "transform": "also to nz.risk.activity | fields: risk_label -> nz.risk.significance.risk_label; land_unit -> nz.risk.significance.land_unit; significance -> nz.risk.significance.significance; management_area -> nz.risk.significance.management_area; activity -> nz.risk.activity.activities | each rating pre-fills as the FEP author's prior assessment (assessed_by = FEP preparer, assessed_on = FEP date), shown for the new assessor to confirm or replace; Schedule 7 management areas map to activity groups: Nutrients->Nutrients, Irrigation->Irrigation, Cultivation and soil structure->Land and soil, Animal effluent->Animal effluent, Waterbodies->Waterways and wetlands, Point sources->Point sources, Water use->Other farming activity"
+        },
+        "cant.s7.actions": {
+          "to": "nz.actions.table",
+          "transform": "fields: action -> action; land_units -> land_units; timeframe -> timeframe; due_on -> due_on; existing_or_new -> existing_or_new; category -> category; target_ref -> s7_target; records -> records; management_area -> management_area | management_area maps as for the risk assessment; category carries when the FEP gave Regulated/Catchment/Supplementary, otherwise new input; risk_addressed and activity are new input unless the FEP row had them; existing_or_new defaults to Existing for actions marked done"
+        },
+        "cant.s7.nutrients": "cant.s7.nutrients",
+        "cant.s7.irrigation": "cant.s7.irrigation",
+        "cant.s7.soils": "cant.s7.soils",
+        "cant.s7.effluent": "cant.s7.effluent",
+        "cant.s7.waterbodies": "cant.s7.waterbodies",
+        "cant.s7.point_sources": "cant.s7.point_sources",
+        "cant.s7.water_use": "cant.s7.water_use"
+      }
+    }
+  ],
+  "parts": [
+    {
+      "key": "nz.part.about",
+      "origin": "fwfp-nz",
+      "title": "About this plan and the farm",
+      "guidance": "The basic facts about who runs the farm, where it is and what consents it holds. A certifier checks every item here, so leave nothing blank: write 'none' where something does not apply.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.admin.operator",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Farm operator",
+          "guidance": "The farm operator is the person or business with final responsibility for running the farm (often the owner, sometimes a lessee or sharemilker company). Give the NZ Business Number if the business has one.",
+          "fields": [
+            {
+              "key": "operator_name",
+              "type": "text",
+              "label": "Operator name",
+              "required": true
+            },
+            {
+              "key": "contact_phone",
+              "type": "text",
+              "label": "Phone",
+              "required": true
+            },
+            {
+              "key": "contact_email",
+              "type": "text",
+              "label": "Email",
+              "required": true
+            },
+            {
+              "key": "nzbn",
+              "type": "text",
+              "label": "NZ Business Number (if any)"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.a",
+            "rma.s217E.1",
+            "s7.B.1b"
+          ]
+        },
+        {
+          "key": "nz.admin.other_parties",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Other owners, leaseholders and licence holders",
+          "guidance": "Anyone else who owns, leases or holds a licence over land in this farm. Add a row for each. Needed when anyone other than the operator owns, leases or licenses land in the farm.",
+          "fields": [
+            {
+              "key": "name",
+              "type": "text",
+              "label": "Name",
+              "required": true
+            },
+            {
+              "key": "role",
+              "type": "select",
+              "label": "Role",
+              "required": true,
+              "options": [
+                "Owner",
+                "Leaseholder",
+                "Licence holder"
+              ]
+            },
+            {
+              "key": "contact",
+              "type": "text",
+              "label": "Contact details",
+              "required": true
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r13.b"
+          ]
+        },
+        {
+          "key": "nz.admin.preparer",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Plan prepared by",
+          "guidance": "Who wrote this plan and when. If you wrote it yourself, put your own name.",
+          "fields": [
+            {
+              "key": "preparer_name",
+              "type": "text",
+              "label": "Prepared by",
+              "required": true
+            },
+            {
+              "key": "organisation",
+              "type": "text",
+              "label": "Organisation"
+            },
+            {
+              "key": "prepared_on",
+              "type": "date",
+              "label": "Date prepared",
+              "required": true
+            },
+            {
+              "key": "version_label",
+              "type": "text",
+              "label": "Version (e.g. Draft, Final)"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.c"
+          ]
+        },
+        {
+          "key": "nz.admin.address",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Physical address",
+          "guidance": "The farm's road address (the one a certifier or auditor would drive to).",
+          "fields": [
+            {
+              "key": "property_name",
+              "type": "text",
+              "label": "Property name"
+            },
+            {
+              "key": "physical_address",
+              "type": "text",
+              "label": "Physical address",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.d",
+            "s7.B.1a"
+          ]
+        },
+        {
+          "key": "nz.admin.titles",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Land titles and parcels",
+          "guidance": "Every record of title and legal parcel the farm is made up of, including leased or licensed land. Copy them from LINZ titles.",
+          "fields": [
+            {
+              "key": "title_ref",
+              "type": "text",
+              "label": "Record of title",
+              "required": true
+            },
+            {
+              "key": "parcel",
+              "type": "text",
+              "label": "Legal description (parcel)",
+              "required": true
+            },
+            {
+              "key": "tenure",
+              "type": "select",
+              "label": "Owned or leased",
+              "required": true,
+              "options": [
+                "Owned",
+                "Leased",
+                "Licensed"
+              ]
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.e",
+            "s7.B.1c.legal"
+          ]
+        },
+        {
+          "key": "nz.admin.areas",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Farm area",
+          "guidance": "Total area of the farm in hectares, and how much of it is leased or licensed.",
+          "fields": [
+            {
+              "key": "total_area_ha",
+              "type": "number",
+              "label": "Total farm area",
+              "required": true,
+              "unit": "ha"
+            },
+            {
+              "key": "leased_area_ha",
+              "type": "number",
+              "label": "Leased or licensed area",
+              "unit": "ha"
+            },
+            {
+              "key": "effective_area_ha",
+              "type": "number",
+              "label": "Effective (grazable or cropped) area",
+              "unit": "ha"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.f",
+            "fwfp.r13.g"
+          ]
+        },
+        {
+          "key": "nz.admin.land_use",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Land use",
+          "guidance": "What the farm is used for, e.g. 'Sheep and beef with dairy grazing' or 'Dairy, 450 cows'. List each land use if there are several.",
+          "fields": [
+            {
+              "key": "land_use",
+              "type": "text",
+              "label": "Land use",
+              "required": true
+            },
+            {
+              "key": "dairy_supply_number",
+              "type": "text",
+              "label": "Dairy supply number (if any)"
+            },
+            {
+              "key": "stock_summary",
+              "type": "text",
+              "label": "Stock carried (summary)"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.i"
+          ]
+        },
+        {
+          "key": "nz.admin.consents",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Current resource consents",
+          "guidance": "Each current resource consent that relates to farming on this land: water takes, discharges, land use. Give the consent number as the council writes it. Schedule 7: list every ECan consent held for the property, not only those about farming effects.",
+          "fields": [
+            {
+              "key": "consent_number",
+              "type": "text",
+              "label": "Consent number",
+              "required": true
+            },
+            {
+              "key": "consent_type",
+              "type": "select",
+              "label": "Type",
+              "required": true,
+              "options": [
+                "Water permit",
+                "Discharge permit",
+                "Land use consent",
+                "Other"
+              ]
+            },
+            {
+              "key": "purpose",
+              "type": "text",
+              "label": "What it is for",
+              "required": true
+            },
+            {
+              "key": "status",
+              "type": "text",
+              "label": "Status (e.g. Issued - Active)"
+            },
+            {
+              "key": "expires_on",
+              "type": "date",
+              "label": "Expiry date"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r13.h",
+            "s7.B.3"
+          ]
+        },
+        {
+          "key": "nz.admin.reliance",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Other rules this plan is used to meet",
+          "guidance": "If a rule or national standard lets a certified farm plan stand in for another requirement (for example the stock exclusion or winter grazing rules), and you intend to rely on that, name the requirement here. Needed when the operator intends to rely on the certified plan to meet another requirement.",
+          "fields": [
+            {
+              "key": "requirement",
+              "type": "text",
+              "label": "Requirement",
+              "required": true
+            },
+            {
+              "key": "instrument",
+              "type": "text",
+              "label": "Rule or regulation it comes from",
+              "required": true
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r14"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.land_units",
+      "origin": "fwfp-nz",
+      "title": "Land units and their inherent vulnerabilities",
+      "guidance": "Split the farm into land units: areas with similar soils, slope and drainage. For each one say how naturally vulnerable it is to losing contaminants to water, before thinking about how it is farmed.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.land_units.unit",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Land unit",
+          "guidance": "Give the land unit a short code and name (LU1 - Irrigated light soils), its area, and a description of its soils, slope, drainage and whether it is irrigated. A land unit can be in more than one piece.",
+          "fields": [
+            {
+              "key": "code",
+              "type": "text",
+              "label": "Code (e.g. LU1)",
+              "required": true
+            },
+            {
+              "key": "name",
+              "type": "text",
+              "label": "Name",
+              "required": true
+            },
+            {
+              "key": "area_ha",
+              "type": "number",
+              "label": "Area",
+              "required": true,
+              "unit": "ha"
+            },
+            {
+              "key": "description",
+              "type": "text",
+              "label": "Description",
+              "required": true
+            },
+            {
+              "key": "soils",
+              "type": "text",
+              "label": "Main soils"
+            },
+            {
+              "key": "irrigated",
+              "type": "boolean",
+              "label": "Irrigated"
+            },
+            {
+              "key": "drained",
+              "type": "boolean",
+              "label": "Artificially drained"
+            }
+          ],
+          "required": true,
+          "repeat": "lmu",
+          "binds": {
+            "places": "land_unit"
+          },
+          "satisfies": [
+            "fwfp.r8.1a",
+            "s7.B.2b",
+            "s7.B.6"
+          ]
+        },
+        {
+          "key": "nz.land_units.vulnerability",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Inherent vulnerabilities",
+          "guidance": "How vulnerable this land unit is, by nature, to each pathway. Use the same scale for every land unit. Add anything else that matters here, such as erosion-prone slopes or a high water table.",
+          "fields": [
+            {
+              "key": "waterlogging",
+              "type": "select",
+              "label": "Waterlogging",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "p_sediment_runoff",
+              "type": "select",
+              "label": "Phosphorus and sediment runoff",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "n_leaching",
+              "type": "select",
+              "label": "Nitrogen leaching",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "structural",
+              "type": "select",
+              "label": "Soil structural damage",
+              "required": true,
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "erosion",
+              "type": "select",
+              "label": "Erosion",
+              "options": [
+                "Very low",
+                "Low",
+                "Low to moderate",
+                "Moderate",
+                "Moderate to high",
+                "High",
+                "Very high",
+                "Not stated"
+              ]
+            },
+            {
+              "key": "other",
+              "type": "text",
+              "label": "Other inherent vulnerabilities"
+            }
+          ],
+          "required": true,
+          "repeat": "lmu",
+          "binds": {
+            "fact_type": "inherent_vulnerability"
+          },
+          "satisfies": [
+            "fwfp.r8.1b.i"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.catchment",
+      "origin": "fwfp-nz",
+      "title": "Catchment context, challenges and values",
+      "guidance": "What the regional council says matters in your catchment: the state of its water, what tangata whenua value, and the plan objectives that apply. Your plan has to show it has taken this into account. If the council has not published this information yet, say so.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.catchment.context",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "The catchment and its water",
+          "guidance": "Name the catchment or freshwater management unit and summarise the condition of its rivers, lakes, wetlands and groundwater, and the main contaminants of concern downstream of the farm.",
+          "fields": [
+            {
+              "key": "council_info_available",
+              "type": "boolean",
+              "label": "Council has published catchment context information",
+              "required": true
+            },
+            {
+              "key": "catchment_name",
+              "type": "text",
+              "label": "Catchment or freshwater management unit",
+              "required": true
+            },
+            {
+              "key": "summary",
+              "type": "text",
+              "label": "Condition and main challenges",
+              "required": true
+            },
+            {
+              "key": "receiving_environment",
+              "type": "text",
+              "label": "Where water from the farm ends up"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r9",
+            "fwfp.r4"
+          ]
+        },
+        {
+          "key": "nz.catchment.tangata_whenua",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Tangata whenua values",
+          "guidance": "Values, sites and species important to tangata whenua in the catchment, including traditional names for waterbodies, from the council's information and any iwi management plan lodged with the council. Needed when council catchment context information is available.",
+          "fields": [
+            {
+              "key": "values",
+              "type": "text",
+              "label": "Values, sites and species",
+              "required": true
+            },
+            {
+              "key": "iwi_plan",
+              "type": "text",
+              "label": "Iwi management plan referred to"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r4"
+          ]
+        },
+        {
+          "key": "nz.catchment.plan_provisions",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Plan objectives and limits that apply",
+          "guidance": "The regional plan objectives, limits and any council action plan that apply to this catchment.",
+          "fields": [
+            {
+              "key": "provisions",
+              "type": "text",
+              "label": "Objectives, limits and action plans",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r4"
+          ]
+        },
+        {
+          "key": "nz.catchment.regard",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "How this plan responds",
+          "guidance": "In a few sentences, how your actions respond to the catchment's challenges (for example: 'fencing and planting the stream reduces sediment, the catchment's main issue'). Actions that respond directly to catchment values are 'Catchment' actions in the action plan.",
+          "fields": [
+            {
+              "key": "response",
+              "type": "text",
+              "label": "How the plan has regard to the catchment",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r9"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.risks",
+      "origin": "fwfp-nz",
+      "title": "Farming activities and risks to freshwater",
+      "guidance": "For each activity on the farm, what could go wrong for water and how serious it is on each land unit. Forestry, packhouses and processing sites, houses and commercial buildings, and visitor accommodation do not need assessing.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.risk.activity",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Activity and its risks",
+          "guidance": "Describe the activity (e.g. 'Cultivation for winter crop') and each way it could harm freshwater (the pathway: sediment runoff, nitrogen leaching, direct stock access).",
+          "fields": [
+            {
+              "key": "management_area",
+              "type": "select",
+              "label": "Activity group",
+              "required": true,
+              "options": [
+                "Land and soil",
+                "Waterways and wetlands",
+                "Nutrients",
+                "Irrigation",
+                "Animal effluent",
+                "Point sources",
+                "Intensive winter grazing",
+                "Other farming activity"
+              ]
+            },
+            {
+              "key": "activities",
+              "type": "text",
+              "label": "Activities",
+              "required": true
+            },
+            {
+              "key": "description",
+              "type": "text",
+              "label": "How the activity is carried out",
+              "required": true
+            },
+            {
+              "key": "risks",
+              "type": "text",
+              "label": "Risks to freshwater",
+              "required": true
+            }
+          ],
+          "required": true,
+          "repeat": "management_area",
+          "satisfies": [
+            "fwfp.r8.1b.ii",
+            "fwfp.r12"
+          ]
+        },
+        {
+          "key": "nz.risk.significance",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Significance of each risk by land unit",
+          "guidance": "Rate each risk on each land unit as Minor, Moderate or Major (or Not applicable). The rating weighs the land unit's inherent vulnerability against how intensively it is farmed. Higher ratings need stronger or sooner actions. Schedule 7: make sure irrigation, nutrient and effluent application, stock exclusion from waterways, and offal and rubbish pits are all covered. Must cover: irrigation, nutrient application, effluent application, stock exclusion from waterways, offal pits, farm rubbish pits.",
+          "fields": [
+            {
+              "key": "risk_label",
+              "type": "text",
+              "label": "Risk (activity - pathway)",
+              "required": true
+            },
+            {
+              "key": "management_area",
+              "type": "select",
+              "label": "Activity group",
+              "required": true,
+              "options": [
+                "Land and soil",
+                "Waterways and wetlands",
+                "Nutrients",
+                "Irrigation",
+                "Animal effluent",
+                "Point sources",
+                "Intensive winter grazing",
+                "Other farming activity"
+              ]
+            },
+            {
+              "key": "land_unit",
+              "type": "text",
+              "label": "Land unit code",
+              "required": true
+            },
+            {
+              "key": "significance",
+              "type": "select",
+              "label": "Significance",
+              "required": true,
+              "options": [
+                "Minor",
+                "Moderate",
+                "Major",
+                "Not applicable"
+              ]
+            },
+            {
+              "key": "assessed_by",
+              "type": "text",
+              "label": "Assessed by"
+            },
+            {
+              "key": "assessed_on",
+              "type": "date",
+              "label": "Assessed on"
+            }
+          ],
+          "required": true,
+          "print": {
+            "orientation": "landscape"
+          },
+          "satisfies": [
+            "fwfp.r8.3a",
+            "fwfp.r8.1b.ii",
+            "s7.B.4A"
+          ]
+        },
+        {
+          "key": "nz.risk.method",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "How risks were assessed",
+          "guidance": "A short note on the method used to rate the risks (for example a vulnerability-by-intensity matrix).",
+          "fields": [
+            {
+              "key": "method",
+              "type": "text",
+              "label": "Method"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r8.3a"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.actions",
+      "origin": "fwfp-nz",
+      "title": "Action plan",
+      "guidance": "What you already do and what you will do to look after water, when each new thing will be done, and which land units it covers. An auditor checks that each action was done by its date, so set dates you can meet.",
+      "print": {
+        "break_before": true,
+        "orientation": "landscape"
+      },
+      "nodes": [
+        {
+          "key": "nz.actions.overview",
+          "kind": "item",
+          "origin": "fwfp-nz",
+          "title": "Action plan overview",
+          "guidance": "A short summary of the main actions and why they were chosen.",
+          "fields": [
+            {
+              "key": "overview",
+              "type": "text",
+              "label": "Overview"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r10.1"
+          ]
+        },
+        {
+          "key": "nz.actions.table",
+          "kind": "table",
+          "origin": "fwfp-nz",
+          "title": "Action table",
+          "guidance": "One row per action. 'Existing' means you already do it; 'New' means you will start it within the next five years. Category: Regulated (needed to meet a rule, consent or regulation), Catchment (responds to the catchment's challenges and values), or Supplementary (anything else that reduces a risk).",
+          "fields": [
+            {
+              "key": "management_area",
+              "type": "select",
+              "label": "Activity group",
+              "required": true,
+              "options": [
+                "Land and soil",
+                "Waterways and wetlands",
+                "Nutrients",
+                "Irrigation",
+                "Animal effluent",
+                "Point sources",
+                "Intensive winter grazing",
+                "Other farming activity"
+              ]
+            },
+            {
+              "key": "activity",
+              "type": "text",
+              "label": "Activity",
+              "required": true
+            },
+            {
+              "key": "risk_addressed",
+              "type": "text",
+              "label": "Risk it addresses",
+              "required": true
+            },
+            {
+              "key": "land_units",
+              "type": "text",
+              "label": "Land units (e.g. 1, 2, 3)",
+              "required": true
+            },
+            {
+              "key": "action",
+              "type": "text",
+              "label": "Action",
+              "required": true
+            },
+            {
+              "key": "how_addresses_risk",
+              "type": "text",
+              "label": "How it reduces the risk"
+            },
+            {
+              "key": "category",
+              "type": "select",
+              "label": "Category",
+              "required": true,
+              "options": [
+                "Regulated",
+                "Catchment",
+                "Supplementary"
+              ]
+            },
+            {
+              "key": "existing_or_new",
+              "type": "select",
+              "label": "Existing or new",
+              "required": true,
+              "options": [
+                "Existing",
+                "New"
+              ]
+            },
+            {
+              "key": "timeframe",
+              "type": "text",
+              "label": "Timeframe (e.g. On-going, by 1 March 2027)",
+              "required": true
+            },
+            {
+              "key": "due_on",
+              "type": "date",
+              "label": "Due date"
+            },
+            {
+              "key": "instrument_ref",
+              "type": "text",
+              "label": "Rule or consent condition (Regulated actions)"
+            },
+            {
+              "key": "s7_target",
+              "type": "text",
+              "label": "Schedule 7 target served (e.g. 5B T2)"
+            },
+            {
+              "key": "records",
+              "type": "text",
+              "label": "Records that will show it is done"
+            }
+          ],
+          "required": true,
+          "binds": {
+            "actions": true
+          },
+          "print": {
+            "orientation": "landscape",
+            "break_before": true
+          },
+          "satisfies": [
+            "fwfp.r8.2a",
+            "fwfp.r8.2b",
+            "fwfp.r10.2a",
+            "fwfp.r10.2b",
+            "fwfp.r10.2c",
+            "fwfp.r10.2d",
+            "fwfp.r10.2e",
+            "fwfp.r10.3",
+            "fwfp.r30",
+            "s7.B.5.actions"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.maps",
+      "origin": "fwfp-nz",
+      "title": "Maps",
+      "guidance": "The regulations list what the maps must show. Several items can share one map. Mark 'none on this farm' for anything that is not present rather than leaving it off.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.map.vulnerabilities",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: farm, land units and inherent vulnerabilities",
+          "guidance": "Boundaries, land units, water and the natural features behind each land unit's vulnerabilities.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            },
+            {
+              "key": "boundary",
+              "type": "select",
+              "label": "Farm boundary, showing leased or licensed land",
+              "guidance": "FR reg 11(1)(a)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "land_use_areas",
+              "type": "select",
+              "label": "Land use areas (where uses are clearly distinct)",
+              "guidance": "FR reg 11(1)(b)",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "land_units",
+              "type": "select",
+              "label": "Land units",
+              "guidance": "FR reg 11(1)(c)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "natural_water",
+              "type": "select",
+              "label": "Natural waterbodies (rivers, streams, lakes, wetlands)",
+              "guidance": "FR reg 11(1)(d)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "artificial_water",
+              "type": "select",
+              "label": "Artificial waterbodies (drains, races, ponds)",
+              "guidance": "FR reg 11(1)(e)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "soils",
+              "type": "select",
+              "label": "Soil types",
+              "guidance": "FR reg 11(1)(f)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "landform_slope",
+              "type": "select",
+              "label": "Landform, including slope",
+              "guidance": "FR reg 11(1)(g)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "iwg_areas",
+              "type": "select",
+              "label": "Potential intensive winter grazing areas and their critical source areas",
+              "guidance": "FR reg 11(1)(h)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "csa",
+              "type": "select",
+              "label": "Other critical source areas",
+              "guidance": "FR reg 11(1)(i)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "drainage",
+              "type": "select",
+              "label": "Drainage systems and drained areas",
+              "guidance": "FR reg 11(1)(j)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "irrigation_frost",
+              "type": "select",
+              "label": "Irrigated and frost-protection areas",
+              "guidance": "FR reg 11(1)(k)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            }
+          ],
+          "required": true,
+          "print": {
+            "break_before": true
+          },
+          "satisfies": [
+            "fwfp.r11.1",
+            "s7.B.2a",
+            "s7.B.2b",
+            "s7.B.2c",
+            "s7.B.2g"
+          ]
+        },
+        {
+          "key": "nz.map.farming_features",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: farming features",
+          "guidance": "The farm infrastructure that relates to the risks and actions.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            },
+            {
+              "key": "stock_exclusion_fencing",
+              "type": "select",
+              "label": "Fencing that keeps stock out of waterbodies",
+              "guidance": "FR reg 11(2)(a)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "riparian_planting",
+              "type": "select",
+              "label": "Planted riparian areas",
+              "guidance": "FR reg 11(2)(b)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "erosion_works",
+              "type": "select",
+              "label": "Erosion control plantings or works",
+              "guidance": "FR reg 11(2)(c)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "effluent",
+              "type": "select",
+              "label": "Effluent systems and application areas",
+              "guidance": "FR reg 11(2)(d)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "water_takes",
+              "type": "select",
+              "label": "Bores, surface water takes and intakes (with fish screens)",
+              "guidance": "FR reg 11(2)(e)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "crossings",
+              "type": "select",
+              "label": "Freshwater crossings, formed and unformed",
+              "guidance": "FR reg 11(2)(f)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "stockholding",
+              "type": "select",
+              "label": "Stockholding areas (feed, winter, stand-off and loafing pads)",
+              "guidance": "FR reg 11(2)(g)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "stock_infrastructure",
+              "type": "select",
+              "label": "Other stock infrastructure (dairy shed, barns, yards)",
+              "guidance": "FR reg 11(2)(h)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "accessways",
+              "type": "select",
+              "label": "Farm accessways (roads, tracks, races, underpasses)",
+              "guidance": "FR reg 11(2)(i)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "point_sources",
+              "type": "select",
+              "label": "Rubbish dumps, offal and silage pits, feed stores, agrichemical, fertiliser and fuel stores, washdown areas",
+              "guidance": "FR reg 11(2)(j)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "drinking_water",
+              "type": "select",
+              "label": "Private drinking water supply points",
+              "guidance": "FR reg 11(2)(k)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            }
+          ],
+          "required": true,
+          "print": {
+            "break_before": true
+          },
+          "satisfies": [
+            "fwfp.r11.2",
+            "s7.B.2d",
+            "s7.B.2e"
+          ]
+        },
+        {
+          "key": "nz.map.catchment",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: catchment information",
+          "guidance": "Catchment features from the council's catchment context information that are relevant to this farm. Needed when the council holds relevant catchment context information.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r11.3"
+          ]
+        },
+        {
+          "key": "nz.map.actions",
+          "kind": "map",
+          "origin": "fwfp-nz",
+          "title": "Map: new physical works",
+          "guidance": "Where each new physical work in the action plan will go (new fences, plantings, crossings). Needed when the action plan includes new physical works.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            }
+          ],
+          "required": false,
+          "binds": {
+            "actions": true
+          },
+          "satisfies": [
+            "fwfp.r11.4"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "nz.part.records",
+      "origin": "fwfp-nz",
+      "title": "Certification and audit record",
+      "guidance": "Filled in from what your certifier and auditor give you. Keep it current: it tells anyone reading the plan when it was certified, how the last audit went and when the next one is due.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "nz.records.certification",
+          "kind": "records",
+          "origin": "fwfp-nz",
+          "title": "Certification",
+          "guidance": "Copy these from the certifier's decision. Needed when the plan has been certified.",
+          "fields": [
+            {
+              "key": "certified_on",
+              "type": "date",
+              "label": "Date certified",
+              "required": true
+            },
+            {
+              "key": "certifier_name",
+              "type": "text",
+              "label": "Certifier",
+              "required": true
+            },
+            {
+              "key": "certifier_id",
+              "type": "text",
+              "label": "Certifier identification number",
+              "required": true
+            },
+            {
+              "key": "certifier_coi",
+              "type": "text",
+              "label": "Certifier's conflict of interest declaration",
+              "required": true
+            },
+            {
+              "key": "recertify_by",
+              "type": "date",
+              "label": "Recertification due by",
+              "required": true
+            },
+            {
+              "key": "next_audit_by",
+              "type": "date",
+              "label": "Next audit due by",
+              "required": true
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r15"
+          ]
+        },
+        {
+          "key": "nz.records.audit",
+          "kind": "records",
+          "origin": "fwfp-nz",
+          "title": "Audits",
+          "guidance": "One entry per audit, copied from the auditor's final report. Needed when the farm has been audited.",
+          "fields": [
+            {
+              "key": "audited_on",
+              "type": "date",
+              "label": "Audit date",
+              "required": true
+            },
+            {
+              "key": "auditor_name",
+              "type": "text",
+              "label": "Auditor",
+              "required": true
+            },
+            {
+              "key": "auditor_id",
+              "type": "text",
+              "label": "Auditor identification number",
+              "required": true
+            },
+            {
+              "key": "auditor_coi",
+              "type": "text",
+              "label": "Auditor's conflict of interest declaration",
+              "required": true
+            },
+            {
+              "key": "grade",
+              "type": "select",
+              "label": "Audit grade",
+              "required": true,
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            {
+              "key": "on_time",
+              "type": "text",
+              "label": "Actions implemented on time",
+              "required": true
+            },
+            {
+              "key": "late",
+              "type": "text",
+              "label": "Actions not implemented on time, and why",
+              "required": true
+            },
+            {
+              "key": "next_audit_by",
+              "type": "date",
+              "label": "Next audit due by",
+              "required": true
+            }
+          ],
+          "required": false,
+          "binds": {
+            "actions": true
+          },
+          "print": {
+            "orientation": "landscape"
+          },
+          "satisfies": [
+            "fwfp.r15",
+            "fwfp.r16",
+            "fwfp.s3"
+          ]
+        },
+        {
+          "key": "nz.records.evidence",
+          "kind": "records",
+          "origin": "fwfp-nz",
+          "title": "Evidence of actions done",
+          "guidance": "Photos, invoices and notes that show each action was done. The regulations do not require you to keep these, but the auditor checks each action was done on time, so this is the easiest way to show it.",
+          "fields": [
+            {
+              "key": "summary",
+              "type": "text",
+              "label": "Where evidence is kept"
+            }
+          ],
+          "required": false,
+          "binds": {
+            "actions": true
+          },
+          "satisfies": [
+            "fwfp.r36"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.part.catchment",
+      "origin": "fwfp-cant",
+      "title": "Canterbury catchment context",
+      "guidance": "Canterbury detail that sits alongside the catchment context: the water zone, the regional plan rules that apply, and Ngāi Tahu values. ECan had not published freshwater farm plan catchment context information when this template was written; until it does, use the zone's implementation programme and the regional plan.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.catchment.zone",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "Water zone and regional plans",
+          "guidance": "The Canterbury Water Management Strategy zone the farm is in, and the regional plans that apply (the Land and Water Regional Plan everywhere; the Hurunui and Waiau River Regional Plan or Waimakariri River Regional Plan as well where they apply).",
+          "fields": [
+            {
+              "key": "zone",
+              "type": "select",
+              "label": "CWMS water zone",
+              "required": true,
+              "options": [
+                "Kaikōura",
+                "Hurunui Waiau Uwha",
+                "Waimakariri",
+                "Christchurch West Melton",
+                "Banks Peninsula",
+                "Selwyn Waihora",
+                "Ashburton",
+                "Orari Temuka Opihi Pareora",
+                "Upper Waitaki",
+                "Lower Waitaki South Coastal Canterbury"
+              ]
+            },
+            {
+              "key": "regional_plans",
+              "type": "text",
+              "label": "Regional plans that apply",
+              "required": true
+            },
+            {
+              "key": "lwrp_sub_region",
+              "type": "text",
+              "label": "LWRP sub-region section"
+            },
+            {
+              "key": "nutrient_zone",
+              "type": "select",
+              "label": "LWRP nutrient allocation zone",
+              "options": [
+                "Red",
+                "Orange",
+                "Lake",
+                "Green/Light Blue",
+                "Not in a mapped zone",
+                "Not checked"
+              ]
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r4",
+            "cant.ctx.zone"
+          ]
+        },
+        {
+          "key": "cant.catchment.zone_outcomes",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "Zone committee outcomes",
+          "guidance": "The zone committee's vision and outcomes for water in this zone, and any targets in its implementation programme.",
+          "fields": [
+            {
+              "key": "outcomes",
+              "type": "text",
+              "label": "Vision and outcomes",
+              "required": true
+            },
+            {
+              "key": "source",
+              "type": "text",
+              "label": "Document referred to"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r4",
+            "cant.ctx.zone"
+          ]
+        },
+        {
+          "key": "cant.catchment.ngai_tahu",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "Ngāi Tahu values",
+          "guidance": "Values, sites and mahinga kai important to the Papatipu Rūnanga for this area, with extracts from the iwi management plan that applies (for example the Mahaanui Iwi Management Plan in central Canterbury).",
+          "fields": [
+            {
+              "key": "runanga",
+              "type": "text",
+              "label": "Papatipu Rūnanga"
+            },
+            {
+              "key": "iwi_plan",
+              "type": "text",
+              "label": "Iwi management plan and sections referred to"
+            },
+            {
+              "key": "values",
+              "type": "text",
+              "label": "Values and how the farm affects them",
+              "required": true
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r4",
+            "cant.ctx.mahinga_kai"
+          ]
+        },
+        {
+          "key": "cant.catchment.ecan_cccv",
+          "kind": "item",
+          "origin": "fwfp-cant",
+          "title": "ECan catchment context information",
+          "guidance": "Whether ECan has published catchment context, challenges and values information for this catchment, and the version used.",
+          "fields": [
+            {
+              "key": "published",
+              "type": "boolean",
+              "label": "ECan has published it",
+              "required": true
+            },
+            {
+              "key": "reference",
+              "type": "text",
+              "label": "Title and date of the information used"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "fwfp.r9",
+            "fwfp.r46"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.part.maps",
+      "origin": "fwfp-cant",
+      "title": "Canterbury map layers",
+      "guidance": "Regional plan zones shown on the farm. These are the catchment features most Canterbury certifiers will expect to see.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.map.regional_zones",
+          "kind": "map",
+          "origin": "fwfp-cant",
+          "title": "Map: regional plan zones",
+          "guidance": "Regional plan zones that cross or adjoin the farm.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            },
+            {
+              "key": "nutrient_zone",
+              "type": "select",
+              "label": "LWRP nutrient allocation zone",
+              "guidance": "LWRP planning maps",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "hrrpz",
+              "type": "select",
+              "label": "High Runoff Risk Phosphorus Zone",
+              "guidance": "LWRP planning maps; Sch 7 Pt B 2(g)",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "cdwpz",
+              "type": "select",
+              "label": "Community drinking-water protection zone",
+              "guidance": "LWRP Sch 1 / planning maps",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "clvma",
+              "type": "select",
+              "label": "Cultural Landscape/Values Management Area (Selwyn Te Waihora)",
+              "guidance": "LWRP section 11; Sch 7 item 7.1",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "npa",
+              "type": "select",
+              "label": "Nitrate Priority Area (Waimakariri, PC7)",
+              "guidance": "LWRP section 8 (PC7)",
+              "required": false,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "fwfp.r11.3"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.part.history",
+      "origin": "fwfp-cant",
+      "title": "Earlier farm environment plans",
+      "guidance": "If the farm had a Farm Environment Plan, its audit history helps the certifier. This part is for reference only.",
+      "switchable": true,
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.records.fep_history",
+          "kind": "table",
+          "origin": "fwfp-cant",
+          "title": "FEP audit history",
+          "guidance": "One row per earlier FEP audit.",
+          "fields": [
+            {
+              "key": "audited_on",
+              "type": "date",
+              "label": "Audit date",
+              "required": true
+            },
+            {
+              "key": "grade",
+              "type": "select",
+              "label": "Grade",
+              "required": true,
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            {
+              "key": "auditor",
+              "type": "text",
+              "label": "Auditor"
+            },
+            {
+              "key": "trigger",
+              "type": "text",
+              "label": "Rule or consent that required the FEP"
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "cant.fep.history"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.s7.part.property_extra",
+      "origin": "fwfp-cant-s7",
+      "title": "Schedule 7 property details",
+      "guidance": "The Schedule 7 property details that the national part does not already ask for.",
+      "print": {
+        "break_before": false,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.s7.property.contact",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Contact person",
+          "guidance": "The named person ECan and the auditor contact about this plan.",
+          "fields": [
+            {
+              "key": "contact_person",
+              "type": "text",
+              "label": "Contact person",
+              "required": true
+            },
+            {
+              "key": "phone",
+              "type": "text",
+              "label": "Phone"
+            },
+            {
+              "key": "email",
+              "type": "text",
+              "label": "Email"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "s7.B.1b"
+          ]
+        },
+        {
+          "key": "cant.s7.property.identifier",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Farm identifier",
+          "guidance": "A farm identifier for the property, e.g. the ECan farm or Farm Portal identifier, a dairy supply number, or GPS coordinates of the farm entrance.",
+          "fields": [
+            {
+              "key": "identifier",
+              "type": "text",
+              "label": "Farm identifier",
+              "required": true
+            },
+            {
+              "key": "identifier_kind",
+              "type": "select",
+              "label": "Kind of identifier",
+              "required": true,
+              "options": [
+                "ECan Farm Portal identifier",
+                "Dairy supply number",
+                "GPS coordinates",
+                "Other"
+              ]
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "s7.B.1c.id"
+          ]
+        },
+        {
+          "key": "cant.s7.property.responsible",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Responsibility for the plan",
+          "guidance": "The person responsible for putting this plan into practice, and the owner's commitment. The auditor expects this person at the audit.",
+          "fields": [
+            {
+              "key": "implementer_name",
+              "type": "text",
+              "label": "Person responsible for implementing the plan",
+              "required": true
+            },
+            {
+              "key": "position",
+              "type": "text",
+              "label": "Position (e.g. owner, manager)",
+              "required": true
+            },
+            {
+              "key": "confirmed_on",
+              "type": "date",
+              "label": "Date confirmed"
+            },
+            {
+              "key": "owner_commitment",
+              "type": "boolean",
+              "label": "Owner (and lessee) commitment signed"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "pac.responsible_present"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.s7.part.maps_extra",
+      "origin": "fwfp-cant-s7",
+      "title": "Schedule 7 map items",
+      "guidance": "Schedule 7 map items not already covered by the national maps.",
+      "print": {
+        "break_before": false,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.s7.map.extra",
+          "kind": "map",
+          "origin": "fwfp-cant-s7",
+          "title": "Map: Schedule 7 items",
+          "guidance": "Can be shown on the farming features map instead of a separate map.",
+          "fields": [
+            {
+              "key": "scene_ref",
+              "type": "text",
+              "label": "Map scene"
+            },
+            {
+              "key": "notes",
+              "type": "text",
+              "label": "Notes"
+            },
+            {
+              "key": "stock_access",
+              "type": "select",
+              "label": "Points on waterways where stock have access or cross",
+              "guidance": "Sch 7 Pt B 2(e)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "riparian_vegetation",
+              "type": "select",
+              "label": "Riparian vegetation and fences next to waterbodies",
+              "guidance": "Sch 7 Pt B 2(d)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "sig_biodiversity",
+              "type": "select",
+              "label": "Areas in or next to the farm shown in the District Plan as significant indigenous biodiversity",
+              "guidance": "Sch 7 Pt B 2(f)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "hrrpz",
+              "type": "select",
+              "label": "Land in the High Runoff Risk Phosphorus Zone",
+              "guidance": "Sch 7 Pt B 2(g)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "flood_assets",
+              "type": "select",
+              "label": "Flood protection or erosion control assets, including flood protection vegetation",
+              "guidance": "Sch 7 Pt B 2(h)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            },
+            {
+              "key": "access_routes",
+              "type": "select",
+              "label": "Public access routes, or routes used to maintain rivers, streams or drains",
+              "guidance": "Sch 7 Pt B 2(i)",
+              "required": true,
+              "options": [
+                "Shown",
+                "None on this farm"
+              ]
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "s7.B.2d",
+            "s7.B.2e",
+            "s7.B.2f",
+            "s7.B.2g",
+            "s7.B.2h",
+            "s7.B.2i"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.s7.part.nutrient_budget",
+      "origin": "fwfp-cant-s7",
+      "title": "Nutrient budgets",
+      "guidance": "The farm's nutrient budget, prepared by a suitably qualified person in OverseerFM (or another model ECan has approved), with nitrogen baseline and current loss, and the Farm Portal report.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.s7.nutrient_budget.summary",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Nutrient budget and Farm Portal report",
+          "guidance": "Copy these from the current nutrient budget and the Farm Portal report. Keep model versions together: never compare numbers from different Overseer versions.",
+          "fields": [
+            {
+              "key": "model",
+              "type": "select",
+              "label": "Model",
+              "required": true,
+              "options": [
+                "OverseerFM",
+                "Other ECan-approved model"
+              ]
+            },
+            {
+              "key": "model_version",
+              "type": "text",
+              "label": "Model version",
+              "required": true
+            },
+            {
+              "key": "prepared_by",
+              "type": "text",
+              "label": "Prepared by",
+              "required": true
+            },
+            {
+              "key": "qualification",
+              "type": "text",
+              "label": "Qualification (e.g. Certified Nutrient Management Adviser)"
+            },
+            {
+              "key": "season",
+              "type": "text",
+              "label": "Year modelled (e.g. 2025/26)",
+              "required": true
+            },
+            {
+              "key": "n_baseline",
+              "type": "number",
+              "label": "Nitrogen baseline",
+              "required": true,
+              "unit": "kg N/ha/yr"
+            },
+            {
+              "key": "n_loss",
+              "type": "number",
+              "label": "Nitrogen loss calculation (current)",
+              "required": true,
+              "unit": "kg N/ha/yr"
+            },
+            {
+              "key": "p_loss",
+              "type": "number",
+              "label": "Phosphorus loss",
+              "unit": "kg P/ha/yr"
+            },
+            {
+              "key": "baseline_gmp_loss_rate",
+              "type": "number",
+              "label": "Baseline GMP Loss Rate (Farm Portal)",
+              "unit": "kg N/ha/yr"
+            },
+            {
+              "key": "gmp_loss_rate",
+              "type": "number",
+              "label": "Good Management Practice Loss Rate (Farm Portal)",
+              "unit": "kg N/ha/yr"
+            },
+            {
+              "key": "farm_portal_report_on",
+              "type": "date",
+              "label": "Farm Portal report date"
+            },
+            {
+              "key": "consented_n_limit",
+              "type": "number",
+              "label": "Consented nitrogen loss limit (if any)",
+              "unit": "kg N/ha/yr"
+            }
+          ],
+          "required": true,
+          "satisfies": [
+            "s7.B.4Ba",
+            "s7.B.4Bb",
+            "s7.B.6",
+            "pac.nutrient_budget"
+          ]
+        },
+        {
+          "key": "cant.s7.nutrient_budget.lmu",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Nutrient budget by land management unit",
+          "guidance": "Nitrogen and phosphorus loss for each land management unit, from the same budget.",
+          "fields": [
+            {
+              "key": "n_loss",
+              "type": "number",
+              "label": "Nitrogen loss",
+              "required": true,
+              "unit": "kg N/ha/yr"
+            },
+            {
+              "key": "p_loss",
+              "type": "number",
+              "label": "Phosphorus loss",
+              "unit": "kg P/ha/yr"
+            },
+            {
+              "key": "overseer_blocks",
+              "type": "text",
+              "label": "Overseer blocks in this unit"
+            }
+          ],
+          "required": true,
+          "repeat": "lmu",
+          "satisfies": [
+            "s7.B.6"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.s7.part.management",
+      "origin": "fwfp-cant-s7",
+      "title": "Management areas, objectives and targets",
+      "guidance": "Schedule 7 sets an objective and targets for seven management areas. For each target the plan must say how it will be met, in detail that matches the risk, the actions and good management practices with timeframes, and the records that will show it. Actions still to do go in the main action table, with the Schedule 7 target they serve.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.s7.nutrients",
+          "kind": "group",
+          "origin": "fwfp-cant-s7",
+          "title": "5A Nutrients",
+          "guidance": "Fertiliser, nitrogen loss and phosphorus and sediment loss. Records usually include soil tests, fertiliser recommendations and application records, spreader calibration or Spreadmark certificates, proof of placement, and the current nutrient budget.",
+          "nodes": [
+            {
+              "key": "cant.s7.nutrients.obj1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5A Nutrients: Objective",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5A, Objective [S7a]",
+              "fixed_text": "Use nutrients efficiently and minimise nutrient losses to water.",
+              "satisfies": [
+                "s7.B.5A.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.nutrients.t1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5A Nutrients: Target 1",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5A, Target 1 [S7a]",
+              "fixed_text": "Nitrogen losses from farming activities are at or below the: (a) Baseline GMP Loss Rate or Good Management Practice Loss Rate (whichever is the lesser); or (b) consented nitrogen loss limits.",
+              "satisfies": [
+                "s7.B.5A.t1",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.nutrients.t2",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5A Nutrients: Target 2",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5A, Target 2 [S7a]",
+              "fixed_text": "Available nitrogen loss mitigation measures (excluding those associated with irrigation, fertiliser or effluent management) are implemented.",
+              "satisfies": [
+                "s7.B.5A.t2",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.nutrients.t3",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5A Nutrients: Target 3",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5A, Target 3 [S7a]",
+              "fixed_text": "Phosphorus and sediment losses from farming activities are minimised.",
+              "satisfies": [
+                "s7.B.5A.t3",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.nutrients.t4",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5A Nutrients: Target 4",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5A, Target 4 [S7a]",
+              "fixed_text": "Manage the amount, timing and application of fertiliser inputs to match the predicted plant requirements and minimise nutrient losses.",
+              "satisfies": [
+                "s7.B.5A.t4",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.nutrients.t5",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5A Nutrients: Target 5",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5A, Target 5 [S7a]",
+              "fixed_text": "Store and load fertiliser to minimise the risk of spillage, leaching and loss into water bodies.",
+              "satisfies": [
+                "s7.B.5A.t5",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            }
+          ],
+          "required": true,
+          "cite": "LWRP Schedule 7 Part B item 5A [S7a]",
+          "satisfies": [
+            "s7.B.5"
+          ]
+        },
+        {
+          "key": "cant.s7.irrigation",
+          "kind": "group",
+          "origin": "fwfp-cant-s7",
+          "title": "5B Irrigation",
+          "guidance": "Only where the farm irrigates. Records usually include design and commissioning reports for new systems, annual bucket or performance tests, maintenance records, soil moisture or water budget records, water meter data and staff training records. Switch this management area off when the farm does not irrigate.",
+          "nodes": [
+            {
+              "key": "cant.s7.irrigation.obj1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5B Irrigation: Objective",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5B, Objective [S7a]",
+              "fixed_text": "The amount and timing of irrigation is managed to meet plant demands, minimise risk of leaching and runoff and ensure efficient water use.",
+              "satisfies": [
+                "s7.B.5B.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.irrigation.t1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5B Irrigation: Target 1",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5B, Target 1 [S7a]",
+              "fixed_text": "New irrigation systems are designed and installed in accordance with industry codes of practice and standards.",
+              "satisfies": [
+                "s7.B.5B.t1",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.irrigation.t2",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5B Irrigation: Target 2",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5B, Target 2 [S7a]",
+              "fixed_text": "The performance of irrigation systems is assessed annually and irrigation systems are maintained and operated to apply irrigation water at their optimal efficiency.",
+              "satisfies": [
+                "s7.B.5B.t2",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.irrigation.t3",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5B Irrigation: Target 3",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5B, Target 3 [S7a]",
+              "fixed_text": "The timing and depth of irrigation water applied takes account of crop requirements and is justified through soil moisture monitoring or soil water budgets and climatic information.",
+              "satisfies": [
+                "s7.B.5B.t3",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.irrigation.t4",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5B Irrigation: Target 4",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5B, Target 4 [S7a]",
+              "fixed_text": "Staff are trained in the operation, maintenance and use of irrigation systems.",
+              "satisfies": [
+                "s7.B.5B.t4",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "LWRP Schedule 7 Part B item 5B [S7a]",
+          "satisfies": [
+            "s7.B.5"
+          ]
+        },
+        {
+          "key": "cant.s7.soils",
+          "kind": "group",
+          "origin": "fwfp-cant-s7",
+          "title": "5C Cultivation and soil structure",
+          "guidance": "Cultivation, winter grazing and erosion. Records usually include cultivation and cropping records, the winter grazing plan and paddock selection, and maps of erosion-prone areas and critical source areas.",
+          "nodes": [
+            {
+              "key": "cant.s7.soils.obj1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5C Cultivation and soil structure: Objective",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5C, Objective [S7a]",
+              "fixed_text": "The physical and biological condition of soils is maintained or improved in order to minimise the movement of sediment, phosphorus and other contaminants to waterways.",
+              "satisfies": [
+                "s7.B.5C.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.soils.t1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5C Cultivation and soil structure: Target 1",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5C, Target 1 [S7a]",
+              "fixed_text": "Farming activities are managed so as to not exacerbate erosion.",
+              "satisfies": [
+                "s7.B.5C.t1",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.soils.t2",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5C Cultivation and soil structure: Target 2",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5C, Target 2 [S7a]",
+              "fixed_text": "Farming practices are implemented that optimise infiltration of water into the soil profile and minimise run-off of water, sediment loss and erosion.",
+              "satisfies": [
+                "s7.B.5C.t2",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            }
+          ],
+          "required": true,
+          "cite": "LWRP Schedule 7 Part B item 5C [S7a]",
+          "satisfies": [
+            "s7.B.5"
+          ]
+        },
+        {
+          "key": "cant.s7.effluent",
+          "kind": "group",
+          "origin": "fwfp-cant-s7",
+          "title": "5D Animal effluent and solid animal waste",
+          "guidance": "Where effluent or solid animal waste is collected and applied. Records usually include the effluent discharge area map, application records, storage calculations, design certificates, backflow preventer checks and staff training. Switch this management area off when no animal effluent or solid animal waste is collected.",
+          "nodes": [
+            {
+              "key": "cant.s7.effluent.obj1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5D Animal effluent and solid animal waste: Objective",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5D, Objective [S7a]",
+              "fixed_text": "Animal effluent and solid animal waste is managed to minimise nutrient leaching and run-off.",
+              "satisfies": [
+                "s7.B.5D.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.effluent.t1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5D Animal effluent and solid animal waste: Target 1",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5D, Target 1 [S7a]",
+              "fixed_text": "Effluent systems meet industry Codes of Practice or an equivalent standard.",
+              "satisfies": [
+                "s7.B.5D.t1",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.effluent.t2",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5D Animal effluent and solid animal waste: Target 2",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5D, Target 2 [S7a]",
+              "fixed_text": "The timing and rate of application of effluent and solid animal waste to land is managed so as to minimise the risk of contamination of groundwater or surface water bodies.",
+              "satisfies": [
+                "s7.B.5D.t2",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.effluent.t3",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5D Animal effluent and solid animal waste: Target 3",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5D, Target 3 [S7a]",
+              "fixed_text": "Sufficient and suitable storage is available to enable animal effluent and wash-down water to be stored when soil conditions are unsuitable for application.",
+              "satisfies": [
+                "s7.B.5D.t3",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.effluent.t4",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5D Animal effluent and solid animal waste: Target 4",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5D, Target 4 [S7a]",
+              "fixed_text": "Staff are trained in the operation, maintenance and use of effluent storage and application systems.",
+              "satisfies": [
+                "s7.B.5D.t4",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "LWRP Schedule 7 Part B item 5D [S7a]",
+          "satisfies": [
+            "s7.B.5"
+          ]
+        },
+        {
+          "key": "cant.s7.waterbodies",
+          "kind": "group",
+          "origin": "fwfp-cant-s7",
+          "title": "5E Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+          "guidance": "Stock exclusion, riparian margins, crossings, tracks and mahinga kai. Records usually include a fencing map or stock exclusion plan, riparian planting plans, photos, and track and crossing maintenance.",
+          "nodes": [
+            {
+              "key": "cant.s7.waterbodies.obj1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5E Waterbodies (wetlands, riparian areas, drains, rivers, lakes): Objective",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5E, Objective [S7a]",
+              "fixed_text": "Wetlands, riparian areas and the margins of surface waterbodies are managed to avoid damage to the bed and margins of the water body, and to avoid the direct input of nutrients, sediment, and microbial pathogens.",
+              "satisfies": [
+                "s7.B.5E.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.waterbodies.t1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5E Waterbodies (wetlands, riparian areas, drains, rivers, lakes): Target 1",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5E, Target 1 [S7a]",
+              "fixed_text": "Stock are excluded from waterbodies in accordance with regional council rules or any granted resource consent.",
+              "satisfies": [
+                "s7.B.5E.t1",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.waterbodies.t2",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5E Waterbodies (wetlands, riparian areas, drains, rivers, lakes): Target 2",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5E, Target 2 [S7a]",
+              "fixed_text": "Vegetated riparian margins of sufficient width are maintained to minimise nutrient, sediment and microbial pathogen losses to waterbodies.",
+              "satisfies": [
+                "s7.B.5E.t2",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.waterbodies.t3",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5E Waterbodies (wetlands, riparian areas, drains, rivers, lakes): Target 3",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5E, Target 3 [S7a]",
+              "fixed_text": "Farm tracks, gateways, water troughs, self-feeding areas, stock camps, wallows and other farming activities that are potential sources of sediment, nutrients and microbial loss are located so as to minimise the risks to surface water quality.",
+              "satisfies": [
+                "s7.B.5E.t3",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            },
+            {
+              "key": "cant.s7.waterbodies.t4",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5E Waterbodies (wetlands, riparian areas, drains, rivers, lakes): Target 4",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5E, Target 4 [S7a]",
+              "fixed_text": "Mahinga kai values are protected as a result of measures taken to protect and enhance water quality and stream health.",
+              "satisfies": [
+                "s7.B.5E.t4",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            }
+          ],
+          "required": true,
+          "cite": "LWRP Schedule 7 Part B item 5E [S7a]",
+          "satisfies": [
+            "s7.B.5"
+          ]
+        },
+        {
+          "key": "cant.s7.point_sources",
+          "kind": "group",
+          "origin": "fwfp-cant-s7",
+          "title": "5F Point sources (offal pits, farm rubbish pits, silage pits)",
+          "guidance": "Offal pits, rubbish pits and silage. Records usually include a pit location map and evidence that each pit meets the permitted activity rules.",
+          "nodes": [
+            {
+              "key": "cant.s7.point_sources.obj1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5F Point sources (offal pits, farm rubbish pits, silage pits): Objective",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5F, Objective [S7a]",
+              "fixed_text": "The number and location of pits are managed to minimise risks to health and water quality.",
+              "satisfies": [
+                "s7.B.5F.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.point_sources.t1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5F Point sources (offal pits, farm rubbish pits, silage pits): Target 1",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5F, Target 1 [S7a]",
+              "fixed_text": "All on-farm silage, offal pit and rubbish dump discharges are managed to avoid direct discharges of contaminants to groundwater or surface water.",
+              "satisfies": [
+                "s7.B.5F.t1",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            }
+          ],
+          "required": true,
+          "cite": "LWRP Schedule 7 Part B item 5F [S7a]",
+          "satisfies": [
+            "s7.B.5"
+          ]
+        },
+        {
+          "key": "cant.s7.water_use",
+          "kind": "group",
+          "origin": "fwfp-cant-s7",
+          "title": "5G Water use (excluding irrigation)",
+          "guidance": "Stock water, dairy shed and other non-irrigation water. Records usually include water meter readings, leak and maintenance records and a dairy shed water plan.",
+          "nodes": [
+            {
+              "key": "cant.s7.water_use.obj1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5G Water use (excluding irrigation): Objective",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5G, Objective [S7a]",
+              "fixed_text": "To use water efficiently ensuring that actual use of water is monitored and efficient.",
+              "satisfies": [
+                "s7.B.5G.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.water_use.t1",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5G Water use (excluding irrigation): Target 1",
+              "guidance": "Say what you do to meet this target, in as much detail as the risk on this farm warrants, and which records show it. List any action still to do in the action table with a timeframe. Mark it Not applicable only if the activity does not happen on this farm, and say why.",
+              "fields": [
+                {
+                  "key": "applies",
+                  "type": "select",
+                  "label": "Does this target apply?",
+                  "required": true,
+                  "options": [
+                    "Applies",
+                    "Not applicable"
+                  ]
+                },
+                {
+                  "key": "not_applicable_reason",
+                  "type": "text",
+                  "label": "Why not (if not applicable)"
+                },
+                {
+                  "key": "how_met",
+                  "type": "text",
+                  "label": "Practices in place and how the target is met",
+                  "required": true
+                },
+                {
+                  "key": "records",
+                  "type": "text",
+                  "label": "Records kept to show the target is met",
+                  "required": true
+                }
+              ],
+              "required": true,
+              "cite": "LWRP Schedule 7 Part B item 5G, Target 1 [S7a]",
+              "fixed_text": "Actual water use is efficient for the end use.",
+              "satisfies": [
+                "s7.B.5G.t1",
+                "s7.B.5.detail",
+                "s7.B.5.records"
+              ]
+            }
+          ],
+          "required": true,
+          "cite": "LWRP Schedule 7 Part B item 5G [S7a]",
+          "satisfies": [
+            "s7.B.5"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.s7.part.sub_region",
+      "origin": "fwfp-cant-s7",
+      "title": "Sub-region requirements",
+      "guidance": "Some parts of Canterbury add to Schedule 7. Switch on the one that applies to this farm; leave the others off.",
+      "switchable": true,
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.s7.sub.selwyn",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Selwyn Te Waihora",
+          "guidance": "Show any part of the farm in the Cultural Landscape/Values Management Area on the map, and describe how the nutrient objectives below are met.",
+          "fields": [
+            {
+              "key": "clvma_on_map",
+              "type": "boolean",
+              "label": "Cultural Landscape/Values Management Area shown on map",
+              "required": true
+            },
+            {
+              "key": "p_sediment",
+              "type": "text",
+              "label": "(a) Minimising phosphorus and sediment loss in the Phosphorus Sediment Risk Area",
+              "required": true
+            },
+            {
+              "key": "gmp",
+              "type": "text",
+              "label": "(b) Achieving good management practice nutrient losses",
+              "required": true
+            },
+            {
+              "key": "drains",
+              "type": "text",
+              "label": "(c) Managing drain discharges in the Lake area"
+            },
+            {
+              "key": "further_n",
+              "type": "text",
+              "label": "(d) Further nitrogen reduction from 2022 where loss exceeds 15 kg N/ha/yr"
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "LWRP Schedule 7 items 7.1-7.2 [S7a]",
+          "satisfies": [
+            "s7.sub.7.1",
+            "s7.sub.7.2"
+          ]
+        },
+        {
+          "key": "cant.s7.sub.hinds",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Hinds/Hekeao Plains",
+          "guidance": "Describe how the farm meets the three Hinds/Hekeao nutrient objectives.",
+          "fields": [
+            {
+              "key": "efficiency",
+              "type": "text",
+              "label": "(a) Maximising nutrient use efficiency, minimising losses",
+              "required": true
+            },
+            {
+              "key": "gmp",
+              "type": "text",
+              "label": "(b) Good management practice loss rates from 2017",
+              "required": true
+            },
+            {
+              "key": "further_n",
+              "type": "text",
+              "label": "(c) Further nitrogen reduction in the Upper and Lower Hinds/Hekeao Plains Area"
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "LWRP Schedule 7 item 8 [S7a]",
+          "satisfies": [
+            "s7.sub.8"
+          ]
+        },
+        {
+          "key": "cant.s7.sub.waitaki",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Waitaki",
+          "guidance": "Two extra management areas: mahinga kai and in-stream biodiversity. Map spring heads, wetlands and spring-fed streams.",
+          "fields": [
+            {
+              "key": "mahinga_kai",
+              "type": "text",
+              "label": "Mahinga kai: indigenous vegetation kept, extra plantings, effects minimised, pest plants managed",
+              "required": true
+            },
+            {
+              "key": "springs_mapped",
+              "type": "boolean",
+              "label": "Spring heads, wetlands and spring-fed streams mapped",
+              "required": true
+            },
+            {
+              "key": "instream",
+              "type": "text",
+              "label": "In-stream biodiversity: how waterbody targets are prioritised for these features",
+              "required": true
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "LWRP Schedule 7 item 9 [S7a]",
+          "satisfies": [
+            "s7.sub.9"
+          ]
+        },
+        {
+          "key": "cant.s7.sub.waimakariri",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Waimakariri (Nitrate Priority Area)",
+          "guidance": "Plan Change 7 added objectives and targets for staged nitrogen reductions in the Waimakariri Nitrate Priority Area. Record the reduction the farm must make and how.",
+          "fields": [
+            {
+              "key": "sub_area",
+              "type": "text",
+              "label": "Nitrate Priority sub-area",
+              "required": true
+            },
+            {
+              "key": "reduction_2030",
+              "type": "text",
+              "label": "Reduction required by 2030 and how it will be met",
+              "required": true
+            },
+            {
+              "key": "reduction_2040",
+              "type": "text",
+              "label": "Reduction required by 2040 and how it will be met"
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "LWRP Schedule 7 Waimakariri additions (PC7), wording not yet verified",
+          "satisfies": [
+            "s7.sub.pc7.waimakariri"
+          ]
+        },
+        {
+          "key": "cant.s7.sub.otop",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Orari-Temuka-Opihi-Pareora (High Nitrogen Concentration Areas)",
+          "guidance": "Plan Change 7 added objectives and targets for staged nitrogen reductions in the OTOP High Nitrogen Concentration Areas. Record the reduction the farm must make and how.",
+          "fields": [
+            {
+              "key": "area",
+              "type": "text",
+              "label": "High Nitrogen Concentration Area",
+              "required": true
+            },
+            {
+              "key": "reductions",
+              "type": "text",
+              "label": "Staged reductions and how they will be met",
+              "required": true
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "LWRP Schedule 7 OTOP additions (PC7), wording not yet verified",
+          "satisfies": [
+            "s7.sub.pc7.otop"
+          ]
+        },
+        {
+          "key": "cant.s7.sub.hurunui_waiau",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Hurunui and Waiau catchments",
+          "guidance": "Farms in the Hurunui and Waiau catchments work to the Hurunui and Waiau River Regional Plan nutrient rules and any group or individual consent, usually a consented or allocated nitrogen limit. Record the limit and where it comes from.",
+          "fields": [
+            {
+              "key": "n_limit",
+              "type": "number",
+              "label": "Nitrogen limit that applies",
+              "unit": "kg N/ha/yr"
+            },
+            {
+              "key": "limit_source",
+              "type": "text",
+              "label": "Rule or consent that sets it",
+              "required": true
+            },
+            {
+              "key": "change_of_land_use_checked",
+              "type": "boolean",
+              "label": "Checked against the HWRRP change-of-land-use test"
+            }
+          ],
+          "required": false,
+          "switchable": true,
+          "cite": "HWRRP rules (see rules/hwrrp/thresholds.json); HDLG master FEP Nutrient sheet",
+          "satisfies": [
+            "cant.hwrrp.n_limit"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.s7.part.audit",
+      "origin": "fwfp-cant-s7",
+      "title": "Farm Environment Plan audits",
+      "guidance": "Schedule 7 plans are audited by an ECan Certified Farm Environment Plan Auditor who is independent of the farm and did not help write the plan. The auditor grades the plan A to D; the grade sets when the next audit is due under the consent or rule.",
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.s7.audit.history",
+          "kind": "records",
+          "origin": "fwfp-cant-s7",
+          "title": "Audit history",
+          "guidance": "One row per audit, from the auditor's report. Needed when the farm has had an FEP audit.",
+          "fields": [
+            {
+              "key": "audited_on",
+              "type": "date",
+              "label": "Audit date",
+              "required": true
+            },
+            {
+              "key": "auditor",
+              "type": "text",
+              "label": "Certified FEP auditor",
+              "required": true
+            },
+            {
+              "key": "independent",
+              "type": "boolean",
+              "label": "Auditor independent of the farm and the plan's preparation",
+              "required": true
+            },
+            {
+              "key": "grade",
+              "type": "select",
+              "label": "Overall grade",
+              "required": true,
+              "options": [
+                "A",
+                "B",
+                "C",
+                "D"
+              ]
+            },
+            {
+              "key": "next_audit_by",
+              "type": "date",
+              "label": "Next audit due by"
+            },
+            {
+              "key": "trigger",
+              "type": "text",
+              "label": "Rule or consent requiring the audit"
+            },
+            {
+              "key": "issues_raised",
+              "type": "text",
+              "label": "Issues raised"
+            }
+          ],
+          "required": false,
+          "print": {
+            "orientation": "landscape"
+          },
+          "satisfies": [
+            "s7.C.auditor",
+            "s7.C.grade",
+            "pac.previous_audit"
+          ]
+        },
+        {
+          "key": "cant.s7.audit.loc",
+          "kind": "table",
+          "origin": "fwfp-cant-s7",
+          "title": "Level of confidence by objective and target (latest audit)",
+          "guidance": "The auditor's level of confidence that each objective and target is being met. These are the auditor's judgements: they are shown with the auditor's name and date and never changed here.",
+          "fields": [
+            {
+              "key": "management_area",
+              "type": "select",
+              "label": "Management area",
+              "required": true,
+              "options": [
+                "Nutrients",
+                "Irrigation",
+                "Cultivation and soil structure",
+                "Animal effluent and solid animal waste",
+                "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+                "Point sources (offal pits, farm rubbish pits, silage pits)",
+                "Water use (excluding irrigation)"
+              ]
+            },
+            {
+              "key": "item_ref",
+              "type": "text",
+              "label": "Objective or target (e.g. 5B T3)",
+              "required": true
+            },
+            {
+              "key": "loc",
+              "type": "select",
+              "label": "Level of confidence",
+              "required": true,
+              "options": [
+                "High",
+                "Medium",
+                "Low",
+                "Not applicable"
+              ]
+            },
+            {
+              "key": "assessed_by",
+              "type": "text",
+              "label": "Auditor",
+              "required": true
+            },
+            {
+              "key": "assessed_on",
+              "type": "date",
+              "label": "Audit date",
+              "required": true
+            }
+          ],
+          "required": false,
+          "satisfies": [
+            "s7.C.1",
+            "s7.C.2",
+            "s7.C.3"
+          ]
+        },
+        {
+          "key": "cant.s7.audit.actions",
+          "kind": "table",
+          "origin": "fwfp-cant-s7",
+          "title": "Actions from the last audit",
+          "guidance": "Each action the auditor asked for, and what has been done. The auditor checks these first at the next audit.",
+          "fields": [
+            {
+              "key": "action",
+              "type": "text",
+              "label": "Action required",
+              "required": true
+            },
+            {
+              "key": "due",
+              "type": "text",
+              "label": "By when"
+            },
+            {
+              "key": "progress",
+              "type": "text",
+              "label": "Progress"
+            }
+          ],
+          "required": false,
+          "binds": {
+            "actions": true
+          },
+          "satisfies": [
+            "pac.previous_audit"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "cant.s7.part.extra",
+      "origin": "fwfp-cant-s7",
+      "title": "Mahinga kai, biodiversity and greenhouse gas",
+      "guidance": "Not required by Schedule 7, but auditors walk the farm's mahinga kai and biodiversity sites, and many groups (HDLG included) ask for a greenhouse gas number. Switch off if not wanted.",
+      "switchable": true,
+      "print": {
+        "break_before": true,
+        "orientation": "portrait"
+      },
+      "nodes": [
+        {
+          "key": "cant.s7.extra.mahinga_kai",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Mahinga kai and biodiversity",
+          "guidance": "Sites on the farm with mahinga kai or biodiversity value (springs, wetlands, waterways, native bush) and how they are protected or enhanced.",
+          "fields": [
+            {
+              "key": "sites",
+              "type": "text",
+              "label": "Sites and their values"
+            },
+            {
+              "key": "management",
+              "type": "text",
+              "label": "How they are protected or enhanced"
+            }
+          ],
+          "required": false,
+          "binds": {
+            "places": "area"
+          },
+          "switchable": true,
+          "satisfies": [
+            "pac.inspect.mahinga_kai"
+          ]
+        },
+        {
+          "key": "cant.s7.extra.ghg",
+          "kind": "item",
+          "origin": "fwfp-cant-s7",
+          "title": "Greenhouse gas emissions",
+          "guidance": "Total emissions from an approved calculator, with the year and calculator used.",
+          "fields": [
+            {
+              "key": "total_t",
+              "type": "number",
+              "label": "Total emissions",
+              "unit": "t CO2-e/yr"
+            },
+            {
+              "key": "methane_t",
+              "type": "number",
+              "label": "Biogenic methane",
+              "unit": "t CO2-e/yr"
+            },
+            {
+              "key": "n2o_t",
+              "type": "number",
+              "label": "Nitrous oxide",
+              "unit": "t CO2-e/yr"
+            },
+            {
+              "key": "co2_t",
+              "type": "number",
+              "label": "Carbon dioxide",
+              "unit": "t CO2-e/yr"
+            },
+            {
+              "key": "calculator",
+              "type": "text",
+              "label": "Calculator"
+            },
+            {
+              "key": "year",
+              "type": "text",
+              "label": "Year"
+            }
+          ],
+          "required": false,
+          "binds": {
+            "fact_type": "ghg_methane"
+          },
+          "switchable": true
+        }
+      ]
+    }
+  ]
+}

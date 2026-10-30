@@ -46,6 +46,9 @@
   function route() {
     if (!readyToRoute) return;
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
+    // The Farm Environment Plan and Freshwater Farm Plan documents, on the invented farm: only in the demo.
+    if (FP.demo?.active && /^#\/plans(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.close(); FP.farmPlansDemo.open(hash); return; }
+    FP.farmPlansDemo.close();
     // The block gallery: fixture data only, so only in the demo.
     if (FP.demo?.active && /^#\/blocks(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.open(hash); return; }
     FP.gallery.close();
@@ -144,7 +147,7 @@
       el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Illustrative map"),
       el("button", { type: "button", class: "demo-switch", "aria-expanded": "false", "aria-controls": "demo-links" }, "Demos"),
       el("div", { id: "demo-links", class: "demo-links" },
-        ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"], ["#/demo/ops", "Operations"], ["#/demo/blocks", "Blocks"]].map(([href, label]) => el("a", { href }, label)),
+        ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"], ["#/demo/ops", "Operations"], ["#/demo/blocks", "Blocks"], ["#/demo/plans", "Farm Environment Plan"]].map(([href, label]) => el("a", { href }, label)),
         el("a", { href: location.pathname + location.search }, "Exit")));
     document.body.prepend(banner);
     const setDemoLinks = (open) => { banner.classList.toggle("open", open); banner.querySelector(".demo-switch").setAttribute("aria-expanded", String(open)); };

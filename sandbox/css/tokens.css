@@ -52,6 +52,9 @@
   --banner-panel: #302f28; --banner-ink: #fffdf7;
   --print-panel: #ffffff; --print-ink: #000000;
   --print-body: 10.5pt; --print-small: 8pt; --print-table: 9pt;
+  /* Farm Environment Plan / Freshwater Farm Plan print (plan-print.css): nothing below 10 pt, greys that survive greyscale. */
+  --plan-print-small: 10pt; --plan-print-body: 11pt; --plan-print-h4: 11.5pt; --plan-print-h3: 13pt; --plan-print-h2: 17pt; --plan-print-h1: 28pt;
+  --print-ink-2: #3f3d35; --print-rule: #8f897b; --print-wash: #efebe1;
   --reader-small: var(--text-small); --reader-body: var(--text-body);
   --reader-heading: var(--text-heading); --reader-title: var(--text-title); --reader-gap: 1.5rem;
   --panel: #fffdf7; --wash: #f3f0e7; --ink: #302f28; --ink-2: #615f52; --ink-3: #716d5d; --rule: #d7d0bf;

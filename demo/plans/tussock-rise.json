@@ -1,0 +1,1971 @@
+{
+ "fixture": "Invented farm for the Farm Environment Plan and Freshwater Farm Plan demos (PL7). Every name, number, title and consent is made up; nothing describes a real farm, person or plan. Content follows tools/plans/fixture_content.py.",
+ "farm": "Tussock Rise Farm",
+ "issued_on": "2026-10-30",
+ "documents": {
+  "fep-cant-s7": {
+   "nodes": {
+    "cant.s7.plan.meta": {
+     "prepared_by": "Sam Fixture",
+     "role": "Catchment Farm Advisor",
+     "prepared_on": "2026-10-30",
+     "version_label": "Final",
+     "route": "Part B default content"
+    },
+    "cant.s7.plan.summary": {
+     "summary": "This plan describes how Tussock Rise Farm manages the risks its farming poses to freshwater, and the actions the owner will take to reduce them. It follows Schedule 7 of the Canterbury Land and Water Regional Plan.\n\nThe farm is 248 hectares on the Example Plains, of which 231.5 hectares are grazable. It carries sheep, beef cattle and dairy grazing and grows winter fodder crops on part of the cultivated area.\n\nThe highest risks are nitrate leaching on the light soils and terraces, and sediment, phosphorus and microbial loss from the creek flats during winter grazing.\n\nMuch of the stock exclusion fencing is done and nutrients are managed from an annual nutrient budget. The remaining actions are in the action table.",
+     "vision": "- Healthy waterways that stock and people can use\n- Soils that stay on the farm and keep their structure\n- Nutrients used by crops and pasture, not lost to water\n- A farm business that can show its progress to neighbours and the council",
+     "farm_story": "Tussock Rise has been in the owner's family for three generations. It began as a dryland sheep farm and was developed for irrigation in the 1990s, when the groundwater consent was granted.\n\nToday the farm runs sheep and beef cattle, grazes dairy heifers for neighbouring dairy farms and grows winter fodder crops. The owner lives on the property and employs one part-time worker during lambing and winter grazing.\n\nThe creek along the south-east boundary is the farm's main waterway. Fencing it and managing winter grazing near it are the owner's two biggest priorities."
+    },
+    "cant.s7.property.address": {
+     "property_name": "Tussock Rise Farm",
+     "physical_address": "100 Example Road, Nowhere Flat, Canterbury 7777"
+    },
+    "cant.s7.property.owner": {
+     "owner_name": "Tussock Rise Farm Ltd",
+     "manager_name": "Pat Example"
+    },
+    "cant.s7.property.contact": {
+     "contact_person": "Pat Example",
+     "phone": "03 555 0100",
+     "email": "owner@example.invalid"
+    },
+    "cant.s7.property.legal": [
+     {
+      "parcel": "Lot 1 DP 99001",
+      "title_ref": "XX99A/101",
+      "tenure": "Owned"
+     },
+     {
+      "parcel": "Lot 2 DP 99001",
+      "title_ref": "XX99A/102",
+      "tenure": "Owned"
+     },
+     {
+      "parcel": "Lot 3 DP 99002",
+      "title_ref": "XX99B/310",
+      "tenure": "Leased"
+     }
+    ],
+    "cant.s7.property.identifier": {
+     "identifier": "FP-99001",
+     "identifier_kind": "ECan Farm Portal identifier"
+    },
+    "cant.s7.property.areas": {
+     "total_area_ha": 248,
+     "effective_area_ha": 231.5,
+     "irrigated_area_ha": 118,
+     "leased_area_ha": 40,
+     "winter_grazing_ha": 36,
+     "land_use": "Sheep (predominantly Romney), beef and dairy grazing",
+     "stock_summary": "About 2,700 stock units: 480 dairy heifers, 70 beef cattle and 1,100 ewes"
+    },
+    "cant.s7.property.responsible": {
+     "implementer_name": "Pat Example",
+     "position": "Owner and manager",
+     "confirmed_on": "2026-10-30",
+     "owner_commitment": true
+    },
+    "cant.s7.map.property": {
+     "boundary": "Shown",
+     "land_units": "Shown",
+     "water": "Shown",
+     "riparian_vegetation": "Shown",
+     "stock_access": "Shown",
+     "sig_biodiversity": "None on this farm",
+     "csa": "Shown",
+     "hrrpz": "None on this farm",
+     "flood_assets": "None on this farm",
+     "access_routes": "Shown"
+    },
+    "cant.s7.consents": [
+     {
+      "consent_number": "CRC990001",
+      "consent_type": "Water permit",
+      "purpose": "Take groundwater from one bore to irrigate 118 ha",
+      "status": "Issued – Active",
+      "expires_on": "2041-06-30"
+     },
+     {
+      "consent_number": "CRC990002",
+      "consent_type": "Land use consent",
+      "purpose": "Use land for farming (nutrient discharge)",
+      "status": "Issued – Active",
+      "expires_on": "2034-05-31"
+     }
+    ],
+    "cant.s7.lmu.unit": {
+     "LU1": {
+      "code": "LU1",
+      "name": "Irrigated Light Soils",
+      "area_ha": 82.5,
+      "description": "Free-draining stony silt loams under centre pivot and lateral irrigation. These soils carry most of the farm's pasture and winter forage production.",
+      "soils": "Lismore stony silt loam",
+      "irrigated": true,
+      "land_use": "Pasture and winter forage, irrigated"
+     },
+     "LU2": {
+      "code": "LU2",
+      "name": "Irrigated Heavy Soils",
+      "area_ha": 71.0,
+      "description": "Deeper, slower-draining silt loams under centre pivot and border-dyke irrigation. They pug easily when wet and are used for most of the winter crop.",
+      "soils": "Waimakariri deep silt loam",
+      "irrigated": true,
+      "land_use": "Pasture and winter crop, irrigated"
+     },
+     "LU3": {
+      "code": "LU3",
+      "name": "Dryland River Terraces",
+      "area_ha": 52.0,
+      "description": "Very stony terraces with no irrigation. Pasture growth depends on spring and autumn rain and the land is mostly grazed by cattle.",
+      "soils": "Eyre very stony sandy loam",
+      "irrigated": false,
+      "land_use": "Dryland pasture, mostly cattle"
+     },
+     "LU4": {
+      "code": "LU4",
+      "name": "Leased Creek Flats",
+      "area_ha": 26.0,
+      "description": "Flat leased land along the south-east boundary beside the creek. It is poorly drained and is grazed seasonally under a lease.",
+      "soils": "Temuka silt loam",
+      "irrigated": false,
+      "land_use": "Seasonal grazing under lease"
+     }
+    },
+    "cant.s7.lmu.vulnerability": {
+     "LU1": {
+      "waterlogging": "Low",
+      "p_sediment_runoff": "Very low",
+      "n_leaching": "High",
+      "structural": "Moderate to high",
+      "erosion": "Low"
+     },
+     "LU2": {
+      "waterlogging": "High",
+      "p_sediment_runoff": "Moderate",
+      "n_leaching": "Low to moderate",
+      "structural": "High",
+      "erosion": "Low"
+     },
+     "LU3": {
+      "waterlogging": "Very low",
+      "p_sediment_runoff": "Low",
+      "n_leaching": "Very high",
+      "structural": "Low",
+      "erosion": "Moderate"
+     },
+     "LU4": {
+      "waterlogging": "Very high",
+      "p_sediment_runoff": "High",
+      "n_leaching": "Moderate",
+      "structural": "Not stated",
+      "erosion": "Moderate"
+     }
+    },
+    "cant.s7.risk.assessment": [
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Winter grazing",
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Winter grazing",
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Winter grazing",
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Winter grazing",
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "land_unit": "LU4",
+      "significance": "Major",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Cultivation",
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Cultivation",
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Cultivation",
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Cultivation",
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Pugging and compaction",
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Pugging and compaction",
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Pugging and compaction",
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "activity": "Pugging and compaction",
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "management": "Back-fence, critical source areas left ungrazed, 10 m grass buffer"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock access to waterways",
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "land_unit": "LU1",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock access to waterways",
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "land_unit": "LU2",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock access to waterways",
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "land_unit": "LU3",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock access to waterways",
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "land_unit": "LU4",
+      "significance": "Major",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock crossings",
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock crossings",
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock crossings",
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Stock crossings",
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Riparian margin condition",
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Riparian margin condition",
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Riparian margin condition",
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "activity": "Riparian margin condition",
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "management": "Fencing, culvert crossing and planting (see actions)"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Nitrogen fertiliser",
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "land_unit": "LU1",
+      "significance": "Major",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Nitrogen fertiliser",
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Nitrogen fertiliser",
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "land_unit": "LU3",
+      "significance": "Major",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Nitrogen fertiliser",
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "land_unit": "LU4",
+      "significance": "Minor",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Phosphorus fertiliser",
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Phosphorus fertiliser",
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Phosphorus fertiliser",
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Phosphorus fertiliser",
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "management": "Annual nutrient budget; no N from May to July; setbacks"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Chemical and fuel storage",
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "management": "Bunded store; pit to be relocated"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Chemical and fuel storage",
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "management": "Bunded store; pit to be relocated"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Chemical and fuel storage",
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "management": "Bunded store; pit to be relocated"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Chemical and fuel storage",
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Offal pit",
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "land_unit": "LU1",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Offal pit",
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "land_unit": "LU2",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Offal pit",
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "land_unit": "LU3",
+      "significance": "Moderate",
+      "management": "Bunded store; pit to be relocated"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "activity": "Offal pit",
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Centre pivot irrigation",
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "land_unit": "LU1",
+      "significance": "Moderate",
+      "management": "Scheduling from soil moisture probes"
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Centre pivot irrigation",
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "management": "Scheduling from soil moisture probes"
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Centre pivot irrigation",
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "land_unit": "LU3",
+      "significance": "Major",
+      "management": "Scheduling from soil moisture probes"
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Centre pivot irrigation",
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Border-dyke irrigation",
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "land_unit": "LU1",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Border-dyke irrigation",
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "management": "Scheduling from soil moisture probes"
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Border-dyke irrigation",
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "land_unit": "LU3",
+      "significance": "Not applicable",
+      "management": null
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Border-dyke irrigation",
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "management": null
+     }
+    ],
+    "cant.s7.nutrient_budget.summary": {
+     "model": "OverseerFM",
+     "model_version": "6.5.4",
+     "prepared_by": "Alex Example",
+     "qualification": "Certified Nutrient Management Adviser",
+     "season": "2025/26",
+     "n_baseline": 24,
+     "n_loss": 21,
+     "p_loss": 0.8,
+     "baseline_gmp_loss_rate": 26,
+     "gmp_loss_rate": 22,
+     "farm_portal_report_on": "2026-06-30"
+    },
+    "cant.s7.nutrient_budget.lmu": {
+     "LU1": {
+      "n_loss": 28,
+      "p_loss": 0.5,
+      "overseer_blocks": "Pivot A, Pivot B"
+     },
+     "LU2": {
+      "n_loss": 19,
+      "p_loss": 0.9,
+      "overseer_blocks": "Pivot B, Border-dyke"
+     },
+     "LU3": {
+      "n_loss": 17,
+      "p_loss": 0.4,
+      "overseer_blocks": "Terraces"
+     },
+     "LU4": {
+      "n_loss": 14,
+      "p_loss": 1.6,
+      "overseer_blocks": "Creek flats"
+     }
+    },
+    "cant.s7.nutrients.obj1": {
+     "summary": "Nutrients are matched to crop need from an annual budget, and losses are kept below the GMP Loss Rate."
+    },
+    "cant.s7.nutrients.t1": {
+     "applies": "Applies",
+     "how_met": "Nitrogen loss is 21 kg N/ha/yr in the 2025/26 nutrient budget, below the Baseline GMP Loss Rate of 26 and the GMP Loss Rate of 22.",
+     "records": "Nutrient budget 2025/26; Farm Portal report"
+    },
+    "cant.s7.nutrients.t2": {
+     "applies": "Applies",
+     "how_met": "Winter crops are grazed from the top of the paddock down, and catch crops are sown after the winter crop on the light soils.",
+     "records": "Paddock plan; sowing records"
+    },
+    "cant.s7.nutrients.t3": {
+     "applies": "Applies",
+     "how_met": "Critical source areas are left ungrazed in winter and a 10 m grass buffer is kept along the creek and drain.",
+     "records": "Winter grazing plan; photos each July"
+    },
+    "cant.s7.nutrients.t4": {
+     "applies": "Applies",
+     "how_met": "Fertiliser rates come from soil tests every two years and the nutrient budget; no nitrogen is applied from 1 May to 31 July.",
+     "records": "Soil tests; fertiliser recommendations and application records"
+    },
+    "cant.s7.nutrients.t5": {
+     "applies": "Applies",
+     "how_met": "Fertiliser is delivered to the bunded loading pad 80 m from the creek; spreading is by a Spreadmark-certified contractor.",
+     "records": "Spreadmark certificate; proof of placement"
+    },
+    "cant.s7.irrigation.obj1": {
+     "summary": "Irrigation is scheduled to soil moisture and the system is checked every year."
+    },
+    "cant.s7.irrigation.t1": {
+     "applies": "Not applicable",
+     "not_applicable_reason": "No new irrigation system is planned on this farm."
+    },
+    "cant.s7.irrigation.t2": {
+     "applies": "Applies",
+     "how_met": "The pivots and the lateral are checked before the season and a uniformity test is done every year.",
+     "records": "Annual system check; uniformity test reports"
+    },
+    "cant.s7.irrigation.t3": {
+     "applies": "Applies",
+     "how_met": "Irrigation is scheduled from soil moisture probes and the weekly water balance; application depth is set for each soil.",
+     "records": "Probe logs; water balance"
+    },
+    "cant.s7.irrigation.t4": {
+     "applies": "Applies",
+     "how_met": "The owner and the part-time worker are trained by the irrigation supplier each spring.",
+     "records": "Training record"
+    },
+    "cant.s7.soils.obj1": {
+     "summary": "Cultivation and winter grazing are planned to keep soil on the farm."
+    },
+    "cant.s7.soils.t1": {
+     "applies": "Applies",
+     "how_met": "Winter grazing is planned around critical source areas and the creek flats are only grazed in dry conditions.",
+     "records": "Winter grazing plan"
+    },
+    "cant.s7.soils.t2": {
+     "applies": "Applies",
+     "how_met": "Cultivation is timed for dry soils, paddocks are re-sown before 31 March and stock come off wet paddocks at an agreed trigger.",
+     "records": "Paddock plan; sowing records"
+    },
+    "cant.s7.waterbodies.obj1": {
+     "summary": "The creek and spring-fed drain are fenced, planted and kept clear of stock."
+    },
+    "cant.s7.waterbodies.t1": {
+     "applies": "Applies",
+     "how_met": "The creek is fenced on one side; the remaining 400 m will be fenced by 1 March 2027.",
+     "records": "Fencing invoices; photos"
+    },
+    "cant.s7.waterbodies.t2": {
+     "applies": "Applies",
+     "how_met": "A 10 m grass margin is kept and 0.8 ha of the creek margin will be planted in natives.",
+     "records": "Planting plan; nursery receipts"
+    },
+    "cant.s7.waterbodies.t3": {
+     "applies": "Applies",
+     "how_met": "A culvert crossing will replace the ford at the main race; troughs are kept 20 m from the creek.",
+     "records": "Photos; contractor invoice"
+    },
+    "cant.s7.waterbodies.t4": {
+     "applies": "Applies",
+     "how_met": "Tuna and kōura habitat in the creek is protected by fencing, shade planting and no fertiliser in the setbacks.",
+     "records": "Mahinga kai notes; photos"
+    },
+    "cant.s7.point_sources.obj1": {
+     "summary": "One offal pit, to be moved; farm rubbish leaves the farm."
+    },
+    "cant.s7.point_sources.t1": {
+     "applies": "Applies",
+     "how_met": "Farm rubbish is taken off site; the old offal pit will be moved more than 50 m from the bore and waterways before it is used again.",
+     "records": "Pit location on the farm map"
+    },
+    "cant.s7.water_use.obj1": {
+     "summary": "Stock water is metered and leaks are fixed quickly."
+    },
+    "cant.s7.water_use.t1": {
+     "applies": "Applies",
+     "how_met": "Stock water is float-controlled and leaks are fixed within a week; the main meter is verified every five years.",
+     "records": "Meter verification; maintenance log"
+    },
+    "cant.s7.actions": [
+     {
+      "management_area": "Cultivation and soil structure",
+      "target_ref": "5C T1",
+      "action": "Leave critical source areas ungrazed and use a back-fence",
+      "land_units": "2, 4",
+      "timeframe": "Each winter",
+      "due_on": null,
+      "existing_or_new": "Existing",
+      "category": "Regulated",
+      "records": "Winter grazing plan and photos"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "target_ref": "5C T1",
+      "action": "Keep a 10 m grass buffer along waterways during cultivation",
+      "land_units": "2, 4",
+      "timeframe": "On-going",
+      "due_on": null,
+      "existing_or_new": "Existing",
+      "category": "Regulated",
+      "records": "Winter grazing plan and photos"
+     },
+     {
+      "management_area": "Cultivation and soil structure",
+      "target_ref": "5C T1",
+      "action": "Re-sow paddocks before 31 March",
+      "land_units": "1",
+      "timeframe": "Every year by 31 March",
+      "due_on": null,
+      "existing_or_new": "Existing",
+      "category": "Supplementary",
+      "records": "Winter grazing plan and photos"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "target_ref": "5E T1",
+      "action": "Fence the remaining 400 m of the creek margin",
+      "land_units": "4",
+      "timeframe": "By 1 March 2027",
+      "due_on": "2027-03-01",
+      "existing_or_new": "New",
+      "category": "Regulated",
+      "records": "Fencing invoices, photos, planting receipts"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "target_ref": "5E T1",
+      "action": "Install a culvert crossing at the main race",
+      "land_units": "4",
+      "timeframe": "By 30 June 2027",
+      "due_on": "2027-06-30",
+      "existing_or_new": "New",
+      "category": "Catchment",
+      "records": "Fencing invoices, photos, planting receipts"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "target_ref": "5E T1",
+      "action": "Plant 0.8 ha of the creek margin in natives",
+      "land_units": "4",
+      "timeframe": "By 1 September 2027",
+      "due_on": "2027-09-01",
+      "existing_or_new": "New",
+      "category": "Catchment",
+      "records": "Fencing invoices, photos, planting receipts"
+     },
+     {
+      "management_area": "Nutrients",
+      "target_ref": "5A T4",
+      "action": "Apply no nitrogen fertiliser between 1 May and 31 July",
+      "land_units": "1, 3",
+      "timeframe": "On-going",
+      "due_on": null,
+      "existing_or_new": "Existing",
+      "category": "Regulated",
+      "records": "Nutrient budget, fertiliser records"
+     },
+     {
+      "management_area": "Nutrients",
+      "target_ref": "5A T4",
+      "action": "Mark 10 m fertiliser setbacks along the creek",
+      "land_units": "4",
+      "timeframe": "By 15 December 2026",
+      "due_on": "2026-12-15",
+      "existing_or_new": "New",
+      "category": "Supplementary",
+      "records": "Nutrient budget, fertiliser records"
+     },
+     {
+      "management_area": "Nutrients",
+      "target_ref": "5A T4",
+      "action": "Complete and review the nutrient budget every autumn",
+      "land_units": "1, 2, 3, 4",
+      "timeframe": "Every year by 31 May",
+      "due_on": null,
+      "existing_or_new": "Existing",
+      "category": "Regulated",
+      "records": "Nutrient budget, fertiliser records"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "target_ref": "5F T1",
+      "action": "Update the chemical inventory and spill kit each season",
+      "land_units": "1, 2, 3, 4",
+      "timeframe": "Annually",
+      "due_on": null,
+      "existing_or_new": "Existing",
+      "category": "Supplementary",
+      "records": "Chemical inventory, pit location on map"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "target_ref": "5F T1",
+      "action": "Relocate the offal pit more than 50 m from the bore and waterways",
+      "land_units": "3",
+      "timeframe": "Prior to using the pit again",
+      "due_on": null,
+      "existing_or_new": "New",
+      "category": "Regulated",
+      "records": "Chemical inventory, pit location on map"
+     },
+     {
+      "management_area": "Irrigation",
+      "target_ref": "5B T3",
+      "action": "Schedule irrigation from soil moisture probes",
+      "land_units": "1, 2",
+      "timeframe": "Prior to undertaking first irrigation round",
+      "due_on": null,
+      "existing_or_new": "New",
+      "category": "Catchment",
+      "records": "Probe logs, water meter records"
+     },
+     {
+      "management_area": "Irrigation",
+      "target_ref": "5B T3",
+      "action": "Convert the border-dyke block to lateral irrigation",
+      "land_units": "2",
+      "timeframe": "By 30 June 2028",
+      "due_on": "2028-06-30",
+      "existing_or_new": "New",
+      "category": "Catchment",
+      "records": "Probe logs, water meter records"
+     },
+     {
+      "management_area": "Irrigation",
+      "target_ref": "5B T3",
+      "action": "Verify the accuracy of the main water meter",
+      "land_units": "1, 2, 3, 4",
+      "timeframe": "By 28 February 2027",
+      "due_on": "2027-02-28",
+      "existing_or_new": "New",
+      "category": "Regulated",
+      "records": "Probe logs, water meter records"
+     }
+    ],
+    "cant.s7.audit.history": [
+     {
+      "audited_on": "2025-04-10",
+      "auditor": "Jo Example",
+      "independent": true,
+      "grade": "B",
+      "next_audit_by": "2027-04-10",
+      "trigger": "CRC990002, condition 7",
+      "issues_raised": "Creek margin fencing incomplete; offal pit within 50 m of the bore."
+     }
+    ],
+    "cant.s7.audit.loc": [
+     {
+      "management_area": "Nutrients",
+      "item_ref": "5A T1",
+      "loc": "High",
+      "assessed_by": "Jo Example",
+      "assessed_on": "2025-04-10"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "item_ref": "5E T1",
+      "loc": "Low",
+      "assessed_by": "Jo Example",
+      "assessed_on": "2025-04-10"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "item_ref": "5F T1",
+      "loc": "Medium",
+      "assessed_by": "Jo Example",
+      "assessed_on": "2025-04-10"
+     }
+    ],
+    "cant.s7.audit.actions": [
+     {
+      "action": "Fence the remaining creek margin",
+      "due": "1 March 2027",
+      "progress": "Posts in; wire to come"
+     },
+     {
+      "action": "Relocate the offal pit",
+      "due": "Before next use",
+      "progress": "New site chosen"
+     }
+    ],
+    "cant.s7.extra.mahinga_kai": {
+     "sites": "- Tuna (longfin eel) (Creek and lowland river)\n- Inanga (Lower river reaches)\n- Kōura (Spring-fed headwaters)\n- Watercress (Spring-fed drain)",
+     "management": "Keep the creek and spring-fed drain fenced and shaded, and keep fertiliser and chemicals out of the setbacks."
+    },
+    "cant.s7.extra.ghg": {
+     "total_t": 2150,
+     "methane_t": 1640,
+     "n2o_t": 390,
+     "co2_t": 120,
+     "calculator": "An approved on-farm emissions calculator",
+     "year": "2025/26"
+    }
+   },
+   "switched_off": [
+    {
+     "key": "cant.s7.effluent",
+     "reason": "No dairy shed or stand-off pad, so no animal effluent or solid animal waste is collected on this farm."
+    }
+   ],
+   "sparse": [
+    "cant.s7.plan.meta",
+    "cant.s7.property.address",
+    "cant.s7.property.areas",
+    "cant.s7.consents",
+    "cant.s7.lmu.unit"
+   ],
+   "figures": {
+    "cant.s7.map.property": {
+     "alt": "Aerial map of Tussock Rise Farm: the boundary, the four land units, the creek on the south-east boundary with its fenced and unfenced reaches, the spring-fed drain, stock crossings, critical source areas and public access routes.",
+     "caption": "Farm map: Schedule 7 item 2"
+    }
+   }
+  },
+  "fwfp-cant-s7": {
+   "nodes": {
+    "nz.admin.operator": {
+     "operator_name": "Tussock Rise Farm Ltd",
+     "contact_phone": "03 555 0100",
+     "contact_email": "owner@example.invalid",
+     "nzbn": "9429000000000"
+    },
+    "nz.admin.other_parties": [
+     {
+      "name": "Creekside Holdings Ltd (invented)",
+      "role": "Owner",
+      "contact": "lessor@example.invalid"
+     }
+    ],
+    "nz.admin.preparer": {
+     "preparer_name": "Sam Fixture",
+     "prepared_on": "2026-10-30",
+     "version_label": "Final"
+    },
+    "nz.admin.address": {
+     "property_name": "Tussock Rise Farm",
+     "physical_address": "100 Example Road, Nowhere Flat, Canterbury 7777"
+    },
+    "nz.admin.titles": [
+     {
+      "title_ref": "XX99A/101",
+      "parcel": "Lot 1 DP 99001",
+      "tenure": "Owned"
+     },
+     {
+      "title_ref": "XX99A/102",
+      "parcel": "Lot 2 DP 99001",
+      "tenure": "Owned"
+     },
+     {
+      "title_ref": "XX99B/310",
+      "parcel": "Lot 3 DP 99002",
+      "tenure": "Leased"
+     }
+    ],
+    "nz.admin.areas": {
+     "total_area_ha": 248,
+     "leased_area_ha": 40,
+     "effective_area_ha": 231.5
+    },
+    "nz.admin.land_use": {
+     "land_use": "Sheep (predominantly Romney), beef and dairy grazing",
+     "stock_summary": "About 2,700 stock units: 480 dairy heifers, 70 beef cattle and 1,100 ewes"
+    },
+    "nz.admin.consents": [
+     {
+      "consent_number": "CRC990001",
+      "consent_type": "Water permit",
+      "purpose": "Take groundwater from one bore to irrigate 118 ha",
+      "status": "Issued – Active",
+      "expires_on": "2041-06-30"
+     },
+     {
+      "consent_number": "CRC990002",
+      "consent_type": "Land use consent",
+      "purpose": "Use land for farming (nutrient discharge)",
+      "status": "Issued – Active",
+      "expires_on": "2034-05-31"
+     }
+    ],
+    "nz.land_units.unit": {
+     "LU1": {
+      "code": "LU1",
+      "name": "Irrigated Light Soils",
+      "area_ha": 82.5,
+      "description": "Free-draining stony silt loams under centre pivot and lateral irrigation. These soils carry most of the farm's pasture and winter forage production.",
+      "soils": "Lismore stony silt loam",
+      "irrigated": true,
+      "drained": false
+     },
+     "LU2": {
+      "code": "LU2",
+      "name": "Irrigated Heavy Soils",
+      "area_ha": 71.0,
+      "description": "Deeper, slower-draining silt loams under centre pivot and border-dyke irrigation. They pug easily when wet and are used for most of the winter crop.",
+      "soils": "Waimakariri deep silt loam",
+      "irrigated": true,
+      "drained": false
+     },
+     "LU3": {
+      "code": "LU3",
+      "name": "Dryland River Terraces",
+      "area_ha": 52.0,
+      "description": "Very stony terraces with no irrigation. Pasture growth depends on spring and autumn rain and the land is mostly grazed by cattle.",
+      "soils": "Eyre very stony sandy loam",
+      "irrigated": false,
+      "drained": false
+     },
+     "LU4": {
+      "code": "LU4",
+      "name": "Leased Creek Flats",
+      "area_ha": 26.0,
+      "description": "Flat leased land along the south-east boundary beside the creek. It is poorly drained and is grazed seasonally under a lease.",
+      "soils": "Temuka silt loam",
+      "irrigated": false,
+      "drained": true
+     }
+    },
+    "nz.land_units.vulnerability": {
+     "LU1": {
+      "waterlogging": "Low",
+      "p_sediment_runoff": "Very low",
+      "n_leaching": "High",
+      "structural": "Moderate to high",
+      "erosion": "Low"
+     },
+     "LU2": {
+      "waterlogging": "High",
+      "p_sediment_runoff": "Moderate",
+      "n_leaching": "Low to moderate",
+      "structural": "High",
+      "erosion": "Low"
+     },
+     "LU3": {
+      "waterlogging": "Very low",
+      "p_sediment_runoff": "Low",
+      "n_leaching": "Very high",
+      "structural": "Low",
+      "erosion": "Moderate"
+     },
+     "LU4": {
+      "waterlogging": "Very high",
+      "p_sediment_runoff": "High",
+      "n_leaching": "Moderate",
+      "structural": "Not stated",
+      "erosion": "Moderate"
+     }
+    },
+    "nz.catchment.context": {
+     "council_info_available": true,
+     "catchment_name": "Example Plains",
+     "summary": "The farm drains to the Example Creek and to shallow groundwater under the Example Plains. Nitrate in groundwater and sediment in the creek are the catchment's main issues.",
+     "receiving_environment": "Example Creek, then the lower Example River and its estuary"
+    },
+    "nz.catchment.tangata_whenua": {
+     "values": "Mahinga kai (tuna, kōura, watercress) in the creek and its springs, and clean water for downstream marae.",
+     "iwi_plan": "The iwi management plan for the area (invented reference)"
+    },
+    "nz.catchment.plan_provisions": {
+     "provisions": "- Regional plan nitrate limits for the Example Plains groundwater zone\n- Stock exclusion rules for permanent waterways"
+    },
+    "nz.catchment.regard": {
+     "response": "Nitrogen loss is held below the GMP Loss Rate, the creek margin is being fenced and planted, and the offal pit is being moved away from the bore."
+    },
+    "nz.risk.activity": {
+     "Land and soil": {
+      "management_area": "Land and soil",
+      "activities": "Cultivation, and grazing management",
+      "description": "About fifty hectares of the irrigated heavy soils and the creek flats are cultivated in rotation for fodder beet and kale, then returned to pasture. Cultivation is timed for dry soils and kept away from the creek margin.",
+      "risks": "Bare soil and winter grazing are the main routes for sediment and phosphorus loss. Critical source areas are left ungrazed and a back-fence is used, and a grass buffer is kept along every waterway."
+     },
+     "Waterways and wetlands": {
+      "management_area": "Waterways and wetlands",
+      "activities": "Stock exclusion, crossings, and riparian management",
+      "description": "The creek along the south-east boundary is the farm's only permanent waterway. It is fenced on one side, with about four hundred metres still to do, and a small spring-fed drain feeds into it near the leased flats.",
+      "risks": "Stock access, crossings and a lack of riparian cover are the main risks to the creek. Fencing, a culvert crossing and native planting are planned."
+     },
+     "Nutrients": {
+      "management_area": "Nutrients",
+      "activities": "Fertiliser application, nutrient budgeting, and soil testing",
+      "description": "Nitrogen and phosphorus fertiliser is applied in spring and early summer to support pasture and winter crops. Rates are set from soil tests and a nutrient budget prepared each autumn.",
+      "risks": "The main freshwater risk is nitrate leaching through the stony soils of the light soils and terraces. Autumn and winter nitrogen is avoided and no fertiliser is applied within the marked setbacks from the creek."
+     },
+     "Point sources": {
+      "management_area": "Point sources",
+      "activities": "Chemical and fuel storage, and offal pits",
+      "description": "Chemicals and fuel are kept in a locked, bunded shed away from waterways. Farm rubbish is taken off site. There is no dairy shed, so no collected animal effluent is generated.",
+      "risks": "One old offal pit sits on the terraces and will be relocated before it is used again."
+     },
+     "Irrigation": {
+      "management_area": "Irrigation",
+      "activities": "Centre pivot irrigation, border-dyke irrigation, and water metering",
+      "description": "Water from one consented bore is applied by two pivots, a lateral and a small border-dyke block. Irrigation is scheduled from soil moisture readings and the weekly farm water balance.",
+      "risks": "Over-application on the lighter soils can carry nitrate below the root zone, so application depths are matched to soil water holding and the border-dyke block is being reduced."
+     }
+    },
+    "nz.risk.significance": [
+     {
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "management_area": "Land and soil",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "management_area": "Land and soil",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "management_area": "Land and soil",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+      "management_area": "Land and soil",
+      "land_unit": "LU4",
+      "significance": "Major",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "management_area": "Land and soil",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "management_area": "Land and soil",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "management_area": "Land and soil",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Cultivation – sediment and phosphorus loss to surface water",
+      "management_area": "Land and soil",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "management_area": "Land and soil",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "management_area": "Land and soil",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "management_area": "Land and soil",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Pugging and compaction – reduced infiltration and increased runoff",
+      "management_area": "Land and soil",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU1",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU2",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU3",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock access to waterways – direct deposition of dung, urine and sediment",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU4",
+      "significance": "Major",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Stock crossings – sediment and microbes disturbed at crossing points",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Riparian margin condition – loss of shading and of filtering of runoff",
+      "management_area": "Waterways and wetlands",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "management_area": "Nutrients",
+      "land_unit": "LU1",
+      "significance": "Major",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "management_area": "Nutrients",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "management_area": "Nutrients",
+      "land_unit": "LU3",
+      "significance": "Major",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Nitrogen fertiliser – nitrate leaching to groundwater",
+      "management_area": "Nutrients",
+      "land_unit": "LU4",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "management_area": "Nutrients",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "management_area": "Nutrients",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "management_area": "Nutrients",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+      "management_area": "Nutrients",
+      "land_unit": "LU4",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "management_area": "Point sources",
+      "land_unit": "LU1",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "management_area": "Point sources",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "management_area": "Point sources",
+      "land_unit": "LU3",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Chemical and fuel storage – spills entering water",
+      "management_area": "Point sources",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "management_area": "Point sources",
+      "land_unit": "LU1",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "management_area": "Point sources",
+      "land_unit": "LU2",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "management_area": "Point sources",
+      "land_unit": "LU3",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Offal pit – leachate reaching groundwater",
+      "management_area": "Point sources",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "management_area": "Irrigation",
+      "land_unit": "LU1",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "management_area": "Irrigation",
+      "land_unit": "LU2",
+      "significance": "Minor",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "management_area": "Irrigation",
+      "land_unit": "LU3",
+      "significance": "Major",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+      "management_area": "Irrigation",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "management_area": "Irrigation",
+      "land_unit": "LU1",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "management_area": "Irrigation",
+      "land_unit": "LU2",
+      "significance": "Moderate",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "management_area": "Irrigation",
+      "land_unit": "LU3",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     },
+     {
+      "risk_label": "Border-dyke irrigation – nitrate and sediment in return flow",
+      "management_area": "Irrigation",
+      "land_unit": "LU4",
+      "significance": "Not applicable",
+      "assessed_by": "Sam Fixture",
+      "assessed_on": "2026-10-20"
+     }
+    ],
+    "nz.risk.method": {
+     "method": "Each risk was rated Minor, Moderate or Major for each land unit by combining the land unit's inherent vulnerability with the intensity of the activity on it."
+    },
+    "nz.actions.overview": {
+     "overview": "Most practices are already in place. The new actions finish fencing the creek, replace the ford with a culvert, plant the creek margin and convert the border-dyke block to lateral irrigation."
+    },
+    "nz.actions.table": [
+     {
+      "management_area": "Land and soil",
+      "activity": "Winter grazing of crops",
+      "risk_addressed": "Sediment, phosphorus and microbial loss in overland flow",
+      "land_units": "2, 4",
+      "action": "Leave critical source areas ungrazed and use a back-fence",
+      "category": "Regulated",
+      "existing_or_new": "Existing",
+      "timeframe": "Each winter",
+      "due_on": null,
+      "s7_target": "5C T1",
+      "records": "Winter grazing plan and photos"
+     },
+     {
+      "management_area": "Land and soil",
+      "activity": "Cultivation",
+      "risk_addressed": "Sediment and phosphorus loss from bare soil",
+      "land_units": "2, 4",
+      "action": "Keep a 10 m grass buffer along waterways during cultivation",
+      "category": "Regulated",
+      "existing_or_new": "Existing",
+      "timeframe": "On-going",
+      "due_on": null,
+      "s7_target": "5C T1",
+      "records": "Winter grazing plan and photos"
+     },
+     {
+      "management_area": "Land and soil",
+      "activity": "Pasture renewal",
+      "risk_addressed": "Bare soil over winter",
+      "land_units": "1",
+      "action": "Re-sow paddocks before 31 March",
+      "category": "Supplementary",
+      "existing_or_new": "Existing",
+      "timeframe": "Every year by 31 March",
+      "due_on": null,
+      "s7_target": "5C T1",
+      "records": "Winter grazing plan and photos"
+     },
+     {
+      "management_area": "Waterways and wetlands",
+      "activity": "Stock exclusion",
+      "risk_addressed": "Microbial and sediment loss from stock access",
+      "land_units": "4",
+      "action": "Fence the remaining 400 m of the creek margin",
+      "category": "Regulated",
+      "existing_or_new": "New",
+      "timeframe": "By 1 March 2027",
+      "due_on": "2027-03-01",
+      "s7_target": "5E T1",
+      "records": "Fencing invoices, photos, planting receipts"
+     },
+     {
+      "management_area": "Waterways and wetlands",
+      "activity": "Stock crossings",
+      "risk_addressed": "Sediment disturbed at crossing points",
+      "land_units": "4",
+      "action": "Install a culvert crossing at the main race",
+      "category": "Catchment",
+      "existing_or_new": "New",
+      "timeframe": "By 30 June 2027",
+      "due_on": "2027-06-30",
+      "s7_target": "5E T1",
+      "records": "Fencing invoices, photos, planting receipts"
+     },
+     {
+      "management_area": "Waterways and wetlands",
+      "activity": "Riparian planting",
+      "risk_addressed": "Loss of shading and filtering of runoff",
+      "land_units": "4",
+      "action": "Plant 0.8 ha of the creek margin in natives",
+      "category": "Catchment",
+      "existing_or_new": "New",
+      "timeframe": "By 1 September 2027",
+      "due_on": "2027-09-01",
+      "s7_target": "5E T1",
+      "records": "Fencing invoices, photos, planting receipts"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Fertiliser application",
+      "risk_addressed": "Nitrate leaching to groundwater",
+      "land_units": "1, 3",
+      "action": "Apply no nitrogen fertiliser between 1 May and 31 July",
+      "category": "Regulated",
+      "existing_or_new": "Existing",
+      "timeframe": "On-going",
+      "due_on": null,
+      "s7_target": "5A T4",
+      "records": "Nutrient budget, fertiliser records"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Fertiliser application",
+      "risk_addressed": "Fertiliser reaching waterways",
+      "land_units": "4",
+      "action": "Mark 10 m fertiliser setbacks along the creek",
+      "category": "Supplementary",
+      "existing_or_new": "New",
+      "timeframe": "By 15 December 2026",
+      "due_on": "2026-12-15",
+      "s7_target": "5A T4",
+      "records": "Nutrient budget, fertiliser records"
+     },
+     {
+      "management_area": "Nutrients",
+      "activity": "Nutrient budgeting",
+      "risk_addressed": "Over-supply of nitrogen",
+      "land_units": "1, 2, 3, 4",
+      "action": "Complete and review the nutrient budget every autumn",
+      "category": "Regulated",
+      "existing_or_new": "Existing",
+      "timeframe": "Every year by 31 May",
+      "due_on": null,
+      "s7_target": "5A T4",
+      "records": "Nutrient budget, fertiliser records"
+     },
+     {
+      "management_area": "Point sources",
+      "activity": "Chemical storage",
+      "risk_addressed": "Spills reaching water",
+      "land_units": "1, 2, 3, 4",
+      "action": "Update the chemical inventory and spill kit each season",
+      "category": "Supplementary",
+      "existing_or_new": "Existing",
+      "timeframe": "Annually",
+      "due_on": null,
+      "s7_target": "5F T1",
+      "records": "Chemical inventory, pit location on map"
+     },
+     {
+      "management_area": "Point sources",
+      "activity": "Offal pit",
+      "risk_addressed": "Leachate reaching groundwater",
+      "land_units": "3",
+      "action": "Relocate the offal pit more than 50 m from the bore and waterways",
+      "category": "Regulated",
+      "existing_or_new": "New",
+      "timeframe": "Prior to using the pit again",
+      "due_on": null,
+      "s7_target": "5F T1",
+      "records": "Chemical inventory, pit location on map"
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Centre pivot irrigation",
+      "risk_addressed": "Drainage below the root zone",
+      "land_units": "1, 2",
+      "action": "Schedule irrigation from soil moisture probes",
+      "category": "Catchment",
+      "existing_or_new": "New",
+      "timeframe": "Prior to undertaking first irrigation round",
+      "due_on": null,
+      "s7_target": "5B T3",
+      "records": "Probe logs, water meter records"
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Border-dyke irrigation",
+      "risk_addressed": "Nitrate and sediment in return flow",
+      "land_units": "2",
+      "action": "Convert the border-dyke block to lateral irrigation",
+      "category": "Catchment",
+      "existing_or_new": "New",
+      "timeframe": "By 30 June 2028",
+      "due_on": "2028-06-30",
+      "s7_target": "5B T3",
+      "records": "Probe logs, water meter records"
+     },
+     {
+      "management_area": "Irrigation",
+      "activity": "Water metering",
+      "risk_addressed": "Inefficient water use",
+      "land_units": "1, 2, 3, 4",
+      "action": "Verify the accuracy of the main water meter",
+      "category": "Regulated",
+      "existing_or_new": "New",
+      "timeframe": "By 28 February 2027",
+      "due_on": "2027-02-28",
+      "s7_target": "5B T3",
+      "records": "Probe logs, water meter records"
+     }
+    ],
+    "nz.map.vulnerabilities": {
+     "boundary": "Shown",
+     "land_use_areas": "Shown",
+     "land_units": "Shown",
+     "natural_water": "Shown",
+     "artificial_water": "Shown",
+     "soils": "Shown",
+     "landform_slope": "Shown",
+     "iwg_areas": "Shown",
+     "csa": "Shown",
+     "drainage": "Shown",
+     "irrigation_frost": "Shown"
+    },
+    "nz.map.farming_features": {
+     "stock_exclusion_fencing": "Shown",
+     "riparian_planting": "Shown",
+     "erosion_works": "None on this farm",
+     "effluent": "None on this farm",
+     "water_takes": "Shown",
+     "crossings": "Shown",
+     "stockholding": "None on this farm",
+     "stock_infrastructure": "Shown",
+     "accessways": "Shown",
+     "point_sources": "Shown",
+     "drinking_water": "Shown"
+    },
+    "nz.records.evidence": [
+     {
+      "summary": "Fencing invoices and photos for the first 1.2 km of creek margin (2025)."
+     }
+    ],
+    "cant.catchment.zone": {
+     "zone": "Selwyn Waihora",
+     "regional_plans": "Canterbury Land and Water Regional Plan",
+     "nutrient_zone": "Not checked"
+    },
+    "cant.catchment.ecan_cccv": {
+     "published": false
+    },
+    "cant.records.fep_history": [
+     {
+      "audited_on": "2025-04-10",
+      "grade": "B",
+      "auditor": "Jo Example",
+      "trigger": "CRC990002, condition 7"
+     }
+    ],
+    "cant.s7.property.contact": {
+     "contact_person": "Pat Example",
+     "phone": "03 555 0100",
+     "email": "owner@example.invalid"
+    },
+    "cant.s7.property.identifier": {
+     "identifier": "FP-99001",
+     "identifier_kind": "ECan Farm Portal identifier"
+    },
+    "cant.s7.property.responsible": {
+     "implementer_name": "Pat Example",
+     "position": "Owner and manager",
+     "confirmed_on": "2026-10-30",
+     "owner_commitment": true
+    },
+    "cant.s7.map.extra": {
+     "stock_access": "Shown",
+     "riparian_vegetation": "Shown",
+     "sig_biodiversity": "None on this farm",
+     "hrrpz": "None on this farm",
+     "flood_assets": "None on this farm",
+     "access_routes": "Shown"
+    },
+    "cant.s7.nutrient_budget.summary": {
+     "model": "OverseerFM",
+     "model_version": "6.5.4",
+     "prepared_by": "Alex Example",
+     "qualification": "Certified Nutrient Management Adviser",
+     "season": "2025/26",
+     "n_baseline": 24,
+     "n_loss": 21,
+     "p_loss": 0.8,
+     "baseline_gmp_loss_rate": 26,
+     "gmp_loss_rate": 22,
+     "farm_portal_report_on": "2026-06-30"
+    },
+    "cant.s7.nutrient_budget.lmu": {
+     "LU1": {
+      "n_loss": 28,
+      "p_loss": 0.5,
+      "overseer_blocks": "Pivot A, Pivot B"
+     },
+     "LU2": {
+      "n_loss": 19,
+      "p_loss": 0.9,
+      "overseer_blocks": "Pivot B, Border-dyke"
+     },
+     "LU3": {
+      "n_loss": 17,
+      "p_loss": 0.4,
+      "overseer_blocks": "Terraces"
+     },
+     "LU4": {
+      "n_loss": 14,
+      "p_loss": 1.6,
+      "overseer_blocks": "Creek flats"
+     }
+    },
+    "cant.s7.nutrients.obj1": {
+     "summary": "Nutrients are matched to crop need from an annual budget, and losses are kept below the GMP Loss Rate."
+    },
+    "cant.s7.nutrients.t1": {
+     "applies": "Applies",
+     "how_met": "Nitrogen loss is 21 kg N/ha/yr in the 2025/26 nutrient budget, below the Baseline GMP Loss Rate of 26 and the GMP Loss Rate of 22.",
+     "records": "Nutrient budget 2025/26; Farm Portal report"
+    },
+    "cant.s7.nutrients.t2": {
+     "applies": "Applies",
+     "how_met": "Winter crops are grazed from the top of the paddock down, and catch crops are sown after the winter crop on the light soils.",
+     "records": "Paddock plan; sowing records"
+    },
+    "cant.s7.nutrients.t3": {
+     "applies": "Applies",
+     "how_met": "Critical source areas are left ungrazed in winter and a 10 m grass buffer is kept along the creek and drain.",
+     "records": "Winter grazing plan; photos each July"
+    },
+    "cant.s7.nutrients.t4": {
+     "applies": "Applies",
+     "how_met": "Fertiliser rates come from soil tests every two years and the nutrient budget; no nitrogen is applied from 1 May to 31 July.",
+     "records": "Soil tests; fertiliser recommendations and application records"
+    },
+    "cant.s7.nutrients.t5": {
+     "applies": "Applies",
+     "how_met": "Fertiliser is delivered to the bunded loading pad 80 m from the creek; spreading is by a Spreadmark-certified contractor.",
+     "records": "Spreadmark certificate; proof of placement"
+    },
+    "cant.s7.irrigation.obj1": {
+     "summary": "Irrigation is scheduled to soil moisture and the system is checked every year."
+    },
+    "cant.s7.irrigation.t1": {
+     "applies": "Not applicable",
+     "not_applicable_reason": "No new irrigation system is planned on this farm."
+    },
+    "cant.s7.irrigation.t2": {
+     "applies": "Applies",
+     "how_met": "The pivots and the lateral are checked before the season and a uniformity test is done every year.",
+     "records": "Annual system check; uniformity test reports"
+    },
+    "cant.s7.irrigation.t3": {
+     "applies": "Applies",
+     "how_met": "Irrigation is scheduled from soil moisture probes and the weekly water balance; application depth is set for each soil.",
+     "records": "Probe logs; water balance"
+    },
+    "cant.s7.irrigation.t4": {
+     "applies": "Applies",
+     "how_met": "The owner and the part-time worker are trained by the irrigation supplier each spring.",
+     "records": "Training record"
+    },
+    "cant.s7.soils.obj1": {
+     "summary": "Cultivation and winter grazing are planned to keep soil on the farm."
+    },
+    "cant.s7.soils.t1": {
+     "applies": "Applies",
+     "how_met": "Winter grazing is planned around critical source areas and the creek flats are only grazed in dry conditions.",
+     "records": "Winter grazing plan"
+    },
+    "cant.s7.soils.t2": {
+     "applies": "Applies",
+     "how_met": "Cultivation is timed for dry soils, paddocks are re-sown before 31 March and stock come off wet paddocks at an agreed trigger.",
+     "records": "Paddock plan; sowing records"
+    },
+    "cant.s7.waterbodies.obj1": {
+     "summary": "The creek and spring-fed drain are fenced, planted and kept clear of stock."
+    },
+    "cant.s7.waterbodies.t1": {
+     "applies": "Applies",
+     "how_met": "The creek is fenced on one side; the remaining 400 m will be fenced by 1 March 2027.",
+     "records": "Fencing invoices; photos"
+    },
+    "cant.s7.waterbodies.t2": {
+     "applies": "Applies",
+     "how_met": "A 10 m grass margin is kept and 0.8 ha of the creek margin will be planted in natives.",
+     "records": "Planting plan; nursery receipts"
+    },
+    "cant.s7.waterbodies.t3": {
+     "applies": "Applies",
+     "how_met": "A culvert crossing will replace the ford at the main race; troughs are kept 20 m from the creek.",
+     "records": "Photos; contractor invoice"
+    },
+    "cant.s7.waterbodies.t4": {
+     "applies": "Applies",
+     "how_met": "Tuna and kōura habitat in the creek is protected by fencing, shade planting and no fertiliser in the setbacks.",
+     "records": "Mahinga kai notes; photos"
+    },
+    "cant.s7.point_sources.obj1": {
+     "summary": "One offal pit, to be moved; farm rubbish leaves the farm."
+    },
+    "cant.s7.point_sources.t1": {
+     "applies": "Applies",
+     "how_met": "Farm rubbish is taken off site; the old offal pit will be moved more than 50 m from the bore and waterways before it is used again.",
+     "records": "Pit location on the farm map"
+    },
+    "cant.s7.water_use.obj1": {
+     "summary": "Stock water is metered and leaks are fixed quickly."
+    },
+    "cant.s7.water_use.t1": {
+     "applies": "Applies",
+     "how_met": "Stock water is float-controlled and leaks are fixed within a week; the main meter is verified every five years.",
+     "records": "Meter verification; maintenance log"
+    },
+    "cant.s7.audit.history": [
+     {
+      "audited_on": "2025-04-10",
+      "auditor": "Jo Example",
+      "independent": true,
+      "grade": "B",
+      "next_audit_by": "2027-04-10",
+      "trigger": "CRC990002, condition 7",
+      "issues_raised": "Creek margin fencing incomplete; offal pit within 50 m of the bore."
+     }
+    ],
+    "cant.s7.audit.loc": [
+     {
+      "management_area": "Nutrients",
+      "item_ref": "5A T1",
+      "loc": "High",
+      "assessed_by": "Jo Example",
+      "assessed_on": "2025-04-10"
+     },
+     {
+      "management_area": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+      "item_ref": "5E T1",
+      "loc": "Low",
+      "assessed_by": "Jo Example",
+      "assessed_on": "2025-04-10"
+     },
+     {
+      "management_area": "Point sources (offal pits, farm rubbish pits, silage pits)",
+      "item_ref": "5F T1",
+      "loc": "Medium",
+      "assessed_by": "Jo Example",
+      "assessed_on": "2025-04-10"
+     }
+    ],
+    "cant.s7.audit.actions": [
+     {
+      "action": "Fence the remaining creek margin",
+      "due": "1 March 2027",
+      "progress": "Posts in; wire to come"
+     },
+     {
+      "action": "Relocate the offal pit",
+      "due": "Before next use",
+      "progress": "New site chosen"
+     }
+    ],
+    "cant.s7.extra.mahinga_kai": {
+     "sites": "- Tuna (longfin eel) (Creek and lowland river)\n- Inanga (Lower river reaches)\n- Kōura (Spring-fed headwaters)\n- Watercress (Spring-fed drain)",
+     "management": "Keep the creek and spring-fed drain fenced and shaded, and keep fertiliser and chemicals out of the setbacks."
+    },
+    "cant.s7.extra.ghg": {
+     "total_t": 2150,
+     "methane_t": 1640,
+     "n2o_t": 390,
+     "co2_t": 120,
+     "calculator": "An approved on-farm emissions calculator",
+     "year": "2025/26"
+    }
+   },
+   "switched_off": [
+    {
+     "key": "cant.s7.effluent",
+     "reason": "No dairy shed or stand-off pad, so no animal effluent or solid animal waste is collected on this farm."
+    },
+    "cant.s7.part.sub_region"
+   ],
+   "sparse": [
+    "nz.admin.preparer",
+    "nz.admin.address",
+    "nz.admin.areas",
+    "nz.admin.consents",
+    "nz.land_units.unit"
+   ],
+   "figures": {
+    "nz.map.vulnerabilities": {
+     "alt": "Map of Tussock Rise Farm showing its boundary, land use areas, the four land units and their soils, slope, waterways, drains, critical source areas and winter grazing paddocks."
+    },
+    "nz.map.farming_features": {
+     "alt": "Map of Tussock Rise Farm showing stock exclusion fencing, riparian planting, the water take, crossings, troughs, races and the offal pit."
+    }
+   }
+  }
+ }
+}
