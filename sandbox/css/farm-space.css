@@ -92,7 +92,7 @@ body.farm-detail #more-open { display: none; }
 
 /* Layers and the map background stay in a secondary drawer, reached from More in the header. */
 .layers-drawer { position: absolute; z-index: 5; top: 12px; left: 12px; width: 310px; max-width: calc(100% - 30px); max-height: calc(100% - 24px); overflow: auto; padding: 16px; border-radius: 10px; background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
-.drawer-sub { margin: 14px 0 6px; font: 600 var(--text-small) var(--f-head); color: var(--ink-2); }
+.drawer-sub { margin: 14px 0 8px; font: 600 var(--text-small) var(--f-head); color: var(--ink-2); }
 .drawer-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }.drawer-heading h2 { font: 600 var(--text-heading) var(--f-head); margin: 0; }
 .action-label { color: var(--map-label); font: 600 var(--text-small) var(--f-head); text-shadow: var(--map-label-shadow); pointer-events: none; }
 

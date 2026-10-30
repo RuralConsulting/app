@@ -114,7 +114,7 @@
     if (FP.demo?.active) { location.href = location.pathname + location.search; return; }
     await FP.auth.signOut(); location.hash = ""; location.reload();
   });
-  if (FP.basemaps.names.length < 2) $(".basemaps").hidden = true;
+  if (FP.basemaps.names.length < 2) $("#drawer-background").hidden = true;
   // Background and terrain live only in the layers drawer (the secondary list); nothing sits on the map itself.
   const pressed = (name) => { for (const o of $$("[data-basemap]")) o.setAttribute("aria-pressed", String(o.dataset.basemap === name)); };
   for (const name of FP.basemaps.names) {
@@ -126,7 +126,7 @@
     });
   }
   if (!FP.basemaps.missingKey) {
-    const t = $("#terrain-toggle"); t.parentElement.hidden = false; t.checked = FP.basemaps.terrainDefault();
+    const t = $("#terrain-toggle"); $("#drawer-terrain").hidden = false; t.checked = FP.basemaps.terrainDefault();
     t.addEventListener("change", () => FP.farmMap.terrain(t.checked));
   }
 

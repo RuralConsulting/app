@@ -51,7 +51,13 @@
 /* List: stacked cards in a narrow host, a table with real headers in a wide one. The block's own width decides. */
 .list-block { container-type: inline-size; color: var(--ink); }
 .list-block > .block-title { margin: 0 0 12px; font: 600 var(--text-heading)/1.2 var(--f-head); }
-.list-group + .list-group { margin-top: 18px; }
+.list-group + .list-group, .list-group + .list-collapsed, .list-collapsed + .list-group { margin-top: 18px; }
+/* Supporting rows are folded: one line each for the group and for a run of the same kind. */
+.list-fold, .list-collapsed { border-top: 1px solid var(--rule); padding: 10px 0; }
+.list-fold > summary, .list-collapsed > summary { cursor: pointer; font-weight: 600; }
+.list-collapsed > summary { font: 600 var(--text-body)/1.3 var(--f-head); }
+.list-fold > :is(.list-cards, .list-table-wrap), .list-collapsed > :is(.list-cards, .list-table-wrap, .list-fold) { margin-top: 10px; }
+.list-collapsed > .list-fold:first-of-type { border-top: 0; }
 .list-group > :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 8px; font: 600 var(--text-body)/1.3 var(--f-head); }
 .list-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .list-card { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); padding: 12px; overflow-wrap: anywhere; }

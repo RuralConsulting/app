@@ -86,6 +86,8 @@
     });
     scheme = window.matchMedia("(prefers-color-scheme: dark)"); scheme.addEventListener("change", syncPalette);
     observer = new MutationObserver(syncPalette); observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] });
+    for (const ev of ["dragstart", "zoomstart", "rotatestart", "pitchstart"]) map.on(ev, (e) => { if (e.originalEvent) { settling++; touched = true; } });   // the person has taken the camera
+    window.addEventListener("resize", onResize);
     map.on("click", onClick);
     map.on("mousemove", (e) => {
       const ids = [...interactive.keys()].filter((id) => map.getLayer(id));
@@ -175,18 +177,45 @@
   }
 
   // The NZ -> farm zoom: a smooth fly, or a jump when the person asks their device for reduced motion.
-  let flightKey = null;
+  let flightKey = null, settling = 0, framed = null, touched = false, resizing = 0, framedWidth = 0;   // framed: the extent last fitted; touched: the person has moved the map since
   const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  function fit(bounds, padding) {
-    map.fitBounds(bounds, { padding, duration: reduced() ? 0 : 2600, maxZoom: 17 });
+  const wide = () => window.innerWidth > 800;
+  function fit(bounds, padding, geom, duration = reduced() ? 0 : 2600) {
+    map.fitBounds(bounds, { padding, duration, maxZoom: 17 });
+    if (geom) { framed = geom; touched = false; framedWidth = window.innerWidth; settle(geom); }
+  }
+  // The window (or the pane the app sits in) changed size: frame the farm again for the new map, unless the person has moved it.
+  // (A phone keeps its frame when only its height changes: that is the keyboard coming up.)
+  function onResize() {
+    const mine = ++resizing, width = window.innerWidth;
+    setTimeout(() => {
+      if (mine !== resizing || !map || !framed || touched || (!wide() && width === framedWidth)) return;
+      framedWidth = width;
+      map.resize();
+      fit(bbox(framed), FP.farmModel.framePadding(inset(), wide()), framed, reduced() ? 0 : 300);
+    }, 200);
+  }
+  // Once the camera has come to rest, any part of the farm still outside the visible map (clear of its controls
+  // and, on a phone, the sheet) is brought back in. Not when the person has moved the map themselves.
+  function settle(geom) {
+    const mine = ++settling;
+    map.once("idle", () => {
+      if (mine !== settling || !map) return;
+      const c = map.getContainer(), fix = FP.farmModel.frameFix(project(geom), { width: c.clientWidth, height: c.clientHeight }, FP.farmModel.framePadding(inset(), wide()));
+      if (fix) map.easeTo({ zoom: map.getZoom() + fix.zoom, center: map.unproject(fix.at), duration: reduced() ? 0 : 400 });
+    });
   }
   function union(boxes) {
     return boxes.reduce((a, b) => [[Math.min(a[0][0], b[0][0]), Math.min(a[0][1], b[0][1])], [Math.max(a[1][0], b[1][0]), Math.max(a[1][1], b[1][1])]]);
   }
   // Where a farm will sit once its view opens: clear of the overview rail (desktop) or sheet (phone).
+  // Wide: the farm will be framed on a canvas that leaves room for the header and the panel, so this flight, which starts
+  // on the portfolio's whole-window canvas, pads for the difference (the canvas already ends where the panel begins).
   function farmPadding() {
-    const wide = window.innerWidth > 800, rail = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rail-width")) || 370;
-    return { top: 40, left: 40, bottom: wide ? 40 : 94, right: wide ? 40 + rail : 40 };
+    if (!wide()) return { top: 40, left: 40, bottom: 94, right: 40 };
+    const css = (name) => parseInt(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0, c = map.getContainer();
+    const from = { width: c.clientWidth, height: c.clientHeight }, to = { width: from.width - (css("--rail-width") || 370), height: from.height - (css("--farm-header-height") || 106) };
+    return FP.farmModel.flightPadding(FP.farmModel.framePadding(0, true), from, to);
   }
   // How far an open bottom sheet (phone) covers the map canvas: farm-space measures it into --sheet-overlap.
   const inset = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue("--sheet-overlap")) || 0;
@@ -194,7 +223,7 @@
   function reframe(geom) {
     if (!map || !geom?.coordinates) return;
     flightKey = null;
-    map.fitBounds(bbox(geom), { padding: FP.farmModel.sheetPadding(inset()), duration: reduced() ? 0 : 500, maxZoom: 17 });
+    fit(bbox(geom), FP.farmModel.framePadding(inset(), wide()), geom, reduced() ? 0 : 500);
   }
   // Where an extent sits on the map canvas, in px from its top-left corner (for checks that it is in view).
   function project(geom) {
@@ -204,14 +233,14 @@
   }
   function zoomTo(geom) {
     if (!map || !geom?.coordinates) return;
-    const b = bbox(geom); flightKey = JSON.stringify(b); fit(b, farmPadding());
+    const b = bbox(geom); flightKey = JSON.stringify(b); fit(b, farmPadding(), geom);
   }
   // Every farm the person can see, fitted to their extents; each pin opens its farm.
   async function portfolio(items, onSelect) {
     const request = ++opening;
     init(); await loaded();
     if (request !== opening) return;
-    clear(); flightKey = null;
+    clear(); flightKey = null; framed = null;
     map.resize();
     const shown = items.filter((i) => i.extent?.coordinates);
     if (!shown.length) return;
@@ -258,12 +287,12 @@
     if (!data) return null;
     await loaded();
     if (request !== opening) return null;
-    clear();
+    clear(); framed = null;
     const entries = [];   // what the layer list shows: {key, name, sub, ids, on, markers, job}
 
     if (data.extent) {
       source("extent", { type: "Feature", geometry: data.extent, properties: {} });
-      entries.push({ key: "extent", name: "Farm extent", sub: `${FP.ha(data.extent_ha)} · titles, leased land and land units`, on: true,
+      entries.push({ key: "extent", name: "Farm boundary", sub: FP.ha(data.extent_ha), section: "farm", on: true,
         ids: [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": accent(), "line-width": 3 } })] });
     }
     source("titles", data.titles);
@@ -272,9 +301,8 @@
       layer({ id: "titles-hit", type: "fill", source: "titles", paint: { "fill-color": "#fff", "fill-opacity": 0 } },
         (f) => ({ title: `Title ${f.properties.title_no}`, layerName: "Record of title", qualifier: f.properties.source ? `Source: ${f.properties.source}` : null,
                   props: { area_ha: f.properties.area_ha, estate: f.properties.estate } }))];
-    const nTitles = data.titles.features.length;
     const titleHa = data.titles.features.reduce((a, f) => a + (Number(f.properties.area_ha) || 0), 0);
-    entries.push({ key: "titles", name: "Titles", sub: `${nTitles} title${nTitles === 1 ? "" : "s"}, ${FP.ha(titleHa)}`, on: true, ids: titleIds });
+    entries.push({ key: "titles", name: "Titles", sub: titleHa ? FP.ha(titleHa) : null, section: "farm", on: true, ids: titleIds });
 
     data.layers.forEach((l, i) => source(`fl-${i}`, l.features));
     source("land-units", data.land_units);
@@ -283,9 +311,8 @@
       data.layers.forEach((l, i) => layerIds[i].push(...farmLayer(l, i, pass)));
     }
     data.layers.forEach((l, i) => {
-      const n = l.features.features.length;
-      const e = { key: l.theme, name: l.name, sub: [`${n} feature${n === 1 ? "" : "s"}`, FP.farmModel.sourceLine(l)].filter(Boolean).join(" · "),
-                  ids: layerIds[i], job: l.job || null };
+      // one plain name and the one line saying where the layer came from; how many features it holds is not for the reader
+      const e = { key: l.theme, name: FP.farmModel.layerName(l), sub: FP.farmModel.sourceLine(l), section: "farm", ids: layerIds[i], job: l.job || null };
       if (l.theme === "land_units") {
         landUnitLabels(data.land_units);
         e.markers = markers.slice();
@@ -307,13 +334,12 @@
     for (const [i, r] of data.reference.entries()) {
       const sid = `ref-${i}`;
       source(sid, r.features);
-      const n = r.features.features.length;
       const id = layer({ id: sid + "-pt", type: "circle", source: sid, paint: {
         "circle-color": "#1e88e5", "circle-radius": 7, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } },
         (f) => ({ title: `${r.theme === "wells" ? "Bore" : r.name} ${f.properties.external_id}`, layerName: r.name,
                   qualifier: f.properties.on_farm ? "On the farm" : "Off the farm, linked to the farm's permit",
                   props: f.properties, permits: f.properties.authorisations || [], attribution: r.attribution }));
-      entries.push({ key: "reference", name: r.theme === "wells" ? `Bores on the farm (${n})` : r.name, sub: r.name, ids: [id] });
+      entries.push({ key: "reference", name: r.theme === "wells" ? "Bores on the farm" : FP.farmModel.layerName(r), sub: null, section: "reference", ids: [id] });
     }
 
     // what's on when the farm opens comes from config.js (farmView.defaultOn); the rest is a tick away
@@ -326,8 +352,8 @@
       const b = bbox(data.extent);
       // The portfolio may already have started this zoom; it is kept unless a phone sheet covers part of the map.
       const sheet = inset();
-      if (flightKey === JSON.stringify(b) && !sheet) flightKey = null;
-      else { flightKey = null; fit(b, FP.farmModel.sheetPadding(sheet)); }
+      if (flightKey === JSON.stringify(b) && !sheet) { flightKey = null; framed = data.extent; touched = false; framedWidth = window.innerWidth; settle(data.extent); }
+      else { flightKey = null; fit(b, FP.farmModel.framePadding(sheet, wide()), data.extent); }
     }
     return { farm: data.farm, extentHa: data.extent_ha, entries };
   }
@@ -360,7 +386,7 @@
       const marker = new maplibregl.Marker({ element: label }).setLngLat(at).addTo(map);
       markers.push(marker); actionMarkers.push(marker);
     }
-    return { key: "actions", name: "Actions", ids, on: true, markers: actionMarkers, sub: features.length + " mapped locations" };
+    return { key: "actions", name: "Actions", ids, on: true, markers: actionMarkers, sub: null, section: "farm" };
   }
 
   function setVisible(entry, on) {
@@ -407,7 +433,7 @@
   // A block's own surface goes when the block does: listeners, labels and the WebGL context with it.
   function remove() {
     if (!map) return;
-    opening++; scheme?.removeEventListener("change", syncPalette); observer?.disconnect();
+    opening++; resizing++; framed = null; window.removeEventListener("resize", onResize); scheme?.removeEventListener("change", syncPalette); observer?.disconnect();
     for (const m of markers) m.remove();
     markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
   }

@@ -5,6 +5,15 @@
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
 })(typeof window === "undefined" ? globalThis : window, function (M) {
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
+  // The tier a document sits in is read once the database has the column (F1e); until then the plain list is read.
+  const DOCUMENT_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,page_count,storage_path,created_at";
+  async function readDocuments(sb, farm) {
+    const query = (columns) => sb.from("documents").select(columns).eq("farm_id", farm.id).order("title");
+    const { data, error } = await query(DOCUMENT_COLUMNS + ",tier");
+    if (!error) return data;
+    if (!/tier/i.test(error.message || "") && error.code !== "42703") throw error;
+    return read(query(DOCUMENT_COLUMNS));
+  }
   const nzToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });
   // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
   async function load(sb, farm, user) {
@@ -12,7 +21,7 @@
       read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
       read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
       read(sb.rpc("farm_map", { f: farm.id })),
-      read(sb.from("documents").select("id,title,doc_type,author,author_org,date_prepared,page_count,storage_path,created_at").eq("farm_id", farm.id).order("title")),
+      readDocuments(sb, farm),
       read(sb.from("authorisations").select("id,kind,title,consent_no,rule_ref,valid_from,valid_to,created_at").eq("farm_id", farm.id).order("title")),
       // Optional: if the dates can't be read, "What's due" says so rather than claiming nothing is due.
       Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,due_date,recurrence").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
@@ -102,6 +111,11 @@
       button.disabled = false;
       if (error || !data?.signedUrl) { button.textContent = "Couldn't open it"; return; }
       window.open(data.signedUrl, "_blank", "noopener");
+    });
+    // Enter asks (Shift+Enter is a new line); the phone keyboard's key reads "send" for the same reason.
+    $("#space-content").addEventListener("keydown", (e) => {
+      if (!e.target.matches?.("#ask-input") || !M.entersToSubmit(e)) return;
+      e.preventDefault(); $("#ask-form").requestSubmit();
     });
     $("#space-content").addEventListener("submit", (e) => {
       if (e.target.matches("#people-add")) { e.preventDefault(); addPerson(); return; }
@@ -273,18 +287,26 @@
       : "Added " + data.email + ". Anyone new gets an email with a link to set a password.", "ok");
     await loadPeople();
   }
+  // The drawer's Farm and Reference lists: a plain name, the line saying where it came from, and a switch. Layers
+  // made for a job sit together under one sentence-case heading.
   function renderLayers(entries) {
-    const row = (e) => el("li", {}, el("label", {}, el("input", { type: "checkbox", checked: e.on, onchange: (ev) => FP.farmMap.setVisible(e, ev.target.checked) }),
+    const row = (e) => el("li", {}, el("label", {}, el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => FP.farmMap.setVisible(e, ev.target.checked) }),
       el("span", {}, el("b", {}, e.name), e.sub ? el("small", {}, e.sub) : null)));
-    const children = entries.filter((e) => !e.job).map(row), jobs = new Map();
-    for (const e of entries.filter((e) => e.job)) { if (!jobs.has(e.job.id)) jobs.set(e.job.id, { job: e.job, entries: [] }); jobs.get(e.job.id).entries.push(e); }
-    for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group" }, "Made for: " + job.name), ...es.map(row));
+    const children = [];
+    for (const [section, heading] of [["farm", "Farm"], ["reference", "Reference"]]) {
+      const own = entries.filter((e) => e.section === section);
+      if (!own.length) continue;
+      children.push(el("li", { class: "group", "data-layer-section": section }, heading), ...own.filter((e) => !e.job).map(row));
+      const jobs = new Map();
+      for (const e of own.filter((e) => e.job)) { if (!jobs.has(e.job.id)) jobs.set(e.job.id, { job: e.job, entries: [] }); jobs.get(e.job.id).entries.push(e); }
+      for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group job" }, M.jobHeading(job)), ...es.map(row));
+    }
     $("#layer-list").replaceChildren(...children);
   }
   function askView() {
     const form = el("form", { id: "ask-form", class: "ask-form" },
       el("label", { for: "ask-input", class: "visually-hidden" }, "Question"),
-      el("textarea", { id: "ask-input", rows: "3", autocomplete: "off", placeholder: "When is the next audit due?" }),
+      el("textarea", { id: "ask-input", rows: "3", autocomplete: "off", enterkeyhint: "send", placeholder: "When is the next audit due?" }),
       el("button", { type: "submit" }, "Ask"));
     return el("section", { class: "space-view", "data-view": "ask" }, el("h2", {}, "Ask"), form, el("div", { id: "ask-answer", class: "ask-answer", "aria-live": "polite" }));
   }

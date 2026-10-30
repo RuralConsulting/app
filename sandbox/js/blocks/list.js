@@ -2,7 +2,8 @@
 // for that kind. Phone: stacked cards carrying the same information; wide hosts: a table with real headers. Both are
 // in the markup and the host's width (a container query in css/blocks.css) picks one, so the block never asks the
 // window how big it is. Data: { kind, title?, rows: [{id, title, group?, href?, open?, ...one field per column}],
-// groups?: [[key, label]] }. Dates are YYYY-MM-DD and shown here. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
+// groups?: [[key, label]], collapsed?: [key] (groups shown folded, when another group is open), rows may carry
+// fold: "<plural noun>" (two or more rows with the same fold in a group are one folded line). Dates are YYYY-MM-DD and shown here. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -41,14 +42,16 @@
     return [def.columns[0], ...wanted.map((k) => def.columns.find(([key]) => key === k))];
   }
   function sorting(kind, o) {
+    if (o.sort === "given") return null;   // the host has put the rows in the order it means
     const def = KINDS[kind], m = String(o.sort || def.sort).match(/^([a-z]+)(?::(asc|desc))?$/);
     const col = m && def.columns.find(([k]) => k === m[1]);
     if (!col) fail('A list of ' + kind + ' cannot be sorted by "' + o.sort + '". Sort by one of: ' + def.columns.map(([k]) => k).join(", ") + " (add :asc or :desc)");
     return { col, dir: m[2] || (o.sort ? "asc" : def.sort.split(":")[1]) };
   }
   // Missing values always last, whichever way it runs; ties by name, then id, so the order never jumps.
-  function sorted(rows, { col: [key, , type], dir }) {
-    const sign = dir === "desc" ? -1 : 1, empty = (v) => v == null || v === "" || (type === "date" && !isDate(v));
+  function sorted(rows, order) {
+    if (!order) return [...rows];
+    const { col: [key, , type], dir } = order, sign = dir === "desc" ? -1 : 1, empty = (v) => v == null || v === "" || (type === "date" && !isDate(v));
     return [...rows].sort((a, b) => {
       const x = a[key], y = b[key];
       if (empty(x) !== empty(y)) return empty(x) ? 1 : -1;
@@ -94,18 +97,36 @@
       columns.map((c, i) => '<th scope="col"' + (i ? numeric(c) : "") + ">" + esc(c[1]) + "</th>").join("") + (hasOpen ? '<th scope="col" class="list-act"><span class="visually-hidden">Open</span></th>' : "") +
       "</tr></thead><tbody>" + group.map(tr).join("") + "</tbody></table></div>";
     const body = (group) => '<ul class="list-cards">' + group.map(card).join("") + "</ul>" + table(group);
-    // Groups the data names (Documents: by who prepared them), in that order; anything outside them goes last.
+    // Groups the data names (Documents: by tier), in that order; anything outside them goes last as "Other".
     const named = list(data.groups).filter((g) => Array.isArray(g) && g.length === 2);
     let groups = [[null, null, rows]];
     if (named.length) {
       const by = new Map(named.map(([k]) => [k, []])), rest = [];
       for (const r of rows) (by.get(r.group) || rest).push(r);
-      groups = [...named.map(([k, label]) => [k, label, by.get(k)]), ["", "Not recorded", rest]].filter(([, , g]) => g.length);
+      groups = [...named.map(([k, label]) => [k, label, by.get(k)]), ["", "Other", rest]].filter(([, , g]) => g.length);
     }
+    // A collapsed group is one folded line, unless nothing else would be open.
+    const collapsed = new Set(list(data.collapsed)), shown = groups.some(([k]) => !collapsed.has(k));
+    const holds = (g) => o.selected != null && g.some((r) => r.id === o.selected);
+    // Two or more rows of one fold are a single folded line, where the first of them stands.
+    const segments = (g) => {
+      const n = new Map();
+      for (const r of g) if (text(r.fold)) n.set(r.fold, (n.get(r.fold) || 0) + 1);
+      const out = [];
+      for (const r of g) {
+        if (text(r.fold) && n.get(r.fold) > 1) { if (!out.some((s) => s.fold === r.fold)) out.push({ fold: r.fold, rows: g.filter((x) => x.fold === r.fold) }); }
+        else if (out.length && !out[out.length - 1].fold) out[out.length - 1].rows.push(r);
+        else out.push({ rows: [r] });
+      }
+      return out;
+    };
+    const inner = (g) => segments(g).map((s) => s.fold ? '<details class="list-fold"' + (holds(s.rows) ? " open" : "") + "><summary>" + s.rows.length + " " + esc(s.fold) + "</summary>" + body(s.rows) + "</details>" : body(s.rows)).join("");
     const sub = ctx.nested ? h : Math.min(h + 1, 6);
     const title = ctx.nested ? "" : "<h" + h + ' class="block-title">' + esc(text(data.title) || "List") + "</h" + h + ">";
     return '<section class="list-block' + (o.dense ? " list-dense" : "") + '" data-list-kind="' + esc(kind) + '">' + title +
-      groups.map(([key, label, g]) => label == null ? body(g) : '<section class="list-group" data-list-group="' + esc(key) + '"><h' + sub + ">" + esc(label) + " (" + g.length + ")</h" + sub + ">" + body(g) + "</section>").join("") +
+      groups.map(([key, label, g]) => label == null ? inner(g) : collapsed.has(key) && shown ?
+        '<details class="list-group list-collapsed" data-list-group="' + esc(key) + '"' + (holds(g) ? " open" : "") + "><summary>" + esc(label) + " (" + g.length + ")</summary>" + inner(g) + "</details>" :
+        '<section class="list-group" data-list-group="' + esc(key) + '"><h' + sub + ">" + esc(label) + " (" + g.length + ")</h" + sub + ">" + inner(g) + "</section>").join("") +
       (rows.length < all.length ? '<p class="list-more">Showing ' + rows.length + " of " + all.length + "</p>" : "") + "</section>";
   }
 

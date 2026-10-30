@@ -22,9 +22,58 @@
   }
   const authName = (a) => [a.consent_no || a.rule_ref, a.title].filter(Boolean).join(" · ") || "Recorded authorisation";
   const count = (n, one, many) => (n === 1 ? "One " + one : n + " " + many);
-  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", consent_decision: "Consent decision", overseer_report: "Nutrient budget",
-    memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report" };
+  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", consent_decision: "Consent decision", consent_application: "Consent application",
+    overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
+    ghg_report: "Greenhouse gas report", consent_correspondence: "Consent correspondence", correspondence: "Correspondence",
+    smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract" };
   const docKind = (k) => docKinds[k] || (k ? String(k).replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()) : null);
+
+  // ---- Documents: what matters first --------------------------------------------------------------------
+  // The tier a document sits in comes from what the record says it is: its type, then its title. When the database
+  // carries a tier (F1e) a "supporting" or "archive" there is kept; its "primary" is also what every existing
+  // document was given, so it decides nothing and the type and title still do. Pure: a documents row in, out comes
+  // { tier: "primary" | "supporting" | "other", rank, kind, fold }; rank orders within a tier (lower first), fold
+  // names the quiet group a run of the same kind is folded into.
+  const DOC_TIERS = [["primary", "Main documents"], ["supporting", "Supporting"], ["other", "Other"]];
+  const DOC_TYPES = {
+    fep: ["primary", 0], fwfp: ["primary", 0], farm_environment_plan: ["primary", 0], freshwater_farm_plan: ["primary", 0],
+    consent_decision: ["primary", 1], consent_application: ["primary", 1], consent: ["primary", 1], aee: ["primary", 1],
+    overseer_report: ["primary", 2], nutrient_budget: ["primary", 2], land_unit_map: ["primary", 3], farm_map: ["primary", 3],
+    luc_report: ["primary", 4], ghg_report: ["primary", 4],
+    consent_correspondence: ["supporting", 0], correspondence: ["supporting", 0], memo: ["supporting", 1],
+    smap_factsheet: ["supporting", 2], gis_artifact: ["supporting", 3],
+  };
+  const DOC_FOLDS = { smap_factsheet: "S-map soil fact sheets", gis_artifact: "map extracts" };
+  const TITLE_RULES = [   // for a document whose type says nothing: [pattern, tier, rank]
+    [/correspondence|\be-?mail\b|\bletter\b|\binformation (?:request|\d+)\b|\bs\.? ?92\b/i, "supporting", 0],
+    [/fact ?sheet/i, "supporting", 2],
+    [/farm environment plan|freshwater farm plan|\bFEP\b|\bFWFP\b/i, "primary", 0],
+    [/\bdecision\b|consent notice/i, "primary", 1], [/assessment of environmental effects|\bAEE\b/i, "primary", 1],
+    [/nutrient budget|overseer/i, "primary", 2], [/\bland units?\b|farm map|property map/i, "primary", 3],
+    [/greenhouse|\bghg\b|land use capability|\bLUC\b/i, "primary", 4],
+  ];
+  const ABOUT_CORRESPONDENCE = /correspondence|\be-?mail\b|\bletter\b/i;
+  const MAP_EXTRACT = /\bclip|buffer|within \d+ ?km|\bextract\b/i;
+  function docClass(d) {
+    const row = d || {}, type = String(row.doc_type || "").toLowerCase().trim().replace(/[\s-]+/g, "_"), title = String(row.title || "");
+    let [tier, rank] = DOC_TYPES[type] || [null, 0];
+    if (type === "gis_artifact" && /\bland units?\b|farm map|property map/i.test(title) && !MAP_EXTRACT.test(title)) [tier, rank] = ["primary", 3];
+    if (!tier) { const hit = TITLE_RULES.find(([re]) => re.test(title)); [tier, rank] = hit ? [hit[1], hit[2]] : ["other", 0]; }
+    if (tier === "primary" && rank >= 2 && ABOUT_CORRESPONDENCE.test(title)) [tier, rank] = ["supporting", 0];   // "nutrient budget 2012/13 correspondence"
+    const given = String(row.tier || "").toLowerCase();
+    if (given === "archive") [tier, rank] = ["other", 9];
+    else if (given === "supporting" && tier !== "supporting") [tier, rank] = ["supporting", 5];
+    return { tier, rank, kind: docKind(row.doc_type), fold: tier === "supporting" ? DOC_FOLDS[type] || null : null };
+  }
+  // A correspondence record titled only by a code ("<consent no> information 3") is shown as what it is: its kind,
+  // the consent it is about and the date it was prepared (or its number in the run when it has no date).
+  const CODE_TITLE = /^\s*([A-Z]{2,5}\s?\d{4,}[A-Z]?)((?:\s+(?:further|additional|information|info|response|request|reply|letter|e-?mail|correspondence|s\.?\s?92))+)[\s#.,-]*(\d+)?[\s.]*$/i;
+  function docTitle(d) {
+    const title = String((d || {}).title || "").trim(), m = title.match(CODE_TITLE);
+    if (!m) return title || "Document";
+    const kind = docKind(d.doc_type) || "Correspondence", when = day(d.date_prepared);
+    return kind + " for " + m[1].replace(/\s/g, "").toUpperCase() + (when ? ", " + date(when) : m[3] ? ", no. " + m[3] : "");
+  }
 
   // Why a condition is on the list, in the words of the record: the consent or rule that requires it and the condition
   // number. A condition the record doesn't link to an authorisation says so instead of leaving the line bare.
@@ -63,52 +112,75 @@
       restricted: !items.length, currency: "As at " + date(today), farm: f };
   }
 
-  // "What's changed": records added to the farm, newest first, from their recorded creation time.
+  // "What's changed": records added to the farm, newest first, from their recorded creation time. Records loaded
+  // together when the farm was set up are not changes: BULK_LOAD or more with the same added day are one line saying
+  // so, never promoted; what is promoted after that is a change since the load.
+  const BULK_LOAD = 10;
   function changed(context) {
     const f = context.farm.id, today = context.today, since = addDays(today, -30);
-    const items = [
-      ...list(context.documents).map((d) => ({ id: "document-" + d.id, text: d.title || "Document", href: href(f, "documents", d.id), added: day(d.created_at), kind: "document" })),
-      ...list(context.authorisations).map((a) => ({ id: "authorisation-" + a.id, text: authName(a), added: day(a.created_at), kind: "authorisation" })),
-    ].sort((a, b) => String(b.added || "").localeCompare(String(a.added || "")) || a.id.localeCompare(b.id));
+    const records = [
+      ...list(context.documents).map((d) => ({ id: "document-" + d.id, text: docTitle(d), href: href(f, "documents", d.id), added: day(d.created_at), kind: "document",
+        primary: docClass(d).tier === "primary", source: ["Document", d.author_org || d.author].filter(Boolean).join(" · ") })),
+      ...list(context.authorisations).map((a) => ({ id: "authorisation-" + a.id, text: authName(a), added: day(a.created_at), kind: "authorisation", primary: true, source: "Consent record" })),
+    ];
+    const perDay = new Map();
+    for (const r of records) if (r.added) perDay.set(r.added, (perDay.get(r.added) || 0) + 1);
+    const earliest = [...perDay.keys()].sort()[0];
+    const loads = [...perDay].filter(([, n]) => n >= BULK_LOAD).map(([added, n]) => ({ added, n })).sort((x, y) => y.added.localeCompare(x.added));
+    const loadDays = new Set(loads.map((l) => l.added));
+    // "when the farm was set up" is only said of the first load, and only once it is older than the window: a load
+    // inside the window is just "loaded on <date>", which is true whatever else the farm's history was.
+    const loadWhat = (l) => l.n + " records", loadDid = (l) => "were loaded on " + date(l.added) + (l.added === earliest && l.added < since ? " when the farm was set up" : "");
+    const real = records.filter((r) => !loadDays.has(r.added));
+    const byNewest = (a, b) => String(b.added || "").localeCompare(String(a.added || "")) || a.id.localeCompare(b.id);
+    const items = [...real, ...loads.map((l) => ({ id: "load-" + l.added, text: loadWhat(l) + " " + loadDid(l), what: loadWhat(l), did: loadDid(l), added: l.added, kind: "load" }))].sort(byNewest);
     for (const i of items) {
-      i.detail = i.added ? "added " + date(i.added) : "date added not recorded";
-      if (i.added && i.added >= since && i.added <= today) { i.eligible = true; i.because = "added " + date(i.added); }
+      i.detail = i.kind === "load" ? null : i.added ? "added " + date(i.added) : "date added not recorded";
+      if (i.primary && i.added && i.added >= since && i.added <= today) { i.eligible = true; i.because = "added " + date(i.added); }
     }
-    const recent = items.filter((i) => i.eligible), latest = items.find((i) => i.added);
-    const answer = recent.length ? { text: count(recent.length, "record was added in the last 30 days", "records were added in the last 30 days"), because: "the latest is " + recent[0].text + ", " + recent[0].because } :
-      latest ? { text: "Nothing was added in the last 30 days", because: "the latest record is " + latest.text + ", added " + date(latest.added) } : null;
-    // The body of All is the Timeline block: one sentence per record, with the date it was added and what it came from.
-    const body = { block: "timeline", data: { today, items: [
-      ...list(context.documents).map((d) => ({ id: "document-" + d.id, kind: "documents", date: day(d.created_at), what: d.title || "Document", did: "was added", href: href(f, "documents", d.id),
-        source: ["Document", d.author_org || d.author].filter(Boolean).join(" · ") })),
-      ...list(context.authorisations).map((a) => ({ id: "authorisation-" + a.id, kind: "authorisations", date: day(a.created_at), what: authName(a), did: "was added", source: "Consent record" })),
-    ] } };
+    const recent = real.filter((r) => r.added && r.added >= since && r.added <= today).sort(byNewest), latest = real.filter((r) => r.added).sort(byNewest)[0];
+    // A bulk load inside the window is reported as that, whatever else the farm holds: "nothing was added" would be untrue.
+    const recentLoad = loads.find((l) => l.added >= since && l.added <= today);   // newest first
+    const alsoLoaded = recentLoad ? "; " + recentLoad.n + " more " + loadDid(recentLoad) : "";
+    const answer = recent.length ? { text: count(recent.length, "record was added in the last 30 days", "records were added in the last 30 days"), because: "the latest is " + recent[0].text + ", added " + date(recent[0].added) + alsoLoaded } :
+      recentLoad ? { text: recentLoad.n + " records " + loadDid(recentLoad), because: real.length ? "nothing else has been added since" : "nothing has been added since" } :
+      latest ? { text: "Nothing was added in the last 30 days", because: "the latest record is " + latest.text + ", added " + date(latest.added) } :
+      loads.length ? { text: loads[0].n + " records " + loadDid(loads[0]), because: "nothing has been added since" } : null;
+    // The body of All is the Timeline block: one sentence per change, with the date it was added and what it came from.
+    const body = { block: "timeline", data: { today, items: items.map((i) => i.kind === "load" ? { id: i.id, kind: "documents", date: i.added, what: i.what, did: i.did, source: "Loaded together" } :
+      { id: i.id, kind: i.kind === "document" ? "documents" : "authorisations", date: i.added, what: i.text, did: "was added", href: i.href, source: i.source }) } };
+    // The load and nothing since: one sentence, no list behind it.
     return { key: "changed", title: "What's changed", rank: "given", items, answer, body, href: null, allLabel: "Everything recorded",
-      empty: { text: "Nothing recorded yet." }, restricted: !items.length, currency: "As at " + date(today), farm: f };
+      empty: { text: "Nothing recorded yet." }, restricted: !items.length || (!real.length && loads.length > 0), currency: "As at " + date(today), farm: f };
   }
 
   // The standing questions whose answers show when a farm opens.
   const standingAnswers = (context) => [due(context), changed(context)];
 
-  // Documents: the sources, by who prepared them.
+  // Documents: the main ones first (the farm's plan, its consents, its nutrient budgets, its map), the supporting ones
+  // folded behind them, anything else last. Within a tier: by kind, then newest first.
   function documents(context) {
-    const f = context.farm.id, docs = list(context.documents);
-    const owner = (d) => d.author_org || d.author || "Not recorded";
-    const owners = [...new Set(docs.map(owner))].sort((a, b) => (a === "Not recorded") - (b === "Not recorded") || a.localeCompare(b));
-    const items = docs.map((d) => ({ id: d.id, text: d.title || "Document", href: href(f, "documents", d.id), group: owner(d), kind: docKind(d.doc_type),
-      prepared: day(d.date_prepared), open: !!d.storage_path,
-      meta: [{ label: "Prepared by", value: [d.author, d.author_org].filter(Boolean).join(", ") || "Not recorded" },
-        { label: "Date", value: d.date_prepared ? date(d.date_prepared) : "Not recorded" },
-        { label: "Pages", value: d.page_count ? String(d.page_count) : null }].filter((m) => m.value) }))
-      .sort((a, b) => String(b.prepared || "").localeCompare(String(a.prepared || "")) || a.text.localeCompare(b.text));
-    const latest = items.find((i) => i.prepared);
+    const f = context.farm.id, docs = list(context.documents), tiers = DOC_TIERS.map(([key]) => key);
+    const items = docs.map((d) => {
+      const c = docClass(d);
+      return { id: d.id, text: docTitle(d), href: href(f, "documents", d.id), group: c.tier, rank: c.rank, fold: c.fold, kind: c.kind,
+        prepared: day(d.date_prepared), open: !!d.storage_path, author: [d.author, d.author_org].filter(Boolean).join(", ") || null, pages: d.page_count || null,
+        meta: [{ label: "Prepared by", value: [d.author, d.author_org].filter(Boolean).join(", ") || "Not recorded" },
+          { label: "Date", value: d.date_prepared ? date(d.date_prepared) : "Not recorded" },
+          { label: "Pages", value: d.page_count ? String(d.page_count) : null }].filter((m) => m.value) };
+    });
+    const newest = (a, b) => String(b.prepared || "").localeCompare(String(a.prepared || "")) || a.text.localeCompare(b.text);
+    // The sentence names the newest main document; the newest of any kind only when no main document has a date.
+    const dated = items.filter((i) => i.prepared), mainDated = dated.filter((i) => i.group === "primary");
+    const latest = [...(mainDated.length ? mainDated : dated)].sort(newest)[0];
+    items.sort((a, b) => tiers.indexOf(a.group) - tiers.indexOf(b.group) || a.rank - b.rank || newest(a, b));
     const answer = items.length ? { text: count(items.length, "document is recorded", "documents are recorded"),
-      because: latest ? "the most recent is " + latest.text + ", dated " + date(latest.prepared) : "none has a recorded date" } : null;
-    // The body of All is the List block: one row per document, grouped by who prepared it.
-    const body = { block: "list", data: { kind: "documents", groups: owners.map((o) => [o, o]), rows: docs.map((d) => ({ id: d.id, title: d.title || "Document", type: docKind(d.doc_type),
-      author: [d.author, d.author_org].filter(Boolean).join(", ") || null, date: day(d.date_prepared), pages: d.page_count || null, group: owner(d), open: !!d.storage_path })) } };
+      because: latest ? (mainDated.length ? "the latest main document is " : "the most recent is ") + latest.text + ", dated " + date(latest.prepared) : "none has a recorded date" } : null;
+    // The body of All is the List block, in the order given: one row per document, the supporting ones folded away.
+    const body = { block: "list", options: { sort: "given" }, data: { kind: "documents", groups: DOC_TIERS, collapsed: ["supporting"],
+      rows: items.map((i) => ({ id: i.id, title: i.text, type: i.kind, author: i.author, date: i.prepared, pages: i.pages, group: i.group, fold: i.fold, open: i.open })) } };
     return { key: "documents", title: "Documents", items, answer, body, rank: "given", allLabel: "All documents",
-      groups: owners.map((o) => [o, o]), empty: { text: "Nothing recorded yet." }, restricted: !items.length };
+      groups: DOC_TIERS, empty: { text: "Nothing recorded yet." }, restricted: !items.length };
   }
 
   // The one plain line under a land unit's name and area on the map: where the map came from, who drew it and when.
@@ -131,6 +203,31 @@
     if (l.epistemic_class === "designation") return shown ? shown[0].toUpperCase() + shown.slice(1) + "." : null;
     return source ? from(source, null, monthYear(l.as_at)) : null;
   }
+
+  // ---- The layers drawer: one plain name for each layer ------------------------------------------------
+  // The drawer says what a layer shows ("Rivers"), not what it was called when it was loaded ("NZ River Centrelines
+  // (Topo, 1:50k) (LINZ)"); the one line under it is sourceLine().
+  const THEME_NAMES = { land_units: "Land units", plantings: "Plantings", fences: "Fences", photos: "Photos", measurements: "Measurements", contaminant_sources: "Contaminant sources",
+    wells: "Bores", consents: "Consents nearby", wetlands: "Wetlands", soils: "Soils", luc: "Land use capability", parcels: "Titles", actions: "Actions" };
+  const NAME_RULES = [[/river centrelines?|\bwaterways?\b/i, "Rivers"], [/river environment classification|\bREC\d?\b/i, "River classes"], [/resource consents?/i, "Consents nearby"],
+    [/\b(?:wells?|bores?)\b/i, "Bores"], [/\bwetlands?\b/i, "Wetlands"], [/\bs-?map\b|^soils?\b/i, "Soils"], [/land use capability|\bLUC\b/i, "Land use capability"]];
+  function layerName(layer) {
+    const l = layer || {}, raw = String(l.name || "").trim();
+    if (THEME_NAMES[l.theme]) return THEME_NAMES[l.theme];
+    const hit = NAME_RULES.find(([re]) => re.test(raw));
+    if (hit) return hit[1];
+    // otherwise the title less its source in brackets, version and sub-title
+    let t = raw.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+v\d+(?:\.\d+)*\b/gi, "").replace(/\s+[-\u2013]\s+.*$/, "").replace(/\s+/g, " ").trim() || raw;
+    if (t && t === t.toUpperCase() && /[A-Z]/.test(t)) t = t[0] + t.slice(1).toLowerCase();
+    return t || "Layer";
+  }
+  // The heading over layers made for a job: sentence case, never shouted.
+  function jobHeading(job) {
+    const n = String((job || {}).name || "").trim(), t = n && n === n.toUpperCase() ? n[0] + n.slice(1).toLowerCase() : n;
+    return t ? "Made for " + t : "Made for a job";
+  }
+  // Submit a question on Enter; Shift+Enter (and anything mid-composition) stays a new line.
+  const entersToSubmit = (e) => !!e && e.key === "Enter" && !e.shiftKey && !e.altKey && !e.isComposing && e.keyCode !== 229;   // 229: Safari ends a composition with isComposing already false
 
   // Which map labels can be drawn without touching another. items are in priority order, each with the screen
   // box of its label and of its dot ({x, y, w, h}); a label is dropped when it would overlap a label already
@@ -185,6 +282,33 @@
   const sheetOverlap = (canvasBottom, sheetTop) => (Number.isFinite(canvasBottom) && Number.isFinite(sheetTop) ? Math.max(0, Math.round(canvasBottom - sheetTop)) : 0);
   // The padding that keeps a farm extent clear of the sheet (and of the map's own controls).
   const sheetPadding = (overlap) => ({ top: 40, left: 40, right: 40, bottom: overlap > 0 ? overlap + 20 : 40 });
+  // Where a farm sits when its view opens. Phone: clear of the sheet. Wide: the panel is beside the map, not over
+  // it, so only the map's own controls count (zoom buttons down the right edge, scale and attribution along the bottom).
+  const CONTROL_INSET = { right: 16, bottom: 28 };
+  function framePadding(overlap, wide) {
+    if (!wide) return sheetPadding(overlap);
+    const p = sheetPadding(0);
+    return { top: p.top, left: p.left, right: p.right + CONTROL_INSET.right, bottom: p.bottom + CONTROL_INSET.bottom };
+  }
+  // A flight that starts on a larger canvas than the farm will have (the portfolio fills the window, a farm leaves
+  // room for its header and panel) pads by half the difference as well: the camera keeps its centre when the canvas
+  // shrinks, so the farm then lands where it would have been framed on the smaller canvas.
+  function flightPadding(pad, from, to) {
+    const dx = Math.max(0, ((from.width || 0) - (to.width || 0)) / 2), dy = Math.max(0, ((from.height || 0) - (to.height || 0)) / 2);
+    return { top: pad.top + dy, left: pad.left + dx, right: pad.right + dx, bottom: pad.bottom + dy };
+  }
+  // Once the camera has stopped: does the farm's box (canvas px: left, top, right, bottom) lie inside the canvas less
+  // its padding? If not, say how far to zoom (log2, never in) and which canvas point to bring to the centre so that it
+  // does. Null when it fits, within a pixel and a half.
+  function frameFix(box, size, pad, tolerance = 1.5) {
+    if (!box || !size || ![box.left, box.top, box.right, box.bottom, size.width, size.height].every(Number.isFinite)) return null;
+    const left = pad.left, top = pad.top, right = size.width - pad.right, bottom = size.height - pad.bottom, w = box.right - box.left, h = box.bottom - box.top;
+    if (!(w > 0) || !(h > 0) || right <= left || bottom <= top) return null;
+    if (box.left >= left - tolerance && box.right <= right + tolerance && box.top >= top - tolerance && box.bottom <= bottom + tolerance) return null;
+    const scale = Math.min(1, (right - left) / w, (bottom - top) / h), centre = [size.width / 2, size.height / 2];
+    const want = [(left + right) / 2, (top + bottom) / 2], at = [(box.left + box.right) / 2, (box.top + box.bottom) / 2];
+    return { zoom: Math.log2(scale), at: [at[0] - (want[0] - centre[0]) / scale, at[1] - (want[1] - centre[1]) / scale] };
+  }
   // The header's account button: initials of the person's name, else the first letter of their email.
   const initials = (name, email) => {
     const words = String(name || "").split(/\s+/).filter(Boolean);
@@ -192,5 +316,5 @@
     return letters.toUpperCase();
   };
 
-  return { views, otherViews, sheetOverlap, sheetPadding, initials, viewLabel, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine, sourceLine, labelsToShow, unitNames, roles, canManage, people };
+  return { views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTitle, DOC_TIERS, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine, sourceLine, labelsToShow, unitNames, roles, canManage, people };
 });
