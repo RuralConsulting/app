@@ -51,6 +51,7 @@
   let markers = [];    // land unit labels
   const interactive = new Map();   // MapLibre layer id -> how to describe a hit
   let declutter = null;            // the label-collision handler for what is drawn (portfolio pins, or a farm's land unit labels)
+  let drawn = null;                // the farm payload on the map now, for focus()
 
   const accent = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
 
@@ -80,7 +81,8 @@
       if (map.getLayer("bm-blank")) map.setPaintProperty("bm-blank", "background-color",
         getComputedStyle(document.documentElement).getPropertyValue("--map-background").trim());
       for (const [id, property] of [["portfolio-fill", "fill-color"], ["portfolio-line", "line-color"],
-        ["extent-line", "line-color"], ["action-programme-lines", "line-color"], ["action-programme-points", "circle-color"]]) {
+        ["extent-line", "line-color"], ["action-programme-lines", "line-color"], ["action-programme-points", "circle-color"],
+        ["focus-fill", "fill-color"], ["focus-line", "line-color"], ["focus-point", "circle-color"]]) {
         if (map.getLayer(id)) map.setPaintProperty(id, property, accent());
       }
     });
@@ -108,6 +110,7 @@
     }
     added = [];
     interactive.clear();
+    drawn = null;
   }
 
   function source(id, data) {
@@ -152,7 +155,8 @@
 
   // Land unit labels: a code (LU1) and a name. When two would touch, the name goes and the code stays, the largest
   // unit keeping its name first; zoom in and the names come back (FP.farmModel.unitNames decides, from screen boxes).
-  function landUnitLabels(units) {
+  // At national scale the farm is a speck and its labels would pile into one glyph: they wait until it is in frame.
+  function landUnitLabels(units, extent) {
     const labels = [];
     for (const f of units.features) {
       const at = f.properties.label_at;
@@ -164,6 +168,9 @@
     let queued = false;
     const place = () => {
       queued = false;
+      const b = extent && project(extent), far = !!extent && (!b || Math.max(b.right - b.left, b.bottom - b.top) < 120);
+      for (const l of labels) l.el.classList.toggle("far", far);
+      if (far) return;
       const shown = labels.filter((l) => l.el.style.display !== "none");   // a layer switched off takes its labels with it
       for (const l of shown) l.el.classList.remove("code-only");
       const box = (n) => { const r = n.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
@@ -224,6 +231,23 @@
     if (!map || !geom?.coordinates) return;
     flightKey = null;
     fit(bbox(geom), FP.farmModel.framePadding(inset(), wide()), geom, reduced() ? 0 : 500);
+  }
+  // An answer's place (a due line's land units, or a theme the map draws): marked on the map and framed with the
+  // same fit and settle as the farm. Nothing on this map for it: nothing moves and nothing is marked (false).
+  // null: the mark goes and the farm is framed again.
+  function focus(place) {
+    if (!map || !drawn?.extent) return false;
+    const hits = place ? FP.farmModel.placeFeatures(drawn, place) : [];
+    if (place && !hits.length) return false;
+    map.getSource("focus")?.setData({ type: "FeatureCollection", features: hits });
+    if (!place) { reframe(drawn.extent); return true; }
+    let [[w, s], [e, n]] = union(hits.map((f) => bbox(f.geometry)));
+    const min = 0.002;   // a single bore is framed with its surroundings (about 200 m)
+    if (e - w < min) [w, e] = [(w + e) / 2 - min / 2, (w + e) / 2 + min / 2];
+    if (n - s < min) [s, n] = [(s + n) / 2 - min / 2, (s + n) / 2 + min / 2];
+    flightKey = null;
+    fit([[w, s], [e, n]], FP.farmModel.framePadding(inset(), wide()), { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] }, reduced() ? 0 : 900);
+    return true;
   }
   // Where an extent sits on the map canvas, in px from its top-left corner (for checks that it is in view).
   function project(geom) {
@@ -314,7 +338,7 @@
       // one plain name and the one line saying where the layer came from; how many features it holds is not for the reader
       const e = { key: l.theme, name: FP.farmModel.layerName(l), sub: FP.farmModel.sourceLine(l), section: "farm", ids: layerIds[i], job: l.job || null };
       if (l.theme === "land_units") {
-        landUnitLabels(data.land_units);
+        landUnitLabels(data.land_units, data.extent);
         e.markers = markers.slice();
         e.ids.push(layer({ id: "land-units-hit", type: "fill", source: "land-units", paint: { "fill-color": "#000", "fill-opacity": 0 } },
           (f) => ({ title: `${f.properties.code} ${f.properties.name || ""}`.trim(), qualifier: FP.farmModel.sourceLine(l),
@@ -341,6 +365,13 @@
                   props: f.properties, permits: f.properties.authorisations || [], attribution: r.attribution }));
       entries.push({ key: "reference", name: r.theme === "wells" ? "Bores on the farm" : FP.farmModel.layerName(r), sub: null, section: "reference", ids: [id] });
     }
+
+    // What an answer is about, drawn over everything when one of its lines is chosen (focus).
+    source("focus", { type: "FeatureCollection", features: [] });
+    layer({ id: "focus-fill", type: "fill", source: "focus", filter: ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], paint: { "fill-color": accent(), "fill-opacity": 0.2 } });
+    layer({ id: "focus-line", type: "line", source: "focus", filter: ["!", ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]]], paint: { "line-color": accent(), "line-width": 4 } });
+    layer({ id: "focus-point", type: "circle", source: "focus", filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]], paint: { "circle-color": accent(), "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+    drawn = data;
 
     // what's on when the farm opens comes from config.js (farmView.defaultOn); the rest is a tick away
     // (or from the block's show option, when its host chose)
@@ -437,7 +468,7 @@
     for (const m of markers) m.remove();
     markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
   }
-  return { open, portfolio, zoomTo, reframe, project, camera: () => map && { zoom: map.getZoom(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => FP.basemaps.setTerrain(init(), on), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => FP.basemaps.setTerrain(init(), on), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
     resize: () => map && map.resize(), remove };
   }
 

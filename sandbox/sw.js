@@ -2,7 +2,7 @@
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
 // APP names this app's caches; the sandbox build (sandbox.cjs) changes it, so the app at / and the one at /sandbox/
 // (same site, so same cache storage) never read or delete each other's caches.
-const VERSION = "202610301259-e78296c";
+const VERSION = "202610301312-bf00142";
 const APP = "fp-sandbox";
 const CACHE = `${APP}-${VERSION}`;
 // The sandbox app lives under this one's folder; its own service worker handles it, this one never does.

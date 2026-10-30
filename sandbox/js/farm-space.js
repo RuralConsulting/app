@@ -42,7 +42,8 @@
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
-    return { farm, user, role: member.role, advisor, maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
+    // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
+    return { farm, user, role: member.role, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
       obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error };
   }
   // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
@@ -52,6 +53,8 @@
   let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, framedOverlap = 0, reserveHeader = () => {};
   // The blocks this space has mounted (docs/BUILDING-BLOCKS.md §2): the map scene, the standing answers, the open view.
   let scene = null, answers = [], view = null;
+  // The standing answers' models, and the What's due line whose place the map is framed on (null: the farm).
+  let standing = [], focused = null;
   const unmount = (...handles) => { for (const h of handles.flat()) h?.destroy(); };
   // Each answer is an Answer block in its own host, so the space never writes answer HTML itself.
   function answer(host, model, options) {
@@ -63,7 +66,7 @@
   function close() {
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
-    unmount(scene, answers, view); scene = null; answers = []; view = null;
+    unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
   }
@@ -115,6 +118,17 @@
       $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
       settleFrame();
     });
+    // Choosing a What's due line whose condition records a place frames the map on it and marks it; choosing it
+    // again goes back to the farm. A line with no place moves nothing and claims nothing.
+    $("#overview-cards").addEventListener("click", (e) => {
+      if (e.target.closest("a, button")) return;
+      const id = e.target.closest("[data-item-id]")?.dataset.itemId, place = id && standing.find((m) => m.places?.[id])?.places[id];
+      if (!place) return;
+      const again = focused === id;
+      if (!FP.farmMap.focus(again ? null : place)) return;
+      focused = again ? null : id;
+      markFocused();
+    });
     $("#space-content").addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");
       const doc = button && context?.documents.find((d) => d.id === button.dataset.openDocument);
@@ -157,6 +171,12 @@
       if (button) { delete button.dataset.confirm; button.textContent = "Remove"; button.classList.remove("confirm"); }
     });
   }
+  function markFocused() {
+    for (const n of $("#overview-cards").querySelectorAll("[data-item-id]")) {
+      const place = standing.some((m) => m.places?.[n.dataset.itemId]);
+      n.classList.toggle("has-place", place); n.classList.toggle("framed-record", place && n.dataset.itemId === focused);
+    }
+  }
   // Phone: how far the open sheet covers the map (--sheet-overlap, read by the map when it frames the farm).
   function measureSheet() {
     let overlap = 0;
@@ -181,7 +201,7 @@
   async function showPortfolio() {
     const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
     context = null; pending = null; openedMap = null;
-    unmount(scene, answers, view); scene = null; answers = []; view = null;
+    unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
     document.body.classList.remove("farm-space-active", "farm-detail");
     document.body.classList.add("portfolio-active");
     $("#farm-space-header")?.setAttribute("hidden", "");
@@ -384,7 +404,7 @@
     $("#space-handle-label").textContent = M.viewLabel(route.view) || "";
     if (context?.farm.id !== farm.id) {
       context = null; openedMap = null;
-      unmount(scene, answers, view); scene = null; answers = []; view = null;
+      unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
       $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren();
       pending = load(FP.sb, farm, user);
     }
@@ -413,7 +433,10 @@
       }
       FP.farmMap.resize(); settleFrame();
       unmount(answers, view); view = null; $("#overview-cards").replaceChildren();
-      answers = M.standingAnswers(context).map((m) => answer($("#overview-cards"), m, { compact: true }));
+      if (focused) { focused = null; FP.farmMap.focus(null); }   // a new view starts on the farm
+      standing = M.standingAnswers(context);
+      answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true }));
+      markFocused();
       $("#space-body").scrollTop = 0;   // the sheet's scroller outlasts the view: each view opens at its top
       if (route.view === "documents") {
         $("#space-body").replaceChildren();

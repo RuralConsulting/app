@@ -1,7 +1,8 @@
 // Checklist block: what must be done, from a farm's obligations (and later its actions), each item one plain line with
 // its reason ("required by CRC251894, condition 4") and its state: ongoing practice, due on a date, a date that has
-// passed with no record that it was done, done, or unknown until there is a record. Grouped "Ongoing practice",
-// "Coming up", "Unknown — needs a record" (and "Done" when shown), in that order: a missing record is said plainly, last. Data: { title?, today, items: [{ id, text, reason,
+// passed with no record that it was done, done, or unknown until there is a record. Grouped "Unknown — needs a record",
+// "Coming up", "Ongoing practice" (and "Done" when shown), in that order: by consequence, what needs a record first,
+// said plainly (a missing record, never a verdict). No mark is drawn: nothing here is ticked. Data: { title?, today, items: [{ id, text, reason,
 // state?, due?, basis?, verb?, repeats?, needs?, done_on?, note?, wording?, source?, parts?, href? }] } with dates as
 // YYYY-MM-DD. A state is never taken on trust for a date: due and passed are worked out from `due` and `today`, so
 // nothing reads as late that the dates don't say is. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
@@ -19,10 +20,10 @@
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
   const STATES = ["ongoing", "due", "overdue", "unknown", "done"];
-  // The groups, in the order they are shown. A passed date with no record that it was done sits with the other
-  // things that need a record: what is missing is the record, not a verdict. A consent's own expiry or lapse date
-  // that has passed is simply an earlier date.
-  const GROUPS = [["ongoing", "Ongoing practice"], ["coming-up", "Coming up"], ["unknown", "Unknown — needs a record"],
+  // The groups, in the order they are shown: by consequence, as a specialist would read them out. A passed date with
+  // no record that it was done sits with the other things that need a record: what is missing is the record, not a
+  // verdict. A consent's own expiry or lapse date that has passed is simply an earlier date.
+  const GROUPS = [["unknown", "Unknown — needs a record"], ["coming-up", "Coming up"], ["ongoing", "Ongoing practice"],
     ["earlier", "Earlier dates"], ["done", "Done"]];
   const groupOf = (item, s) => s === "done" ? "done" : s === "ongoing" ? "ongoing" : s === "due" ? "coming-up" :
     s === "overdue" && item.verb && item.verb !== "due" ? "earlier" : "unknown";
@@ -75,7 +76,7 @@
         (text(item.wording) ? '<blockquote class="checklist-wording">' + esc(item.wording) + "</blockquote>" : "") +
         (text(item.source) ? '<p class="checklist-source">' + esc(item.source) + "</p>" : "") + "</details>" : "";
       return '<li class="checklist-item" data-item-id="' + esc(item.id) + '" data-check-state="' + s + '" tabindex="-1">' +
-        '<span class="checklist-mark" aria-hidden="true"></span><div class="checklist-body">' +
+        '<div class="checklist-body">' +
         '<p class="checklist-line">' + link(item, text(item.text) || "A recorded condition") + "</p>" +
         (text(item.reason) ? '<p class="checklist-reason">' + esc(item.reason) + "</p>" : "") +
         (where ? '<p class="checklist-standing">' + esc(where) + "</p>" : "") +

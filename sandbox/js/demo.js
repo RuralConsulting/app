@@ -71,12 +71,17 @@
         shown_as: "Example Advisory Ltd, Aug 2024", label_at: [w + .00625, s + .005] });
     });
     const landUnits = collection(units);
+    // An illustrative creek and drain across the rectangles (what a setback condition is about), not a survey.
+    const water = f.waterways ? [{ id: "demo-waterways", name: f.waterways.name, theme: "waterways", geometry_type: "line", epistemic_class: "assessment",
+      source: f.waterways.source, as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: collection([
+        feature({ type: "LineString", coordinates: [[172.0118, -42.9802], [172.0131, -42.9875], [172.0122, -42.994], [172.0134, -42.9998]] }, { name: "Creek (synthetic)" }),
+        feature({ type: "LineString", coordinates: [[172.0005, -42.9952], [172.006, -42.9948], [172.0122, -42.994]] }, { name: "Drain (synthetic)" })]) }] : [];
     const map = {
       farm: { id: FARM, name: farm.name, region: farm.region }, extent, extent_ha: f.extent_ha,
       titles: collection(f.titles.map((t) => feature(extent, { title_no: t.title_no, estate: t.estate, source: "Synthetic title", area_ha: t.area_ha }))),
       land_units: landUnits, reference: [],
       layers: [{ id: "demo-units", name: "Land units (synthetic)", theme: "land_units", geometry_type: "polygon",
-        epistemic_class: "assessment", source: "the 2024 farm plan map", as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: landUnits }],
+        epistemic_class: "assessment", source: "the 2024 farm plan map", as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: landUnits }, ...water],
     };
     const data = { asAt: f.as_at, map, map2: null, user: { id: USER, email: "advisor@example.test" }, tables: {
       farms: [farm], farm_members: [{ farm_id: FARM, user_id: USER, role: "admin" }], org_members: [{ org_id: ORG, user_id: USER, role: "advisor" }],

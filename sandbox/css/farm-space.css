@@ -35,6 +35,9 @@ body #screen-map #map { right: 0; bottom: var(--peek-height); }
 #overview-cards { display: none; gap: 10px; padding: 10px; }
 #overview-rail.expanded { height: var(--sheet-height); overflow: auto; }
 #overview-rail.expanded #overview-cards { display: grid; }
+/* A What's due line whose condition records its place: choosing it frames the map there (farm-space.js focus). */
+#overview-cards .has-place { cursor: pointer; }
+#overview-cards .framed-record { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 
 /* Ask, Create, Documents and People. Phone: the same bottom sheet as the standing answers, so a strip of the map stays
    above it (tap the handle to fold it to a peek). Wide: the panel beside the map. */
