@@ -27,38 +27,71 @@
   // read (load) only when that farm is opened.
   const summaries = (sb) => read(sb.from("farm_summaries").select("*"));
 
-  let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null;
+  let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, framedOverlap = 0, reserveHeader = () => {};
+  // The blocks this space has mounted (docs/BUILDING-BLOCKS.md §2): the map scene, the standing answers, the open view.
+  let scene = null, answers = [], view = null;
+  const unmount = (...handles) => { for (const h of handles.flat()) h?.destroy(); };
+  // Each answer is an Answer block in its own host, so the space never writes answer HTML itself.
+  function answer(host, model, options) {
+    const node = el("div", { class: "block-host" });
+    host.append(node);
+    return FP.blocks.render(node, { block: "answer", owner: { farm: context.farm.id }, options }, { read: () => model, level: 2, href: FP.href });
+  }
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
   function close() {
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
+    unmount(scene, answers, view); scene = null; answers = []; view = null;
     $("#farm-space-header")?.setAttribute("hidden", "");
+    document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
   }
   function setPortfolio(farms, person) { portfolio = farms; user = person; init(); }
   function init() {
     if ($("#farm-space-header")) return;
     const h = el("header", { id: "farm-space-header", hidden: true });
-    h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
-      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-ops" class="link ops-link" hidden>Operations</a></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div>' +
+    // Phone: row one is the farm and one account button, row two the three things to do. The person, the farm
+    // switcher, People, Operations and Sign out sit behind the button; on a wide screen they stay in the row.
+    h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1>' +
+      '<button type="button" id="account-open" class="account-open" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account and people"><span id="account-initials" aria-hidden="true"></span></button>' +
+      '<div id="account-menu" class="account-menu"><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
+      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-ops" class="link ops-link" hidden>Operations</a><button type="button" id="more-open" class="link" aria-controls="layers-drawer" aria-expanded="false">More</button></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div></div>' +
       '<nav id="farm-actions" aria-label="Farm"></nav>';
     document.body.prepend(h);
-    const reserve = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
-    new ResizeObserver(reserve).observe(h);
+    reserveHeader = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
+    new ResizeObserver(() => { reserveHeader(); measureSheet(); }).observe(h);
+    const menu = $("#account-menu"), account = $("#account-open");
+    const setMenu = (open) => { menu.classList.toggle("open", open); account.setAttribute("aria-expanded", String(open)); };
+    account.addEventListener("click", () => { setMenu(!menu.classList.contains("open")); });
+    menu.addEventListener("click", (e) => { if (e.target.closest("a, button")) setMenu(false); });
+    menu.addEventListener("change", () => setMenu(false));
+    document.addEventListener("click", (e) => { if (!e.target.closest("#account-menu, #account-open")) setMenu(false); });
+    window.addEventListener("hashchange", () => setMenu(false));
+    window.addEventListener("resize", () => { measureSheet(); });
     $("#farm-switch").addEventListener("change", (e) => { location.hash = FP.href(farmTarget(e.target.value)); });
     $("#space-signout").addEventListener("click", async () => {
       if (FP.demo?.active) location.href = location.pathname + location.search;
       else { await FP.auth.signOut(); location.hash = ""; location.reload(); }
     });
+    // The phone sheets (What's due, and Ask, Create and Documents) open over the map: the farm is re-framed in
+    // what stays visible above them, and back again when they close.
     $("#overview-toggle").addEventListener("click", () => {
       const rail = $("#overview-rail"), expanded = rail.classList.toggle("expanded");
       $("#overview-toggle").setAttribute("aria-expanded", String(expanded));
+      settleFrame();
     });
-    $("#layers-open").addEventListener("click", () => { $("#layers-drawer").hidden = false; $("#layers-open").setAttribute("aria-expanded", "true"); $("#layers-close").focus(); });
-    $("#layers-close").addEventListener("click", () => { $("#layers-drawer").hidden = true; $("#layers-open").setAttribute("aria-expanded", "false"); $("#layers-open").focus(); });
+    $("#space-handle").addEventListener("click", () => {
+      const peeked = $("#space-content").classList.toggle("peeked");
+      $("#space-handle").setAttribute("aria-expanded", String(!peeked));
+      settleFrame();
+    });
+    $("#more-open").addEventListener("click", () => { $("#layers-drawer").hidden = false; $("#more-open").setAttribute("aria-expanded", "true"); $("#layers-close").focus(); });
+    $("#layers-close").addEventListener("click", () => { $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false"); $("#more-open").focus(); });
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
-      $("#layers-drawer").hidden = true; $("#layers-open").setAttribute("aria-expanded", "false");
+      if ($("#account-menu").classList.contains("open")) { $("#account-menu").classList.remove("open"); $("#account-open").setAttribute("aria-expanded", "false"); $("#account-open").focus(); }
+      $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false");
       $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
+      settleFrame();
     });
     $("#space-content").addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");
@@ -97,6 +130,21 @@
       if (button) { delete button.dataset.confirm; button.textContent = "Remove"; button.classList.remove("confirm"); }
     });
   }
+  // Phone: how far the open sheet covers the map (--sheet-overlap, read by the map when it frames the farm).
+  function measureSheet() {
+    let overlap = 0;
+    const sheet = window.innerWidth <= 800 && [$("#space-content"), $("#overview-rail")].find((n) => !n.hidden);
+    if (sheet) overlap = M.sheetOverlap($("#map").getBoundingClientRect().bottom, sheet.getBoundingClientRect().top);
+    document.documentElement.style.setProperty("--sheet-overlap", overlap + "px");
+    return overlap;
+  }
+  // A sheet opened or closed: frame the farm again in the visible map, unless it is already framed for that.
+  function settleFrame() {
+    const overlap = measureSheet();
+    if (overlap === framedOverlap || !context) return;
+    framedOverlap = overlap;
+    FP.farmMap.reframe(context.maps.extent);
+  }
   function farmTarget(id) {
     let target = id ? M.href(id, "map") : "";
     try { if (id) target = sessionStorage.getItem("fp-view-" + user.id + "-" + id) || target; } catch {}
@@ -106,9 +154,11 @@
   async function showPortfolio() {
     const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
     context = null; pending = null; openedMap = null;
+    unmount(scene, answers, view); scene = null; answers = []; view = null;
     document.body.classList.remove("farm-space-active", "farm-detail");
     document.body.classList.add("portfolio-active");
     $("#farm-space-header")?.setAttribute("hidden", "");
+    document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
     for (const id of ["#space-content", "#overview-rail", "#layers-drawer", "#map-msg"]) $(id).hidden = true;
     document.title = "Farms | " + FP.brand?.product;
     FP.show("screen-map");
@@ -136,7 +186,9 @@
     const name = $("#space-farm-name");
     name.textContent = farm.name; name.href = FP.href(M.href(farm.id, "map"));
     if (route.view === "map") name.setAttribute("aria-current", "page"); else name.removeAttribute("aria-current");
-    $("#space-person").textContent = FP.demo?.active ? (context.advisor ? "Demo advisor" : "Demo farmer") : user.user_metadata?.display_name || user.email;
+    const person = FP.demo?.active ? (context.advisor ? "Demo advisor" : "Demo farmer") : user.user_metadata?.display_name || user.email;
+    $("#space-person").textContent = person;
+    $("#account-initials").textContent = M.initials(FP.demo?.active ? person : user.user_metadata?.display_name, user.email);
     const select = $("#farm-switch");
     select.replaceChildren(el("option", { value: "" }, "All farms"), ...portfolio.map((f) => el("option", { value: f.id }, f.name)));
     select.value = farm.id;
@@ -146,6 +198,7 @@
     const people = $("#space-people");
     people.hidden = !M.canManage(context.role); people.href = FP.href(M.href(farm.id, "people"));
     if (route.view === "people") people.setAttribute("aria-current", "page"); else people.removeAttribute("aria-current");
+    $("#account-open").toggleAttribute("data-current", route.view === "people");
   }
 
   // ---- People: who can open the farm, for its owner and admins (A0) -----------------------------------
@@ -244,11 +297,14 @@
     const current = ++token;
     document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
     document.body.classList.add("farm-space-active");
-    $("#layers-drawer").hidden = true; $("#layers-open").setAttribute("aria-expanded", "false");
+    $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false");
     $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
+    $("#space-content").classList.remove("peeked"); $("#space-handle").setAttribute("aria-expanded", "true");
+    $("#space-handle-label").textContent = M.viewLabel(route.view) || "";
     if (context?.farm.id !== farm.id) {
       context = null; openedMap = null;
-      $("#space-content").replaceChildren(); $("#overview-cards").replaceChildren();
+      unmount(scene, answers, view); scene = null; answers = []; view = null;
+      $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren();
       pending = load(FP.sb, farm, user);
     }
     FP.show("screen-map");
@@ -260,26 +316,33 @@
       const loaded = context || await pending;
       if (current !== token) return;
       context = loaded;
-      header(farm, route);
+      header(farm, route); reserveHeader();
       document.title = farm.name + (route.view === "map" ? "" : " · " + M.viewLabel(route.view)) + " | " + FP.brand?.product;
       try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, M.href(farm.id, route.view)); } catch {}
       if (openedMap !== farm.id) {
-        const view = await FP.farmMap.open(farm.id, context.maps);
+        // A sheet that opens with the view (Ask, Create, Documents) covers part of the map: the first fly lands clear of it.
+        framedOverlap = measureSheet();
+        // The Map scene block draws the farm on the space's one map (FP.farmMap), so the NZ -> farm zoom carries on.
+        unmount(scene);
+        scene = FP.blocks.render($("#farm-scene"), { block: "map-scene", owner: { farm: farm.id } }, { read: () => context.maps, surface: FP.farmMap, level: 2 });
+        const drawn = await scene.ready;
         if (current !== token) return;
-        if (!view) throw Error("Map unavailable for this farm.");
-        renderLayers(view.entries); openedMap = farm.id;
+        if (!drawn) throw Error("Map unavailable for this farm.");
+        renderLayers(drawn.entries); openedMap = farm.id;
       }
-      FP.farmMap.resize();
-      $("#overview-cards").innerHTML = M.standingAnswers(context).map((m) => FP.answer.render({ ...m, compact: true })).join("");
+      FP.farmMap.resize(); settleFrame();
+      unmount(answers, view); view = null; $("#overview-cards").replaceChildren();
+      answers = M.standingAnswers(context).map((m) => answer($("#overview-cards"), m, { compact: true }));
+      $("#space-body").scrollTop = 0;   // the sheet's scroller outlasts the view: each view opens at its top
       if (route.view === "documents") {
-        $("#space-content").innerHTML = FP.answer.render({ ...M.documents(context), selectedId: route.item });
-        const selected = [...$("#space-content").querySelectorAll("[data-item-id]")].find((n) => n.dataset.itemId === route.item);
+        $("#space-body").replaceChildren();
+        view = answer($("#space-body"), M.documents(context), { open: true, selected: route.item });
+        // The list holds each row as a card and as a table row; the host's width shows one, so take the one on screen.
+        const selected = [...$("#space-body").querySelectorAll("[data-item-id]")].find((n) => n.dataset.itemId === route.item && (n.checkVisibility?.() ?? true));
         if (selected) { selected.scrollIntoView({ block: "nearest" }); selected.focus({ preventScroll: true }); }
-      } else if (route.view === "ask") { $("#space-content").replaceChildren(askView()); }
-      else if (route.view === "create") { $("#space-content").replaceChildren(createView()); }
-      else if (route.view === "people") { $("#space-content").replaceChildren(peopleView()); if (M.canManage(context.role)) await loadPeople(); }
-      for (const a of $("#space-content").querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
-      for (const a of $("#overview-cards").querySelectorAll('a[href^="#/farm/"]')) a.setAttribute("href", FP.href(a.getAttribute("href")));
+      } else if (route.view === "ask") { $("#space-body").replaceChildren(askView()); }
+      else if (route.view === "create") { $("#space-body").replaceChildren(createView()); }
+      else if (route.view === "people") { $("#space-body").replaceChildren(peopleView()); if (M.canManage(context.role)) await loadPeople(); }
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }

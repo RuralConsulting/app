@@ -36,6 +36,7 @@
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
     if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
+    if (suffix === "/blocks" && !multi) return "#/blocks" + (query ? "?" + query : "");   // the block gallery
     // Two farms: "#/demo/multi" is the portfolio; "#/demo/multi/farm-1" and ".../farm-2" open one.
     if (multi) {
       if (suffix === "") return "";
@@ -49,6 +50,7 @@
   function href(hash, sparse = false, farmer = false, multi = false) {
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/ops") return "#/demo/ops";
+    if (/^#\/blocks(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
     if (!farm) return hash;
     return "#/demo" + (multi ? "/multi/farm-" + (farm === FARM2 ? 2 : 1) : sparse ? "/empty" : farmer ? "/farmer" : "") + hash.slice(("#/farm/" + farm).length);
@@ -64,15 +66,16 @@
     const extent = polygon(172, -43, 172.025, -42.98);
     const units = f.land_units.map((u, i) => {
       const w = 172 + (i % 2) * .0125, s = -43 + Math.floor(i / 2) * .01;
-      return feature(polygon(w, s, w + .0125, s + .01), { code: u.code, name: u.name, area_ha: u.area_ha, method: "Synthetic fixture geometry",
-        shown_as: "Illustrative only; not a survey", label_at: [w + .00625, s + .005] });
+      return feature(polygon(w, s, w + .0125, s + .01), { code: u.code, name: u.name, area_ha: u.area_ha, method: "digitised from the farm plan map",
+        shown_as: "Example Advisory Ltd, Aug 2024", label_at: [w + .00625, s + .005] });
     });
     const landUnits = collection(units);
     const map = {
       farm: { id: FARM, name: farm.name, region: farm.region }, extent, extent_ha: f.extent_ha,
       titles: collection(f.titles.map((t) => feature(extent, { title_no: t.title_no, estate: t.estate, source: "Synthetic title", area_ha: t.area_ha }))),
       land_units: landUnits, reference: [],
-      layers: [{ id: "demo-units", name: "Land units (synthetic)", theme: "land_units", geometry_type: "polygon", shown_as: "Illustrative geometry, not surveyed boundaries", features: landUnits }],
+      layers: [{ id: "demo-units", name: "Land units (synthetic)", theme: "land_units", geometry_type: "polygon",
+        epistemic_class: "assessment", source: "the 2024 farm plan map", as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: landUnits }],
     };
     const data = { asAt: f.as_at, map, map2: null, user: { id: USER, email: "advisor@example.test" }, tables: {
       farms: [farm], farm_members: [{ farm_id: FARM, user_id: USER, role: "admin" }], org_members: [{ org_id: ORG, user_id: USER, role: "advisor" }],

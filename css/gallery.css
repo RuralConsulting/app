@@ -1,0 +1,20 @@
+/* The block gallery (#/demo/blocks): each block in full, sparse and empty, at phone or desktop width. */
+.gallery { min-height: 100%; background: var(--wash); color: var(--ink); padding: var(--demo-banner-height, 0px) 0 48px; }
+.gallery-bar { position: sticky; top: var(--demo-banner-height, 0px); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--rule); }
+.gallery-bar h1 { margin: 0 auto 0 0; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.gallery-switch { display: inline-flex; border: 1px solid var(--rule); border-radius: 999px; padding: 2px; background: var(--wash); }
+.gallery-switch button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 600 var(--text-small) var(--f-ui); }
+.gallery-switch button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+.gallery-blocks { display: grid; gap: 40px; padding: 24px 16px 0; }
+.gallery-block > h2 { margin: 0 0 14px; font: 600 var(--text-title)/1.1 var(--f-display); }
+.gallery-states { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.gallery-cell { margin: 0; flex: 0 1 390px; min-width: 0; max-width: 100%; }
+.gallery[data-width="desktop"] .gallery-states { flex-direction: column; flex-wrap: nowrap; }
+.gallery[data-width="desktop"] .gallery-cell { flex: none; width: min(100%, 960px); }
+.gallery-cell figcaption { margin: 0 0 8px; color: var(--ink-3); font: 600 var(--text-small)/1.2 var(--f-ui); }
+.gallery-frame { min-width: 0; }
+.gallery-frame[data-block="map-scene"] { height: 300px; }
+.gallery[data-width="desktop"] .gallery-frame[data-block="map-scene"] { height: 420px; }
+.gallery-frame .map-scene, .gallery-frame .map-scene-empty { height: 100%; }
+@media (max-width: 430px) { .gallery-cell { flex-basis: 100%; } }

@@ -46,6 +46,9 @@
   function route() {
     if (!readyToRoute) return;
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
+    // The block gallery: fixture data only, so only in the demo.
+    if (FP.demo?.active && /^#\/blocks(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.open(hash); return; }
+    FP.gallery.close();
     // Operations: RCL staff only. Anyone else asking for it is simply taken to their farms.
     if (hash === "#/ops" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.ops.open(); return; }
     FP.ops.close();
@@ -135,11 +138,19 @@
   if (FP.demo?.active) {
     document.body.classList.add("demo-mode");
     for (const b of $$(".b-signout")) b.textContent = "Exit demo";
+    // Phone: one row ("DEMO", what it is, and a Demos button); the links to the other demos open under it.
+    // Wide: the links stay in the row.
     const banner = el("aside", { class: "demo-banner", "aria-label": "Demonstration" },
       el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Illustrative map"),
-      ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"], ["#/demo/ops", "Operations"]].map(([href, label]) => el("a", { href }, label)),
-      el("a", { href: location.pathname + location.search }, "Exit"));
+      el("button", { type: "button", class: "demo-switch", "aria-expanded": "false", "aria-controls": "demo-links" }, "Demos"),
+      el("div", { id: "demo-links", class: "demo-links" },
+        ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"], ["#/demo/ops", "Operations"], ["#/demo/blocks", "Blocks"]].map(([href, label]) => el("a", { href }, label)),
+        el("a", { href: location.pathname + location.search }, "Exit")));
     document.body.prepend(banner);
+    const setDemoLinks = (open) => { banner.classList.toggle("open", open); banner.querySelector(".demo-switch").setAttribute("aria-expanded", String(open)); };
+    banner.querySelector(".demo-switch").addEventListener("click", () => setDemoLinks(!banner.classList.contains("open")));
+    document.addEventListener("click", (e) => { if (!e.target.closest(".demo-switch")) setDemoLinks(false); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && banner.classList.contains("open")) { setDemoLinks(false); banner.querySelector(".demo-switch").focus(); } });
     const reserveBanner = () => document.documentElement.style.setProperty("--demo-banner-height", banner.getBoundingClientRect().height + "px");
     reserveBanner();
     new ResizeObserver(reserveBanner).observe(banner);
