@@ -1,7 +1,8 @@
 // What a tap on the map shows: the feature's details, how its layer is qualified, and its photo if any.
 FP.popup = (() => {
   const HIDDEN = new Set(["storage_path", "photo_sha256", "fid", "source_fid", "ogc_fid", "label_at", "on_farm",
-                          "authorisations", "external_id", "layer_ref"]);
+                          "authorisations", "external_id", "layer_ref", "resolution", "resolution_reason", "by_kind",
+                          "by_feature_id", "conflicts"]);
   const photoCache = new Map();
 
   function rows(props) {
@@ -28,6 +29,7 @@ FP.popup = (() => {
     box.append(FP.el("h3", {}, hit.title));
     if (hit.layerName && hit.layerName !== hit.title) box.append(FP.el("p", { class: "pop-layer" }, hit.layerName));
     if (hit.qualifier) box.append(FP.el("p", { class: "pop-q" }, hit.qualifier));
+    if (hit.resolution) box.append(FP.el("p", { class: "pop-q" }, hit.resolution));
     if (hit.props.storage_path) {
       const img = FP.el("img", { class: "pop-photo", alt: hit.title });
       box.append(img);

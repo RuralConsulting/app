@@ -137,6 +137,7 @@
     const describe = (f) => ({
       title: f.properties.name || f.properties.Name || f.properties.type || f.properties.label || l.name,
       layerName: l.name, qualifier: FP.farmModel.sourceLine(l), props: f.properties,
+      resolution: FP.farmModel.resolutionLine(f.properties),
     });
     const ids = [];
     if (pass === "polygon" && l.geometry_type === "polygon") {

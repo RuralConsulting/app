@@ -80,7 +80,7 @@
     const water = f.waterways ? [{ id: "demo-waterways", name: f.waterways.name, theme: "waterways", geometry_type: "line", epistemic_class: "assessment",
       source: f.waterways.source, as_at: "2024-08-01", shown_as: "Example Advisory Ltd, Aug 2024", features: collection([
         feature({ type: "LineString", coordinates: [[172.0118, -42.9802], [172.0131, -42.9875], [172.0122, -42.994], [172.0134, -42.9998]] }, { name: "Creek (synthetic)" }),
-        feature({ type: "LineString", coordinates: [[172.0005, -42.9952], [172.006, -42.9948], [172.0122, -42.994]] }, { name: "Drain (synthetic)" })]) }] : [];
+        feature({ type: "LineString", coordinates: [[172.0005, -42.9952], [172.006, -42.9948], [172.0122, -42.994]] }, { name: "Drain (synthetic)", resolution: "beside", resolution_reason: "official_governs" })]) }] : [];
     const map = {
       farm: { id: FARM, name: farm.name, region: farm.region }, extent, extent_ha: f.extent_ha,
       titles: collection(f.titles.map((t) => feature(extent, { title_no: t.title_no, estate: t.estate, source: "Synthetic title", area_ha: t.area_ha }))),

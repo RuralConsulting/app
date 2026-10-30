@@ -364,6 +364,17 @@
     return source ? from(source, null, monthYear(l.as_at)) : null;
   }
 
+  // The one plain sentence for a feature the database has placed beside, or trimmed against, another layer
+  // (public.farm_map's `resolution` and `resolution_reason`). Null when none applies or the value is unknown: a raw code is never shown.
+  function resolutionLine(props) {
+    const p = props || {};
+    if (p.resolution === "trimmed") return "Shown only where no more detailed map covers it.";
+    if (p.resolution !== "beside") return null;
+    if (p.resolution_reason === "official_governs") return "Shown beside the official layer, which governs here.";
+    if (p.resolution_reason === "designation_stands") return "Shown beside the official designation, which stands.";
+    return "Shown beside the official layer.";
+  }
+
   // ---- The layers drawer: one plain name for each layer ------------------------------------------------
   // The drawer says what a layer shows ("Rivers"), not what it was called when it was loaded ("NZ River Centrelines
   // (Topo, 1:50k) (LINZ)"); the one line under it is sourceLine().
@@ -476,5 +487,5 @@
     return letters.toUpperCase();
   };
 
-  return { views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, labelsToShow, unitNames, roles, canManage, people };
+  return { views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });
