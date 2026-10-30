@@ -17,6 +17,14 @@
   const promoted = (items) => items.filter((i) => i.eligible === true && text(i.because)).slice(0, 3);
   const answered = (model) => !!(text(model.answer?.text) && text(model.answer?.because));
 
+  // The one sentence of an answer. With exactly one promoted line, the sentence carries that line and its reason, and the
+  // list under it is left out (APP-STRUCTURE §3.1); otherwise the model's own sentence stands and the lines follow it.
+  function sentence(model) {
+    const items = ranked(list(model.items), model.rank), lines = promoted(items), has = answered(model);
+    if (has && lines.length === 1) return { text: model.answer.text + " — " + lines[0].text + ", " + lines[0].because, carried: lines[0] };
+    return { text: has ? model.answer.text + " — " + model.answer.because : model.empty?.text || "Nothing recorded yet.", carried: null };
+  }
+
   // empty: nothing to say and nothing recorded; sparse: something recorded but nothing promoted, or a single record.
   function state(model) {
     const items = list(model.items);
@@ -29,7 +37,7 @@
     // In-app links only; the host maps them to its own routes (the demo's, say) through ctx.href.
     const link = (href, label, attrs = "") => text(href) && /^#\//.test(href) ? '<a href="' + esc(ctx.href ? ctx.href(href) : href) + '" ' + attrs + ">" + esc(label) + "</a>" : esc(label);
     const items = ranked(list(model.items), model.rank), highlights = promoted(items), hasAnswer = answered(model);
-    const sentence = hasAnswer ? model.answer.text + " — " + model.answer.because : model.empty?.text || "Nothing recorded yet.";
+    const said = sentence(model), lines = highlights.filter((i) => i !== said.carried);
     const selected = (item) => o.selected != null && o.selected === item.id;
     const row = (item, lead) => '<li tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? ' class="selected-record"' : "") + ">" + link(item.href, item.text) +
       (lead ? '<span class="answer-reason"> — ' + esc(item.because) + "</span>" : item.detail ? '<p class="record-detail">' + esc(item.detail) + "</p>" : "") + "</li>";
@@ -56,8 +64,8 @@
       "</summary>" + (items.length ? (body() || (o.cards ? cards() : "<ul>" + items.map((i) => row(i, false)).join("") + "</ul>")) : "<p>Nothing else recorded.</p>") + "</details>";
     return '<section class="answer-panel' + (o.compact ? " answer-compact" : "") + '" data-answer-key="' + esc(model.key) +
       '" data-answer-state="' + (!hasAnswer && !highlights.length ? "empty" : "recorded") + '">' +
-      "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + esc(sentence) + "</p>" +
-      (highlights.length ? '<ul class="answer-highlights">' + highlights.map((i) => row(i, true)).join("") + "</ul>" : "") +
+      "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + (said.carried ? esc(model.answer.text) + " — " + link(said.carried.href, said.carried.text) + esc(", " + said.carried.because) : esc(said.text)) + "</p>" +
+      (lines.length ? '<ul class="answer-highlights">' + lines.map((i) => row(i, true)).join("") + "</ul>" : "") +
       (model.restricted ? "" : all) +
       (text(model.currency) ? '<footer class="answer-currency">' + esc(model.currency) + "</footer>" : "") + "</section>";
   }
@@ -72,5 +80,5 @@
     },
     state, render,
   });
-  return { block, ranked, state };
+  return { block, ranked, state, sentence };
 });

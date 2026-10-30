@@ -50,7 +50,7 @@
   let added = [];      // MapLibre layer and source ids for the current farm
   let markers = [];    // land unit labels
   const interactive = new Map();   // MapLibre layer id -> how to describe a hit
-  let declutter = null;            // the portfolio's label-collision handler, while the portfolio is drawn
+  let declutter = null;            // the label-collision handler for what is drawn (portfolio pins, or a farm's land unit labels)
 
   const accent = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
 
@@ -125,7 +125,7 @@
     const st = FP.qml.style(l);
     const describe = (f) => ({
       title: f.properties.name || f.properties.Name || f.properties.type || f.properties.label || l.name,
-      layerName: l.name, qualifier: l.shown_as, props: f.properties,
+      layerName: l.name, qualifier: FP.farmModel.sourceLine(l), props: f.properties,
     });
     const ids = [];
     if (pass === "polygon" && l.geometry_type === "polygon") {
@@ -148,13 +148,30 @@
     return ids;
   }
 
+  // Land unit labels: a code (LU1) and a name. When two would touch, the name goes and the code stays, the largest
+  // unit keeping its name first; zoom in and the names come back (FP.farmModel.unitNames decides, from screen boxes).
   function landUnitLabels(units) {
+    const labels = [];
     for (const f of units.features) {
       const at = f.properties.label_at;
       if (!at) continue;
       const el = FP.el("div", { class: "lu-label" }, FP.el("b", {}, f.properties.code), FP.el("span", {}, f.properties.name));
       markers.push(new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map));
+      labels.push({ el, area: Number(f.properties.area_ha) || 0 });
     }
+    let queued = false;
+    const place = () => {
+      queued = false;
+      const shown = labels.filter((l) => l.el.style.display !== "none");   // a layer switched off takes its labels with it
+      for (const l of shown) l.el.classList.remove("code-only");
+      const box = (n) => { const r = n.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
+      const keep = FP.farmModel.unitNames(shown.map((l) => ({ area: l.area, full: box(l.el), code: box(l.el.querySelector("b")) })));
+      shown.forEach((l, n) => l.el.classList.toggle("code-only", !keep[n]));
+    };
+    declutter = () => { if (!queued) { queued = true; requestAnimationFrame(place); } };
+    for (const ev of ["move", "resize"]) map.on(ev, declutter);
+    document.fonts?.ready.then(declutter);
+    declutter();
   }
 
   // The NZ -> farm zoom: a smooth fly, or a jump when the person asks their device for reduced motion.
@@ -267,7 +284,7 @@
     }
     data.layers.forEach((l, i) => {
       const n = l.features.features.length;
-      const e = { key: l.theme, name: l.name, sub: [`${n} feature${n === 1 ? "" : "s"}`, l.shown_as].filter(Boolean).join(" · "),
+      const e = { key: l.theme, name: l.name, sub: [`${n} feature${n === 1 ? "" : "s"}`, FP.farmModel.sourceLine(l)].filter(Boolean).join(" · "),
                   ids: layerIds[i], job: l.job || null };
       if (l.theme === "land_units") {
         landUnitLabels(data.land_units);
@@ -350,6 +367,7 @@
     entry.on = on;
     for (const id of entry.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
     for (const m of entry.markers || []) m.getElement().style.display = on ? "" : "none";
+    if (entry.markers?.length && declutter) declutter();
   }
 
   function onClick(e) {

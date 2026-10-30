@@ -73,6 +73,7 @@ button, input { font: inherit; color: inherit; }
   text-shadow: var(--map-label-shadow); font-family: var(--f-head); }
 .lu-label b { display: block; font-size: var(--text-body); font-weight: 700; }
 .lu-label span { display: block; font-size: var(--text-small); font-weight: 600; max-width: 140px; }
+.lu-label.code-only span { display: none; }
 
 /* tap details */
 .maplibregl-popup-content { background: var(--panel); color: var(--ink); border-radius: 10px; box-shadow: var(--shadow); padding: 12px 14px; }

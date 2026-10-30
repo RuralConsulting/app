@@ -145,6 +145,17 @@
     });
   }
 
+  // Which land units keep their name on the map. Every unit always keeps its code (LU1...); the name goes when it
+  // would touch a name already kept or another unit's code. The largest unit is looked at first, so it keeps its
+  // name longest. items are {area, full, code}: the unit's label box with its name, and its code's box alone
+  // ({x, y, w, h}, screen px). Returns one boolean per item, in the order given: true when the name stays.
+  function unitNames(items, gap = 4) {
+    const order = items.map((it, i) => i).sort((a, b) => (Number(items[b].area) || 0) - (Number(items[a].area) || 0) || a - b);
+    const keep = labelsToShow(order.map((i) => ({ label: items[i].full, dot: items[i].code })), gap), out = [];
+    order.forEach((i, n) => { out[i] = keep[n]; });
+    return out;
+  }
+
   // One sentence per farm for the portfolio, from farm_summaries (0038) counts alone.
   function summaryLine(s) {
     const overdue = Number(s.overdue_actions) || 0, auths = Number(s.authorisation_count) || 0, docs = Number(s.document_count) || 0;
@@ -181,5 +192,5 @@
     return letters.toUpperCase();
   };
 
-  return { views, otherViews, sheetOverlap, sheetPadding, initials, viewLabel, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine, sourceLine, labelsToShow, roles, canManage, people };
+  return { views, otherViews, sheetOverlap, sheetPadding, initials, viewLabel, outputs, match, href, date, standingAnswers, documents, summaryLine, portfolioLine, sourceLine, labelsToShow, unitNames, roles, canManage, people };
 });
