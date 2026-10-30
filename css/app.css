@@ -104,3 +104,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .maplibregl-ctrl-attrib a { color: inherit; }
 .maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: var(--map-icon-filter); }
 .maplibregl-ctrl-scale { background: var(--panel); color: var(--ink); border-color: var(--ink-2); font: var(--text-small) var(--f-ui); }
+.terrain-toggle { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: var(--text-small); cursor: pointer; }
+.terrain-toggle input { width: 16px; height: 16px; accent-color: var(--brand); }
+.terrain-toggle[hidden] { display: none; }

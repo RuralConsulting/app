@@ -109,11 +109,19 @@
     await FP.auth.signOut(); location.hash = ""; location.reload();
   });
   if (FP.basemaps.names.length < 2) $(".basemaps").hidden = true;
-  for (const b of $$("[data-basemap]")) {
-    b.addEventListener("click", () => {
-      for (const o of $$("[data-basemap]")) o.setAttribute("aria-pressed", String(o === b));
-      FP.farmMap.basemap(b.dataset.basemap);
+  // Background and terrain live only in the layers drawer (the secondary list); nothing sits on the map itself.
+  const pressed = (name) => { for (const o of $$("[data-basemap]")) o.setAttribute("aria-pressed", String(o.dataset.basemap === name)); };
+  for (const name of FP.basemaps.names) {
+    const b = FP.el("button", { type: "button", "data-basemap": name, "aria-pressed": String(name === "aerial") }, FP.basemaps.labels[name]);
+    $(".basemaps").appendChild(b);
+    b.addEventListener("click", async () => {
+      pressed(name);
+      try { await FP.farmMap.basemap(name); } catch { pressed("aerial"); FP.farmMap.basemap("aerial"); }
     });
+  }
+  if (!FP.basemaps.missingKey) {
+    const t = $("#terrain-toggle"); t.parentElement.hidden = false; t.checked = FP.basemaps.terrainDefault();
+    t.addEventListener("change", () => FP.farmMap.terrain(t.checked));
   }
 
   window.addEventListener("hashchange", () => { if (farms.length) route(); });

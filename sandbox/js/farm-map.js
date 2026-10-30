@@ -28,6 +28,8 @@ FP.farmMap = (() => {
       const poll = () => (map.style && map.style._loaded ? res() : setTimeout(poll, 50));
       poll();
     });
+    // 3D terrain where the device copes (the layers drawer can switch it)
+    ready.then(() => FP.basemaps.setTerrain(map, FP.basemaps.terrainDefault()));
     // UI colours follow the same tokens as the shell, including a live OS/theme change.
     const syncPalette = () => ready.then(() => {
       if (map.getLayer("bm-blank")) map.setPaintProperty("bm-blank", "background-color",
@@ -306,7 +308,7 @@ FP.farmMap = (() => {
 
   // Wait for a painted, idle map before capturing a view (DOM readiness alone is too early for WebGL).
   const whenIdle = () => new Promise((resolve) => { if (!map) return resolve(); map.once("idle", resolve); map.triggerRepaint(); });
-  return { open, portfolio, zoomTo, camera: () => map && { zoom: map.getZoom(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+  return { open, portfolio, zoomTo, camera: () => map && { zoom: map.getZoom(), moving: map.isMoving() }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => FP.basemaps.setTerrain(init(), on), frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
     resize: () => map && map.resize() };
 })();
 
