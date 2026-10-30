@@ -7,7 +7,7 @@ window.FP_CONFIG = {
   // LINZ Basemaps API key (basemaps.linz.govt.nz): the aerial background. Browser keys are public by design.
   // A standard key expires after 90 days; a developer key (free, from LINZ) doesn't and can be limited to the
   // app's domain (brand.json): moving domain means updating the key's allowed site at LINZ. With no key the map has a plain background. No other tile provider is used.
-  linzKey: "c01m5yfbymwg7qgabe7w20kkx7p",
+  linzKey: "d01m5g152dsk2a73kfxb6a9xf1k",
 
   // What the farm view shows when it opens. Keys: "extent", "titles", a layer's theme (e.g. "land_units"),
   // or "reference" (the farm's own bores etc.). Everything else starts off and can be switched on.
