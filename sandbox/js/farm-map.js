@@ -286,7 +286,22 @@ FP.farmMap = (() => {
     }
     const hit = interactive.get(f.layer.id)({ ...f, properties: props });
     if (props.authorisations && !hit.permits) hit.permits = props.authorisations;
-    new maplibregl.Popup({ maxWidth: "320px" }).setLngLat(e.lngLat).setDOMContent(FP.popup.content(hit)).addTo(map);
+    const popup = new maplibregl.Popup({ maxWidth: Math.min(320, map.getContainer().clientWidth - 24) + "px" }).setLngLat(e.lngLat).setDOMContent(FP.popup.content(hit)).addTo(map);
+    keepInside(popup);
+  }
+
+  // The auto anchor is fixed from the size at open; re-anchor once layout/fonts settle, then pan whatever still overflows.
+  function keepInside(popup) {
+    const fit = () => {
+      if (!popup.isOpen()) return;
+      popup.setLngLat(popup.getLngLat());
+      const b = popup.getElement().getBoundingClientRect(), f = map.getContainer().getBoundingClientRect(), pad = 8;
+      const d = (lo, hi, flo, fhi) => (lo < flo + pad ? lo - flo - pad : hi > fhi - pad ? hi - fhi + pad : 0);
+      const dx = d(b.left, b.right, f.left, f.right), dy = d(b.top, b.bottom, f.top, f.bottom);
+      if (dx || dy) map.panBy([dx, dy], { duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200 });
+    };
+    requestAnimationFrame(fit);
+    document.fonts?.ready.then(fit);
   }
 
   // Wait for a painted, idle map before capturing a view (DOM readiness alone is too early for WebGL).
