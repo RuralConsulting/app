@@ -95,6 +95,8 @@ button, input { font: inherit; color: inherit; }
 .pop dt { color: var(--ink-3); text-transform: capitalize; }
 .pop dd { margin: 0; word-break: break-word; }
 .pop-attr { margin: 8px 0 0; font-size: var(--text-small); color: var(--ink-3); }
+.pop-link { margin: 6px 0 0; font-size: var(--text-small); }
+.pop-link a { color: inherit; text-underline-offset: 2px; }
 
 /* Photos on the map (E3): a small white camera on each photo point (no box; a soft shadow), and the open photo's card,
    inside the map's frame: top left on a wide map (the controls are top right), the map's own sheet on a narrow one. */
@@ -110,6 +112,12 @@ button, input { font: inherit; color: inherit; }
 .photo-pop { position: relative; }
 .photo-pop .pop-photo { width: 100%; height: auto; max-height: none; aspect-ratio: 4 / 3; object-fit: contain; margin: 0 0 10px; }
 .photo-card.sheet .pop-photo { aspect-ratio: auto; height: 180px; }
+/* The original can take a while: until it is in, the box is a soft wash that says so quietly, never a blank slab. */
+.photo-frame { position: relative; }
+.photo-frame.loading .pop-photo { visibility: hidden; }
+.photo-loading { display: none; }
+.photo-frame.loading .photo-loading { display: flex; position: absolute; inset: 0 0 10px; align-items: center; justify-content: center; border-radius: 6px;
+  background: var(--wash); color: var(--ink-3); font-size: var(--text-small); }
 .photo-pop h3 { margin: 0 36px 2px 0; }
 .photo-pop .pop-photo ~ h3 { margin-right: 0; }
 .photo-close { position: absolute; z-index: 1; top: -4px; right: -6px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;

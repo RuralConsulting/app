@@ -44,6 +44,7 @@ FP.popup = (() => {
       for (const [k, v] of r) dl.append(FP.el("dt", {}, k), FP.el("dd", {}, v));
       box.append(dl);
     }
+    if (hit.link?.href) box.append(FP.el("p", { class: "pop-link" }, FP.el("a", { href: hit.link.href, target: "_blank", rel: "noopener noreferrer" }, hit.link.text)));
     if (hit.attribution) box.append(FP.el("p", { class: "pop-attr" }, hit.attribution));
     return box;
   }
@@ -57,10 +58,14 @@ FP.popup = (() => {
     const box = FP.el("div", { class: "pop photo-pop" });
     box.append(FP.el("button", { type: "button", class: "photo-close", "aria-label": "Close the photo", onclick: step.close }, "×"));
     if (model.image) {
-      const img = FP.el("img", { class: "pop-photo", alt: model.line, loading: "lazy", decoding: "async" });
-      box.append(img);
-      photoUrl(model.image).then((u) => { if (u) img.src = u; else img.remove(); });
-      img.addEventListener("error", () => img.remove());
+      // The original can take a while on a slow line: the box says so quietly until the image is in (never a blank slab).
+      const img = FP.el("img", { class: "pop-photo", alt: model.line, decoding: "async" });
+      const frame = FP.el("div", { class: "photo-frame loading" }, FP.el("span", { class: "photo-loading" }, "Loading photo…"), img);
+      box.append(frame);
+      const shown = () => { if (img.complete && img.naturalWidth) frame.classList.remove("loading"); };
+      img.addEventListener("load", shown);
+      img.addEventListener("error", () => frame.remove());
+      photoUrl(model.image).then((u) => { if (u) { img.src = u; shown(); } else frame.remove(); });
     }
     box.append(FP.el("h3", {}, model.line));
     if (model.place) box.append(FP.el("p", { class: "photo-place" }, model.place));

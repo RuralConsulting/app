@@ -1,6 +1,8 @@
 // Answer block: one sentence -> up to three promoted lines, each with its reason -> All behind a tap.
 // Data is an answer model (farm-model.js builds them): { key, title, answer: {text, because}, items, rank, empty,
-// allLabel, href, body?, restricted, currency, total? }. Pure: data in, HTML out (APP-STRUCTURE §3.1–3.4).
+// allLabel, href, body?, lines?, folds?, restricted, currency, total? }. A model may hand its promoted lines to another
+// block (lines: What's due draws them with the Checklist, one line each that opens on a tap) and add quiet folds under
+// them (folds: [{ key, label, body }]). Pure: data in, HTML out (APP-STRUCTURE §3.1–3.4).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -21,7 +23,7 @@
   // list under it is left out (APP-STRUCTURE §3.1); otherwise the model's own sentence stands and the lines follow it.
   function sentence(model) {
     const items = ranked(list(model.items), model.rank), lines = promoted(items), has = answered(model);
-    if (has && lines.length === 1) return { text: model.answer.text + " — " + lines[0].text + ", " + lines[0].because, carried: lines[0] };
+    if (has && lines.length === 1 && !model.lines) return { text: model.answer.text + " — " + lines[0].text + ", " + lines[0].because, carried: lines[0] };
     return { text: has ? model.answer.text + " — " + model.answer.because : model.empty?.text || "Nothing recorded yet.", carried: null };
   }
 
@@ -44,16 +46,17 @@
       return at < 0 ? esc(said) : esc(said.slice(0, at)) + link(l.href, l.text) + esc(said.slice(at + l.text.length));
     };
     const selected = (item) => o.selected != null && o.selected === item.id;
-    // A promoted line whose record has a place on the map (model.places, What's due) is a toggle: choosing it frames
-    // the map there and marks it, choosing it again goes back (the host wires it; aria-pressed says which is chosen).
-    const choosable = (item) => !!model.places?.[item.id] && !text(item.href);
     const row = (item, lead) => {
       const said = link(item.href, item.text) + (lead ? '<span class="answer-reason"> — ' + esc(item.because) + "</span>" : item.detail ? '<p class="record-detail">' + esc(item.detail) + "</p>" : "");
-      return '<li tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? ' class="selected-record"' : "") + ">" +
-        (lead && choosable(item) ? '<span class="answer-place" role="button" tabindex="0" aria-pressed="false">' + said + "</span>" : said) + "</li>";
+      return '<li tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? ' class="selected-record"' : "") + ">" + said + "</li>";
     };
-    // A model may hand its All to another block (the List for Documents, the Timeline for What's changed). It is
-    // drawn without a title of its own, one heading level down; without that block loaded, All is the plain list.
+    // A model may hand its All to another block (the List for Documents, the Timeline for What's changed), and its
+    // promoted lines and folds too (What's due: the Checklist). Each is drawn without a title of its own, one heading
+    // level down; without that block loaded, All is the plain list and the lines are the plain lines.
+    const nested = (b) => {
+      if (!b || !blocks.list().includes(b.block)) return null;
+      return blocks.html(b.block, b.data, b.options || {}, { level: sub, nested: true, href: ctx.href }).html;
+    };
     const body = () => {
       const b = model.body;
       if (!b || !blocks.list().includes(b.block)) return null;
@@ -68,7 +71,9 @@
     return '<section class="answer-panel' + (o.compact ? " answer-compact" : "") + '" data-answer-key="' + esc(model.key) +
       '" data-answer-state="' + (!hasAnswer && !highlights.length ? "empty" : "recorded") + '">' +
       "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + (said.carried ? esc(model.answer.text) + " — " + link(said.carried.href, said.carried.text) + esc(", " + said.carried.because) : emptyLinked(said.text)) + "</p>" +
-      (lines.length ? '<ul class="answer-highlights">' + lines.map((i) => row(i, true)).join("") + "</ul>" : "") +
+      (lines.length ? (model.lines && nested(model.lines) ? '<div class="answer-highlights answer-lines">' + nested(model.lines) + "</div>" :
+        '<ul class="answer-highlights">' + lines.map((i) => row(i, true)).join("") + "</ul>") : "") +
+      list(model.folds).map((f) => { const inner = nested(f.body); return inner && text(f.label) ? '<details class="answer-fold" data-fold="' + esc(f.key) + '"><summary>' + esc(f.label) + "</summary>" + inner + "</details>" : ""; }).join("") +
       (model.restricted ? "" : all) +
       (text(model.currency) ? '<footer class="answer-currency">' + esc(model.currency) + "</footer>" : "") + "</section>";
   }

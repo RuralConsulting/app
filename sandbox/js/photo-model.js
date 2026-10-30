@@ -173,6 +173,13 @@
     return scale >= 1 ? { ok: true } : { zoom: Math.log2(Math.max(scale, 0.25)) };
   }
 
+  // Photo pins are curated by zoom (Josh, 31 Oct): Photos is on by default, but at the farm's own frame its pins are
+  // hidden (the opening map is the boundary alone); they show once the map is zoomed in past that frame by about one
+  // zoom level (PIN_ZOOM), and always while a photo is open. Photos switched off hides them at any zoom.
+  // { on, open, zoom, farmZoom } -> true when the pins are drawn. No farm frame yet (the flight in): hidden.
+  const PIN_ZOOM = 0.9;
+  const pinsShown = ({ on, open, zoom, farmZoom } = {}) => !!on && (!!open || (Number.isFinite(zoom) && Number.isFinite(farmZoom) && zoom >= farmZoom + PIN_ZOOM));
+
   return { direction, compass, takenAt, line, inTimeOrder, inside, unitAt, unitLine, card, cone, metresPerPixel, camera, padding, offset,
-    cameraGap, closer, TOO_CLOSE, frameCheck };
+    cameraGap, closer, TOO_CLOSE, frameCheck, pinsShown, PIN_ZOOM };
 });

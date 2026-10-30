@@ -115,7 +115,7 @@
     await FP.auth.signOut(); location.hash = ""; location.reload();
   });
   if (FP.basemaps.names.length < 2) $("#drawer-background").hidden = true;
-  // Background and terrain live only in the layers drawer (the secondary list); nothing sits on the map itself.
+  // Background and terrain live in the Layers drawer, under the farm's own layers (they are secondary).
   const pressed = (name) => { for (const o of $$("[data-basemap]")) o.setAttribute("aria-pressed", String(o.dataset.basemap === name)); };
   for (const name of FP.basemaps.names) {
     const b = FP.el("button", { type: "button", "data-basemap": name, "aria-pressed": String(name === "aerial") }, FP.basemaps.labels[name]);

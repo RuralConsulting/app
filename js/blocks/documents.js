@@ -29,7 +29,9 @@
     const kinds = list(o.kinds).map((k) => k.toLowerCase());
     const rows = list(docs).filter((d) => d && d.id != null && (!kinds.length || kinds.includes(String(d.doc_type || "").toLowerCase())));
     const ids = new Set(rows.map((d) => d.id)), parents = new Set(rows.map((d) => d.relates_to).filter((p) => ids.has(p)));
-    const placed = rows.map((doc) => ({ doc, tier: M.docTier(doc, parents.has(doc.id)) }));
+    // whether the farm has a plan decides where a digitising record sits (with it, supporting; without, it may be the map)
+    const plan = list(docs).some((d) => d && M.isPlan(d));
+    const placed = rows.map((doc) => ({ doc, tier: M.docTier(doc, parents.has(doc.id), plan) }));
     const primary = placed.filter((p) => p.tier.tier === "primary"), primaryIds = new Set(primary.map((p) => p.doc.id));
     const under = new Map(primary.map((p) => [p.doc.id, []])), loose = [], archive = [];
     for (const p of placed) {
@@ -43,11 +45,12 @@
     return { primaries: shown, more: primaries.slice(shown.length), loose: loose.sort(byDate), archive: archive.sort(byDate), all: placed };
   }
 
-  // The one plain line under a title: what it is (when the title doesn't say), who prepared it, when.
+  // The one plain line under a title: what it is (when the title doesn't say, or when nothing else would), who prepared
+  // it, when (the date prepared, else the end of the period it covers).
   function sourceLine(d) {
     const kind = M.docKind(d.doc_type), title = String(M.docTitle(d)).toLowerCase();
-    const who = d.author_org || d.author, when = day(d.date_prepared);
-    const parts = [kind && kind !== "Other" && !title.includes(kind.toLowerCase()) ? kind : null, who || null, when ? M.date(when) : null];
+    const who = d.author_org || d.author, when = day(d.date_prepared) || day(d.period_end);
+    const parts = [kind && kind !== "Other" && (!title.includes(kind.toLowerCase()) || (!who && !when)) ? kind : null, who || null, when ? M.date(when) : null];
     if (!who && !when && day(d.created_at)) parts.push("added " + M.date(day(d.created_at)));
     return parts.filter(Boolean).join(" · ") || "Nothing more recorded";
   }
@@ -66,7 +69,8 @@
   // What a fold holds, in a few words: "notes, a map extract and 3 S-map soil fact sheets".
   function kindsLine(items) {
     const counts = new Map();
-    for (const p of items) { const k = (M.docKind(p.doc.doc_type) || "Document").toLowerCase(); counts.set(k, (counts.get(k) || 0) + 1); }
+    // a word's capital goes; "FEP", "NZFAP+" and "S-map" keep theirs
+    for (const p of items) { const k = (M.docKind(p.doc.doc_type) || "Document").replace(/\b[A-Z](?=[a-z])/g, (c) => c.toLowerCase()); counts.set(k, (counts.get(k) || 0) + 1); }
     const words = [...counts].map(([k, c]) => (c > 1 ? k + " (" + c + ")" : k));
     return words.length > 3 ? words.slice(0, 3).join(", ") + " and more" : words.length > 1 ? words.slice(0, -1).join(", ") + " and " + words[words.length - 1] : words[0] || "";
   }

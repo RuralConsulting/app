@@ -12,7 +12,7 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   // The kinds a person can choose from, in the order the chooser lists them: [doc_type, plain name].
   const KINDS = [
-    ["fep", "Farm Environment Plan"], ["fwfp", "Freshwater Farm Plan"], ["nzfap_checklist", "NZFAP+ checklist"],
+    ["fep", "Farm Environment Plan"], ["fep_audit", "FEP audit"], ["fwfp", "Freshwater Farm Plan"], ["nzfap_checklist", "NZFAP+ checklist"],
     ["consent_decision", "Consent decision"], ["consent_application", "Consent application"], ["aee", "Assessment of environmental effects"],
     ["overseer_report", "Nutrient budget"], ["land_unit_map", "Land unit map"], ["luc_report", "Land use capability report"],
     ["ghg_report", "Greenhouse gas report"], ["memo", "Notes"], ["correspondence", "Correspondence"],
@@ -24,6 +24,8 @@
   const ARCHIVE = /\bwip\b|work[\s_-]*in[\s_-]*progress|\bcopy[\s_-]+of\b|\bbackup\b|\bold\b|\bsuperseded\b|\barchived?\b|^~\$/i;
   // [pattern on the name, doc_type, tier]; the first that matches wins. Tier "supporting" sits under a main document.
   const RULES = [
+    // an audit of the plan is its record, not the plan (an irrigation, effluent or meter audit is not this kind)
+    [/(\bfep\b|\bfemp\b|farm[\s_-]*environment[\s_-]*plan).*\baudit|\baudit\b.*(\bfep\b|farm[\s_-]*environment[\s_-]*plan)/i, "fep_audit", "supporting"],
     [/farm[\s_-]*environment[\s_-]*plan|\bfep\b|\bfemp\b/i, "fep", "primary"],
     [/freshwater[\s_-]*farm[\s_-]*plan|\bfwfp\b/i, "fwfp", "primary"],
     [/nzfap/i, "nzfap_checklist", "primary"],

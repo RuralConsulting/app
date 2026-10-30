@@ -57,6 +57,8 @@
   let units = null;                // the scene's land units (a photo's card says which one it sits in)
   let featurePopup = null;         // the feature popup open on the map, if any
   let drawn = null;                // the farm payload on the map now, for focus()
+  let farmZoom = null;             // the zoom the farm's own frame settled at (photo pins show once zoomed in past it)
+  const photoEntries = [];         // the Photos rows: their pins are drawn by curatePins, not by setVisible alone
 
   const accent = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
 
@@ -96,6 +98,9 @@
     window.addEventListener("resize", onResize);
     map.on("click", onClick);
     map.on("moveend", reground);
+    // the zoom the farm's own frame settled at, and the photo pins curated against it (FP.photoModel.pinsShown)
+    map.on("moveend", () => { if (map && !touched && !photo && drawn?.extent && framed === drawn.extent && !map.isMoving()) farmZoom = map.getZoom(); curatePins(); });
+    map.on("zoomend", curatePins);
     map.on("data", (e) => { if (e.sourceId && e.sourceId === map?.getTerrain?.()?.source) reground(); });
     map.on("mousemove", (e) => {
       const ids = [...interactive.keys()].filter((id) => map.getLayer(id));
@@ -119,7 +124,7 @@
     }
     added = [];
     interactive.clear();
-    drawn = null;
+    drawn = null; farmZoom = null; photoEntries.length = 0;
   }
 
   function source(id, data) {
@@ -168,12 +173,13 @@
   // unit keeping its name first; zoom in and the names come back (FP.farmModel.unitNames decides, from screen boxes).
   // At national scale the farm is a speck and its labels would pile into one glyph: they wait until it is in frame.
   function landUnitLabels(units, extent) {
-    const labels = [];
+    const labels = [], own = [];
     for (const f of units.features) {
       const at = f.properties.label_at;
       if (!at) continue;
       const el = FP.el("div", { class: "lu-label" }, FP.el("b", {}, f.properties.code), FP.el("span", {}, f.properties.name));
-      markers.push(new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map));
+      const marker = new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map);
+      markers.push(marker); own.push(marker);
       labels.push({ el, area: Number(f.properties.area_ha) || 0 });
     }
     let queued = false;
@@ -192,6 +198,7 @@
     for (const ev of ["move", "resize"]) map.on(ev, declutter);
     document.fonts?.ready.then(declutter);
     declutter();
+    return own;
   }
 
   // ---- Photos (E3, #221): a small white camera on each photo point; a tap eases the map to it, turned to look the way
@@ -227,6 +234,7 @@
       { at: k, of: set.list.length, earlier: () => showPhoto(i, k - 1), later: () => showPhoto(i, k + 1), close: dismissPhoto }));
     c.append(card);
     photo = { i, k, card };
+    curatePins();   // a photo open: its layer's pins are shown, whatever the zoom
     if (focused) card.querySelector('[aria-label="' + focused + '"]:not([disabled])')?.focus();
     framePhoto(f, model.direction);
   }
@@ -272,6 +280,7 @@
   function closePhoto() {
     if (!photo) return;
     photo.card.remove(); photo = null; photoMoves++;
+    curatePins();
     for (const s of photoSets.values()) for (const m of s.markers) m.getElement().classList.remove("selected");
     map?.getSource("photo-cone")?.setData(NONE);
     releaseTerrain();
@@ -306,6 +315,8 @@
     map.fitBounds(bounds, { padding, duration, maxZoom: 17, pitch: 0 });   // flat: a photo's tilt never carries into a frame
     if (!map.isMoving()) stand(mid);   // a jump (reduced motion) measures the height itself, from tiles it may not have
     if (geom) { framed = geom; touched = false; framedWidth = window.innerWidth; settle(geom); }
+    // a jump (reduced motion) has already ended its move: the farm frame's zoom is known now
+    if (geom && geom === drawn?.extent && !map.isMoving() && !photo) { farmZoom = map.getZoom(); curatePins(); }
   }
   // The window (or the pane the app sits in) changed size: frame the farm again for the new map, unless the person has moved it.
   // (A phone keeps its frame when only its height changes: that is the keyboard coming up.)
@@ -514,16 +525,16 @@
       data.layers.forEach((l, i) => layerIds[i].push(...farmLayer(l, i, pass)));
     }
     data.layers.forEach((l, i) => {
-      // one plain name and the one line saying where the layer came from; how many features it holds is not for the reader
-      const e = { key: l.theme, name: FP.farmModel.layerName(l), sub: FP.farmModel.sourceLine(l), section: "farm", ids: layerIds[i], job: l.job || null };
+      // one plain name; where the layer came from is in each feature's popup, and how many features it holds is not for the reader
+      const e = { key: l.theme, name: FP.farmModel.layerName(l), sub: null, section: "farm", ids: layerIds[i], job: l.job || null };
       if (l.theme === "land_units") {
-        landUnitLabels(data.land_units, data.extent);
-        e.markers = markers.slice();
+        // only the labels: a photo pin made earlier is the Photos layer's, never the land units' (pins showed with Photos off)
+        e.markers = landUnitLabels(data.land_units, data.extent);
         e.ids.push(layer({ id: "land-units-hit", type: "fill", source: "land-units", paint: { "fill-color": "#000", "fill-opacity": 0 } },
           (f) => ({ title: `${f.properties.code} ${f.properties.name || ""}`.trim(), qualifier: FP.farmModel.sourceLine(l),
                     props: { area_ha: f.properties.area_ha } })));
       }
-      if (l.theme === "photos") { e.markers = photoPins(l, i); e.photoLayer = i; }
+      if (l.theme === "photos") { e.markers = photoPins(l, i); e.photoLayer = i; photoEntries.push(e); }
       if (l.theme === "actions") {
         e.markers = [];
         for (const f of l.features.features) if (f.geometry?.type === "Point" && f.properties.map_code) {
@@ -541,15 +552,33 @@
     layer({ id: "photo-cone-casing", type: "line", source: "photo-cone", paint: { "line-color": "#000", "line-opacity": 0.35, "line-width": 3.5 } });
     layer({ id: "photo-cone-line", type: "line", source: "photo-cone", paint: { "line-color": "#ffffff", "line-width": 1.5 } });
 
+    // Reference layers, each drawn by its geometry (#243): lines as light blue lines on a dark casing, areas as a fill
+    // and outline, points as circles; one describe per layer, so every popup says what it is and where it came from.
+    // Consents: current ones only, until "Past consents" adds the rest (the row's own second switch).
+    const AREA = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], LINE = ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString"]]],
+      POINT = ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]];
     for (const [i, r] of data.reference.entries()) {
-      const sid = `ref-${i}`;
-      source(sid, r.features);
-      const id = layer({ id: sid + "-pt", type: "circle", source: sid, paint: {
-        "circle-color": "#1e88e5", "circle-radius": 7, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } },
-        (f) => ({ title: `${r.theme === "wells" ? "Bore" : r.name} ${f.properties.external_id}`, layerName: r.name,
-                  qualifier: f.properties.on_farm ? "On the farm" : "Off the farm, linked to the farm's permit",
-                  props: f.properties, permits: f.properties.authorisations || [], attribution: r.attribution }));
-      entries.push({ key: "reference", name: r.theme === "wells" ? "Bores on the farm" : FP.farmModel.layerName(r), sub: null, section: "reference", ids: [id] });
+      const sid = `ref-${i}`, consents = r.theme === "consents" || r.key === "ecan-consents";
+      const features = consents ? { ...r.features, features: (r.features?.features || []).map((f) => ({ ...f, properties: { ...f.properties, fp_past: FP.farmModel.pastConsent(f.properties) } })) } : r.features;
+      source(sid, features);
+      const describe = (f) => {
+        const { fp_past, ...props } = f.properties;
+        if (consents) return FP.farmModel.consentPopup(props, r, f.properties.on_farm ? "On the farm" : "Off the farm, linked to the farm's permit");
+        const named = props.name || props.Name || props.NAME;
+        return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
+          qualifier: props.on_farm ? "On the farm" : "Off the farm, linked to the farm's permit", props, permits: props.authorisations || [], attribution: r.attribution };
+      };
+      const ids = [
+        layer({ id: sid + "-fill", type: "fill", source: sid, filter: AREA, paint: { "fill-color": "#bfe8ff", "fill-opacity": 0.25 } }, describe),
+        layer({ id: sid + "-outline", type: "line", source: sid, filter: AREA, paint: { "line-color": "#bfe8ff", "line-width": 1.5 } }),
+        layer({ id: sid + "-casing", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#000000", "line-opacity": 0.5, "line-width": 5 } }),
+        layer({ id: sid + "-line", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bfe8ff", "line-width": 2.5 } }, describe),
+        layer({ id: sid + "-pt", type: "circle", source: sid, filter: consents ? ["all", POINT, ["!=", ["get", "fp_past"], true]] : POINT, paint: {
+          "circle-color": "#1e88e5", "circle-radius": 7, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } }, describe),
+      ];
+      const past = consents ? [layer({ id: sid + "-past", type: "circle", source: sid, filter: ["all", POINT, ["==", ["get", "fp_past"], true]], paint: {
+        "circle-color": "#78909c", "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } }, describe)] : null;
+      entries.push({ key: r.key || "reference-" + i, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}) });
     }
 
     // What an answer is about, when one of its lines is chosen (focus, #224): the rest of the farm dims, and the chosen
@@ -570,7 +599,7 @@
     const defaultOn = new Set(show || [...(FP_CONFIG.farmView?.defaultOn || []), ...(FP.demo?.active ? ["actions"] : [])]);
     // a photo asked for by the host is on show, with its layer
     const asked = wanted == null ? null : [...photoSets].map(([i, s]) => [i, s.list.findIndex((f) => String(f.id) === String(wanted))]).find(([, k]) => k >= 0);
-    for (const e of entries) setVisible(e, defaultOn.has(e.key) || (!!asked && e.photoLayer === asked[0]));
+    for (const e of entries) setVisible(e, defaultOn.has(e.key) || (e.section === "reference" && defaultOn.has("reference")) || (!!asked && e.photoLayer === asked[0]));
 
     if (data.extent) {
       map.resize();
@@ -619,8 +648,25 @@
     entry.on = on;
     if (!on && photo && entry.photoLayer === photo.i) closePhoto();
     for (const id of entry.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    for (const id of entry.past?.ids || []) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on && entry.past.on ? "visible" : "none");
+    if (entry.photoLayer != null) { curatePins(); return; }
     for (const m of entry.markers || []) m.getElement().style.display = on ? "" : "none";
     if (entry.markers?.length && declutter) declutter();
+  }
+  // Photo pins by FP.photoModel.pinsShown: hidden at the farm's frame, shown once zoomed in, always while a photo is open.
+  function curatePins() {
+    if (!map) return;
+    for (const e of photoEntries) {
+      const shown = FP.photoModel.pinsShown({ on: e.on, open: !!photo && photo.i === e.photoLayer, zoom: map.getZoom(), farmZoom });
+      for (const m of e.markers || []) m.getElement().style.display = shown ? "" : "none";
+    }
+  }
+
+  // A row's second switch (Consents: "Past consents") adds what the first leaves out; it shows only while the row is on.
+  function setPast(entry, on) {
+    if (!entry.past) return;
+    entry.past.on = on;
+    for (const id of entry.past.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", entry.on && on ? "visible" : "none");
   }
 
   function onClick(e) {
@@ -629,7 +675,8 @@
     const hits = map.queryRenderedFeatures(e.point, { layers: ids });
     if (!hits.length) return;
     // points over lines over areas; titles last
-    const rank = (h) => (h.layer.type === "circle" ? 0 : h.layer.type === "line" ? 1 : h.layer.id === "titles-hit" ? 3 : 2);
+    // (land units are under every other area: a planting tapped inside a land unit is the planting)
+    const rank = (h) => (h.layer.type === "circle" ? 0 : h.layer.type === "line" ? 1 : h.layer.id === "titles-hit" ? 4 : h.layer.id === "land-units-hit" ? 3 : 2);
     hits.sort((a, b) => rank(a) - rank(b));
     const f = hits[0];
     const props = {};
@@ -667,7 +714,7 @@
     for (const m of markers) m.remove();
     markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
   }
-  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving(), terrain: !!map.getTerrain?.(), elevation: map.getCameraTargetElevation?.() ?? 0, dimmed, labelsOff: map.getContainer().querySelectorAll(".lu-label.on-line").length }, setVisible, whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => { heldTerrain = false; return FP.basemaps.setTerrain(init(), on); }, frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving(), terrain: !!map.getTerrain?.(), elevation: map.getCameraTargetElevation?.() ?? 0, dimmed, labelsOff: map.getContainer().querySelectorAll(".lu-label.on-line").length }, setVisible, setPast, addControl: (control, position) => init().addControl(control, position), whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => { heldTerrain = false; return FP.basemaps.setTerrain(init(), on); }, frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
     resize: () => map && map.resize(), closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
   }
 

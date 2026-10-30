@@ -25,7 +25,7 @@
   const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", consent_decision: "Consent decision", consent_application: "Consent application",
     overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
     ghg_report: "Greenhouse gas report", consent_correspondence: "Consent correspondence", correspondence: "Correspondence",
-    smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract", nzfap_checklist: "NZFAP+ checklist", land_unit_map: "Land unit map",
+    smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract", map_extract: "Map extract", fep_audit: "FEP audit", nzfap_checklist: "NZFAP+ checklist", land_unit_map: "Land unit map",
     image: "Photo or image", other: "Other" };
   const docKind = (k) => docKinds[k] || (k ? String(k).replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()) : null);
 
@@ -41,7 +41,7 @@
     consent_decision: ["primary", 1], consent_application: ["primary", 1], consent: ["primary", 1], aee: ["primary", 1], nzfap_checklist: ["primary", 1],
     overseer_report: ["primary", 2], nutrient_budget: ["primary", 2], land_unit_map: ["primary", 3], farm_map: ["primary", 3],
     luc_report: ["primary", 4], ghg_report: ["primary", 4],
-    consent_correspondence: ["supporting", 0], correspondence: ["supporting", 0], memo: ["supporting", 1],
+    consent_correspondence: ["supporting", 0], correspondence: ["supporting", 0], memo: ["supporting", 1], fep_audit: ["supporting", 0],
     smap_factsheet: ["supporting", 2], gis_artifact: ["supporting", 3], image: ["supporting", 4],
   };
   const DOC_FOLDS = { smap_factsheet: "S-map soil fact sheets", gis_artifact: "map extracts" };
@@ -55,6 +55,9 @@
   ];
   const ABOUT_CORRESPONDENCE = /correspondence|\be-?mail\b|\bletter\b/i;
   const MAP_EXTRACT = /\bclip|buffer|within \d+ ?km|\bextract\b/i;
+  // A digitising or georeferencing record (how a map was brought in, "… (pilot)") is background to the plan, not a main
+  // document (#223): supporting, unless the farm has no plan, when it may be the only map there is.
+  const DIGITISING = /\bdigiti[sz]|georeferenc|\bpilot\b/i;
   function docClass(d) {
     const row = d || {}, type = String(row.doc_type || "").toLowerCase().trim().replace(/[\s-]+/g, "_"), title = String(row.title || "");
     let [tier, rank] = DOC_TYPES[type] || [null, 0];
@@ -72,14 +75,21 @@
   // (F1e gave every existing document that tier) and a row from before tiers still go by docClass, with "other"
   // shown as supporting: a guess never hides a document in the archive. A superseded document is archived.
   // Returns { tier: "primary" | "supporting" | "archive", weight (kind order among primaries, lower first), fold, chosen }.
-  function docTier(d, hasChildren = false) {
+  function docTier(d, hasChildren = false, planExists = true) {
     const row = d || {}, stored = String(row.tier || "").toLowerCase(), c = docClass({ ...row, tier: null });
+    const kind = String(row.doc_type || "").toLowerCase().trim().replace(/[\s-]+/g, "_");
+    if (planExists && c.tier === "primary" && ["gis_artifact", "map_extract"].includes(kind) && DIGITISING.test(String(row.title || ""))) [c.tier, c.rank] = ["supporting", 3];
     const weight = c.tier === "primary" ? c.rank : 5, fold = DOC_FOLDS[String(row.doc_type || "").toLowerCase().trim().replace(/[\s-]+/g, "_")] || null;
     if (stored === "archive" || row.status === "superseded") return { tier: "archive", weight, fold, chosen: stored === "archive" };
     if (stored === "supporting") return { tier: "supporting", weight, fold, chosen: true };
     if (stored === "primary" && (row.tiered_at || hasChildren)) return { tier: "primary", weight, fold: null, chosen: true };
     return { tier: c.tier === "primary" ? "primary" : "supporting", weight, fold: c.tier === "primary" ? null : fold, chosen: false };
   }
+  // The farm's plan among its documents: a main document of the plan kind (its FEP or FWFP). Selecting it in Documents
+  // brings the FEP's layers onto the map (E5).
+  const isPlan = (d) => { const t = docTier(d); return t.tier === "primary" && t.weight === 0; };
+  // The kind of document a condition's record is, from what the condition says it needs; null leaves the guess to the form.
+  const recordKind = (needs) => /\baudit/i.test(needs || "") ? "fep_audit" : /nutrient|nitrogen|overseer/i.test(needs || "") ? "overseer_report" : null;
   // A correspondence record titled only by a code ("<consent no> information 3") is shown as what it is: its kind,
   // the consent it is about and the date it was prepared (or its number in the run when it has no date).
   const CODE_TITLE = /^\s*([A-Z]{2,5}\s?\d{4,}[A-Z]?)((?:\s+(?:further|additional|information|info|response|request|reply|letter|e-?mail|correspondence|s\.?\s?92))+)[\s#.,-]*(\d+)?[\s.]*$/i;
@@ -101,7 +111,6 @@
   };
   const params = (o) => (o.parameters && typeof o.parameters === "object" && !Array.isArray(o.parameters) ? o.parameters : {});
   const words = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
-  const and = (xs) => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
   // Where a condition stands from what is recorded, never from what ought to be true: ongoing practice; a date
   // (coming up or passed); or unknown until there is a record (an audit repeating on its last grade, a report after
   // each audit). Rows loaded before schedules were recorded fall back on their date, repeat rule and kind.
@@ -133,7 +142,6 @@
     const t = unmarked(a.title || "").trim();
     return t && !/\.$/.test(t) ? t : a.consent_no ? "Consent " + a.consent_no : t || a.rule_ref || "Recorded authorisation";
   };
-  const setBy = (a) => (!a ? "a recorded condition" : a.kind === "consent" ? "your consent" : a.kind === "permitted_rule" ? "a permitted activity rule" : "a recorded authorisation");
   // Where a condition is on the farm's map, when the record says: its land units (by code) or a theme the map draws
   // ("waterways", "wells"). Never worked out from the wording; no place recorded, no place.
   function placeOf(o) {
@@ -149,34 +157,61 @@
   // "What's due": the farm's conditions as a checklist (what needs a record before anything can be said, dates
   // coming up, ongoing practice), with authorisation expiry dates and consents whose conditions aren't recorded.
   // Ordered by consequence: the sentence names what needs a record first, then the next date; its counts are the
-  // checklist's own. Promoted lines are what needs a record (the dated first), then the next date, then the practice
-  // to keep up, each with its reason. The advisor reads the citation up front; the farmer reads the action and its
-  // date, with the consent and condition in the checklist behind it. Nothing is inferred or asserted.
+  // checklist's own. Promoted lines are what needs a record (the dated first), then the next date, each one line
+  // ("Have the first FEP audit done · due 15 Jan 2026 · no record") whose fold holds the consent, condition, basis and
+  // wording; the practice to keep up and what the FEP must contain are two quiet folds under them. A condition marked
+  // done (a met, unsuperseded check) or with a record linked to it (an entry linking it to a document) has left what
+  // needs a record. The advisor's sentence cites, the farmer's reads the action and its date. Nothing is inferred.
+  // FEP: the plan as Josh and the farm's people name it, in every line and sentence here.
+  const fep = (t) => String(t ?? "").replace(/\bFarm Environment Plan\b/g, "FEP");
+  // A consent's lapse date matters only while it is unused: it is shown when the consent starts in the future or the
+  // record says it has not been used (parameters.exercised === false); otherwise it sits in Everything recorded only.
+  const lapseMatters = (o, a, today) => params(o).exercised === false || (!!a && !!day(a.valid_from) && day(a.valid_from) > today);
+  // A plan-content item (an appendix's list of what the plan must hold, under its condition): not a thing that needs a record.
+  const isPlanContent = (o) => o.kind === "plan_content" && !!words(params(o).part_of);
+  // Records from entry_links rows: an entry linked to a condition and to a document records that condition with it.
+  function recordLinks(links) {
+    const by = new Map();
+    for (const l of list(links)) {
+      if (!l?.entry_id) continue;
+      if (!by.has(l.entry_id)) by.set(l.entry_id, { obligations: [], documents: [] });
+      if (l.obligation_id) by.get(l.entry_id).obligations.push(l.obligation_id);
+      if (l.document_id) by.get(l.entry_id).documents.push(l.document_id);
+    }
+    return [...by.values()].flatMap((e) => e.obligations.flatMap((obligation_id) => e.documents.map((document_id) => ({ obligation_id, document_id }))));
+  }
   function due(context) {
     const f = context.farm.id, today = context.today, horizon = addDays(today, 365), auths = list(context.authorisations), obligations = list(context.obligations);
     const farmer = audienceOf(context) === "farmer", name = farmer ? plainName : authName;
     const byId = new Map(auths.map((a) => [a.id, a])), docs = new Map(list(context.documents).map((d) => [d.id, d]));
+    // Done (a met check that nothing has superseded) and records (a document linked to the condition), by obligation id.
+    const doneOn = new Map(), recordOf = new Map();
+    // the day it was marked done is the farm's (New Zealand) day, not UTC's: a tick at 9 am on 31 Oct reads 31 Oct
+    const nzDay = (v) => { const t = Date.parse(v), d = Number.isFinite(t) ? new Date(t).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" }) : null; return isDate(d) ? d : day(v); };
+    for (const c of list(context.checks)) if (c?.obligation_id && c.status === "met" && !c.superseded_at && day(c.created_at)) {
+      const d = nzDay(c.created_at); if (!doneOn.has(c.obligation_id) || doneOn.get(c.obligation_id) < d) doneOn.set(c.obligation_id, d);
+    }
+    for (const r of list(context.records)) { const d = r && docs.get(r.document_id); if (d && !recordOf.has(r.obligation_id)) recordOf.set(r.obligation_id, d); }
     const source = (o) => {
       const d = o.source_document_id && docs.get(o.source_document_id), page = Number.isInteger(o.source_page) ? "page " + o.source_page : null;
       return d ? [d.title || "Source document", page].filter(Boolean).join(", ") : page ? "Source " + page : null;
     };
-    // Plan content listed under its condition (Appendix B under condition 7) folds into that condition's line.
-    const codeOf = (o) => (o.authorisation_id || "") + "|" + (o.code || "");
-    const parents = new Set(obligations.map(codeOf)), parts = new Map();
-    const partOf = (o) => { const p = words(params(o).part_of); return p && parents.has((o.authorisation_id || "") + "|" + p) ? (o.authorisation_id || "") + "|" + p : null; };
-    for (const o of obligations) if (partOf(o)) { const k = partOf(o); if (!parts.has(k)) parts.set(k, []); parts.get(k).push(o); }
-    const checklist = [], places = {}, auth = new Map();
+    // What the plan must contain (Appendix B under condition 7) is its own fold, not a part of that condition's line.
+    const contents = obligations.filter(isPlanContent).sort((x, y) => String(x.code).localeCompare(String(y.code), "en", { numeric: true }));
+    const checklist = [], places = {}, auth = new Map(), quiet = new Set();
     for (const o of obligations) {
-      if (partOf(o)) continue;
+      if (isPlanContent(o)) continue;
       const a = byId.get(o.authorisation_id), p = params(o), s = schedule(o), id = "obligation-" + o.id;
-      const kids = (parts.get(codeOf(o)) || []).sort((x, y) => String(x.code).localeCompare(String(y.code), "en", { numeric: true }));
       if (placeOf(o)) places[id] = placeOf(o);
       auth.set(id, a);
-      checklist.push({ id, text: o.summary || "Recorded condition", reason: obligationReason(o, a),
+      if (o.code === "lapse" && !lapseMatters(o, a, today)) quiet.add(id);
+      const record = recordOf.get(o.id);
+      checklist.push({ id, obligation_id: String(o.id), text: fep(o.summary || "Recorded condition"), reason: obligationReason(o, a),
         state: s.state === "dated" ? undefined : s.state, due: s.due || null, verb: o.code === "lapse" ? "lapses" : "due",
         repeats: words(o.recurrence), needs: words(p.needs_record), basis: s.due ? words(p.due_basis) : null,
-        note: [s.due ? words(p.due_basis) : null, words(p.note), words(p.flag)].filter(Boolean).join(" ") || null,
-        wording: words(o.full_text), source: source(o), parts: kids.map((k) => k.summary).filter(Boolean),
+        note: [s.due && words(p.due_basis) ? "Calculated: " + lower(words(p.due_basis)) : null, words(p.note), words(p.flag)].filter(Boolean).join(" ") || null,
+        wording: words(o.full_text), source: source(o),
+        ...(record ? { record: { title: docTitle(record), href: href(f, "documents", record.id) } } : doneOn.has(o.id) ? { done_on: doneOn.get(o.id) } : {}),
         detail: [a ? name(a) : null, conditionCode(o) ? "condition " + o.code : null, s.due ? (s.due < today ? "was due " : "due ") + date(s.due) : null, o.recurrence].filter(Boolean).join(" · ") });
     }
     for (const a of auths) {
@@ -188,55 +223,24 @@
       else if (bare) checklist.push({ id: "conditions-" + a.id, text: "Conditions of " + (farmer ? lower(name(a)) : name(a)), reason: "the consent is recorded, its conditions aren't yet", state: "unknown",
         needs: "the consent's conditions", detail: "conditions not recorded" });
     }
-    const stateOf = (i) => (i.state === "ongoing" ? "ongoing" : i.due ? (i.due < today ? "passed" : "due") : "unknown");
+    const stateOf = (i) => (i.record || i.done_on ? "done" : i.state === "ongoing" ? "ongoing" : i.due ? (i.due < today ? "passed" : "due") : "unknown");
     const byDate = (a, b) => a.due.localeCompare(b.due) || a.id.localeCompare(b.id), byText = (a, b) => a.text.localeCompare(b.text) || a.id.localeCompare(b.id);
-    // The checklist's own groups, so the sentence's counts are the ones under it.
-    const coming = checklist.filter((i) => stateOf(i) === "due").sort(byDate);
+    // The checklist's own groups, so the sentence's counts are the ones under it. A lapse date that doesn't matter
+    // (the consent is in use) is in the checklist and nowhere up front.
+    const coming = checklist.filter((i) => stateOf(i) === "due" && !quiet.has(i.id)).sort(byDate);
     const passed = checklist.filter((i) => stateOf(i) === "passed").sort(byDate);
     const needs = [...passed.filter((i) => i.verb === "due"), ...checklist.filter((i) => stateOf(i) === "unknown").sort(byText)];
     const ended = passed.filter((i) => i.verb !== "due");
     const ongoing = checklist.filter((i) => stateOf(i) === "ongoing");
     const calc = (i) => (i.basis ? ", calculated" : "");
-    // Each line's reason. Advisor: where it stands and the consent and condition that require it. Farmer: the line
-    // leads with the date and the action; its reason is how often, or what sets it.
-    for (const i of coming) {
-      if (!farmer) i.because = i.verb + " " + date(i.due) + calc(i) + (i.verb === "due" && i.reason ? ", " + i.reason : "");
-      else if (i.verb === "expires") { i.lead = date(i.due) + ": " + i.text + " expires"; i.because = "the consent's expiry date"; }
-      else { i.lead = "By " + date(i.due) + ": " + lower(i.text); i.because = i.repeats || "set by " + setBy(auth.get(i.id)); }
-    }
-    for (const i of needs) {
-      if (i.id.startsWith("conditions-")) i.because = i.reason;   // a consent with no conditions read in: its line says so
-      else if (!farmer) i.because = "needs a record" + (i.needs ? " of " + i.needs : "") + (i.due ? " (due by " + date(i.due) + calc(i) + ")" : "") + (i.reason ? ", " + i.reason : "");
-      else if (i.due) { i.lead = "Was due " + date(i.due) + ": " + lower(i.text); i.because = "no record of " + (i.needs || "it") + " yet"; }
-      else i.because = "needs a record" + (i.needs ? " of " + i.needs : "");
-    }
-    // The practice to keep up, in one line: how many, and the consents and conditions that require it.
-    let summary = null;
-    if (ongoing.length) {
-      const by = new Map(), kinds = new Map();
-      for (const o of obligations.filter((x) => ongoing.some((i) => i.id === "obligation-" + x.id))) {
-        const a = byId.get(o.authorisation_id), key = a ? a.consent_no || a.rule_ref || a.title || "a recorded authorisation" : "conditions with no consent recorded";
-        if (!by.has(key)) by.set(key, []);
-        kinds.set(key, setBy(a));
-        if (conditionCode(o)) by.get(key).push(o.code);
-      }
-      const named = [...by].map(([k, codes]) => {
-        codes.sort((x, y) => x.localeCompare(y, "en", { numeric: true }));
-        const shown = codes.length > 6 ? [...codes.slice(0, 5), codes.length - 5 + " more"] : codes;
-        return k + (codes.length ? (codes.length === 1 ? ", condition " : ", conditions ") + and(shown) : "");
-      });
-      // the farmer's line: what sets the practice, without the codes ("your consent and a permitted activity rule")
-      const sources = [...new Set(kinds.values())], consents = [...kinds.values()].filter((k) => k === "your consent").length;
-      const set = sources.map((k) => (k === "your consent" && consents > 1 ? "your " + consents + " consents" : k));
-      summary = { id: "ongoing", text: count(ongoing.length, "practice to keep up", "practices to keep up"),
-        because: farmer ? "set by " + and(set) : "required by " + named.join("; "), eligible: true };
-    }
+    // Each promoted line's reason (what the fold opens on): where it stands and the consent and condition that require it.
+    for (const i of [...coming, ...needs]) i.because = i.id.startsWith("conditions-") ? i.reason : i.reason || i.detail;
     // Promoted, at most three, by consequence: what needs a record (a passed date first, and a second passed date
-    // with it), the next date, the practice; then more of each.
-    const promoted = [...new Set([needs[0], needs[1]?.due ? needs[1] : null, coming[0], summary, ...needs.slice(1), ...coming.slice(1)])]
+    // with it), the next date; then more of each.
+    const promoted = [...new Set([needs[0], needs[1]?.due ? needs[1] : null, coming[0], ...needs.slice(1), ...coming.slice(1).filter((i) => i.due <= horizon)])]
       .filter((i) => i && i.because).slice(0, 3);
     for (const i of promoted) i.eligible = true;
-    const items = [...new Set([...promoted, ...needs, ...coming, ...ended, ...ongoing])].map(({ id, text, lead, because, eligible, detail }) => ({ id, text: lead || text, because, eligible: !!eligible, detail }));
+    const items = [...new Set([...promoted, ...needs, ...coming, ...ended, ...ongoing])].map(({ id, text, because, eligible, detail }) => ({ id, text, because, eligible: !!eligible, detail }));
     // The sentence: how many things need a record and the first of them by name (with the date it was due), then
     // the next date. With nothing needing a record: how many dates are coming up and the next one.
     const next = coming[0];
@@ -253,10 +257,25 @@
       next ? { text: count(coming.length, "recorded date is coming up", "recorded dates are coming up"),
         because: next.due > horizon ? nextSaid : farmer ? nextSaid.replace(/^next/, "the next") : "the next is " + next.text + ", " + next.verb + " " + date(next.due) } :
       checklist.length ? { text: "No recorded dates are coming up", because: ongoing.length ? "what is recorded is practice to keep up" : ended.length ? "the dates on record have passed" : "the recorded conditions have no dates" } : null;
-    // The body of All is the Checklist block. The map is handed the farm; a line whose condition records its place
-    // (land units, or a theme the map draws) hands the map that place when it is chosen (places, by line id).
-    const body = { block: "checklist", data: { today, items: checklist.map(({ detail, because, eligible, lead, ...rest }) => rest) } };
-    const model = { key: "due", title: "What's due", rank: "given", items, answer, body, places, audience: farmer ? "farmer" : "advisor",
+    // Who may mark a condition done (a check) and add its record (a document linked through an entry): the farm's
+    // editors (a view-only member reads); adding a document also needs the database's tiers (B3).
+    const editor = ["owner", "admin", "edit"].includes(context.role);
+    const record = { can_tick: editor, can_attach: editor && context.documentTiers === "chosen" };
+    const rows = checklist.map(({ detail, because, eligible, ...rest }) => rest), ofIds = (ids) => rows.filter((r) => ids.has(r.id));
+    // The promoted lines and the folds are drawn by the Checklist block (one line each, the line opens its fold); the
+    // body of All is the Checklist block too, with what is done or recorded shown. The map is handed the farm; a line
+    // whose condition records its place (land units, or a theme the map draws) hands the map that place when it is
+    // chosen (places, by line id).
+    const lines = { block: "checklist", data: { today, items: ofIds(new Set(promoted.map((i) => i.id))) }, options: { group: "none", ...record } };
+    const contentRows = contents.map((o) => ({ id: "obligation-" + o.id, text: fep(o.summary || "Recorded condition"), reason: obligationReason(o, byId.get(o.authorisation_id)),
+      state: "ongoing", wording: words(o.full_text), source: source(o) }));
+    const folds = [
+      ongoing.length ? { key: "practices", label: count(ongoing.length, "practice to keep up", "practices to keep up"),
+        body: { block: "checklist", data: { today, items: ofIds(new Set(ongoing.map((i) => i.id))) }, options: { group: "none" } } } : null,
+      contentRows.length ? { key: "fep-contents", label: "What the FEP must contain (" + contentRows.length + ")",
+        body: { block: "checklist", data: { today, items: contentRows }, options: { group: "none" } } } : null].filter(Boolean);
+    const body = { block: "checklist", data: { today, items: rows }, options: { show_done: true, ...record } };
+    const model = { key: "due", title: "What's due", rank: "given", items, answer, lines, folds, body, places, audience: farmer ? "farmer" : "advisor",
       total: checklist.length, scene: { farm: f, frame: "extent", area: null }, href: null, allLabel: "Everything recorded",
       // A farm with a consent decision on file but no conditions read in says that, not "nothing recorded".
       empty: { text: context.obligationsError ? "The condition dates couldn't be read." : decision ? "The consent's conditions haven't been read in yet; its decision is in Documents." : "Nothing recorded yet.",
@@ -422,12 +441,16 @@
   // ---- The layers drawer: one plain name for each layer ------------------------------------------------
   // The drawer says what a layer shows ("Rivers"), not what it was called when it was loaded ("NZ River Centrelines
   // (Topo, 1:50k) (LINZ)"); the one line under it is sourceLine().
-  const THEME_NAMES = { land_units: "Land units", plantings: "Plantings", fences: "Fences", photos: "Photos", measurements: "Measurements", contaminant_sources: "Contaminant sources",
-    wells: "Bores", consents: "Consents nearby", wetlands: "Wetlands", soils: "Soils", luc: "Land use capability", parcels: "Titles", actions: "Actions" };
-  const NAME_RULES = [[/river centrelines?|\bwaterways?\b/i, "Rivers"], [/river environment classification|\bREC\d?\b/i, "River classes"], [/resource consents?/i, "Consents nearby"],
+  const THEME_NAMES = { land_units: "Land units", plantings: "Plantings", fences: "Fences", photos: "Photos", measurements: "Measured distances", contaminant_sources: "Contaminant sources",
+    point_features: "Farm features", line_features: "Farm lines", proposed_actions: "Proposed fences", extent: "Farm boundary", titles: "Titles",
+    wells: "Bores", consents: "Consents", wetlands: "Wetlands", soils: "Soils", luc: "Land use capability", parcels: "Titles", actions: "Actions" };
+  // Reference rows by their source: Rivers (LINZ Topo50) is the governing waterways layer; the two river networks start off.
+  const KEY_NAMES = { "ecan-wells": "Bores", "ecan-consents": "Consents", "linz-topo50-river-centrelines": "Rivers", "niwa-rec2-rivers": "River network (REC2)", "ecan-rivers": "River network (ECan)" };
+  const NAME_RULES = [[/river centrelines?|\bwaterways?\b/i, "Rivers"], [/river environment classification|\bREC\d?\b/i, "River classes"], [/resource consents?/i, "Consents"],
     [/\b(?:wells?|bores?)\b/i, "Bores"], [/\bwetlands?\b/i, "Wetlands"], [/\bs-?map\b|^soils?\b/i, "Soils"], [/land use capability|\bLUC\b/i, "Land use capability"]];
   function layerName(layer) {
     const l = layer || {}, raw = String(l.name || "").trim();
+    if (KEY_NAMES[l.key]) return KEY_NAMES[l.key];
     if (THEME_NAMES[l.theme]) return THEME_NAMES[l.theme];
     const hit = NAME_RULES.find(([re]) => re.test(raw));
     if (hit) return hit[1];
@@ -435,6 +458,27 @@
     let t = raw.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+v\d+(?:\.\d+)*\b/gi, "").replace(/\s+[-\u2013]\s+.*$/, "").replace(/\s+/g, " ").trim() || raw;
     if (t && t === t.toUpperCase() && /[A-Z]/.test(t)) t = t[0] + t.slice(1).toLowerCase();
     return t || "Layer";
+  }
+  // ECan consent points (#243): current ones are drawn; a consent whose status says it has ended is past, shown only
+  // when the person asks for past consents.
+  const PAST_CONSENT = /terminated|expired|lapsed|surrender|cancel|declined|withdrawn|superseded/i;
+  const pastConsent = (p) => PAST_CONSENT.test(String((p || {}).ConsentStatus || ""));
+  // A date as ECan's service gives it (epoch milliseconds, or text) as YYYY-MM-DD, or null.
+  function serviceDay(v) {
+    if (typeof v === "number" && Number.isFinite(v)) return new Date(v).toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });   // the NZ day, not UTC's
+    const t = String(v ?? "").trim(), nz = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (nz) return nz[3] + "-" + nz[2].padStart(2, "0") + "-" + nz[1].padStart(2, "0");
+    return isDate(t) ? t.slice(0, 10) : /^\d{10,13}$/.test(t) ? serviceDay(Number(t)) : null;
+  }
+  // A consent point's popup: "Consent CRC… · <type>", then "<status> · expires <date>", its holder (public ECan data,
+  // never in a list row or heading) and the link to ECan's own record.
+  function consentPopup(props, layer, where) {
+    const p = props || {}, no = String(p.ConsentNo || p.external_id || "").trim(), type = String(p.ConsentType || "").trim(), status = String(p.ConsentStatus || "").trim();
+    const ends = serviceDay(p.Expires) || serviceDay(p.toDate), link = String(p.LINK || "").trim();
+    return { title: ["Consent " + no, type].filter((x) => x && x !== "Consent ").join(" · ") || "Consent", layerName: layerName(layer),
+      qualifier: [status, ends ? "expires " + date(ends) : null].filter(Boolean).join(" · ") || null, resolution: where || null,
+      props: p.HolderName ? { holder: String(p.HolderName).trim() } : {}, permits: list(p.authorisations),
+      link: /^https:\/\//i.test(link) ? { href: link, text: "ECan record" } : null, attribution: (layer || {}).attribution || null };
   }
   // The heading over layers made for a job: sentence case, never shouted.
   function jobHeading(job) {
@@ -531,5 +575,5 @@
     return letters.toUpperCase();
   };
 
-  return { dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  return { dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });

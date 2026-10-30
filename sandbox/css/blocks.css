@@ -18,8 +18,18 @@
 .answer-compact .answer-highlights { margin: 8px 0; font-size: var(--text-small); }
 .answer-compact .answer-highlights li { padding: 8px 0; }
 @media (max-width: 800px) {
-  .answer-compact .answer-highlights li:not(:first-child) { display: none; }
+  .answer-compact .answer-highlights li:not(:first-child), .answer-compact .answer-lines .checklist-item:not(:first-child) { display: none; }
 }
+/* What's due's quiet folds under its lines: the practice to keep up, and what the FEP must contain. */
+.answer-fold { border-top: 1px solid var(--rule); padding: 10px 0; }
+.answer-fold > summary { cursor: pointer; font-weight: 600; min-height: 28px; display: flex; align-items: center; list-style: none; position: relative; padding-left: 16px; }
+.answer-fold > summary::-webkit-details-marker { display: none; }
+.answer-fold > summary::before { content: ""; position: absolute; left: 2px; top: calc(50% - 4px); border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.answer-fold[open] > summary::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.answer-compact .answer-fold > summary { font-size: var(--text-small); }
+.answer-fold .checklist-list { margin-top: 6px; }
+.answer-lines { margin: 8px 0; }
+.answer-lines .checklist-item:first-child { border-top: 1px solid var(--rule); }
 
 .answer-panel { border-radius: var(--radius); }
 .answer-sentence { overflow-wrap: anywhere; }
@@ -157,7 +167,22 @@
 .checklist-group > :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 6px; font: 600 var(--text-body)/1.3 var(--f-head); }
 .checklist-list { list-style: none; margin: 0; padding: 0; }
 .checklist-item { padding: 10px 0; border-top: 1px solid var(--rule); overflow-wrap: anywhere; scroll-margin-top: 20px; }
-.checklist-line { margin: 0; font-weight: 600; }
+.checklist-line { margin: 0; font-weight: 600; overflow-wrap: normal; }
+/* The line is the control: a tap opens its fold (the consent, the condition, the wording, Done and Add the record). */
+summary.checklist-line { cursor: pointer; list-style: none; display: block; padding-left: 16px; position: relative; min-height: 24px; }
+summary.checklist-line::-webkit-details-marker { display: none; }
+summary.checklist-line::before { content: ""; position: absolute; left: 2px; top: .5em; border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.checklist-fold[open] > summary.checklist-line::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.checklist-fold > .checklist-body { padding: 4px 0 2px 16px; }
+.checklist-sub { margin: 8px 0 0; font-size: var(--text-small); color: var(--ink-2); }
+.checklist-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.checklist-actions button, .checklist-attach { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.checklist-actions button[disabled] { opacity: .6; cursor: progress; }
+.checklist-attach:focus-within { outline: 2px solid var(--ink); outline-offset: 3px; }
+.checklist-upload:not([hidden]) { margin-top: 10px; }
+.checklist-msg:empty { display: none; }
+.checklist-msg { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); }
 .checklist-line a { color: inherit; text-underline-offset: 2px; }
 .checklist-reason, .checklist-standing, .checklist-note { margin: 2px 0 0; font-size: var(--text-small); }
 .checklist-reason { color: var(--ink-2); }

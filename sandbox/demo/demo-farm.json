@@ -54,6 +54,19 @@
     { "id": "obl-records", "authorisation_id": "auth-water", "code": "11", "summary": "Send the season's water-use records", "kind": "reporting", "parameters": { "schedule": "recurring", "place": { "land_units": ["LU1", "LU3"] } }, "due_date": "2026-07-31", "recurrence": "annual by 31 July", "full_text": null, "source_document_id": null, "source_page": null },
     { "id": "obl-buffer", "authorisation_id": "auth-rule", "code": null, "summary": "Keep stock out of waterways", "kind": "practice", "parameters": { "schedule": "continuous", "place": { "themes": ["waterways"] } }, "due_date": null, "recurrence": null, "full_text": null, "source_document_id": null, "source_page": null }
   ],
+  "checks": [
+    { "id": "check-meter", "obligation_id": "obl-meter", "status": "met", "explanation": "Marked done in the app", "author_kind": "advisor", "author_user": "de000000-0000-4000-8000-000000000003", "due_date": "2027-07-31", "superseded_at": null, "created_at": "2026-10-12T02:00:00Z" }
+  ],
+  "record_types": [
+    { "id": "rt-note", "key": "note", "label": "Note", "farm_id": null, "org_id": null }
+  ],
+  "entries": [
+    { "id": "entry-report", "type_id": "rt-note", "body": "Record for CRC000101 condition 10: Nutrient budget 2025/26 (synthetic)", "visibility": "farm", "created_at": "2026-10-20T03:00:00Z" }
+  ],
+  "entry_links": [
+    { "id": "link-report-condition", "entry_id": "entry-report", "obligation_id": "obl-report", "document_id": null },
+    { "id": "link-report-document", "entry_id": "entry-report", "obligation_id": null, "document_id": "doc-nutrient" }
+  ],
   "ops": {
     "jobs": [
       {

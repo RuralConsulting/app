@@ -11,7 +11,7 @@
   // or "none" (F1e not deployed yet: no tier is read, documents go by docClass, nothing is added or moved, no error).
   // It is learnt once per client (page), so a database without the columns costs one refused read, not one per farm.
   const learnt = new WeakMap();
-  const DOCUMENT_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,page_count,storage_path,original_name,sha256,status,created_at";
+  const DOCUMENT_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,period_start,period_end,page_count,storage_path,original_name,sha256,status,created_at";
   const TIER_COLUMNS = { chosen: ",tier,tiered_at", tiers: ",tier", none: "" };
   const missingColumn = (e) => e && (e.code === "42703" || e.code === "PGRST204" || /column|tier/i.test(e.message || ""));
   async function readDocuments(sb, farm) {
@@ -28,9 +28,15 @@
     return rows.map((d) => ({ ...d, relates_to: parent.get(d.id) ?? null }));
   }
   const nzToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });
+  const optional = (query) => Promise.resolve(query).then((r) => (r.error ? [] : r.data || []), () => []);
+  // What's due's own record-keeping (E5): conditions marked done (a met check nothing has superseded) and records (an
+  // entry linking a condition to a document). Optional: if either can't be read, the conditions read as before.
+  const readChecks = (sb, farm) => optional(sb.from("checks").select("id,obligation_id,status,created_at,superseded_at").eq("farm_id", farm.id))
+    .then((rows) => rows.filter((c) => c.obligation_id && c.status === "met" && !c.superseded_at));
+  const readRecords = (sb, farm) => optional(sb.from("entry_links").select("entry_id,obligation_id,document_id").eq("farm_id", farm.id)).then(M.recordLinks);
   // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
   async function load(sb, farm, user) {
-    const [member, org, maps, documents, authorisations, obligations, today] = await Promise.all([
+    const [member, org, maps, documents, authorisations, obligations, today, checks, records] = await Promise.all([
       read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
       read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
       read(sb.rpc("farm_map", { f: farm.id })),
@@ -39,12 +45,13 @@
       // Optional: if the dates can't be read, "What's due" says so rather than claiming nothing is due.
       Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,full_text,kind,parameters,due_date,recurrence,source_document_id,source_page").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
       sb.today ? sb.today() : nzToday(),
+      readChecks(sb, farm), readRecords(sb, farm),
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
     return { farm, user, role: member.role, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
-      obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error };
+      obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error, checks, records };
   }
   // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
   // read (load) only when that farm is opened.
@@ -55,6 +62,9 @@
   let scene = null, answers = [], view = null;
   // The standing answers' models, and the What's due line whose place the map is framed on (null: the farm).
   let standing = [], focused = null;
+  // What the map shows (E5, #244): the layer rows drawn for this farm, the route it is showing, the place a chosen
+  // What's due line brings, whether a photo has been opened in this view, and the layers the person set by hand.
+  let layerEntries = [], shownRoute = null, focusPlace = null, photoShown = false, handSet = new Map(), layersButton = null;
   const unmount = (...handles) => { for (const h of handles.flat()) h?.destroy(); };
   // Each answer is an Answer block in its own host, so the space never writes answer HTML itself.
   function answer(host, model, options) {
@@ -67,6 +77,7 @@
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
+    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map();
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
   }
@@ -79,7 +90,7 @@
     h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1>' +
       '<button type="button" id="account-open" class="account-open" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account and people"><span id="account-initials" aria-hidden="true"></span></button>' +
       '<div id="account-menu" class="account-menu"><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
-      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-ops" class="link ops-link" hidden>Operations</a><button type="button" id="more-open" class="link" aria-controls="layers-drawer" aria-expanded="false">More</button></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div></div>' +
+      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-ops" class="link ops-link" hidden>Operations</a></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div></div>' +
       '<nav id="farm-actions" aria-label="Farm"></nav>';
     document.body.prepend(h);
     reserveHeader = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
@@ -113,41 +124,56 @@
     // first (without re-framing the farm), so the photo is framed in the map left above it.
     $("#map").addEventListener("fp-photo", () => {
       if (focused) { focused = null; markFocused(); }   // the photo's frame replaces a chosen line's: its mark is gone too
+      focusPlace = null; photoShown = true; applyScene();   // a photo opened: Photos on, until the view changes
+      for (const fold of $("#overview-cards").querySelectorAll("details.checklist-fold[open]"))   // and a chosen line folds away with its mark
+        if (standing.some((m) => m.places?.[fold.closest("[data-item-id]")?.dataset.itemId])) fold.open = false;
       if (window.innerWidth > 800) return;
       $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
       if (!$("#space-content").hidden) { $("#space-content").classList.add("peeked"); $("#space-handle").setAttribute("aria-expanded", "false"); }
       framedOverlap = measureSheet();
     });
-    $("#more-open").addEventListener("click", () => { $("#layers-drawer").hidden = false; $("#more-open").setAttribute("aria-expanded", "true"); $("#layers-close").focus(); });
-    $("#layers-close").addEventListener("click", () => { $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false"); $("#more-open").focus(); });
+    $("#layers-close").addEventListener("click", () => { setDrawer(false); layersButton?.focus(); });
     document.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // On People, Escape goes home (#242) only when nothing else is open over it (the account menu, Layers, a photo)
+      // and the key isn't being typed into a field (the email being added is kept).
+      const over = $("#account-menu").classList.contains("open") || !$("#layers-drawer").hidden || !!FP.farmMap.photoOpen();
+      const typing = !!e.target?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])");
+      if (shownRoute?.view === "people" && !over && !typing) $("#space-farm-name").click();
       if ($("#account-menu").classList.contains("open")) { $("#account-menu").classList.remove("open"); $("#account-open").setAttribute("aria-expanded", "false"); $("#account-open").focus(); }
-      $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false");
+      setDrawer(false);
       $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
       if (FP.farmMap.photoOpen()) FP.farmMap.dismissPhoto();
       settleFrame();
     });
-    // Choosing a What's due line whose condition records a place frames the map on it and marks it; choosing it
-    // again goes back to the farm. A line with no place moves nothing and claims nothing.
-    const choose = (id) => {
+    // Opening a What's due line (its fold) whose condition records its place frames the map on it, marks it and brings
+    // the layers that place needs; closing it goes back to the farm and the quiet map. A line with no place moves nothing.
+    const choose = (id, open) => {
       const place = id && standing.find((m) => m.places?.[id])?.places[id];
       if (!place) return false;
-      const again = focused === id;
-      if (!FP.farmMap.focus(again ? null : place)) return true;
-      focused = again ? null : id;
-      markFocused();
+      const next = open ? id : focused === id ? null : focused;
+      if (next === focused) return true;
+      if (!FP.farmMap.focus(next ? place : null)) return true;   // nothing on this map for it: say nothing, move nothing
+      focused = next; focusPlace = next ? place : null;
+      applyScene(); markFocused();
       return true;
     };
+    // toggle doesn't bubble: listen as it passes down
+    $("#overview-cards").addEventListener("toggle", (e) => {
+      const fold = e.target;
+      if (!fold.matches?.("details.checklist-fold")) return;
+      const id = fold.closest("[data-item-id]")?.dataset.itemId;
+      const stillOpen = $("#overview-cards").querySelectorAll('[data-item-id="' + CSS.escape(id || "") + '"] > details.checklist-fold[open]').length > 0;
+      choose(id, fold.open || stillOpen);
+    }, true);
+    // Done and Add the record (E5): a condition marked done, or a document added and linked to it.
     $("#overview-cards").addEventListener("click", (e) => {
-      if (e.target.closest("a, button")) return;
-      choose(e.target.closest("[data-item-id]")?.dataset.itemId);
+      const done = e.target.closest("[data-check-done]");
+      if (done) { markDone(done.dataset.checkDone, done); return; }
+      if (e.target.closest("[data-doc-cancel]")) { const box = e.target.closest(".checklist-upload"); box.replaceChildren(); box.hidden = true; }
     });
-    // A promoted line with a place is a toggle button: Enter or Space chooses it, as a tap does.
-    $("#overview-cards").addEventListener("keydown", (e) => {
-      if ((e.key !== "Enter" && e.key !== " ") || !e.target.matches?.(".answer-place")) return;
-      if (choose(e.target.closest("[data-item-id]")?.dataset.itemId)) e.preventDefault();
-    });
+    $("#overview-cards").addEventListener("change", (e) => { const input = e.target.closest?.("[data-check-file]"); if (input) chooseRecord(input); });
+    $("#overview-cards").addEventListener("submit", (e) => { if (e.target.matches(".checklist-upload .doc-confirm-form")) { e.preventDefault(); addRecord(e.target); } });
     $("#space-content").addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");
       const doc = button && context?.documents.find((d) => d.id === button.dataset.openDocument);
@@ -157,6 +183,8 @@
       button.disabled = false;
       if (error || !data?.signedUrl) { button.textContent = "Couldn't open it"; return; }
       window.open(data.signedUrl, "_blank", "noopener");
+      // the document opened is the one selected: the map follows it (the plan brings the FEP's layers)
+      if (shownRoute?.view === "documents" && shownRoute.item !== doc.id) location.replace(FP.href(M.href(context.farm.id, "documents", doc.id)));
     });
     // Enter asks (Shift+Enter is a new line); the phone keyboard's key reads "send" for the same reason.
     $("#space-content").addEventListener("keydown", (e) => {
@@ -194,7 +222,6 @@
     for (const n of $("#overview-cards").querySelectorAll("[data-item-id]")) {
       const place = standing.some((m) => m.places?.[n.dataset.itemId]);
       n.classList.toggle("has-place", place); n.classList.toggle("framed-record", place && n.dataset.itemId === focused);
-      n.querySelector(":scope > .answer-place")?.setAttribute("aria-pressed", String(place && n.dataset.itemId === focused));
     }
   }
   // Phone: how far the open sheet covers the map (--sheet-overlap, read by the map when it frames the farm).
@@ -260,7 +287,8 @@
     select.replaceChildren(el("option", { value: "" }, "All farms"), ...portfolio.map((f) => el("option", { value: f.id }, f.name)));
     select.value = farm.id;
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
-    $("#farm-actions").replaceChildren(...M.views.map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
+    // The home view is the first tab, so from Ask, Create or Documents the way back is a tab, not a guess at the title.
+    $("#farm-actions").replaceChildren(...[["map", "What's due"], ...M.views].map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
     const people = $("#space-people");
     people.hidden = !M.canManage(context.role); people.href = FP.href(M.href(farm.id, "people"));
@@ -275,7 +303,8 @@
     return el("select", { id, ...(label ? { "aria-label": label } : {}) }, ...M.roles.map(([k, name]) => el("option", { value: k, ...(k === value ? { selected: true } : {}) }, name)));
   }
   function peopleView() {
-    const section = el("section", { class: "space-view people-view", "data-view": "people" }, el("h2", {}, "People"));
+    const section = el("section", { class: "space-view people-view", "data-view": "people" }, el("h2", {}, "People"),
+      el("a", { class: "link people-close", href: $("#space-farm-name").getAttribute("href") }, "Close"));
     if (!M.canManage(context.role)) return section.append(el("p", { class: "people-count" }, "Only the farm's owner or an admin can see who has access.")), section;
     section.append(el("p", { id: "people-count", class: "people-count" }, "Reading who has access…"),
       el("ul", { id: "people-list", class: "people-list" }),
@@ -340,11 +369,68 @@
       : "Added " + data.email + ". Anyone new gets an email with a link to set a password.", "ok");
     await loadPeople();
   }
-  // The drawer's Farm and Reference lists: a plain name, the line saying where it came from, and a switch. Layers
-  // made for a job sit together under one sentence-case heading.
+  // ---- The map's layers (E5, #244) ------------------------------------------------------------------
+  // The map starts quiet (the farm boundary; photos once zoomed in) and layers come up by context, by one rule:
+  // a What's due line brings what its place needs, an opened photo brings Photos, the plan selected in Documents brings
+  // the FEP's layers; Ask, Create and People keep the quiet map. A layer the person sets by hand in Layers stays as they
+  // set it. Pure: view is the route ({ view, item }), focus { place, photo }, context the farm's documents.
+  const QUIET = ["extent", "photos"];   // the boundary; photo pins curated by zoom (photo-model.js pinsShown)
+  const FEP_LAYERS = ["extent", "land_units", "contaminant_sources", "plantings", "proposed_actions", "line_features"];
+  // The reference row that governs a place's theme: Rivers (Topo50) for waterways, bores for wells; wetlands has none yet.
+  const GOVERNS = { waterways: ["linz-topo50-river-centrelines"], wells: ["ecan-wells"] };
+  function sceneFor(view, focus, context) {
+    const on = new Set(globalThis.FP_CONFIG?.farmView?.defaultOn || QUIET), f = focus || {}, v = view || {};
+    if (v.view === "documents" && v.item) {
+      const doc = (context?.documents || []).find((d) => String(d.id) === String(v.item));
+      if (doc && M.isPlan(doc)) for (const k of FEP_LAYERS) on.add(k);
+    }
+    if (f.place) {
+      if ((f.place.land_units || []).length) on.add("land_units");
+      for (const theme of f.place.themes || []) { on.add(theme); for (const k of GOVERNS[theme] || []) on.add(k); }
+    }
+    if (f.photo) on.add("photos");
+    return on;
+  }
+  // Every row as the scene says, unless the person set it by hand; the drawer's switches follow.
+  function applyScene() {
+    if (!context || !layerEntries.length) return;
+    const want = sceneFor(shownRoute, { place: focusPlace, photo: photoShown }, context);
+    for (const e of layerEntries) {
+      const on = handSet.has(e.key) ? handSet.get(e.key) : want.has(e.key);
+      if (e.on !== on) FP.farmMap.setVisible(e, on);
+      if (e.input) e.input.checked = on;
+      if (e.pastInput) e.pastInput.closest("label").hidden = !on;
+    }
+  }
+  function setDrawer(open) {
+    $("#layers-drawer").hidden = !open;
+    layersButton?.setAttribute("aria-expanded", String(open));
+    if (open) $("#layers-close").focus();
+  }
+  // Layers: a button on the map itself, under the zoom and compass, that needs no explanation (an icon and the word).
+  const LAYERS_ICON = '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 2 1 6.5l9 4.5 9-4.5zm-6.8 7.6L1 10.7l9 4.5 9-4.5-2.2-1.1L10 13zm0 4.2L1 14.9l9 4.5 9-4.5-2.2-1.1L10 17.2z"/></svg>';
+  function addLayersControl() {
+    if (layersButton) return;
+    const button = el("button", { type: "button", id: "layers-open", class: "layers-open", "aria-controls": "layers-drawer", "aria-expanded": "false", onclick: () => setDrawer($("#layers-drawer").hidden) });
+    button.innerHTML = LAYERS_ICON + "<span>Layers</span>";
+    const box = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group layers-ctrl" }, button);
+    FP.farmMap.addControl({ onAdd: () => box, onRemove: () => box.remove() }, "top-right");
+    layersButton = button;
+  }
+  // The drawer's Farm and Reference lists: a plain name (with its area for the boundary and titles) and a switch;
+  // where a layer came from is in its features' popups. Layers made for a job sit together under one heading.
   function renderLayers(entries) {
-    const row = (e) => el("li", {}, el("label", {}, el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => FP.farmMap.setVisible(e, ev.target.checked) }),
-      el("span", {}, el("b", {}, e.name), e.sub ? el("small", {}, e.sub) : null)));
+    layerEntries = entries;
+    const row = (e) => {
+      e.input = el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => {
+        handSet.set(e.key, ev.target.checked);
+        for (const x of layerEntries.filter((x) => x.key === e.key)) { FP.farmMap.setVisible(x, ev.target.checked); if (x.input) x.input.checked = ev.target.checked; }
+        if (e.pastInput) e.pastInput.closest("label").hidden = !ev.target.checked;
+      } });
+      e.pastInput = e.past ? el("input", { type: "checkbox", role: "switch", checked: e.past.on, onchange: (ev) => FP.farmMap.setPast(e, ev.target.checked) }) : null;
+      const past = e.past ? el("label", { class: "layer-past", ...(e.on ? {} : { hidden: true }) }, e.pastInput, el("span", {}, "Past consents")) : null;
+      return el("li", {}, el("label", {}, e.input, el("span", {}, el("b", {}, e.name), e.sub ? el("small", {}, e.sub) : null)), past);
+    };
     const children = [];
     for (const [section, heading] of [["farm", "Farm"], ["reference", "Reference"]]) {
       const own = entries.filter((e) => e.section === section);
@@ -355,6 +441,101 @@
       for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group job" }, M.jobHeading(job)), ...es.map(row));
     }
     $("#layer-list").replaceChildren(...children);
+  }
+  // ---- What's due: Done and Add the record (E5, #245) ---------------------------------------------------
+  // Done writes a check (met, by the person, as farmer or advisor); Add the record uploads a document (B3's upload,
+  // as supporting), writes a note entry saying what it records and links the entry to the condition and the document.
+  // Row-level security decides what is allowed; the demo keeps both in memory.
+  const dueItem = (id) => standing.find((m) => m.key === "due")?.body?.data.items.find((i) => i.id === id) || null;
+  const obligationOf = (item) => item && (context?.obligations || []).find((o) => String(o.id) === item.obligation_id);
+  const say = (node, text) => { const p = node.closest(".checklist-body")?.querySelector(".checklist-msg"); if (p) p.textContent = text || ""; };
+  async function markDone(id, button) {
+    const item = dueItem(id), farm = context?.farm.id;
+    if (!item?.obligation_id) return;
+    button.disabled = true; say(button, "");
+    const { data, error } = await FP.sb.from("checks").insert({ farm_id: farm, obligation_id: obligationOf(item)?.id ?? item.obligation_id, status: "met",
+      explanation: "Marked done in the app", author_kind: context.advisor ? "advisor" : "farmer", author_user: user.id, due_date: item.due || null })
+      .select("id,obligation_id,status,created_at,superseded_at").single();
+    if (context?.farm.id !== farm) return;
+    if (error || !data) { button.disabled = false; say(button, error?.message || "That change wasn't allowed."); return; }
+    context.checks = [...(context.checks || []), data];
+    redrawDue(id);
+  }
+  const uploads = new Map();   // line id -> the file chosen for its record, as the documents block guessed it
+  function chooseRecord(input) {
+    const file = input.files?.[0], li = input.closest("[data-item-id]"), box = li?.querySelector(".checklist-upload");
+    const item = dueItem(li?.dataset.itemId);
+    input.value = "";
+    if (!file || !box || !item) return;
+    const D = FP.documentsBlock, a = D.arrange(context.documents), mains = [...a.primaries, ...a.more].map((p) => p.doc), from = obligationOf(item)?.source_document_id;
+    const [it] = D.guessBatch([file], mains);
+    // a record is supporting; its kind from what the condition needs, and it sits with the decision the condition is in
+    it.guess = { ...it.guess, tier: "supporting", doc_type: M.recordKind(item.needs) || it.guess.doc_type,
+      relates_to: mains.some((d) => d.id === from) ? from : it.guess.relates_to };
+    uploads.set(li.dataset.itemId, [it]);
+    box.innerHTML = D.confirmHtml([it], mains); box.hidden = false;
+    box.querySelector("input[name^=title-]")?.focus();
+  }
+  let noteType = null;
+  async function noteTypeId() {
+    if (noteType) return noteType;
+    const { data, error } = await FP.sb.from("record_types").select("id,key,farm_id,org_id").eq("key", "note");
+    if (error) throw error;
+    const t = (data || []).find((r) => !r.farm_id && !r.org_id);
+    if (!t) throw Error("no note record type");
+    return (noteType = t.id);
+  }
+  // An entry written for a line whose links then failed: a retry with the same document links that entry, not a second one.
+  const unlinked = new Map();   // line id -> { entry, document }
+  async function addRecord(form) {
+    const D = FP.documentsBlock, li = form.closest("[data-item-id]"), id = li.dataset.itemId, item = dueItem(id), ob = obligationOf(item), farm = context.farm.id;
+    const msg = form.querySelector(".doc-msg"), button = form.querySelector('button[type="submit"]');
+    const [choice] = D.confirmed(uploads.get(id) || [], (name) => form.elements.namedItem(name)?.value ?? null);
+    if (!choice || !ob) return;
+    button.disabled = true; msg.textContent = "Adding…";
+    try {
+      // the same file already among the farm's documents is linked, not added twice
+      const sha = await D.sha256Hex(await choice.file.arrayBuffer()), same = context.documents.find((d) => d.sha256 === sha);
+      const documentId = same ? same.id : await documentStore(farm, () => []).add(choice);
+      const a = (context.authorisations || []).find((x) => x.id === ob.authorisation_id);
+      const what = [a?.consent_no || a?.rule_ref, ob.code && /^\d/.test(ob.code) ? "condition " + ob.code : null].filter(Boolean).join(" ");
+      const kept = unlinked.get(id), entry = kept && kept.document === documentId ? { id: kept.entry } :
+        await read(FP.sb.from("entries").insert({ farm_id: farm, type_id: await noteTypeId(), visibility: "farm",
+          body: "Record for " + (what || "a condition") + ": " + (same ? M.docTitle(same) : choice.title) }).select("id").single());
+      unlinked.set(id, { entry: entry.id, document: documentId });
+      await read(FP.sb.from("entry_links").insert([{ entry_id: entry.id, obligation_id: ob.id }, { entry_id: entry.id, document_id: documentId }]));
+      unlinked.delete(id);
+      if (context?.farm.id !== farm) return;
+      context.documents = await readDocuments(FP.sb, context.farm);
+      context.records = [...(context.records || []), { obligation_id: ob.id, document_id: documentId }];
+      uploads.delete(id);
+      redrawDue(id);
+    } catch (err) {
+      if (context?.farm.id !== farm) return;
+      // the document may have been added before the entry or its links failed: read again, so a retry links it
+      context.documents = await readDocuments(FP.sb, context.farm).catch(() => context.documents);
+      if (context?.farm.id !== farm) return;
+      button.disabled = false; msg.textContent = "Not added: " + (err?.message || err);
+    }
+  }
+  // The standing answers drawn from the farm's records (again, after Done or Add the record).
+  function drawStanding() {
+    unmount(answers); answers = []; $("#overview-cards").replaceChildren();
+    standing = M.standingAnswers(context);
+    answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true }));
+    markFocused();
+    // Phone: the closed sheet shows What's due's first clause over the handle ("3 things need a record"), whole (#240)
+    const due = standing.find((m) => m.key === "due");
+    $("#overview-peek").textContent = due?.answer?.text || $('#overview-cards [data-answer-key="due"] .answer-sentence')?.textContent || "";
+  }
+  // A line just marked done or recorded is shown where it now sits, in Everything recorded.
+  function redrawDue(id) {
+    if (focused) { focused = null; focusPlace = null; FP.farmMap.focus(null); applyScene(); }   // its fold is drawn again closed
+    drawStanding();
+    const all = $('#overview-cards [data-answer-key="due"] details.answer-all'), line = all?.querySelector('[data-item-id="' + CSS.escape(id) + '"]');
+    if (!line) return;
+    all.open = true;
+    line.scrollIntoView({ block: "nearest" }); line.focus({ preventScroll: true });
   }
   // ---- Documents (B3): the sentence, then the Documents block; editors add documents and move them between tiers --
   const editor = () => ["owner", "admin", "edit"].includes(context?.role) && context.documentTiers === "chosen";
@@ -418,13 +599,14 @@
     const current = ++token;
     document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
     document.body.classList.add("farm-space-active");
-    $("#layers-drawer").hidden = true; $("#more-open").setAttribute("aria-expanded", "false");
+    setDrawer(false);
     $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
     $("#space-content").classList.remove("peeked"); $("#space-handle").setAttribute("aria-expanded", "true");
     $("#space-handle-label").textContent = M.viewLabel(route.view) || "";
     if (context?.farm.id !== farm.id) {
       context = null; openedMap = null;
       unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
+      layerEntries = []; handSet = new Map();
       $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren(); $("#overview-peek").textContent = "";
       pending = load(FP.sb, farm, user);
     }
@@ -450,15 +632,16 @@
         if (current !== token) return;
         if (!drawn) throw Error("Map unavailable for this farm.");
         renderLayers(drawn.entries); openedMap = farm.id;
+        addLayersControl();
       }
       FP.farmMap.resize(); settleFrame();
-      unmount(answers, view); view = null; $("#overview-cards").replaceChildren();
+      unmount(view); view = null;
       if (focused) { focused = null; FP.farmMap.focus(null); }   // a new view starts on the farm
-      standing = M.standingAnswers(context);
-      answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true }));
-      markFocused();
-      // Phone: the closed sheet shows the What's due sentence (its first line) over the handle, so the answer is there on load
-      $("#overview-peek").textContent = $('#overview-cards [data-answer-key="due"] .answer-sentence')?.textContent || "";
+      // and on the quiet map, with what this view brings (the plan selected in Documents: the FEP's layers); a photo
+      // opened in an earlier view no longer counts
+      shownRoute = { view: route.view, item: route.item || null }; focusPlace = null; photoShown = false;
+      applyScene();
+      drawStanding();
       $("#space-body").scrollTop = 0;   // the sheet's scroller outlasts the view: each view opens at its top
       if (route.view === "documents") {
         $("#space-body").replaceChildren();
@@ -471,5 +654,5 @@
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }
-  return { load, summaries, setPortfolio, showPortfolio, close, open };
+  return { load, summaries, setPortfolio, showPortfolio, close, open, sceneFor };
 });

@@ -1,4 +1,6 @@
 // Demo mode: synthetic, memory-only data from tests/app/fixtures/demo-farm.json. Never constructs a Supabase client.
+// What's due's two verbs work in the demo (E5): marking a condition done and adding its record (an upload, an entry
+// and its links) are kept in this page's memory until it is left or reloaded. Nothing else is saved.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -93,6 +95,8 @@
     const data = { asAt: f.as_at, map, map2: null, user: { id: USER, email: "advisor@example.test" }, tables: {
       farms: [farm], farm_members: [{ farm_id: FARM, user_id: USER, role: "admin" }], org_members: [{ org_id: ORG, user_id: USER, role: "advisor" }],
       documents: owned(f.documents, FARM), authorisations: owned(f.authorisations, FARM), obligations: owned(f.obligations, FARM),
+      // one condition marked done and one with its record linked, so What's due and the gallery show both
+      checks: owned(f.checks || [], FARM), record_types: f.record_types || [], entries: owned(f.entries || [], FARM), entry_links: owned(f.entry_links || [], FARM),
       // The staff Operations page: invented job records, one failing and one late. The farmer demo is not staff.
       profiles: [{ user_id: USER, is_staff: true }], ops_job_status: f.ops.jobs, ops_reference_status: f.ops.references,
     }, build: f.ops.build };
@@ -100,6 +104,7 @@
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
       data.tables.documents = []; data.tables.authorisations = []; data.tables.obligations = [];
+      data.tables.checks = []; data.tables.entries = []; data.tables.entry_links = [];
     }
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
@@ -150,20 +155,32 @@
       overdue_actions: 0,
       authorisation_count: mine("authorisations"), document_count: mine("documents") };
   }
+  // The tables the demo adds rows to, in memory: What's due's Done (checks) and Add the record (documents, entries, links).
+  const KEPT = ["checks", "documents", "entries", "entry_links"];
+  let made = 0;
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
     function query(table) {
-      const filters = [], orders = []; let write = false, singular = false, maybe = false;
+      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null;
       const q = {
         select() { return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
         order(key, options) { orders.push([key, options?.ascending !== false]); return q; },
-        insert() { write = true; return q; }, update() { write = true; return q; }, delete() { write = true; return q; },
+        insert(rows) { write = true; adding = rows; return q; }, update() { write = true; return q; }, delete() { write = true; return q; },
         single() { singular = true; return execute(); }, maybeSingle() { singular = true; maybe = true; return execute(); },
         then(resolve, reject) { return execute().then(resolve, reject); },
       };
       async function execute() {
         const d = await ready, rows = d.tables[table];
+        if (write && adding && KEPT.includes(table)) {
+          const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...copy(r) }));
+          for (const r of added) {
+            if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
+            rows.push(r);
+            if (table === "documents") d.tables.document_relations.push({ id: r.id, tier: r.tier, relates_to: r.relates_to || null, superseded_by: null });
+          }
+          return result(singular ? added[0] : added);
+        }
         if (write) return error("The demo does not save changes");
         if (!rows) return error("This demo does not provide " + table);
         let selected = rows.filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : row[key] === val)));
@@ -193,7 +210,7 @@
       functions: { invoke: async () => error("The demo does not save changes") },
       // Every document opens the one stand-in page; the demo's photo points name the one stand-in picture.
       storage: { from: () => ({ createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
-        upload: async () => error("The demo does not save changes") }) },
+        upload: async (path) => result({ path }) }) },
     };
   }
   return { FARM, FARM2, USER, ORG, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };

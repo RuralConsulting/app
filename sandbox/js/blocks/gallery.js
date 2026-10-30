@@ -33,11 +33,13 @@
     const changes = (rows) => { const body = M.standingAnswers(context(rows))[1].body.data; return { ...body, title: "What's changed" }; };
     // The checklist: the demo farm's conditions; sparse is one water permit with one recorded condition.
     const checks = (rows) => ({ ...M.standingAnswers(context(rows))[0].body.data, title: "What's due" });
+    // the demo farm's one condition marked done and one with its record linked (E5), so both are shown
+    const kept = { checks: t.checks || [], records: M.recordLinks(t.entry_links) };
     const onePractice = t.obligations.filter((o) => o.id === "obl-meter");
     return {
       answer: {
         options: {},
-        full: M.standingAnswers(context({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations }))[0],
+        full: M.standingAnswers(context({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations, ...kept }))[0],
         sparse: M.standingAnswers(context({ authorisations: oneConsent }))[0],
         empty: M.standingAnswers(context())[0],
       },
@@ -65,8 +67,8 @@
         variants: [["hdlg", "HDLG member folder", { documents: demoDocuments().hdlg, canEdit: true, canAdd: true }]],
       },
       checklist: {
-        options: {},
-        full: checks({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations }),
+        options: { show_done: true },
+        full: checks({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations, ...kept }),
         sparse: checks({ authorisations: oneConsent, obligations: onePractice }),
         empty: checks(),
       },

@@ -9,11 +9,14 @@ window.FP_CONFIG = {
   // app's domain (brand.json): moving domain means updating the key's allowed site at LINZ. With no key the map has a plain background. No other tile provider is used.
   linzKey: "d01m5g152dsk2a73kfxb6a9xf1k",
 
-  // What the farm view shows when it opens. Keys: "extent", "titles", a layer's theme (e.g. "land_units"),
-  // or "reference" (the farm's own bores etc.). Everything else starts off and can be switched on.
-  // Layers made for a job (measured distances for a consent AEE) are listed under that job.
+  // What the farm view shows when it opens: the quiet map (E5, Josh 31 Oct): the farm boundary. Photos is on, but its
+  // pins show only once the map is zoomed in past the farm's frame (FP.photoModel.pinsShown). Land units are the FEP's
+  // and come up by context (farm-space.js sceneFor), as the FEP's other layers do. Keys:
+  // "extent", "titles", a layer's theme (e.g. "land_units"), a reference source's key (e.g. "ecan-wells") or
+  // "reference" (every reference row). Everything else comes up by context (farm-space.js sceneFor) or a switch in
+  // Layers. Layers made for a job (measured distances for a consent AEE) are listed under that job.
   farmView: {
-    defaultOn: ["extent", "land_units", "plantings"],
+    defaultOn: ["extent", "photos"],
   },
 
   photoLinkSeconds: 3600,
