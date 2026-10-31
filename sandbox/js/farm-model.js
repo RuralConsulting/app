@@ -20,7 +20,10 @@
     const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(ask|create|documents|people))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[2] || "map", item: m[3] ? decodeURIComponent(m[3]) : null } : null; } catch { return null; }
   }
-  const authName = (a) => [a.consent_no || a.rule_ref, a.title].filter(Boolean).join(" · ") || "Recorded authorisation";
+  // A consent's or document's title as the app quotes it in a sentence or a line: without the full stop its record may
+  // end with ("To use land for farming activity." -> "To use land for farming activity").
+  const title = (t) => String(t ?? "").trim().replace(/\s*\.+$/, "");
+  const authName = (a) => [a.consent_no || a.rule_ref, title(a.title)].filter(Boolean).join(" · ") || "Recorded authorisation";
   const count = (n, one, many) => (n === 1 ? "One " + one : n + " " + many);
   const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", consent_decision: "Consent decision", consent_application: "Consent application",
     overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
@@ -94,8 +97,8 @@
   // the consent it is about and the date it was prepared (or its number in the run when it has no date).
   const CODE_TITLE = /^\s*([A-Z]{2,5}\s?\d{4,}[A-Z]?)((?:\s+(?:further|additional|information|info|response|request|reply|letter|e-?mail|correspondence|s\.?\s?92))+)[\s#.,-]*(\d+)?[\s.]*$/i;
   function docTitle(d) {
-    const title = String((d || {}).title || "").trim(), m = title.match(CODE_TITLE);
-    if (!m) return title || "Document";
+    const t = title((d || {}).title), m = t.match(CODE_TITLE);
+    if (!m) return t || "Document";
     const kind = docKind(d.doc_type) || "Correspondence", when = day(d.date_prepared);
     return kind + " for " + m[1].replace(/\s/g, "").toUpperCase() + (when ? ", " + date(when) : m[3] ? ", no. " + m[3] : "");
   }
@@ -140,7 +143,7 @@
   // the consent's activity ("To use land for farming.") gives way to the consent number.
   const plainName = (a) => {
     const t = unmarked(a.title || "").trim();
-    return t && !/\.$/.test(t) ? t : a.consent_no ? "Consent " + a.consent_no : t || a.rule_ref || "Recorded authorisation";
+    return t && !/\.$/.test(t) ? t : a.consent_no ? "Consent " + a.consent_no : title(t) || a.rule_ref || "Recorded authorisation";
   };
   // Where a condition is on the farm's map, when the record says: its land units (by code) or a theme the map draws
   // ("waterways", "wells"). Never worked out from the wording; no place recorded, no place.
@@ -194,7 +197,7 @@
     for (const r of list(context.records)) { const d = r && docs.get(r.document_id); if (d && !recordOf.has(r.obligation_id)) recordOf.set(r.obligation_id, d); }
     const source = (o) => {
       const d = o.source_document_id && docs.get(o.source_document_id), page = Number.isInteger(o.source_page) ? "page " + o.source_page : null;
-      return d ? [d.title || "Source document", page].filter(Boolean).join(", ") : page ? "Source " + page : null;
+      return d ? [title(d.title) || "Source document", page].filter(Boolean).join(", ") : page ? "Source " + page : null;
     };
     // What the plan must contain (Appendix B under condition 7) is its own fold, not a part of that condition's line.
     const contents = obligations.filter(isPlanContent).sort((x, y) => String(x.code).localeCompare(String(y.code), "en", { numeric: true }));
@@ -206,7 +209,7 @@
       auth.set(id, a);
       if (o.code === "lapse" && !lapseMatters(o, a, today)) quiet.add(id);
       const record = recordOf.get(o.id);
-      checklist.push({ id, obligation_id: String(o.id), text: fep(o.summary || "Recorded condition"), reason: obligationReason(o, a),
+      checklist.push({ id, obligation_id: String(o.id), consent: a ? a.consent_no || a.rule_ref || null : null, text: fep(o.summary || "Recorded condition"), reason: obligationReason(o, a),
         state: s.state === "dated" ? undefined : s.state, due: s.due || null, verb: o.code === "lapse" ? "lapses" : "due",
         repeats: words(o.recurrence), needs: words(p.needs_record), basis: s.due ? words(p.due_basis) : null,
         note: [s.due && words(p.due_basis) ? "Calculated: " + lower(words(p.due_basis)) : null, words(p.note), words(p.flag)].filter(Boolean).join(" ") || null,
@@ -218,7 +221,7 @@
       const when = day(a.valid_to), code = a.consent_no || a.rule_ref;
       // A consent with none of its conditions recorded says so: on its expiry line, or on a line of its own.
       const bare = a.kind === "consent" && !obligations.some((o) => o.authorisation_id === a.id), unrecorded = "Its conditions aren't recorded yet.";
-      if (when) checklist.push({ id: "expiry-" + a.id, text: name(a), reason: farmer && code ? "the expiry date of " + code : "the consent's expiry date", due: when, verb: "expires",
+      if (when) checklist.push({ id: "expiry-" + a.id, consent: code || null, text: name(a), reason: farmer && code ? "the expiry date of " + code : "the consent's expiry date", due: when, verb: "expires",
         note: bare ? unrecorded : null, detail: (when < today ? "expired " : "expires ") + date(when) });
       else if (bare) checklist.push({ id: "conditions-" + a.id, text: "Conditions of " + (farmer ? lower(name(a)) : name(a)), reason: "the consent is recorded, its conditions aren't yet", state: "unknown",
         needs: "the consent's conditions", detail: "conditions not recorded" });
@@ -236,8 +239,10 @@
     // Each promoted line's reason (what the fold opens on): where it stands and the consent and condition that require it.
     for (const i of [...coming, ...needs]) i.because = i.id.startsWith("conditions-") ? i.reason : i.reason || i.detail;
     // Promoted, at most three, by consequence: what needs a record (a passed date first, and a second passed date
-    // with it), the next date; then more of each.
-    const promoted = [...new Set([needs[0], needs[1]?.due ? needs[1] : null, coming[0], ...needs.slice(1), ...coming.slice(1).filter((i) => i.due <= horizon)])]
+    // with it), the next date; then more of each. A date more than a year off is never a promoted line: the sentence
+    // names it ("the next date on record is …") and Everything recorded lists it (E5b).
+    const near = coming.filter((i) => i.due <= horizon);
+    const promoted = [...new Set([needs[0], needs[1]?.due ? needs[1] : null, near[0], ...needs.slice(1), ...near.slice(1)])]
       .filter((i) => i && i.because).slice(0, 3);
     for (const i of promoted) i.eligible = true;
     const items = [...new Set([...promoted, ...needs, ...coming, ...ended, ...ongoing])].map(({ id, text, because, eligible, detail }) => ({ id, text, because, eligible: !!eligible, detail }));
@@ -248,7 +253,9 @@
     // Sentence first means short: it names one (the first by date) and counts the rest; the promoted lines list them.
     const first = needs[0], firstSaid = !first ? null : needs.length === 1 ? named(first) : farmer ? "first: " + named(first) :
       "the first is " + named(first).replace(/^the first /i, "the ");
-    const nextSaid = !next ? null : next.due > horizon ? "the next date on record is " + (next.verb === "lapses" ? "the lapse date" : next.verb === "expires" ? "the expiry of " + next.text : about(next.text)) + ", " + date(next.due) :
+    // a far date: "the next date on record is 1 Jan 2035, when CRC251894 expires" (or lapses)
+    const ends = (i) => (i.verb === "expires" || i.verb === "lapses") && (i.consent || i.verb === "expires") ? ", when " + (i.consent || i.text) + " " + i.verb : null;
+    const nextSaid = !next ? null : next.due > horizon ? "the next date on record is " + (ends(next) ? date(next.due) + ends(next) : about(next.text) + ", " + date(next.due)) :
       farmer ? (next.verb === "expires" ? "next, " + date(next.due) + ": " + next.text + " expires" : "next, by " + date(next.due) + ": " + lower(next.text)) :
       next.verb === "expires" ? "next: " + next.text + " expires " + date(next.due) : next.verb === "lapses" ? "next: the lapse date, " + date(next.due) : "next due: " + about(next.text) + ", " + date(next.due);
     const decision = list(context.documents).find(isDecision);
@@ -575,5 +582,5 @@
     return letters.toUpperCase();
   };
 
-  return { dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  return { dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });
