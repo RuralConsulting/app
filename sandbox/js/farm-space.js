@@ -65,6 +65,9 @@
   // What the map shows (E5, #244): the layer rows drawn for this farm, the route it is showing, the place a chosen
   // What's due line brings, whether a photo has been opened in this view, and the layers the person set by hand.
   let layerEntries = [], shownRoute = null, focusPlace = null, photoShown = false, handSet = new Map(), layersButton = null;
+  // Ask (the farm's Ask function): the layer set its answer brought up (until the view changes), and the last answer on
+  // this farm, kept so the Ask tab shows it again after a source or the plan was opened.
+  let askSet = null, lastAsk = null, askToken = 0;
   const unmount = (...handles) => { for (const h of handles.flat()) h?.destroy(); };
   // Each answer is an Answer block in its own host, so the space never writes answer HTML itself.
   function answer(host, model, options) {
@@ -77,7 +80,7 @@
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
-    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map();
+    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null;
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
   }
@@ -197,7 +200,13 @@
       e.preventDefault();
       const question = $("#ask-input").value.trim();
       if (!question) { $("#ask-input").focus(); return; }
-      $("#ask-answer").replaceChildren(el("p", { class: "ask-question" }, question), el("p", { class: "answer-sentence" }, "Questions can't be answered here yet."));
+      askQuestion(question);
+    });
+    // An answer's confirmations: the person's Confirm makes the change, as them; Not now puts it away.
+    $("#space-content").addEventListener("click", (e) => {
+      const yes = e.target.closest("[data-ask-confirm]"), no = e.target.closest("[data-ask-dismiss]");
+      if (yes) confirmAsk(Number(yes.dataset.askConfirm), yes);
+      else if (no && lastAsk?.result.confirmations?.[Number(no.dataset.askDismiss)]) { lastAsk.result.confirmations[Number(no.dataset.askDismiss)].state = "dismissed"; showAnswer(false); }
     });
     $("#space-content").addEventListener("change", (e) => {
       const select = e.target.closest("[data-role-for]");
@@ -378,6 +387,9 @@
   const FEP_LAYERS = ["extent", "land_units", "contaminant_sources", "plantings", "proposed_actions", "line_features"];
   // The reference row that governs a place's theme: Rivers (Topo50) for waterways, bores for wells; wetlands has none yet.
   const GOVERNS = { waterways: ["linz-topo50-river-centrelines"], wells: ["ecan-wells"] };
+  // The layer sets an answer in Ask can bring up (the action list's map.layers): water is the rivers and bores.
+  const ASK_SETS = { quiet: [], fep: FEP_LAYERS, photos: ["photos"], water: ["waterways", ...GOVERNS.waterways, ...GOVERNS.wells], consents: ["consents", "ecan-consents"] };
+  const mapKeys = (m) => ["extent", "titles", ...(m?.layers || []).map((l) => l.theme), ...(m?.reference || []).map((r, i) => r.key || "reference-" + i)];
   function sceneFor(view, focus, context) {
     const on = new Set(globalThis.FP_CONFIG?.farmView?.defaultOn || QUIET), f = focus || {}, v = view || {};
     if (v.view === "documents" && v.item) {
@@ -387,14 +399,17 @@
     if (f.place) {
       if ((f.place.land_units || []).length) on.add("land_units");
       for (const theme of f.place.themes || []) { on.add(theme); for (const k of GOVERNS[theme] || []) on.add(k); }
+      for (const k of f.place.layers || []) on.add(k);
     }
     if (f.photo) on.add("photos");
+    // an answer in Ask brings the set it names (all: every layer the farm's map has)
+    for (const k of f.set === "all" ? mapKeys(context?.maps) : ASK_SETS[f.set] || []) on.add(k);
     return on;
   }
   // Every row as the scene says, unless the person set it by hand; the drawer's switches follow.
   function applyScene() {
     if (!context || !layerEntries.length) return;
-    const want = sceneFor(shownRoute, { place: focusPlace, photo: photoShown }, context);
+    const want = sceneFor(shownRoute, { place: focusPlace, photo: photoShown, set: askSet }, context);
     for (const e of layerEntries) {
       const on = handSet.has(e.key) ? handSet.get(e.key) : want.has(e.key);
       if (e.on !== on) FP.farmMap.setVisible(e, on);
@@ -451,15 +466,16 @@
   const say = (node, text) => { const p = node.closest(".checklist-body")?.querySelector(".checklist-msg"); if (p) p.textContent = text || ""; };
   async function markDone(id, button) {
     const item = dueItem(id), farm = context?.farm.id;
-    if (!item?.obligation_id) return;
+    if (!item?.obligation_id) return "That can't be marked done here.";
     button.disabled = true; say(button, "");
     const { data, error } = await FP.sb.from("checks").insert({ farm_id: farm, obligation_id: obligationOf(item)?.id ?? item.obligation_id, status: "met",
       explanation: "Marked done in the app", author_kind: context.advisor ? "advisor" : "farmer", author_user: user.id, due_date: item.due || null })
       .select("id,obligation_id,status,created_at,superseded_at").single();
-    if (context?.farm.id !== farm) return;
-    if (error || !data) { button.disabled = false; say(button, error?.message || "That change wasn't allowed."); return; }
+    if (context?.farm.id !== farm) return "That change wasn't allowed.";
+    if (error || !data) { button.disabled = false; say(button, error?.message || "That change wasn't allowed."); return error?.message || "That change wasn't allowed."; }
     context.checks = [...(context.checks || []), data];
     redrawDue(id);
+    return true;
   }
   const uploads = new Map();   // line id -> the file chosen for its record, as the documents block guessed it
   function chooseRecord(input) {
@@ -497,17 +513,9 @@
       // the same file already among the farm's documents is linked, not added twice
       const sha = await D.sha256Hex(await choice.file.arrayBuffer()), same = context.documents.find((d) => d.sha256 === sha);
       const documentId = same ? same.id : await documentStore(farm, () => []).add(choice);
-      const a = (context.authorisations || []).find((x) => x.id === ob.authorisation_id);
-      const what = [a?.consent_no || a?.rule_ref, ob.code && /^\d/.test(ob.code) ? "condition " + ob.code : null].filter(Boolean).join(" ");
-      const kept = unlinked.get(id), entry = kept && kept.document === documentId ? { id: kept.entry } :
-        await read(FP.sb.from("entries").insert({ farm_id: farm, type_id: await noteTypeId(), visibility: "farm",
-          body: "Record for " + (what || "a condition") + ": " + (same ? M.docTitle(same) : choice.title) }).select("id").single());
-      unlinked.set(id, { entry: entry.id, document: documentId });
-      await read(FP.sb.from("entry_links").insert([{ entry_id: entry.id, obligation_id: ob.id }, { entry_id: entry.id, document_id: documentId }]));
-      unlinked.delete(id);
+      await linkRecord(farm, ob, documentId, same ? M.docTitle(same) : choice.title, id);
       if (context?.farm.id !== farm) return;
       context.documents = await readDocuments(FP.sb, context.farm);
-      context.records = [...(context.records || []), { obligation_id: ob.id, document_id: documentId }];
       uploads.delete(id);
       redrawDue(id);
     } catch (err) {
@@ -517,6 +525,20 @@
       if (context?.farm.id !== farm) return;
       button.disabled = false; msg.textContent = "Not added: " + (err?.message || err);
     }
+  }
+  // A document recorded against a condition: a note entry saying what it records, linked to the condition and the
+  // document (two links: the table allows one target per row). Add the record and a confirmed answer in Ask share it;
+  // id is the What's due line, so a retry after the links failed reuses the entry already written for it.
+  async function linkRecord(farm, ob, documentId, title, id) {
+    const a = (context.authorisations || []).find((x) => x.id === ob.authorisation_id);
+    const what = [a?.consent_no || a?.rule_ref, ob.code && /^\d/.test(ob.code) ? "condition " + ob.code : null].filter(Boolean).join(" ");
+    const kept = unlinked.get(id), entry = kept && kept.document === documentId ? { id: kept.entry } :
+      await read(FP.sb.from("entries").insert({ farm_id: farm, type_id: await noteTypeId(), visibility: "farm",
+        body: "Record for " + (what || "a condition") + ": " + title }).select("id").single());
+    unlinked.set(id, { entry: entry.id, document: documentId });
+    await read(FP.sb.from("entry_links").insert([{ entry_id: entry.id, obligation_id: ob.id }, { entry_id: entry.id, document_id: documentId }]));
+    unlinked.delete(id);
+    if (context?.farm.id === farm) context.records = [...(context.records || []), { obligation_id: ob.id, document_id: documentId }];
   }
   // The standing answers drawn from the farm's records (again, after Done or Add the record).
   function drawStanding() {
@@ -583,6 +605,100 @@
       },
     };
   }
+  // ---- Ask: the question goes to the farm's Ask function; its answer, its sources as links, the map arranged as it
+  // says (after the answer is shown), and each change it offers as a line the person confirms or puts away. ---------
+  async function askQuestion(question) {
+    const farm = context.farm.id, mine = ++askToken, button = $("#ask-form button[type=submit]");
+    $("#ask-answer").replaceChildren(el("p", { class: "ask-question" }, question), el("p", { class: "ask-wait", role: "status" }, "Reading the farm's records…"));
+    if (button) button.disabled = true;
+    const result = await FP.ask.request(FP.sb, farm, question);
+    if (mine !== askToken || context?.farm.id !== farm) return;
+    if (button) button.disabled = false;
+    lastAsk = { farm, question, result };
+    showAnswer(true);
+  }
+  const canChange = () => ["owner", "admin", "edit"].includes(context?.role);
+  // An offered change the farm space can make: a condition of this farm that What's due lists (and, to attach, one of
+  // its documents). A condition What's due doesn't list is never offered.
+  const offered = (c) => canChange() && (context.obligations || []).some((o) => String(o.id) === c.obligation_id) &&
+    !!dueItem("obligation-" + c.obligation_id)?.obligation_id &&
+    (c.verb !== "document.attach" || (context.documents || []).some((d) => String(d.id) === c.document_id));
+  function showAnswer(run) {
+    const box = $("#ask-answer");
+    if (!box || !lastAsk || lastAsk.farm !== context?.farm.id) return;
+    const { question, result } = lastAsk, farm = context.farm.id, nodes = [el("p", { class: "ask-question" }, question)];
+    if (result.kind !== "answer") nodes.push(el("p", { class: "answer-sentence" }, result.message));
+    else {
+      for (const b of FP.ask.blocks(result.text)) nodes.push(b.type === "list" ? el("ul", { class: "ask-list" }, ...b.items.map((t) => el("li", {}, t))) : el("p", { class: "ask-text" }, b.text));
+      if (result.sources.length) nodes.push(el("div", { class: "ask-sources" }, el("h3", {}, "Sources"), el("ul", {}, ...result.sources.map((s) =>
+        el("li", {}, el("a", { href: FP.href(s.kind === "document" ? M.href(farm, "documents", s.id) : M.href(farm, "map", "obligation-" + s.id)) }, s.label))))));
+      const changes = result.confirmations.map((c, n) => [c, n]).filter(([c]) => c.state !== "dismissed" && offered(c));
+      if (changes.length) nodes.push(el("ul", { class: "ask-confirm" }, ...changes.map(([c, n]) => el("li", {}, el("span", {}, c.label),
+        c.state === "done" ? el("span", { class: "ask-confirm-msg", role: "status" }, "Done.") :
+          el("span", { class: "ask-confirm-actions" }, el("button", { type: "button", "data-ask-confirm": String(n) }, "Confirm"),
+            el("button", { type: "button", class: "link", "data-ask-dismiss": String(n) }, "Not now"), el("span", { class: "ask-confirm-msg", role: "status" }))))));
+      for (const note of result.notes) nodes.push(el("p", { class: "ask-note" }, note));
+    }
+    box.replaceChildren(...nodes);
+    if (run && result.kind === "answer") runAsk(result.ui);
+  }
+  // Where a map.frame verb points: a land unit, a condition's recorded place, one of the map's layers; null is the farm.
+  function askPlace(place, ctx, models) {
+    const [kind, ...rest] = String(place || "").split(":"), v = rest.join(":");
+    if (kind === "land_unit") return { land_units: [v], themes: [] };
+    if (kind === "obligation") return (models || []).find((m) => m.places?.["obligation-" + v])?.places["obligation-" + v] || null;
+    if (kind === "layer") return (ctx?.maps?.reference || []).some((r) => r.key === v) ? { land_units: [], themes: [], layers: [v] } : { land_units: [], themes: [v] };
+    return null;
+  }
+  // The answer's map verbs, in order, once it is shown: the layer set it names and the place it frames (the last one
+  // given), or Documents opened on the plan. The previous answer's arrangement goes first; Layers set by hand stay.
+  function runAsk(actions) {
+    askSet = null;
+    let frame;   // undefined: no frame named; null: the farm
+    for (const a of actions) {
+      if (a.verb === "map.layers") askSet = a.set;
+      else if (a.verb === "map.frame") frame = askPlace(a.place, context, standing);
+      else if (a.verb === "plan.open" && (context.documents || []).some((d) => String(d.id) === a.document_id)) {
+        applyScene(); location.hash = FP.href(M.href(context.farm.id, "documents", a.document_id)); return;
+      }
+    }
+    if (frame === undefined) { if (focusPlace) { focusPlace = null; FP.farmMap.focus(null); } }
+    else if (!frame || !FP.farmMap.focus(frame)) { focusPlace = null; FP.farmMap.focus(null); }
+    else focusPlace = frame;
+    applyScene();
+  }
+  async function confirmAsk(n, button) {
+    const c = lastAsk?.result.confirmations?.[n], farm = context?.farm.id;
+    if (!c || lastAsk.farm !== farm || !offered(c)) return;
+    const msg = button.closest("li")?.querySelector(".ask-confirm-msg"), ob = context.obligations.find((o) => String(o.id) === c.obligation_id);
+    button.disabled = true; if (msg) msg.textContent = "";
+    try {
+      if (c.verb === "obligation.done") {
+        const done = await markDone("obligation-" + ob.id, button);
+        if (done !== true) throw Error(done);
+      } else {
+        const doc = context.documents.find((d) => String(d.id) === c.document_id);
+        await linkRecord(farm, ob, doc.id, M.docTitle(doc), "obligation-" + ob.id);
+        if (context?.farm.id === farm) drawStanding();
+      }
+      if (context?.farm.id !== farm) return;
+      c.state = "done"; showAnswer(false);
+    } catch (err) {
+      if (context?.farm.id !== farm) return;
+      button.disabled = false; if (msg) msg.textContent = err?.message || String(err);
+    }
+  }
+  // A condition's line opened from a link (an answer's source): What's due shows it, open, with its place framed.
+  function revealLine(id) {
+    const line = $("#overview-cards").querySelector('[data-item-id="' + CSS.escape(id) + '"]');
+    if (!line) return;
+    const outer = line.parentElement?.closest("details.answer-all, details.answer-fold");
+    if (outer) outer.open = true;
+    const fold = line.querySelector(":scope > details.checklist-fold");
+    if (fold) fold.open = true;
+    $("#overview-rail").classList.add("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "true");
+    line.scrollIntoView({ block: "nearest" }); line.focus({ preventScroll: true });
+  }
   function askView() {
     const form = el("form", { id: "ask-form", class: "ask-form" },
       el("label", { for: "ask-input", class: "visually-hidden" }, "Question"),
@@ -637,6 +753,7 @@
       FP.farmMap.resize(); settleFrame();
       unmount(view); view = null;
       if (focused) { focused = null; FP.farmMap.focus(null); }   // a new view starts on the farm
+      askSet = null;   // and an answer's layers go with the Ask view
       // and on the quiet map, with what this view brings (the plan selected in Documents: the FEP's layers); a photo
       // opened in an earlier view no longer counts
       shownRoute = { view: route.view, item: route.item || null }; focusPlace = null; photoShown = false;
@@ -648,11 +765,12 @@
         view = documentsView($("#space-body"), route.item);
         const selected = $("#space-body").querySelector('[data-item-id="' + CSS.escape(route.item || "") + '"]');
         if (selected) { selected.scrollIntoView({ block: "nearest" }); selected.focus({ preventScroll: true }); }
-      } else if (route.view === "ask") { $("#space-body").replaceChildren(askView()); }
+      } else if (route.view === "ask") { $("#space-body").replaceChildren(askView()); showAnswer(false); }
+      else if (route.view === "map" && route.item) revealLine(route.item);
       else if (route.view === "create") { $("#space-body").replaceChildren(createView()); }
       else if (route.view === "people") { $("#space-body").replaceChildren(peopleView()); if (M.canManage(context.role)) await loadPeople(); }
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }
-  return { load, summaries, setPortfolio, showPortfolio, close, open, sceneFor };
+  return { load, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace };
 });

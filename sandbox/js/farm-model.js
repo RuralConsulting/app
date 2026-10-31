@@ -338,14 +338,15 @@
   // The standing questions whose answers show when a farm opens, curated for who is reading (audienceOf).
   const standingAnswers = (context) => [due(context), changed(context)];
 
-  // The features on a farm's map that a place names: its land units by code, and the farm layers and reference
-  // features of its themes ("waterways", "wells"). None on this map: an empty list, and the map stays where it is.
+  // The features on a farm's map that a place names: its land units by code, the farm layers and reference features
+  // of its themes ("waterways", "wells"), and reference layers it names by key (an answer in Ask framing "Bores").
+  // None on this map: an empty list, and the map stays where it is.
   function placeFeatures(scene, place) {
-    const s = scene || {}, p = place || {}, codes = new Set(list(p.land_units)), themes = new Set(list(p.themes));
+    const s = scene || {}, p = place || {}, codes = new Set(list(p.land_units)), themes = new Set(list(p.themes)), keys = new Set(list(p.layers));
     const drawn = (fc) => list(fc?.features).filter((x) => x?.geometry?.coordinates);
     return [...drawn(s.land_units).filter((x) => codes.has(x.properties?.code)),
       ...list(s.layers).filter((l) => l.theme !== "land_units" && themes.has(l.theme)).flatMap((l) => drawn(l.features)),
-      ...list(s.reference).filter((r) => themes.has(r.theme)).flatMap((r) => drawn(r.features))];
+      ...list(s.reference).filter((r) => themes.has(r.theme) || keys.has(r.key)).flatMap((r) => drawn(r.features))];
   }
 
   // #224 What dims when a line's place is chosen: everything on the map around the farm but the chosen areas, as one

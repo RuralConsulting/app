@@ -1,6 +1,7 @@
 // Demo mode: synthetic, memory-only data from tests/app/fixtures/demo-farm.json. Never constructs a Supabase client.
 // What's due's two verbs work in the demo (E5): marking a condition done and adding its record (an upload, an entry
-// and its links) are kept in this page's memory until it is left or reloaded. Nothing else is saved.
+// and its links) are kept in this page's memory until it is left or reloaded. Nothing else is saved. Ask answers from
+// the fixture's own answers (nothing is sent anywhere), so the demo shows an answer's shape.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -99,12 +100,13 @@
       checks: owned(f.checks || [], FARM), record_types: f.record_types || [], entries: owned(f.entries || [], FARM), entry_links: owned(f.entry_links || [], FARM),
       // The staff Operations page: invented job records, one failing and one late. The farmer demo is not staff.
       profiles: [{ user_id: USER, is_staff: true }], ops_job_status: f.ops.jobs, ops_reference_status: f.ops.references,
-    }, build: f.ops.build };
+    }, build: f.ops.build, ask: f.ask || [] };
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
       data.tables.documents = []; data.tables.authorisations = []; data.tables.obligations = [];
       data.tables.checks = []; data.tables.entries = []; data.tables.entry_links = [];
+      data.ask = [];
     }
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
@@ -158,6 +160,12 @@
   // The tables the demo adds rows to, in memory: What's due's Done (checks) and Add the record (documents, entries, links).
   const KEPT = ["checks", "documents", "entries", "entry_links"];
   let made = 0;
+  // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
+  function askReply(answers, question) {
+    const q = String(question || "").toLowerCase(), all = Array.isArray(answers) ? answers : [];
+    const hit = all.find((a) => (a.match || []).some((w) => q.includes(String(w).toLowerCase()))) || all.find((a) => !(a.match || []).length);
+    return hit?.reply || { answer_text: "Nothing is recorded on this farm yet.", sources: [], ui_actions: [], confirmations: [], notes: [] };
+  }
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
@@ -206,12 +214,12 @@
         if (name === "farm_people") return result(d.people[args.f] || []);
         return error("This operation is not available in the demo");
       },
-      // The demo never sends invitations or saves changes.
-      functions: { invoke: async () => error("The demo does not save changes") },
+      // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.
+      functions: { invoke: async (name, options) => name === "ask" ? result(askReply((await ready).ask, options?.body?.question)) : error("The demo does not save changes") },
       // Every document opens the one stand-in page; the demo's photo points name the one stand-in picture.
       storage: { from: () => ({ createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
         upload: async (path) => result({ path }) }) },
     };
   }
-  return { FARM, FARM2, USER, ORG, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };
+  return { FARM, FARM2, USER, ORG, askReply, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };
 });
