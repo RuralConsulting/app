@@ -7,6 +7,8 @@
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.ask = api;
 })(typeof window === "undefined" ? globalThis : window, function () {
   const UNAVAILABLE = "Ask isn't available yet.";
+  // An answer with no text (the model ran out of room, or said nothing) is one plain line, never a blank panel (#256).
+  const NO_ANSWER = "Ask couldn't answer that.";
   const list = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => typeof v === "string" && v.trim() !== "";
   const SETS = ["quiet", "fep", "photos", "water", "consents", "all"];
@@ -18,7 +20,8 @@
   function reply(data) {
     if (!data || typeof data !== "object") return { kind: "unavailable", message: UNAVAILABLE };
     if (data.refused) return { kind: "refused", message: str(data.message) ? data.message : "That can't be answered here." };
-    return { kind: "answer", text: typeof data.answer_text === "string" ? data.answer_text.trim() : "", sources: list(data.sources).filter(sourceOk),
+    const text = typeof data.answer_text === "string" ? data.answer_text.trim() : "";
+    return { kind: "answer", text: text || NO_ANSWER, sources: list(data.sources).filter(sourceOk),
       ui: list(data.ui_actions).filter(uiOk), confirmations: list(data.confirmations).filter(confirmOk), notes: list(data.notes).filter(str) };
   }
   // A function that isn't deployed (404), is down or can't be reached says one line; its own refusal of the request
@@ -45,5 +48,5 @@
     }
     return out.filter(Boolean);
   }
-  return { UNAVAILABLE, SETS, reply, request, blocks };
+  return { UNAVAILABLE, NO_ANSWER, SETS, reply, request, blocks };
 });
