@@ -29,7 +29,7 @@
   const ruleRef = (a) => { const r = typeof a?.rule_ref === "string" ? a.rule_ref.trim() : ""; return r && !PLACEHOLDER_REF.test(r) ? r : null; };
   const authName = (a) => [a.consent_no || ruleRef(a), title(a.title)].filter(Boolean).join(" · ") || "Recorded authorisation";
   const count = (n, one, many) => (n === 1 ? "One " + one : n + " " + many);
-  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", consent_decision: "Consent decision", consent_application: "Consent application",
+  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", plan_issue: "Issued document", consent_decision: "Consent decision", consent_application: "Consent application",
     overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
     ghg_report: "Greenhouse gas report", consent_correspondence: "Consent correspondence", correspondence: "Correspondence",
     smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract", map_extract: "Map extract", fep_audit: "FEP audit", nzfap_checklist: "NZFAP+ checklist", land_unit_map: "Land unit map",
@@ -44,7 +44,7 @@
   // names the quiet group a run of the same kind is folded into.
   const DOC_TIERS = [["primary", "Main documents"], ["supporting", "Supporting"], ["other", "Other"]];
   const DOC_TYPES = {
-    fep: ["primary", 0], fwfp: ["primary", 0], farm_environment_plan: ["primary", 0], freshwater_farm_plan: ["primary", 0],
+    fep: ["primary", 0], fwfp: ["primary", 0], farm_environment_plan: ["primary", 0], freshwater_farm_plan: ["primary", 0], plan_issue: ["primary", 0],
     consent_decision: ["primary", 1], consent_application: ["primary", 1], consent: ["primary", 1], aee: ["primary", 1], nzfap_checklist: ["primary", 1],
     overseer_report: ["primary", 2], nutrient_budget: ["primary", 2], land_unit_map: ["primary", 3], farm_map: ["primary", 3],
     luc_report: ["primary", 4], ghg_report: ["primary", 4],

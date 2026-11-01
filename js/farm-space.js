@@ -11,7 +11,7 @@
   // or "none" (F1e not deployed yet: no tier is read, documents go by docClass, nothing is added or moved, no error).
   // It is learnt once per client (page), so a database without the columns costs one refused read, not one per farm.
   const learnt = new WeakMap();
-  const DOCUMENT_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,period_start,period_end,page_count,storage_path,original_name,sha256,status,created_at";
+  const DOCUMENT_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,period_start,period_end,page_count,storage_path,original_name,sha256,status,created_at,model,model_version";
   const TIER_COLUMNS = { chosen: ",tier,tiered_at", tiers: ",tier", none: "" };
   const missingColumn = (e) => e && (e.code === "42703" || e.code === "PGRST204" || /column|tier/i.test(e.message || ""));
   async function readDocuments(sb, farm) {

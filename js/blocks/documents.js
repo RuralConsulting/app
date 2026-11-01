@@ -48,6 +48,11 @@
   // The one plain line under a title: what it is (when the title doesn't say, or when nothing else would), who prepared
   // it, when (the date prepared, else the end of the period it covers).
   function sourceLine(d) {
+    // An issued plan (PL14, tools/issue_plan.cjs): when it was issued and the version of the document it was issued in.
+    if (String(d.doc_type || "").toLowerCase() === "plan_issue") {
+      const when = day(d.date_prepared) || day(d.created_at), version = /^\d+$/.test(String(d.model_version ?? "")) ? "version " + d.model_version : null;
+      return ["Issued " + (when ? M.date(when) : "on a date not recorded"), version, d.author_org || null].filter(Boolean).join(" · ");
+    }
     const kind = M.docKind(d.doc_type), title = String(M.docTitle(d)).toLowerCase();
     const who = d.author_org || d.author, when = day(d.date_prepared) || day(d.period_end);
     const parts = [kind && kind !== "Other" && (!title.includes(kind.toLowerCase()) || (!who && !when)) ? kind : null, who || null, when ? M.date(when) : null];
