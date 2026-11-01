@@ -34,7 +34,7 @@
       "valid_from": "2025-01-14", "valid_to": "2040-01-14", "created_at": "2026-03-02T09:10:00Z" },
     { "id": "auth-water", "kind": "consent", "consent_no": "CRC000102", "rule_ref": null, "title": "Water permit (synthetic)",
       "valid_from": "2012-06-01", "valid_to": "2027-05-31", "created_at": "2026-03-02T09:12:00Z" },
-    { "id": "auth-rule", "kind": "permitted_rule", "consent_no": null, "rule_ref": "Rule 0.0", "title": "Permitted activity rule (synthetic)",
+    { "id": "auth-rule", "kind": "permitted_rule", "consent_no": null, "rule_ref": "LWRP Rule 5.41", "title": "Permitted activity rule (synthetic)",
       "valid_from": "2021-07-01", "valid_to": null, "created_at": "2026-10-20T03:20:00Z" }
   ],
   "obligations": [

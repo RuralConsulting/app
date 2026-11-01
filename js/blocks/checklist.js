@@ -8,7 +8,7 @@
 // repeats?, needs?, done_on?, record?: { title, href? }, obligation_id?, note?, wording?, source?, parts?, href? }] }
 // with dates as YYYY-MM-DD. A state is never taken on trust for a date: due and passed are worked out from `due` and
 // `today`, so nothing reads as late that the dates don't say is. Done and Add the record are buttons the host wires
-// ([data-check-done], [data-check-file]); the block only draws them. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
+// ([data-check-done], [data-check-file]; with inline_done the Done is on the line itself); the block only draws them. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -83,12 +83,17 @@
       return link(item, text(item.text) || "A recorded condition") + tail;
     };
     // Done and Add the record: on a condition that is dated or needs a record and has neither yet, when the host says
-    // the reader may record (a view-only member never sees them).
+    // the reader may record (a view-only member never sees them). Each control is named for its line ("Done: Have the plan
+    // audited"; "Add the record: ..."), so a list of them is not a row of identical buttons (#259). With inline_done the
+    // Done sits on the line itself, outside its fold: one tap (#257); the fold keeps Add the record.
+    const canAct = (item, s) => text(item.obligation_id) && ["due", "overdue", "unknown"].includes(s) && !(item.verb && item.verb !== "due");
+    const named = (item) => esc(text(item.text) || "A recorded condition");
+    const inlineDone = (item, s) => o.inline_done && o.can_tick && canAct(item, s);
     const acts = (item, s) => {
-      if (!text(item.obligation_id) || !["due", "overdue", "unknown"].includes(s) || (item.verb && item.verb !== "due") || !(o.can_tick || o.can_attach)) return "";
+      if (!canAct(item, s) || !(o.can_tick || o.can_attach) || (inlineDone(item, s) && !o.can_attach)) return "";
       const id = esc(item.id);
-      return '<div class="checklist-actions">' + (o.can_tick ? '<button type="button" data-check-done="' + id + '">Done</button>' : "") +
-        (o.can_attach ? '<label class="checklist-attach"><input type="file" class="visually-hidden" data-check-file="' + id + '"><span>Add the record</span></label>' : "") +
+      return '<div class="checklist-actions">' + (o.can_tick && !inlineDone(item, s) ? '<button type="button" data-check-done="' + id + '" aria-label="Done: ' + named(item) + '">Done</button>' : "") +
+        (o.can_attach ? '<label class="checklist-attach"><input type="file" class="visually-hidden" data-check-file="' + id + '" aria-label="Add the record: ' + named(item) + '"><span>Add the record</span></label>' : "") +
         '</div><div class="checklist-upload" hidden></div><p class="checklist-msg" role="status" aria-live="polite"></p>';
     };
     const li = ({ item, state: s }) => {
@@ -100,9 +105,11 @@
         (text(item.wording) ? '<p class="checklist-sub">As written</p><blockquote class="checklist-wording">' + esc(item.wording) + "</blockquote>" : "") +
         (text(item.source) ? '<p class="checklist-source">' + esc(item.source) + "</p>" : "") + acts(item, s);
       // the line is a real control (a summary: keyboard and touch) when there is anything behind it
+      const control = fold ? '<details class="checklist-fold"><summary class="checklist-line">' + line(item, s) + '</summary><div class="checklist-body">' + fold + "</div></details>"
+        : '<p class="checklist-line">' + line(item, s) + "</p>";
+      const tick = inlineDone(item, s) ? '<button type="button" class="checklist-done-inline" data-check-done="' + esc(item.id) + '" aria-label="Done: ' + named(item) + '">Done</button>' : "";
       return '<li class="checklist-item" data-item-id="' + esc(item.id) + '" data-check-state="' + s + '" tabindex="-1">' +
-        (fold ? '<details class="checklist-fold"><summary class="checklist-line">' + line(item, s) + '</summary><div class="checklist-body">' + fold + "</div></details>"
-          : '<p class="checklist-line">' + line(item, s) + "</p>") + "</li>";
+        (tick ? '<div class="checklist-row">' + control + tick + '</div><p class="checklist-msg" role="status" aria-live="polite"></p>' : control) + "</li>";
     };
     const ul = (items) => '<ul class="checklist-list">' + items.map(li).join("") + "</ul>";
     let shown = 0, total = all.length, sections;
@@ -128,6 +135,7 @@
       show_done: { type: "boolean", default: false },
       can_tick: { type: "boolean", default: false },     // Done on a condition that is dated or needs a record
       can_attach: { type: "boolean", default: false },   // Add the record (an upload linked to the condition)
+      inline_done: { type: "boolean", default: false },  // Done on the line itself, one tap, not inside its fold (What's due's lines)
     },
     state, render,
   });

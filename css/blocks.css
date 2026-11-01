@@ -17,8 +17,10 @@
 .answer-all-link { font-size: var(--text-small); }.selected-record { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 .answer-compact .answer-highlights { margin: 8px 0; font-size: var(--text-small); }
 .answer-compact .answer-highlights li { padding: 8px 0; }
+/* Phone: a plain promoted list shows its first line; What's due's lines (the Checklist) all show, each with its Done (#257):
+   the headline counts them, so the sheet shows them (the rest are behind "and N more"). */
 @media (max-width: 800px) {
-  .answer-compact .answer-highlights li:not(:first-child), .answer-compact .answer-lines .checklist-item:not(:first-child) { display: none; }
+  .answer-compact ul.answer-highlights > li:not(:first-child) { display: none; }
 }
 /* What's due's quiet folds under its lines: the practice to keep up, and what the FEP must contain. */
 .answer-fold { border-top: 1px solid var(--rule); padding: 10px 0; }
@@ -179,6 +181,13 @@ summary.checklist-line::before { content: ""; position: absolute; left: 2px; top
 .checklist-actions button, .checklist-attach { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px;
   background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
 .checklist-actions button[disabled] { opacity: .6; cursor: progress; }
+/* Done on the line itself (inline_done): the line opens its fold, the tick is one tap beside it; after a tick, Undo takes its place. */
+.checklist-row { display: flex; align-items: flex-start; gap: 10px; }
+.checklist-row > :is(details, p) { flex: 1 1 auto; min-width: 0; }
+.checklist-done-inline, .checklist-undo button { flex: none; min-width: 56px; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px; background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.checklist-done-inline[hidden], [data-check-done][hidden] { display: none; }
+.checklist-undo { display: inline-flex; flex: none; align-items: center; gap: 8px; min-height: 40px; font-size: var(--text-small); color: var(--ink-2); }
+.checklist-undo button { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
 .checklist-attach:focus-within { outline: 2px solid var(--ink); outline-offset: 3px; }
 .checklist-upload:not([hidden]) { margin-top: 10px; }
 .checklist-msg:empty { display: none; }

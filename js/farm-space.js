@@ -78,6 +78,7 @@
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
   function close() {
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
+    flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
     layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null;
@@ -105,6 +106,9 @@
     menu.addEventListener("change", () => setMenu(false));
     document.addEventListener("click", (e) => { if (!e.target.closest("#account-menu, #account-open")) setMenu(false); });
     window.addEventListener("hashchange", () => setMenu(false));
+    // a Done still inside its Undo window is written when the page is hidden or closed (#258)
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushDone(); });
+    window.addEventListener("pagehide", flushDone);
     window.addEventListener("resize", () => { measureSheet(); });
     $("#farm-switch").addEventListener("change", (e) => { location.hash = FP.href(farmTarget(e.target.value)); });
     $("#space-signout").addEventListener("click", async () => {
@@ -166,13 +170,14 @@
       const fold = e.target;
       if (!fold.matches?.("details.checklist-fold")) return;
       const id = fold.closest("[data-item-id]")?.dataset.itemId;
-      const stillOpen = $("#overview-cards").querySelectorAll('[data-item-id="' + CSS.escape(id || "") + '"] > details.checklist-fold[open]').length > 0;
+      const stillOpen = $("#overview-cards").querySelectorAll('[data-item-id="' + CSS.escape(id || "") + '"] details.checklist-fold[open]').length > 0;
       choose(id, fold.open || stillOpen);
     }, true);
     // Done and Add the record (E5): a condition marked done, or a document added and linked to it.
     $("#overview-cards").addEventListener("click", (e) => {
-      const done = e.target.closest("[data-check-done]");
-      if (done) { markDone(done.dataset.checkDone, done); return; }
+      const done = e.target.closest("[data-check-done]"), undo = e.target.closest("[data-check-undo]");
+      if (done) { startDone(done.dataset.checkDone); return; }
+      if (undo) { undoDone(undo.dataset.checkUndo); return; }
       if (e.target.closest("[data-doc-cancel]")) { const box = e.target.closest(".checklist-upload"); box.replaceChildren(); box.hidden = true; }
     });
     $("#overview-cards").addEventListener("change", (e) => { const input = e.target.closest?.("[data-check-file]"); if (input) chooseRecord(input); });
@@ -256,6 +261,7 @@
   // Portfolio: every farm with its one sentence, and a map of them all (the NZ -> farm zoom starts here).
   async function showPortfolio() {
     const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
+    flushDone();
     context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
     document.body.classList.remove("farm-space-active", "farm-detail");
@@ -464,20 +470,69 @@
   // Row-level security decides what is allowed; the demo keeps both in memory.
   const dueItem = (id) => standing.find((m) => m.key === "due")?.body?.data.items.find((i) => i.id === id) || null;
   const obligationOf = (item) => item && (context?.obligations || []).find((o) => String(o.id) === item.obligation_id);
-  const say = (node, text) => { const p = node.closest(".checklist-body")?.querySelector(".checklist-msg"); if (p) p.textContent = text || ""; };
-  async function markDone(id, button) {
-    const item = dueItem(id), farm = context?.farm.id;
-    if (!item?.obligation_id) return "That can't be marked done here.";
-    button.disabled = true; say(button, "");
-    const { data, error } = await FP.sb.from("checks").insert({ farm_id: farm, obligation_id: obligationOf(item)?.id ?? item.obligation_id, status: "met",
-      explanation: "Marked done in the app", author_kind: context.advisor ? "advisor" : "farmer", author_user: user.id, due_date: item.due || null })
-      .select("id,obligation_id,status,created_at,superseded_at").single();
-    if (context?.farm.id !== farm) return "That change wasn't allowed.";
-    if (error || !data) { button.disabled = false; say(button, error?.message || "That change wasn't allowed."); return error?.message || "That change wasn't allowed."; }
-    context.checks = [...(context.checks || []), data];
-    redrawDue(id);
-    return true;
+  // The line's message (an error): under the line beside an inline Done, else in its fold.
+  const say = (node, text) => { const p = node.closest("li[data-item-id]")?.querySelector(":scope > .checklist-msg") || node.closest(".checklist-body")?.querySelector(".checklist-msg"); if (p) p.textContent = text || ""; };
+  const isDone = (item) => (context?.checks || []).some((c) => String(c.obligation_id) === String(item?.obligation_id) && c.status === "met" && !c.superseded_at);
+  // The check Done writes: met, by the person, as farmer or advisor. All it needs is taken when Done is tapped, so it can
+  // be written after the Undo window, or as the person leaves the farm, from what was true at the tap.
+  const inflight = new Set();   // lines whose Done is being written by Ask's Confirm: a tap on the line meanwhile is refused
+  function doneRow(id) {
+    const item = dueItem(id);
+    return !item?.obligation_id || isDone(item) || inflight.has(id) ? null : { farm: context.farm.id, item, obligation: obligationOf(item)?.id ?? item.obligation_id, advisor: !!context.advisor, user: user.id };
   }
+  async function writeDone(id, w) {
+    const { farm, item } = w;
+    try {
+      const { data, error } = await FP.sb.from("checks").insert({ farm_id: farm, obligation_id: w.obligation, status: "met",
+        explanation: "Marked done in the app", author_kind: w.advisor ? "advisor" : "farmer", author_user: w.user, due_date: item.due || null })
+        .select("id,obligation_id,status,created_at,superseded_at").single();
+      if (error || !data) return error?.message || "That change wasn't allowed.";
+      if (context?.farm.id !== farm) return true;   // written; the person has gone to another farm
+      context.checks = [...(context.checks || []), data];
+      redrawDue(id);
+      return true;
+    } catch (err) { return err?.message || "That change wasn't allowed."; }
+  }
+  // Done from Ask's Confirm (the person has just confirmed it there): written at once, and not twice.
+  async function markDone(id, button) {
+    const w = doneRow(id);
+    if (!w || undoable.has(id)) return dueItem(id) && (isDone(dueItem(id)) || inflight.has(id) || undoable.has(id)) ? "That is already marked done." : "That can't be marked done here.";
+    button.disabled = true; say(button, ""); inflight.add(id);
+    try {
+      const result = await writeDone(id, w);
+      if (result !== true) { button.disabled = false; say(button, result); }
+      return result;
+    } finally { inflight.delete(id); }
+  }
+  // ---- Done with an Undo (#258) ---------------------------------------------------------------------------
+  // Done on a What's due line shows "Marked done. Undo" for UNDO_MS, with no modal. Nothing is written until the window
+  // closes (or the person goes to another view or farm, or the page is hidden); Undo inside it means nothing was ever
+  // written, and a second Done on a line that is waiting (or being written) is refused. farm-model.js undoWindow.
+  const undoable = M.undoWindow({ write: async (id, w) => {
+    const result = await writeDone(id, w);
+    if (result !== true && context?.farm.id === w.farm) { showDone(id, true); for (const b of cards(id)) say(b, result); }
+  } });
+  const cards = (id) => $("#overview-cards").querySelectorAll('[data-check-done="' + CSS.escape(id) + '"]');
+  // Every Done button for the line (on the line, behind "and N more", in Everything recorded) gives way to the Undo, or comes back.
+  function showDone(id, back) {
+    for (const b of cards(id)) {
+      b.parentElement.querySelectorAll(":scope > .checklist-undo").forEach((n) => n.remove());
+      b.hidden = !back;
+      if (!back) b.after(el("span", { class: "checklist-undo", role: "status" }, "Marked done. ",
+        el("button", { type: "button", "data-check-undo": id, "aria-label": "Undo: " + (dueItem(id)?.text || "marked done") }, "Undo")));
+    }
+  }
+  function startDone(id) {
+    const w = doneRow(id);
+    if (!w || !undoable.start(id, w)) return;
+    showDone(id, false);
+  }
+  function undoDone(id) {
+    if (!undoable.undo(id)) return;
+    showDone(id, true);
+    [...cards(id)].find((b) => b.offsetParent)?.focus({ preventScroll: true });
+  }
+  const flushDone = () => { undoable.flush().catch(() => {}); };
   const uploads = new Map();   // line id -> the file chosen for its record, as the documents block guessed it
   function chooseRecord(input) {
     const file = input.files?.[0], li = input.closest("[data-item-id]"), box = li?.querySelector(".checklist-upload");
@@ -532,7 +587,7 @@
   // id is the What's due line, so a retry after the links failed reuses the entry already written for it.
   async function linkRecord(farm, ob, documentId, title, id) {
     const a = (context.authorisations || []).find((x) => x.id === ob.authorisation_id);
-    const what = [a?.consent_no || a?.rule_ref, ob.code && /^\d/.test(ob.code) ? "condition " + ob.code : null].filter(Boolean).join(" ");
+    const what = [a?.consent_no || M.ruleRef(a), ob.code && /^\d/.test(ob.code) ? "condition " + ob.code : null].filter(Boolean).join(" ");
     const kept = unlinked.get(id), entry = kept && kept.document === documentId ? { id: kept.entry } :
       await read(FP.sb.from("entries").insert({ farm_id: farm, type_id: await noteTypeId(), visibility: "farm",
         body: "Record for " + (what || "a condition") + ": " + title }).select("id").single());
@@ -547,9 +602,11 @@
     standing = M.standingAnswers(context);
     answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true }));
     markFocused();
-    // Phone: the closed sheet shows What's due's first clause over the handle ("3 things need a record"), whole (#240)
+    for (const id of undoable.waiting()) showDone(id, false);   // a Done still inside its Undo window keeps its Undo through a redraw
+    // Phone: the closed sheet shows What's due's first clause over the handle ("3 things need a record"), whole, and never
+    // ends inside a word (#240)
     const due = standing.find((m) => m.key === "due");
-    $("#overview-peek").textContent = due?.answer?.text || $('#overview-cards [data-answer-key="due"] .answer-sentence')?.textContent || "";
+    $("#overview-peek").textContent = M.peek(due?.answer?.text || $('#overview-cards [data-answer-key="due"] .answer-sentence')?.textContent || "");
   }
   // A line just marked done or recorded is shown where it now sits, in Everything recorded.
   function redrawDue(id) {
@@ -695,7 +752,7 @@
     if (!line) return;
     const outer = line.parentElement?.closest("details.answer-all, details.answer-fold");
     if (outer) outer.open = true;
-    const fold = line.querySelector(":scope > details.checklist-fold");
+    const fold = line.querySelector("details.checklist-fold");
     if (fold) fold.open = true;
     $("#overview-rail").classList.add("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "true");
     line.scrollIntoView({ block: "nearest" }); line.focus({ preventScroll: true });
@@ -713,6 +770,7 @@
       el("ul", { class: "output-list" }, ...M.outputs.map(([key, label]) => el("li", { "data-output": key }, el("span", {}, label)))));
   }
   async function open(farm, route) {
+    flushDone();   // going to another view (or farm) writes any Done still inside its Undo window (#258)
     const current = ++token;
     document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
     document.body.classList.add("farm-space-active");

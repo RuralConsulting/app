@@ -23,7 +23,11 @@
   // A consent's or document's title as the app quotes it in a sentence or a line: without the full stop its record may
   // end with ("To use land for farming activity." -> "To use land for farming activity").
   const title = (t) => String(t ?? "").trim().replace(/\s*\.+$/, "");
-  const authName = (a) => [a.consent_no || a.rule_ref, title(a.title)].filter(Boolean).join(" · ") || "Recorded authorisation";
+  // A rule's reference as written in the plan ("LWRP Rule 5.41"). A placeholder ("Rule 0.0", "TBC", anything marked
+  // synthetic) is not a reference: it is never quoted, and a rule that has no other is not shown as a change (#241).
+  const PLACEHOLDER_REF = /^(?:(?:rule|r)\s*)?0+(?:[.\-\s]0+)*$|^(?:tbc|tbd|n\/?a|none|unknown|placeholder|-+)$|synthetic/i;
+  const ruleRef = (a) => { const r = typeof a?.rule_ref === "string" ? a.rule_ref.trim() : ""; return r && !PLACEHOLDER_REF.test(r) ? r : null; };
+  const authName = (a) => [a.consent_no || ruleRef(a), title(a.title)].filter(Boolean).join(" · ") || "Recorded authorisation";
   const count = (n, one, many) => (n === 1 ? "One " + one : n + " " + many);
   const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", consent_decision: "Consent decision", consent_application: "Consent application",
     overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
@@ -109,7 +113,7 @@
   const conditionCode = (o) => (o.code && /^\d/.test(o.code) ? o.code : null);
   const obligationReason = (o, a) => {
     const code = conditionCode(o) ? "condition " + o.code : null;
-    if (a) return "required by " + (a.consent_no || a.rule_ref || a.title || "a recorded authorisation") + (code ? ", " + code : "");
+    if (a) return "required by " + (a.consent_no || ruleRef(a) || title(a.title) || "a recorded authorisation") + (code ? ", " + code : "");
     return (code ? "from " + code : "from a recorded condition") + ", consent not recorded";
   };
   const params = (o) => (o.parameters && typeof o.parameters === "object" && !Array.isArray(o.parameters) ? o.parameters : {});
@@ -143,7 +147,7 @@
   // the consent's activity ("To use land for farming.") gives way to the consent number.
   const plainName = (a) => {
     const t = unmarked(a.title || "").trim();
-    return t && !/\.$/.test(t) ? t : a.consent_no ? "Consent " + a.consent_no : title(t) || a.rule_ref || "Recorded authorisation";
+    return t && !/\.$/.test(t) ? t : a.consent_no ? "Consent " + a.consent_no : title(t) || ruleRef(a) || "Recorded authorisation";
   };
   // Where a condition is on the farm's map, when the record says: its land units (by code) or a theme the map draws
   // ("waterways", "wells"). Never worked out from the wording; no place recorded, no place.
@@ -209,7 +213,7 @@
       auth.set(id, a);
       if (o.code === "lapse" && !lapseMatters(o, a, today)) quiet.add(id);
       const record = recordOf.get(o.id);
-      checklist.push({ id, obligation_id: String(o.id), consent: a ? a.consent_no || a.rule_ref || null : null, text: fep(o.summary || "Recorded condition"), reason: obligationReason(o, a),
+      checklist.push({ id, obligation_id: String(o.id), consent: a ? a.consent_no || ruleRef(a) || null : null, text: fep(o.summary || "Recorded condition"), reason: obligationReason(o, a),
         state: s.state === "dated" ? undefined : s.state, due: s.due || null, verb: o.code === "lapse" ? "lapses" : "due",
         repeats: words(o.recurrence), needs: words(p.needs_record), basis: s.due ? words(p.due_basis) : null,
         note: [s.due && words(p.due_basis) ? "Calculated: " + lower(words(p.due_basis)) : null, words(p.note), words(p.flag)].filter(Boolean).join(" ") || null,
@@ -218,7 +222,7 @@
         detail: [a ? name(a) : null, conditionCode(o) ? "condition " + o.code : null, s.due ? (s.due < today ? "was due " : "due ") + date(s.due) : null, o.recurrence].filter(Boolean).join(" · ") });
     }
     for (const a of auths) {
-      const when = day(a.valid_to), code = a.consent_no || a.rule_ref;
+      const when = day(a.valid_to), code = a.consent_no || ruleRef(a);
       // A consent with none of its conditions recorded says so: on its expiry line, or on a line of its own.
       const bare = a.kind === "consent" && !obligations.some((o) => o.authorisation_id === a.id), unrecorded = "Its conditions aren't recorded yet.";
       if (when) checklist.push({ id: "expiry-" + a.id, consent: code || null, text: name(a), reason: farmer && code ? "the expiry date of " + code : "the consent's expiry date", due: when, verb: "expires",
@@ -273,10 +277,15 @@
     // body of All is the Checklist block too, with what is done or recorded shown. The map is handed the farm; a line
     // whose condition records its place (land units, or a theme the map draws) hands the map that place when it is
     // chosen (places, by line id).
-    const lines = { block: "checklist", data: { today, items: ofIds(new Set(promoted.map((i) => i.id))) }, options: { group: "none", ...record } };
+    // Done sits on the line itself (inline_done): one tap on a phone (#257). A need the three promoted lines leave out is
+    // behind "and N more", one tap, so the headline's count is the lines shown plus the "more" (#257).
+    const lines = { block: "checklist", data: { today, items: ofIds(new Set(promoted.map((i) => i.id))) }, options: { group: "none", inline_done: true, ...record } };
+    const more = needs.filter((i) => !promoted.includes(i));
     const contentRows = contents.map((o) => ({ id: "obligation-" + o.id, text: fep(o.summary || "Recorded condition"), reason: obligationReason(o, byId.get(o.authorisation_id)),
       state: "ongoing", wording: words(o.full_text), source: source(o) }));
     const folds = [
+      more.length ? { key: "more", label: "and " + more.length + " more",
+        body: { block: "checklist", data: { today, items: ofIds(new Set(more.map((i) => i.id))) }, options: { group: "none", inline_done: true, ...record } } } : null,
       ongoing.length ? { key: "practices", label: count(ongoing.length, "practice to keep up", "practices to keep up"),
         body: { block: "checklist", data: { today, items: ofIds(new Set(ongoing.map((i) => i.id))) }, options: { group: "none" } } } : null,
       contentRows.length ? { key: "fep-contents", label: "What the FEP must contain (" + contentRows.length + ")",
@@ -296,12 +305,22 @@
   // together when the farm was set up are not changes: BULK_LOAD or more with the same added day are one line saying
   // so, never promoted; what is promoted after that is a change since the load.
   const BULK_LOAD = 10;
+  // #241 A rule that carries no real reference (a placeholder like "Rule 0.0") is not a change anyone can act on: it is not
+  // listed, and so never leads the sentence. A consent has its number; a rule needs its reference.
+  const shownAsChange = (a) => !!(a?.consent_no || a?.kind === "consent" || ruleRef(a));
+  // The record first, its reference after it, the same shape for advisor and farmer: "Permitted activity rule, LWRP Rule 5.41".
+  // A consent keeps its number first for the advisor ("CRC000102 · Water permit") and its title alone for the farmer.
+  function changeName(a, farmer) {
+    if (a.consent_no) return farmer ? plainName(a) : authName(a);
+    const base = title(farmer ? unmarked(a.title) : a.title) || "Recorded rule", ref = ruleRef(a);
+    return ref && !base.includes(ref) ? base + ", " + ref : base;
+  }
   function changed(context) {
     const f = context.farm.id, today = context.today, since = addDays(today, -30), farmer = audienceOf(context) === "farmer";
     const records = [
       ...list(context.documents).map((d) => ({ id: "document-" + d.id, text: docTitle(d), href: href(f, "documents", d.id), added: day(d.created_at), kind: "document",
         primary: docTier(d).tier === "primary", source: ["Document", d.author_org || d.author].filter(Boolean).join(" · ") })),
-      ...list(context.authorisations).map((a) => ({ id: "authorisation-" + a.id, text: farmer ? plainName(a) : authName(a), added: day(a.created_at), kind: "authorisation", primary: true, source: "Consent record" })),
+      ...list(context.authorisations).filter(shownAsChange).map((a) => ({ id: "authorisation-" + a.id, text: changeName(a, farmer), added: day(a.created_at), kind: "authorisation", primary: true, source: "Consent record" })),
     ];
     const perDay = new Map();
     for (const r of records) if (r.added) perDay.set(r.added, (perDay.get(r.added) || 0) + 1);
@@ -640,5 +659,54 @@
     return letters.toUpperCase();
   };
 
-  return { riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  // The map's attribution on a phone (#259): the (i), opening on tap. `ctrl` is MapLibre's attribution <details>; a compact
+  // one starts shown until the map first moves, so it is folded here. MapLibre calls a canvas this wide or narrower compact.
+  const PHONE_MAP = 640;
+  const isPhoneMap = (width) => Number.isFinite(width) && width <= PHONE_MAP;
+  function foldAttribution(ctrl) {
+    if (!ctrl?.classList?.contains("maplibregl-compact")) return false;
+    ctrl.classList.remove("maplibregl-compact-show"); ctrl.removeAttribute("open");
+    return true;
+  }
+
+  // The closed phone sheet's peek (#240): the sentence's first clause, whole. A clause longer than `max` ends at a word
+  // boundary with an ellipsis, never inside a word; the sentence is cut at its first dash or semicolon.
+  function peek(text, max = 72) {
+    const first = String(text ?? "").replace(/\s+/g, " ").trim().split(/ [—–] |; /)[0].trim();
+    if (first.length <= max) return first;
+    const cut = first.slice(0, max + 1), at = cut.lastIndexOf(" ");
+    return (at > 0 ? cut.slice(0, at) : first.slice(0, max)).replace(/[\s,.:;—–-]+$/, "") + "…";
+  }
+
+  // Done with a way back (#258). start(id, payload) opens a short window; undo(id) inside it means nothing was written;
+  // when the window closes, or flush() is called (the person navigates), write(id, payload) is called once. A second start
+  // on a line that is already waiting (or being written) is refused, so one line never makes two records.
+  // The clock is passed in (setTimeout/clearTimeout in the app) so the window can be tested without waiting.
+  const UNDO_MS = 8000;
+  function undoWindow({ write, ms = UNDO_MS, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+    const waiting = new Map(), writing = new Set();
+    const commit = (id) => {
+      const w = waiting.get(id);
+      if (!w) return Promise.resolve(false);
+      clearTimer(w.timer); waiting.delete(id); writing.add(id);
+      // the write starts now (not on a later tick): a page being hidden gets its request out
+      let done; try { done = Promise.resolve(write(id, w.payload)); } catch (err) { done = Promise.reject(err); }
+      return done.finally(() => writing.delete(id)).then(() => true);
+    };
+    return {
+      ms,
+      start(id, payload) {
+        if (waiting.has(id) || writing.has(id)) return false;
+        waiting.set(id, { payload, timer: setTimer(() => { commit(id).catch(() => {}); }, ms) });
+        return true;
+      },
+      undo(id) { const w = waiting.get(id); if (!w) return false; clearTimer(w.timer); waiting.delete(id); return true; },
+      has: (id) => waiting.has(id) || writing.has(id),
+      waiting: () => [...waiting.keys()],
+      commit,
+      flush: () => Promise.all([...waiting.keys()].map(commit)),
+    };
+  }
+
+  return { peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });

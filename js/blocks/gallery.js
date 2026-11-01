@@ -39,7 +39,8 @@
     return {
       answer: {
         options: {},
-        full: M.standingAnswers(context({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations, ...kept }))[0],
+        // an editor's farm: each What's due line carries its Done, and a need the three lines leave out sits behind "and N more" (#257)
+        full: M.standingAnswers(context({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations, role: "edit", ...kept }))[0],
         sparse: M.standingAnswers(context({ authorisations: oneConsent }))[0],
         empty: M.standingAnswers(context())[0],
       },

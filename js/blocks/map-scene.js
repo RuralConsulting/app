@@ -73,6 +73,16 @@
       bounds: [[166.3, -47.4], [178.6, -34.3]], maxZoom: 21,
       attributionControl: { compact: true, customAttribution: FP.brand.org_legal },
     });
+    // #259: on a phone the attribution starts as the (i) and opens on tap (MapLibre starts a compact one open until the map
+    // is first moved, which put two lines over the map above the sheet). Folded once the map is up, and again when a narrow
+    // canvas follows a wide one; a person who opened it is not folded again while the canvas stays narrow.
+    let narrow = null;
+    const foldAttribution = () => {
+      const now = FP.farmModel.isPhoneMap(map.getCanvasContainer().offsetWidth);
+      if (now && now !== narrow) FP.farmModel.foldAttribution(map.getContainer().querySelector(".maplibregl-ctrl-attrib"));
+      narrow = now;
+    };
+    foldAttribution(); map.once("load", foldAttribution); map.on("resize", foldAttribution);
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
