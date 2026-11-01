@@ -9,8 +9,12 @@
 //               (instances in order, e.g. "LU1"); table and records -> [{ field: value }, ...]; map -> { field: value }.
 //               switched_off entries are a key, or { key, reason } to say why (e.g. "No dairy shed on this farm").
 //               valuesFromPlanDocument() builds this from a PlanDocument (tools/plans/plan_document.py).
-//   brand       { display_name, accent: "#rrggbb", logo?, logo_dark?, footer?, contact? }: applied here, never stored
-//               in a definition. An accent below WCAG AA (4.5:1) on paper is refused with a BrandError.
+//   brand       { display_name, accent: "#rrggbb", logo?, logo_dark?, footer_lines?, contact_lines? } (footer and
+//               contact may also be one string each): applied here, never stored in a definition. The display name
+//               and logo head the cover, the accent colours headings and rules, the footer lines run along the foot
+//               of every printed page with the contact lines under them. An accent below WCAG AA (4.5:1) on paper is
+//               refused with a BrandError. null or undefined: no brand (an organisation without an org_brands row),
+//               and the document renders unbranded. brandFromRow() turns an org_brands / brand_for row into this.
 //   figures     { [map node key]: { alt, src?, caption? } }: alt text for each map; src once Map scenes print.
 //
 // The document never shows a blank where something is required: an empty required node, field or table reads
@@ -53,8 +57,22 @@
     const ratio = contrast(accent, PAPER);
     if (ratio < AA) throw new BrandError(name + ": the accent " + accent + " is too light to read on paper (" + ratio.toFixed(2) + ":1; at least " + AA + ":1 is needed)");
     for (const k of ["logo", "logo_dark"]) if (brand[k] != null && !image(brand[k])) throw new BrandError(name + ": the " + k.replace("_", " ") + " must be an image on this site");
+    const footerLines = lines(brand.footer_lines, brand.footer), contactLines = lines(brand.contact_lines, brand.contact);
+    const footer = footerLines.length ? footerLines : [name];
     return Object.freeze({ display_name: name, accent, ratio, logo: image(brand.logo), logo_dark: image(brand.logo_dark),
-      footer: text(brand.footer) || name, contact: text(brand.contact) || null });
+      footer_lines: Object.freeze(footer), contact_lines: Object.freeze(contactLines),
+      footer: footer.join(" · "), contact: contactLines.length ? contactLines.join(" · ") : null });
+  }
+  // Lines: an array of lines (org_brands.footer_lines / contact_lines) or one string; blanks dropped.
+  const lines = (list, one) => (Array.isArray(list) ? list : one != null ? [one] : []).map(text).filter(Boolean);
+
+  // An org_brands row, as app.brand_for returns it, in the renderer's shape. The logo is an organisation file held
+  // privately in storage (row.logo_path): the caller fetches it and passes it here as a data: image (or a same-site
+  // path), since the renderer never loads from another site. No row (the organisation has no brand): null, unbranded.
+  function brandFromRow(row, { logo = null, logo_dark = null } = {}) {
+    if (row == null) return null;
+    return { display_name: row.display_name, accent: row.accent, footer_lines: row.footer_lines || [], contact_lines: row.contact_lines || [],
+      logo: logo ?? undefined, logo_dark: logo_dark ?? undefined };
   }
 
   // ---- values --------------------------------------------------------------------------------------------------
@@ -130,7 +148,8 @@
 
   function render(definition, values, brand, figures) {
     if (!isObject(definition) || !Array.isArray(definition.parts)) throw new Error("A document definition needs its parts");
-    const b = checkBrand(brand);
+    // No brand: the document carries none (no logo or name on the cover, the stylesheet's own accent, no brand lines).
+    const b = brand == null ? null : checkBrand(brand);
     const vals = isObject(values) ? values : {};
     const data = isObject(vals.nodes) ? vals.nodes : {};
     // Switched off: a key, or { key, reason }. The reason is printed where a management area does not apply.
@@ -302,19 +321,22 @@
     const first = (keys) => { for (const n of byKey.values()) for (const k of keys) { const v = isObject(data[n.key]) && !isRows(n) && !repeats(n) ? data[n.key][k] : null; if (!blank(v)) return n.fields?.find((f) => f.key === k)?.type === "date" ? formatDate(v) : String(v); } return null; };
     const meta = [["Issued", issued], ["Prepared by", [first(["prepared_by", "preparer_name"]), first(["organisation"])].filter(Boolean).join(", ")], ["Version", first(["version_label"])]].filter(([, v]) => v);
     const parts = definition.parts.filter((p) => !off.has(p.key) && (p.nodes || []).some(shown));
-    const logos = b.logo ? '<img class="plan-logo plan-logo-light" src="' + esc(b.logo) + '" alt="' + esc(b.display_name) + '">' +
+    const logos = !b ? "" : b.logo ? '<img class="plan-logo plan-logo-light" src="' + esc(b.logo) + '" alt="' + esc(b.display_name) + '">' +
       (b.logo_dark ? '<img class="plan-logo plan-logo-dark" src="' + esc(b.logo_dark) + '" alt="' + esc(b.display_name) + '">' : "")
       : '<span class="plan-wordmark">' + esc(b.display_name) + "</span>";
+    // The running footer: the brand's footer lines, and its contact lines on a line under them. The contact string
+    // starts with its own line break, so a brand without contact lines prints no empty second line.
     const running = "<style>:root{--plan-running-farm:" + cssString(farm) + ";--plan-running-title:" + cssString(docName) + ";--plan-running-date:" + cssString(issued) +
-      ";--plan-running-foot:" + cssString(b.footer) + "}</style>";
+      (b ? ";--plan-running-foot:" + cssString(b.footer) + (b.contact ? ";--plan-running-contact:" + cssString("\n" + b.contact) : "") : "") + "}</style>";
+    const brandLines = b ? [...b.footer_lines, ...b.contact_lines] : [];
     const cover = '<header class="plan-cover">' +
-      '<div class="plan-brand' + (b.logo && !b.logo_dark ? " plan-brand-single" : "") + '">' + logos + "</div>" +
+      (b ? '<div class="plan-brand' + (b.logo && !b.logo_dark ? " plan-brand-single" : "") + '">' + logos + "</div>" : "") +
       '<h1 class="plan-title">' + esc(docName) + (qualifier ? ' <span class="plan-qualifier">' + esc(qualifier) + "</span>" : "") + "</h1>" +
       '<p class="plan-farm">' + esc(farm) + "</p>" +
       '<dl class="plan-cover-meta">' + meta.map(([k, v]) => "<div><dt>" + k + "</dt><dd>" + esc(v) + "</dd></div>").join("") + "</dl>" +
       (parts.length ? '<nav class="plan-contents" aria-labelledby="plan-contents"><h2 id="plan-contents">Contents</h2><ol>' +
         parts.map((p, i) => '<li><span class="plan-num">' + (i + 1) + "</span> " + esc(p.title) + "</li>").join("") + "</ol></nav>" : "") +
-      '<p class="plan-brand-lines">' + esc([b.footer, b.contact].filter(Boolean).join(" · ")) + "</p></header>";
+      (brandLines.length ? '<p class="plan-brand-lines">' + esc(brandLines.join(" · ")) + "</p>" : "") + "</header>";
     // A part whose first section is landscape: the part heading goes on that landscape page with it, rather than
     // alone on a portrait page before it (the switch of page orientation forces a break).
     const body = parts.map((p, i) => {
@@ -324,9 +346,9 @@
       return '<section class="plan-part" id="' + id(p.key) + '" data-part="' + esc(p.key) + '"' + attrs(p) + (landscapeFirst ? ' data-heading="with-first"' : "") + ">" +
         (landscapeFirst ? html.replace(/^(<section [^>]*>)/, "$1" + h2) : h2 + html) + "</section>";
     }).join("");
-    return '<article class="plan-doc" data-family="' + esc(definition.family) + '" data-version="' + esc(definition.version) + '" style="--plan-accent:' + b.accent + '" lang="en-NZ">' +
+    return '<article class="plan-doc" data-family="' + esc(definition.family) + '" data-version="' + esc(definition.version) + '"' + (b ? ' style="--plan-accent:' + b.accent + '"' : "") + ' lang="en-NZ">' +
       running + cover + body + "</article>";
   }
 
-  return { render, checkBrand, contrast, valuesFromPlanDocument, formatDate, formatNumber, BrandError, TO_COMPLETE, AA };
+  return { render, checkBrand, brandFromRow, contrast, valuesFromPlanDocument, formatDate, formatNumber, BrandError, TO_COMPLETE, AA };
 });

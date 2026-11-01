@@ -1,8 +1,9 @@
 /* Farm Environment Plan and Freshwater Farm Plan: one document (js/plans/render.js) laid out for the screen and
    for A4 (docs/side-projects/PLANS.md §6). The same HTML both ways; print only changes the page, never the layout.
    The brand's accent arrives as --plan-accent on .plan-doc (checked for contrast on paper when rendered).
-   The running header (farm · document · issue date) and footer (brand footer · page x of y) come from the
-   --plan-running-* strings the renderer writes; Chromium shows @page margin boxes, other browsers print without them. */
+   The running header (farm · document · issue date) and footer (the brand's footer lines, its contact lines on a
+   line under them · page x of y) come from the --plan-running-* strings the renderer writes; an unbranded document
+   has no brand lines and keeps the stylesheet's own accent; Chromium shows @page margin boxes, other browsers print without them. */
 
 /* ---- screen -------------------------------------------------------------------------------------------------- */
 .plan-doc { --plan-accent: var(--accent); max-width: 52rem; margin: 0 auto; padding: 0 0 48px; color: var(--ink); background: var(--panel);
@@ -113,14 +114,14 @@
   margin: 20mm 16mm 18mm;
   @top-left { content: var(--plan-running-farm, "") "  \00B7  " var(--plan-running-title, ""); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: bottom; padding-bottom: 4mm; }
   @top-right { content: var(--plan-running-date, ""); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: bottom; padding-bottom: 4mm; }
-  @bottom-left { content: var(--plan-running-foot, ""); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: top; padding-top: 4mm; }
+  @bottom-left { content: var(--plan-running-foot, "") var(--plan-running-contact, ""); white-space: pre-wrap; font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: top; padding-top: 4mm; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: top; padding-top: 4mm; }
 }
 @page plan-landscape {
   margin: 16mm 16mm 15mm;
   @top-left { content: var(--plan-running-farm, "") "  \00B7  " var(--plan-running-title, ""); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: bottom; padding-bottom: 3mm; }
   @top-right { content: var(--plan-running-date, ""); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: bottom; padding-bottom: 3mm; }
-  @bottom-left { content: var(--plan-running-foot, ""); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: top; padding-top: 3mm; }
+  @bottom-left { content: var(--plan-running-foot, "") var(--plan-running-contact, ""); white-space: pre-wrap; font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: top; padding-top: 3mm; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 400 var(--plan-print-small)/1.2 var(--f-ui); color: var(--print-ink-2); vertical-align: top; padding-top: 3mm; }
 }
 /* The cover carries the farm and the document's name already: no running header on page one. */

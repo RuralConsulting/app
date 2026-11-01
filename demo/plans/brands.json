@@ -1,0 +1,23 @@
+{
+  "fixture": "Invented brand rows for the plans gallery (#/demo/plans), in the shape app.brand_for returns them (org_brands, PL13). Contact lines are placeholders. \"logo\" and \"logo_dark\" stand in for the organisation's logo file, which a signed-in page downloads from storage (logo_path) and the demo serves from the site.",
+  "brands": {
+    "rcl": {
+      "source": "servicing",
+      "display_name": "Rural Consulting",
+      "accent": "#1f4e3d",
+      "footer_lines": ["Rural Consulting · environmental and resource management"],
+      "contact_lines": ["Enquiries: info@example.org", "Phone: 00 000 0000"],
+      "logo_path": null,
+      "logo": "brand/logo.png",
+      "logo_dark": "brand/logo-dark.png"
+    },
+    "group": {
+      "source": "group",
+      "display_name": "Example Plains Catchment Group",
+      "accent": "#1f5f5b",
+      "footer_lines": ["Example Plains Catchment Group · invented for this demonstration"],
+      "contact_lines": ["Coordinator: coordinator@example.org"],
+      "logo_path": null
+    }
+  }
+}
