@@ -1,117 +1,13 @@
 {
   "schema": "plan/1",
   "family": "fwfp-cant-s7",
-  "version": 1,
+  "version": 2,
   "title": "Freshwater Farm Plan (Canterbury, with Schedule 7)",
-  "description": "Freshwater Farm Plan (Canterbury, with Schedule 7) (Canterbury (LWRP Schedule 7 kept)), draft as at 2026-10-30. RCL platform template (draft, Claude research agent 30 Oct 2026); needs Josh's content approval (PLANS.md §11). Sources: [FR] Resource Management (Freshwater Farm Plans) Regulations 2023 (SL 2023/113), version as at 26 May 2026 <https://www.legislation.govt.nz/secondary-legislation/pco-drafted/2023/113/en/latest/>; [RMA217E] Resource Management Act 1991 s 217E (as amended 21 August 2025) <https://mail.nzlii.org/nz/legis/consol_act/rma1991200/s217e.html>; [S7a] Canterbury Land and Water Regional Plan, Schedule 7 Farm Environment Plan (printed pp. 435-440), copy hosted by MHV Water <https://mhvwater.nz/images/Schedule_7_LWRP.pdf>; [S7b] Schedule 7 Farm Environment Plan - PC 5 (copy hosted by MHV Water) <https://www.mhvwater.nz/images/Schedule_7_Farm_Environment_Plan.pdf>; [LWRP] Canterbury Land and Water Regional Plan (operative, incl. PC7 from 10 March 2025) <https://www.ecan.govt.nz/your-region/plans-strategies-and-bylaws/canterbury-land-and-water-regional-plan/canterbury-land-and-water-regional-plan>; [ECANAUD] ECan: Information for auditors (Certified FEP Auditor Manual, November 2022) <https://www.ecan.govt.nz/your-region/farmers-hub/farming-plans-and-consenting/farm-environment-plans/information-for-auditors>; [PAC] HDLG/ECan FEP pre-audit check form (two versions, sprint drops) (sprint drop, not in the repository). Before publishing: Objective and target wording is from a secondary copy of LWRP Schedule 7 [S7a]; ECan's operative consolidated plan was not reachable from the sandbox. Plan Change 7 (operative 10 March 2025) amended Schedule 7 (springs added as a receptor; Waimakariri and OTOP nitrogen-reduction additions). Read the operative Schedule 7, correct any wording (notably 5E, which may now name springs), fill cant.s7.sub.waimakariri and cant.s7.sub.otop from it, then publish v2 with this flag removed. Part C sets the auditor and audit criteria only. Grades A-D and audit frequency come from the Certified FEP Auditor Manual (Nov 2022) and consent conditions, not from Schedule 7. Proposed fact types named in binds (risk_significance, fep_audit_grade, fep_audit_loc) do not exist yet; PL8/PL10 add them or bind elsewhere. Part 9A of the RMA has never been applied to Canterbury by Order in Council, so no Canterbury farm has a legal freshwater farm plan duty today; ECan says FEP obligations continue under consents and rules (27 Jan 2026). Crosswalk from fep-cant-s7 v1: Schedule 7 nodes carry unchanged; new input needed for cant.catchment.ecan_cccv, cant.catchment.ngai_tahu, cant.catchment.zone, cant.catchment.zone_outcomes, cant.map.regional_zones, cant.records.fep_history, nz.admin.reliance, nz.catchment.context, nz.catchment.plan_provisions, nz.catchment.regard, nz.catchment.tangata_whenua, nz.map.actions, nz.map.catchment, nz.records.audit, nz.records.certification, nz.records.evidence, nz.risk.method; no longer used: cant.s7.plan.meta.route, cant.s7.plan.meta.approved_template, cant.s7.plan.summary.vision, cant.s7.plan.summary.farm_story, cant.s7.lmu.unit.land_use.",
+  "description": "Freshwater Farm Plan (Canterbury, with Schedule 7) (Canterbury (LWRP Schedule 7 kept)), draft as at 2026-10-30. RCL platform template (draft, Claude research agent 30 Oct 2026); needs Josh's content approval (PLANS.md §11). Sources: [FR] Resource Management (Freshwater Farm Plans) Regulations 2023 (SL 2023/113), version as at 26 May 2026 <https://www.legislation.govt.nz/secondary-legislation/pco-drafted/2023/113/en/latest/>; [RMA217E] Resource Management Act 1991 s 217E (as amended 21 August 2025) <https://mail.nzlii.org/nz/legis/consol_act/rma1991200/s217e.html>; [S7a] Canterbury Land and Water Regional Plan, Schedule 7 Farm Environment Plan (printed pp. 435-440), copy hosted by MHV Water <https://mhvwater.nz/images/Schedule_7_LWRP.pdf>; [S7b] Schedule 7 Farm Environment Plan - PC 5 (copy hosted by MHV Water) <https://www.mhvwater.nz/images/Schedule_7_Farm_Environment_Plan.pdf>; [LWRP] Canterbury Land and Water Regional Plan (operative, incl. PC7 from 10 March 2025) <https://www.ecan.govt.nz/your-region/plans-strategies-and-bylaws/canterbury-land-and-water-regional-plan/canterbury-land-and-water-regional-plan>; [ECANAUD] ECan: Information for auditors (Certified FEP Auditor Manual, November 2022) <https://www.ecan.govt.nz/your-region/farmers-hub/farming-plans-and-consenting/farm-environment-plans/information-for-auditors>; [PAC] HDLG/ECan FEP pre-audit check form (two versions, sprint drops). Objective and target wording is checked word for word against the operative Schedule 7 (LWRP printed pp. 435-440, the text [S7a] copies), which Josh confirmed on 1 Nov 2026 is the current text: Plan Change 7 (operative 10 March 2025) did not change Schedule 7, so there are no Plan Change 7 sub-region sections and 5E does not name springs (springs appear only in the Waitaki section, item 9). The Hurunui and Waiau section is RCL's addition for farms under the Hurunui and Waiau River Regional Plan, not Schedule 7. Part C sets the auditor and audit criteria only. Grades A-D and audit frequency come from the Certified FEP Auditor Manual (Nov 2022) and consent conditions, not from Schedule 7. Proposed fact types named in binds (risk_significance, fep_audit_grade, fep_audit_loc) do not exist yet; PL8/PL10 add them or bind elsewhere. Part 9A of the RMA has never been applied to Canterbury by Order in Council, so no Canterbury farm has a legal freshwater farm plan duty today; ECan says FEP obligations continue under consents and rules (27 Jan 2026). Crosswalk from fep-cant-s7 v1: Schedule 7 nodes carry unchanged; new input needed for cant.catchment.ecan_cccv, cant.catchment.ngai_tahu, cant.catchment.zone, cant.catchment.zone_outcomes, cant.map.regional_zones, cant.records.fep_history, nz.admin.reliance, nz.catchment.context, nz.catchment.plan_provisions, nz.catchment.regard, nz.catchment.tangata_whenua, nz.map.actions, nz.map.catchment, nz.records.audit, nz.records.certification, nz.records.evidence, nz.risk.method; no longer used: cant.s7.plan.meta.route, cant.s7.plan.meta.approved_template, cant.s7.plan.summary.vision, cant.s7.plan.summary.farm_story, cant.s7.lmu.unit.land_use. Version 2 (1 Nov 2026), after that check: adds 5A Objective 2, drops a full stop from 5A Target 4 that the Schedule does not have, removes the unverified Waimakariri and OTOP sections (not in Schedule 7) and marks the Hurunui and Waiau section as not Schedule 7; the rest of the wording is as in version 1, and a plan on version 1 pre-fills version 2.",
   "extends": {
     "family": "fwfp-cant",
     "version": 1
   },
-  "crosswalk_from": [
-    {
-      "family": "fep-cant-s7",
-      "version": 1,
-      "map": {
-        "cant.s7.property.contact": "cant.s7.property.contact",
-        "cant.s7.property.identifier": "cant.s7.property.identifier",
-        "cant.s7.property.responsible": "cant.s7.property.responsible",
-        "cant.s7.nutrient_budget.summary": "cant.s7.nutrient_budget.summary",
-        "cant.s7.nutrient_budget.lmu": "cant.s7.nutrient_budget.lmu",
-        "cant.s7.nutrients.obj1": "cant.s7.nutrients.obj1",
-        "cant.s7.nutrients.t1": "cant.s7.nutrients.t1",
-        "cant.s7.nutrients.t2": "cant.s7.nutrients.t2",
-        "cant.s7.nutrients.t3": "cant.s7.nutrients.t3",
-        "cant.s7.nutrients.t4": "cant.s7.nutrients.t4",
-        "cant.s7.nutrients.t5": "cant.s7.nutrients.t5",
-        "cant.s7.irrigation.obj1": "cant.s7.irrigation.obj1",
-        "cant.s7.irrigation.t1": "cant.s7.irrigation.t1",
-        "cant.s7.irrigation.t2": "cant.s7.irrigation.t2",
-        "cant.s7.irrigation.t3": "cant.s7.irrigation.t3",
-        "cant.s7.irrigation.t4": "cant.s7.irrigation.t4",
-        "cant.s7.soils.obj1": "cant.s7.soils.obj1",
-        "cant.s7.soils.t1": "cant.s7.soils.t1",
-        "cant.s7.soils.t2": "cant.s7.soils.t2",
-        "cant.s7.effluent.obj1": "cant.s7.effluent.obj1",
-        "cant.s7.effluent.t1": "cant.s7.effluent.t1",
-        "cant.s7.effluent.t2": "cant.s7.effluent.t2",
-        "cant.s7.effluent.t3": "cant.s7.effluent.t3",
-        "cant.s7.effluent.t4": "cant.s7.effluent.t4",
-        "cant.s7.waterbodies.obj1": "cant.s7.waterbodies.obj1",
-        "cant.s7.waterbodies.t1": "cant.s7.waterbodies.t1",
-        "cant.s7.waterbodies.t2": "cant.s7.waterbodies.t2",
-        "cant.s7.waterbodies.t3": "cant.s7.waterbodies.t3",
-        "cant.s7.waterbodies.t4": "cant.s7.waterbodies.t4",
-        "cant.s7.point_sources.obj1": "cant.s7.point_sources.obj1",
-        "cant.s7.point_sources.t1": "cant.s7.point_sources.t1",
-        "cant.s7.water_use.obj1": "cant.s7.water_use.obj1",
-        "cant.s7.water_use.t1": "cant.s7.water_use.t1",
-        "cant.s7.sub.selwyn": "cant.s7.sub.selwyn",
-        "cant.s7.sub.hinds": "cant.s7.sub.hinds",
-        "cant.s7.sub.waitaki": "cant.s7.sub.waitaki",
-        "cant.s7.sub.waimakariri": "cant.s7.sub.waimakariri",
-        "cant.s7.sub.otop": "cant.s7.sub.otop",
-        "cant.s7.sub.hurunui_waiau": "cant.s7.sub.hurunui_waiau",
-        "cant.s7.audit.history": "cant.s7.audit.history",
-        "cant.s7.audit.loc": "cant.s7.audit.loc",
-        "cant.s7.audit.actions": "cant.s7.audit.actions",
-        "cant.s7.extra.mahinga_kai": "cant.s7.extra.mahinga_kai",
-        "cant.s7.extra.ghg": "cant.s7.extra.ghg",
-        "cant.s7.plan.meta": {
-          "to": "nz.admin.preparer",
-          "transform": "fields: prepared_by -> preparer_name; organisation -> organisation; prepared_on -> prepared_on; version_label -> version_label | route and approved_template are no longer used (the FWFP replaces the Part A route choice)"
-        },
-        "cant.s7.plan.summary": {
-          "to": "nz.actions.overview",
-          "transform": "fields: summary -> overview | vision and farm_story are not carried (no FWFP node); kept in the FEP issue"
-        },
-        "cant.s7.property.address": "nz.admin.address",
-        "cant.s7.property.owner": {
-          "to": "nz.admin.operator",
-          "transform": "also to nz.admin.other_parties | fields: owner_name -> nz.admin.operator.operator_name; lessee_name -> nz.admin.other_parties.name | a person confirms who the farm operator is (the person with final responsibility; may be the lessee); a lessee becomes an other-parties row with role Leaseholder; contact_phone and contact_email come from cant.s7.property.contact; nzbn needs new input"
-        },
-        "cant.s7.property.legal": {
-          "to": "nz.admin.titles",
-          "transform": "fields: parcel -> parcel; title_ref -> title_ref; tenure -> tenure | title_ref needs input where the FEP gave only a legal description"
-        },
-        "cant.s7.property.areas": {
-          "to": "nz.admin.areas",
-          "transform": "also to nz.admin.land_use | fields: total_area_ha -> nz.admin.areas.total_area_ha; effective_area_ha -> nz.admin.areas.effective_area_ha; leased_area_ha -> nz.admin.areas.leased_area_ha; land_use -> nz.admin.land_use.land_use; stock_summary -> nz.admin.land_use.stock_summary | irrigated_area_ha and winter_grazing_ha stay as facts (bound) and feed the irrigation and winter grazing map layers"
-        },
-        "cant.s7.consents": {
-          "to": "nz.admin.consents",
-          "transform": "fields: consent_number -> consent_number; consent_type -> consent_type; purpose -> purpose; status -> status; expires_on -> expires_on"
-        },
-        "cant.s7.map.property": {
-          "to": "nz.map.vulnerabilities",
-          "transform": "also to nz.map.farming_features, cant.s7.map.extra | layers: boundary -> nz.map.vulnerabilities.boundary; land_units -> nz.map.vulnerabilities.land_units; water -> nz.map.vulnerabilities.natural_water; csa -> nz.map.vulnerabilities.csa; riparian_vegetation -> cant.s7.map.extra.riparian_vegetation; stock_access -> cant.s7.map.extra.stock_access; sig_biodiversity -> cant.s7.map.extra.sig_biodiversity; hrrpz -> cant.s7.map.extra.hrrpz; flood_assets -> cant.s7.map.extra.flood_assets; access_routes -> cant.s7.map.extra.access_routes | Schedule 7 'water' splits into natural and artificial waterbodies: a person assigns drains and ponds to artificial_water"
-        },
-        "cant.s7.lmu.unit": {
-          "to": "nz.land_units.unit",
-          "transform": "fields: code -> code; name -> name; area_ha -> area_ha; description -> description; soils -> soils; irrigated -> irrigated | land_use is not carried; drained needs input"
-        },
-        "cant.s7.lmu.vulnerability": {
-          "to": "nz.land_units.vulnerability",
-          "transform": "fields: waterlogging -> waterlogging; p_sediment_runoff -> p_sediment_runoff; n_leaching -> n_leaching; structural -> structural; erosion -> erosion; other -> other | blank or 'Not stated' values become new input because the four core vulnerabilities are required in the FWFP"
-        },
-        "cant.s7.risk.assessment": {
-          "to": "nz.risk.significance",
-          "transform": "also to nz.risk.activity | fields: risk_label -> nz.risk.significance.risk_label; land_unit -> nz.risk.significance.land_unit; significance -> nz.risk.significance.significance; management_area -> nz.risk.significance.management_area; activity -> nz.risk.activity.activities | each rating pre-fills as the FEP author's prior assessment (assessed_by = FEP preparer, assessed_on = FEP date), shown for the new assessor to confirm or replace; Schedule 7 management areas map to activity groups: Nutrients->Nutrients, Irrigation->Irrigation, Cultivation and soil structure->Land and soil, Animal effluent->Animal effluent, Waterbodies->Waterways and wetlands, Point sources->Point sources, Water use->Other farming activity"
-        },
-        "cant.s7.actions": {
-          "to": "nz.actions.table",
-          "transform": "fields: action -> action; land_units -> land_units; timeframe -> timeframe; due_on -> due_on; existing_or_new -> existing_or_new; category -> category; target_ref -> s7_target; records -> records; management_area -> management_area | management_area maps as for the risk assessment; category carries when the FEP gave Regulated/Catchment/Supplementary, otherwise new input; risk_addressed and activity are new input unless the FEP row had them; existing_or_new defaults to Existing for actions marked done"
-        },
-        "cant.s7.nutrients": "cant.s7.nutrients",
-        "cant.s7.irrigation": "cant.s7.irrigation",
-        "cant.s7.soils": "cant.s7.soils",
-        "cant.s7.effluent": "cant.s7.effluent",
-        "cant.s7.waterbodies": "cant.s7.waterbodies",
-        "cant.s7.point_sources": "cant.s7.point_sources",
-        "cant.s7.water_use": "cant.s7.water_use"
-      }
-    }
-  ],
   "parts": [
     {
       "key": "nz.part.about",
@@ -824,6 +720,7 @@
               "key": "not_applicable_reason",
               "type": "text",
               "label": "Why it does not apply",
+              "guidance": "Needed when the significance is Not applicable: say why the risk does not arise on this farm or land unit.",
               "required_when": {
                 "field": "significance",
                 "equals": "Not applicable"
@@ -1397,115 +1294,25 @@
           "kind": "records",
           "origin": "fwfp-nz",
           "title": "Certification",
-          "guidance": "Copy these from the certifier's decision. Needed when the plan has been certified.",
-          "fields": [
-            {
-              "key": "certified_on",
-              "type": "date",
-              "label": "Date certified",
-              "required": true
-            },
-            {
-              "key": "certifier_name",
-              "type": "text",
-              "label": "Certifier",
-              "required": true
-            },
-            {
-              "key": "certifier_id",
-              "type": "text",
-              "label": "Certifier identification number",
-              "required": true
-            },
-            {
-              "key": "certifier_coi",
-              "type": "text",
-              "label": "Certifier's conflict of interest declaration",
-              "required": true
-            },
-            {
-              "key": "recertify_by",
-              "type": "date",
-              "label": "Recertification due by",
-              "required": true
-            },
-            {
-              "key": "next_audit_by",
-              "type": "date",
-              "label": "Next audit due by",
-              "required": true
-            }
-          ],
+          "guidance": "Copy these from the certifier's decision. Needed when the plan has been certified. Certification and audit records are kept in the farm's records form (regulations 15 and 16) and printed here.",
           "required": true,
           "satisfies": [
             "fwfp.r15"
-          ]
+          ],
+          "binds": {
+            "form": "fwfp-records"
+          }
         },
         {
           "key": "nz.records.audit",
           "kind": "records",
           "origin": "fwfp-nz",
           "title": "Audits",
-          "guidance": "One entry per audit, copied from the auditor's final report. Needed when the farm has been audited.",
-          "fields": [
-            {
-              "key": "audited_on",
-              "type": "date",
-              "label": "Audit date",
-              "required": true
-            },
-            {
-              "key": "auditor_name",
-              "type": "text",
-              "label": "Auditor",
-              "required": true
-            },
-            {
-              "key": "auditor_id",
-              "type": "text",
-              "label": "Auditor identification number",
-              "required": true
-            },
-            {
-              "key": "auditor_coi",
-              "type": "text",
-              "label": "Auditor's conflict of interest declaration",
-              "required": true
-            },
-            {
-              "key": "grade",
-              "type": "select",
-              "label": "Audit grade",
-              "required": true,
-              "options": [
-                "A",
-                "B",
-                "C",
-                "D"
-              ]
-            },
-            {
-              "key": "on_time",
-              "type": "text",
-              "label": "Actions implemented on time",
-              "required": true
-            },
-            {
-              "key": "late",
-              "type": "text",
-              "label": "Actions not implemented on time, and why",
-              "required": true
-            },
-            {
-              "key": "next_audit_by",
-              "type": "date",
-              "label": "Next audit due by",
-              "required": true
-            }
-          ],
+          "guidance": "One entry per audit, copied from the auditor's final report. Needed when the farm has been audited. Certification and audit records are kept in the farm's records form (regulations 15 and 16) and printed here.",
           "required": false,
           "binds": {
-            "actions": true
+            "actions": true,
+            "form": "fwfp-records"
           },
           "print": {
             "orientation": "landscape"
@@ -2201,7 +2008,7 @@
               "key": "cant.s7.nutrients.obj1",
               "kind": "item",
               "origin": "fwfp-cant-s7",
-              "title": "5A Nutrients: Objective",
+              "title": "5A Nutrients: Objective 1",
               "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
               "fields": [
                 {
@@ -2211,10 +2018,30 @@
                 }
               ],
               "required": false,
-              "cite": "LWRP Schedule 7 Part B item 5A, Objective [S7a]",
+              "cite": "LWRP Schedule 7 Part B item 5A, Objective 1 [S7a]",
               "fixed_text": "Use nutrients efficiently and minimise nutrient losses to water.",
               "satisfies": [
                 "s7.B.5A.obj1"
+              ]
+            },
+            {
+              "key": "cant.s7.nutrients.obj2",
+              "kind": "item",
+              "origin": "fwfp-cant-s7",
+              "title": "5A Nutrients: Objective 2",
+              "guidance": "The objective for this management area, in the plan's own words. Every target below serves it.",
+              "fields": [
+                {
+                  "key": "summary",
+                  "type": "text",
+                  "label": "How the objective is met (summary)"
+                }
+              ],
+              "required": false,
+              "cite": "LWRP Schedule 7 Part B item 5A, Objective 2 [S7a]",
+              "fixed_text": "Nutrient losses do not exceed consented nitrogen loss limits.",
+              "satisfies": [
+                "s7.B.5A.obj2"
               ]
             },
             {
@@ -2237,7 +2064,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2247,13 +2074,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2285,7 +2118,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2295,13 +2128,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2333,7 +2172,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2343,13 +2182,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2381,7 +2226,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2391,18 +2236,24 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
               "cite": "LWRP Schedule 7 Part B item 5A, Target 4 [S7a]",
-              "fixed_text": "Manage the amount, timing and application of fertiliser inputs to match the predicted plant requirements and minimise nutrient losses.",
+              "fixed_text": "Manage the amount, timing and application of fertiliser inputs to match the predicted plant requirements and minimise nutrient losses",
               "satisfies": [
                 "s7.B.5A.t4",
                 "s7.B.5.detail",
@@ -2429,7 +2280,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2439,13 +2290,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2511,7 +2368,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2521,13 +2378,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2559,7 +2422,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2569,13 +2432,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2607,7 +2476,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2617,13 +2486,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2655,7 +2530,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2665,13 +2540,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2738,7 +2619,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2748,13 +2629,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2786,7 +2673,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2796,13 +2683,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2868,7 +2761,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2878,13 +2771,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2916,7 +2815,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2926,13 +2825,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -2964,7 +2869,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -2974,13 +2879,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3012,7 +2923,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -3022,13 +2933,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3095,7 +3012,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -3105,13 +3022,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3143,7 +3066,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -3153,13 +3076,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3191,7 +3120,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -3201,13 +3130,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3239,7 +3174,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -3249,13 +3184,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3321,7 +3262,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -3331,13 +3272,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3403,7 +3350,7 @@
                 {
                   "key": "not_applicable_reason",
                   "type": "text",
-                  "label": "Why not (if not applicable)",
+                  "label": "Why it does not apply",
                   "required_when": {
                     "field": "applies",
                     "equals": "Not applicable"
@@ -3413,13 +3360,19 @@
                   "key": "how_met",
                   "type": "text",
                   "label": "Practices in place and how the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 },
                 {
                   "key": "records",
                   "type": "text",
                   "label": "Records kept to show the target is met",
-                  "required": true
+                  "required_when": {
+                    "field": "applies",
+                    "equals": "Applies"
+                  }
                 }
               ],
               "required": true,
@@ -3444,7 +3397,7 @@
       "key": "cant.s7.part.sub_region",
       "origin": "fwfp-cant-s7",
       "title": "Sub-region requirements",
-      "guidance": "Some parts of Canterbury add to Schedule 7. Switch on the one that applies to this farm; leave the others off.",
+      "guidance": "Some parts of Canterbury add to Schedule 7, and farms in the Hurunui and Waiau catchments also work to their own regional plan. Switch on the one that applies to this farm; leave the others off.",
       "switchable": true,
       "print": {
         "break_before": true,
@@ -3561,70 +3514,11 @@
           ]
         },
         {
-          "key": "cant.s7.sub.waimakariri",
-          "kind": "item",
-          "origin": "fwfp-cant-s7",
-          "title": "Waimakariri (Nitrate Priority Area)",
-          "guidance": "Plan Change 7 added objectives and targets for staged nitrogen reductions in the Waimakariri Nitrate Priority Area. Record the reduction the farm must make and how.",
-          "fields": [
-            {
-              "key": "sub_area",
-              "type": "text",
-              "label": "Nitrate Priority sub-area",
-              "required": true
-            },
-            {
-              "key": "reduction_2030",
-              "type": "text",
-              "label": "Reduction required by 2030 and how it will be met",
-              "required": true
-            },
-            {
-              "key": "reduction_2040",
-              "type": "text",
-              "label": "Reduction required by 2040 and how it will be met"
-            }
-          ],
-          "required": false,
-          "switchable": true,
-          "cite": "LWRP Schedule 7 Waimakariri additions (PC7), wording not yet verified",
-          "satisfies": [
-            "s7.sub.pc7.waimakariri"
-          ]
-        },
-        {
-          "key": "cant.s7.sub.otop",
-          "kind": "item",
-          "origin": "fwfp-cant-s7",
-          "title": "Orari-Temuka-Opihi-Pareora (High Nitrogen Concentration Areas)",
-          "guidance": "Plan Change 7 added objectives and targets for staged nitrogen reductions in the OTOP High Nitrogen Concentration Areas. Record the reduction the farm must make and how.",
-          "fields": [
-            {
-              "key": "area",
-              "type": "text",
-              "label": "High Nitrogen Concentration Area",
-              "required": true
-            },
-            {
-              "key": "reductions",
-              "type": "text",
-              "label": "Staged reductions and how they will be met",
-              "required": true
-            }
-          ],
-          "required": false,
-          "switchable": true,
-          "cite": "LWRP Schedule 7 OTOP additions (PC7), wording not yet verified",
-          "satisfies": [
-            "s7.sub.pc7.otop"
-          ]
-        },
-        {
           "key": "cant.s7.sub.hurunui_waiau",
           "kind": "item",
           "origin": "fwfp-cant-s7",
           "title": "Hurunui and Waiau catchments",
-          "guidance": "Farms in the Hurunui and Waiau catchments work to the Hurunui and Waiau River Regional Plan nutrient rules and any group or individual consent, usually a consented or allocated nitrogen limit. Record the limit and where it comes from.",
+          "guidance": "This is not part of Schedule 7. Farms in the Hurunui and Waiau catchments work to the Hurunui and Waiau River Regional Plan nutrient rules and any group or individual consent, usually a consented or allocated nitrogen limit. Record the limit and where it comes from.",
           "fields": [
             {
               "key": "n_limit",

@@ -12,6 +12,17 @@
   const DOCS = [["fep-cant-s7", "Farm Environment Plan"], ["fwfp-cant-s7", "Freshwater Farm Plan"]];
   const BRANDS = [["rcl", "Rural Consulting"], ["group", "Example Plains Catchment Group"], ["none", "Unbranded"]];
   const DATA = [["full", "Full"], ["sparse", "Sparse"], ["empty", "Empty"]];
+  // The template version each demo definition is: the newest PUBLISHED platform version of its family, copied
+  // unchanged from templates/plans/<family>/v<n>.json (tests/app/plans.test.cjs checks both). fep-cant-s7 v3 is a
+  // draft until Josh publishes it; the demo moves to it then.
+  const VERSIONS = { "fep-cant-s7": 2, "fwfp-cant-s7": 2, "fwfp-cant": 1, "fwfp-nz": 1 };
+  const definitionFile = (family) => family + ".v" + VERSIONS[family] + ".json";
+  // A demo definition is its template file less what the page never uses or should not show: the crosswalks (only
+  // imports read them) and the local source paths in the description.
+  function demoCopy(template) {
+    const { crosswalk_from, ...rest } = template;
+    return { ...rest, description: String(template.description || "").replace(/ ?<local:[^>]*>/g, "") };
+  }
 
   // The brands render() is given, by choice, from the fixture rows: "rcl" is RCL's (as seeded by the org_brands
   // migration, with the app's logo standing in for RCL's logo file), "group" an invented catchment group's, and
@@ -79,7 +90,7 @@
     const host = screen.querySelector(".plans-page");
     host.setAttribute("aria-busy", "true");
     try {
-      const [definition, fixture, brandRows] = await Promise.all([fetchJson("demo/plans/" + s.doc + ".v1.json"), fetchJson("demo/plans/tussock-rise.json"), fetchJson("demo/plans/brands.json")]);
+      const [definition, fixture, brandRows] = await Promise.all([fetchJson("demo/plans/" + definitionFile(s.doc)), fetchJson("demo/plans/tussock-rise.json"), fetchJson("demo/plans/brands.json")]);
       if (mine !== opened) return;
       const { values: v, figures } = values(fixture, s.doc, s.data);
       host.innerHTML = R.render(definition, v, brands(brandRows)[s.brand], figures);
@@ -106,5 +117,5 @@
     return draw();
   }
   function close() { opened++; document.body?.classList.remove("plans-open"); }
-  return { DOCS, BRANDS, DATA, brands, brandFor, values, view, open, close };
+  return { DOCS, BRANDS, DATA, VERSIONS, definitionFile, demoCopy, brands, brandFor, values, view, open, close };
 });

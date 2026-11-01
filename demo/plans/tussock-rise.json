@@ -910,6 +910,12 @@
      "co2_t": 120,
      "calculator": "An approved on-farm emissions calculator",
      "year": "2025/26"
+    },
+    "cant.s7.catchment.context": {
+     "fmu": "Example Plains lowland streams",
+     "fmu_overview": "Spring-fed lowland streams draining the Example Plains to a coastal lagoon. Most of the catchment is irrigated sheep, beef and dairy support land.",
+     "contaminants": "Nitrate leaching to groundwater and the spring-fed streams; sediment, phosphorus and E. coli from winter grazing near waterways.",
+     "receptor": "The lowland streams and the coastal lagoon they feed."
     }
    },
    "switched_off": [

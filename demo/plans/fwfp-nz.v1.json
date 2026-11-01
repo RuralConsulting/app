@@ -707,6 +707,16 @@
               ]
             },
             {
+              "key": "not_applicable_reason",
+              "type": "text",
+              "label": "Why it does not apply",
+              "guidance": "Needed when the significance is Not applicable: say why the risk does not arise on this farm or land unit.",
+              "required_when": {
+                "field": "significance",
+                "equals": "Not applicable"
+              }
+            },
+            {
               "key": "assessed_by",
               "type": "text",
               "label": "Assessed by"
@@ -1256,115 +1266,25 @@
           "kind": "records",
           "origin": "fwfp-nz",
           "title": "Certification",
-          "guidance": "Copy these from the certifier's decision. Needed when the plan has been certified.",
-          "fields": [
-            {
-              "key": "certified_on",
-              "type": "date",
-              "label": "Date certified",
-              "required": true
-            },
-            {
-              "key": "certifier_name",
-              "type": "text",
-              "label": "Certifier",
-              "required": true
-            },
-            {
-              "key": "certifier_id",
-              "type": "text",
-              "label": "Certifier identification number",
-              "required": true
-            },
-            {
-              "key": "certifier_coi",
-              "type": "text",
-              "label": "Certifier's conflict of interest declaration",
-              "required": true
-            },
-            {
-              "key": "recertify_by",
-              "type": "date",
-              "label": "Recertification due by",
-              "required": true
-            },
-            {
-              "key": "next_audit_by",
-              "type": "date",
-              "label": "Next audit due by",
-              "required": true
-            }
-          ],
+          "guidance": "Copy these from the certifier's decision. Needed when the plan has been certified. Certification and audit records are kept in the farm's records form (regulations 15 and 16) and printed here.",
           "required": true,
           "satisfies": [
             "fwfp.r15"
-          ]
+          ],
+          "binds": {
+            "form": "fwfp-records"
+          }
         },
         {
           "key": "nz.records.audit",
           "kind": "records",
           "origin": "fwfp-nz",
           "title": "Audits",
-          "guidance": "One entry per audit, copied from the auditor's final report. Needed when the farm has been audited.",
-          "fields": [
-            {
-              "key": "audited_on",
-              "type": "date",
-              "label": "Audit date",
-              "required": true
-            },
-            {
-              "key": "auditor_name",
-              "type": "text",
-              "label": "Auditor",
-              "required": true
-            },
-            {
-              "key": "auditor_id",
-              "type": "text",
-              "label": "Auditor identification number",
-              "required": true
-            },
-            {
-              "key": "auditor_coi",
-              "type": "text",
-              "label": "Auditor's conflict of interest declaration",
-              "required": true
-            },
-            {
-              "key": "grade",
-              "type": "select",
-              "label": "Audit grade",
-              "required": true,
-              "options": [
-                "A",
-                "B",
-                "C",
-                "D"
-              ]
-            },
-            {
-              "key": "on_time",
-              "type": "text",
-              "label": "Actions implemented on time",
-              "required": true
-            },
-            {
-              "key": "late",
-              "type": "text",
-              "label": "Actions not implemented on time, and why",
-              "required": true
-            },
-            {
-              "key": "next_audit_by",
-              "type": "date",
-              "label": "Next audit due by",
-              "required": true
-            }
-          ],
+          "guidance": "One entry per audit, copied from the auditor's final report. Needed when the farm has been audited. Certification and audit records are kept in the farm's records form (regulations 15 and 16) and printed here.",
           "required": false,
           "binds": {
-            "actions": true
+            "actions": true,
+            "form": "fwfp-records"
           },
           "print": {
             "orientation": "landscape"
