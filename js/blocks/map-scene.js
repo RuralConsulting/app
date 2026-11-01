@@ -1,7 +1,8 @@
 // Map scene block: frames, draws and labels the scene it is handed, a farm_map payload (extent, titles, layers,
-// land units, the farm's own reference features). Reference features are only those on the farm or linked to its
-// permits; radius analysis (wells within 2 km) is advisor-side job tooling and never drawn here (ARCHITECTURE.md
-// "Presenting reference data"). The block draws on a surface: its own map in the frame it is given, or a live one the
+// land units, the shared reference features in the farm's context). Reference features are those around the farm
+// (each source's context distance, DM1) or linked to its permits, each flagged on_farm / linked; radius analysis
+// (distances for a job) is advisor-side job tooling and never drawn here (ARCHITECTURE.md "Reference data and how a
+// farm sees it"). The block draws on a surface: its own map in the frame it is given, or a live one the
 // host hands it as ctx.surface (the farm space keeps one map for the session, so the NZ -> farm zoom is unbroken).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
@@ -563,10 +564,12 @@
       source(sid, features);
       const describe = (f) => {
         const { fp_past, ...props } = f.properties;
-        if (consents) return FP.farmModel.consentPopup(props, r, f.properties.on_farm ? "On the farm" : "Off the farm, linked to the farm's permit");
+        // DM1: the farm map shows each layer around the farm too, so off the farm is "near" unless linked to a permit
+        const where = props.on_farm ? "On the farm" : props.linked ? "Off the farm, linked to the farm's permit" : "Near the farm";
+        if (consents) return FP.farmModel.consentPopup(props, r, where);
         const named = props.name || props.Name || props.NAME;
         return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
-          qualifier: props.on_farm ? "On the farm" : "Off the farm, linked to the farm's permit", props, permits: props.authorisations || [], attribution: r.attribution };
+          qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution };
       };
       const ids = [
         layer({ id: sid + "-fill", type: "fill", source: sid, filter: AREA, paint: { "fill-color": "#bfe8ff", "fill-opacity": 0.25 } }, describe),

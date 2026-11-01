@@ -1,6 +1,6 @@
 // What a tap on the map shows: the feature's details, how its layer is qualified, and its photo if any.
 FP.popup = (() => {
-  const HIDDEN = new Set(["storage_path", "photo_sha256", "fid", "source_fid", "ogc_fid", "label_at", "on_farm",
+  const HIDDEN = new Set(["storage_path", "photo_sha256", "fid", "source_fid", "ogc_fid", "label_at", "on_farm", "linked",
                           "authorisations", "external_id", "layer_ref", "resolution", "resolution_reason", "by_kind",
                           "by_feature_id", "conflicts"]);
   const photoCache = new Map();
