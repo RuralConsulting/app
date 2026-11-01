@@ -1,12 +1,9 @@
 // Service worker: makes the app installable and quick to start. Caches only the app's own files (this site);
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
-// APP names this app's caches; the sandbox build (sandbox.cjs) changes it, so the app at / and the one at /sandbox/
-// (same site, so same cache storage) never read or delete each other's caches.
-const VERSION = "202610312348-aa7e852";
+// APP names this app's caches: only caches that start with it are cleared on activate.
+const VERSION = "202611010013-f57fc45";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
-// The sandbox app lives under this one's folder; its own service worker handles it, this one never does.
-const NESTED = new URL("sandbox/", self.registration.scope).pathname;
 const SHELL = ["./", "index.html", "css/tokens.css", "css/app.css", "manifest.webmanifest",
   "js/demo.js", "css/demo.css", "demo/demo-farm.json", "demo/source.html",
   "js/blocks/registry.js", "js/blocks/answer.js", "js/blocks/map-scene.js", "js/blocks/list.js", "js/blocks/timeline.js", "js/blocks/checklist.js", "js/blocks/gallery.js", "css/blocks.css", "css/gallery.css", "js/plans/render.js", "js/plans/demo.js", "css/plan-print.css", "css/plans-demo.css", "js/farm-model.js", "js/classify.js", "js/blocks/documents.js", "js/demo-documents.js", "js/ask.js", "js/farm-space.js", "css/farm-space.css",
@@ -24,7 +21,7 @@ self.addEventListener("activate", (e) => {
 });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== "GET" || url.origin !== location.origin || url.pathname.startsWith(NESTED)) return;
+  if (e.request.method !== "GET" || url.origin !== location.origin) return;
   // the page: network first, so a new version shows on the next open; cached copy if there's no coverage
   if (e.request.mode === "navigate") {
     e.respondWith(fetch(e.request).catch(() => caches.open(CACHE).then((c) => c.match("index.html"))));
