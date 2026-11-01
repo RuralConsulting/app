@@ -385,11 +385,12 @@
   // set it. Pure: view is the route ({ view, item }), focus { place, photo }, context the farm's documents.
   const QUIET = ["extent", "photos"];   // the boundary; photo pins curated by zoom (photo-model.js pinsShown)
   const FEP_LAYERS = ["extent", "land_units", "contaminant_sources", "plantings", "proposed_actions", "line_features"];
-  // The reference row that governs a place's theme: Rivers (Topo50) for waterways, bores for wells; wetlands has none yet.
-  const GOVERNS = { waterways: ["linz-topo50-river-centrelines"], wells: ["ecan-wells"] };
+  // The reference row that governs a place's theme: Rivers (the shared waterways layer, DM2) for waterways, bores for
+  // wells; wetlands has none yet.
+  const GOVERNS = { waterways: ["rivers"], wells: ["ecan-wells"] };
   // The layer sets an answer in Ask can bring up (the action list's map.layers): water is the rivers and bores.
   const ASK_SETS = { quiet: [], fep: FEP_LAYERS, photos: ["photos"], water: ["waterways", ...GOVERNS.waterways, ...GOVERNS.wells], consents: ["consents", "ecan-consents"] };
-  const mapKeys = (m) => ["extent", "titles", ...(m?.layers || []).map((l) => l.theme), ...(m?.reference || []).map((r, i) => r.key || "reference-" + i)];
+  const mapKeys = (m) => ["extent", "titles", ...(m?.layers || []).map((l) => l.theme), ...(m?.reference || []).map((r, i) => r.key || "reference-" + i), "rivers"];
   function sceneFor(view, focus, context) {
     const on = new Set(globalThis.FP_CONFIG?.farmView?.defaultOn || QUIET), f = focus || {}, v = view || {};
     if (v.view === "documents" && v.item) {

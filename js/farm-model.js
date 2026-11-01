@@ -452,8 +452,9 @@
   const THEME_NAMES = { land_units: "Land units", plantings: "Plantings", fences: "Fences", photos: "Photos", measurements: "Measured distances", contaminant_sources: "Contaminant sources",
     point_features: "Farm features", line_features: "Farm lines", proposed_actions: "Proposed fences", extent: "Farm boundary", titles: "Titles",
     wells: "Bores", consents: "Consents", wetlands: "Wetlands", soils: "Soils", luc: "Land use capability", parcels: "Titles", actions: "Actions" };
-  // Reference rows by their source: Rivers (LINZ Topo50) is the governing waterways layer; the two river networks start off.
-  const KEY_NAMES = { "ecan-wells": "Bores", "ecan-consents": "Consents", "linz-topo50-river-centrelines": "Rivers", "niwa-rec2-rivers": "River network (REC2)", "ecan-rivers": "River network (ECan)" };
+  // Reference rows by their source. "Rivers" is the shared waterways display layer (DM2, riverLayers below), not a row of
+  // farm_map; the source layers behind it (Topo50 lines and the two river networks) start off.
+  const KEY_NAMES = { "ecan-wells": "Bores", "ecan-consents": "Consents", "linz-topo50-river-centrelines": "River lines (Topo50)", "niwa-rec2-rivers": "River network (REC2)", "ecan-rivers": "River network (ECan)" };
   const NAME_RULES = [[/river centrelines?|\bwaterways?\b/i, "Rivers"], [/river environment classification|\bREC\d?\b/i, "River classes"], [/resource consents?/i, "Consents"],
     [/\b(?:wells?|bores?)\b/i, "Bores"], [/\bwetlands?\b/i, "Wetlands"], [/\bs-?map\b|^soils?\b/i, "Soils"], [/land use capability|\bLUC\b/i, "Land use capability"]];
   function layerName(layer) {
@@ -466,6 +467,62 @@
     let t = raw.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+v\d+(?:\.\d+)*\b/gi, "").replace(/\s+[-\u2013]\s+.*$/, "").replace(/\s+/g, " ").trim() || raw;
     if (t && t === t.toUpperCase() && /[A-Z]/.test(t)) t = t[0] + t.slice(1).toLowerCase();
     return t || "Layer";
+  }
+  // ---- Rivers (DM2): the shared waterways layer as the map draws it --------------------------------------------
+  // Rows of waterways_in_view: one per named run of connected reaches (merged by name, stream-order class and a 10 km
+  // cell), so each is labelled once, never once per segment; unnamed runs are drawn and never labelled. Which streams
+  // show follows the zoom: order 4 and up at farm scale, order 3 from z13, every stream from z15. Width by order class.
+  const RIVER_MIN_ZOOM = 10;   // below this no rivers are read or drawn (the region, not a farm)
+  const riverMinOrder = (zoom) => (zoom >= 15 ? 1 : zoom >= 13 ? 3 : 4);
+  const RIVER_ORDER = ["coalesce", ["get", "stream_order_max"], 0];
+  const RIVER_BANDS = [
+    { band: "large", filter: [">=", RIVER_ORDER, 4], minzoom: RIVER_MIN_ZOOM },
+    { band: "order3", filter: ["==", RIVER_ORDER, 3], minzoom: 13 },
+    { band: "small", filter: ["<", RIVER_ORDER, 3], minzoom: 15 },
+  ];
+  const byClass = (river, stream, minor) => ["match", ["get", "order_class"], "river", river, "stream", stream, minor];
+  const RIVER_WIDTH = ["interpolate", ["linear"], ["zoom"], 11, byClass(2.2, 1.4, 0.9), 16, byClass(5, 3, 1.8)];
+  const RIVER_CASING = ["interpolate", ["linear"], ["zoom"], 11, byClass(4.2, 3.4, 2.9), 16, byClass(7, 5, 3.8)];
+  // The map's layer specs for one source: per band a dark casing and the light blue line, then (where the map has
+  // glyphs) its labels: white italic text with a soft shadow and no box (RCL's map style), along the line, far apart,
+  // never over another label, and only for named runs.
+  function riverLayers(source, { labels = true } = {}) {
+    const round = { "line-cap": "round", "line-join": "round" };
+    const lines = RIVER_BANDS.flatMap(({ band, filter, minzoom }) => [
+      { id: "rivers-" + band + "-casing", type: "line", source, minzoom, filter, layout: round, paint: { "line-color": "#000000", "line-opacity": 0.45, "line-width": RIVER_CASING } },
+      { id: "rivers-" + band + "-line", type: "line", source, minzoom, filter, layout: round, paint: { "line-color": "#bfe8ff", "line-width": RIVER_WIDTH } },
+    ]);
+    if (!labels) return lines;
+    return [...lines, ...RIVER_BANDS.map(({ band, filter, minzoom }) => ({
+      id: "rivers-" + band + "-label", type: "symbol", source, minzoom, filter: ["all", filter, ["==", ["get", "named"], true]],
+      layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-font": ["Open Sans Italic"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 11, 11, 16, 14], "symbol-spacing": 1000, "text-max-angle": 30,
+        "text-allow-overlap": false, "text-ignore-placement": false, "text-keep-upright": true, "text-padding": 4 },
+      paint: { "text-color": "#ffffff", "text-halo-color": "rgba(0, 0, 0, 0.6)", "text-halo-width": 1.2, "text-halo-blur": 0.8 },
+    }))];
+  }
+  // waterways_in_view rows as a FeatureCollection for the source (properties: what the style and the popup read).
+  function riverFeatures(rows) {
+    return { type: "FeatureCollection", features: list(rows).filter((r) => r?.web_geom?.coordinates).map((r) => ({
+      type: "Feature", id: r.id, geometry: r.web_geom,
+      properties: { name: r.named ? r.name : null, named: !!r.named, order_class: r.order_class,
+        stream_order_min: r.stream_order_min ?? null, stream_order_max: r.stream_order_max ?? null } })) };
+  }
+  // The box to ask for: the map's bounds ([[w, s], [e, n]], lng/lat) widened by a quarter each way, so a short pan
+  // needs no new read; null below the zoom rivers are drawn at.
+  function riverBox(bounds, zoom) {
+    if (!(zoom >= RIVER_MIN_ZOOM) || !bounds) return null;
+    const [[w, s], [e, n]] = bounds, dx = (e - w) / 4, dy = (n - s) / 4;
+    return { bbox_xmin: w - dx, bbox_ymin: s - dy, bbox_xmax: e + dx, bbox_ymax: n + dy, min_order: riverMinOrder(zoom), max_rows: 5000, bbox_srid: 4326 };
+  }
+  // The map's bounds lie inside an earlier read's box, at the same stream-order cut: no new read is needed.
+  const riverBoxCovers = (had, bounds, zoom) => !!had && !!bounds && had.min_order === riverMinOrder(zoom) &&
+    had.bbox_xmin <= bounds[0][0] && had.bbox_ymin <= bounds[0][1] && had.bbox_xmax >= bounds[1][0] && had.bbox_ymax >= bounds[1][1];
+  function riverPopup(props) {
+    const p = props || {}, lo = p.stream_order_min, hi = p.stream_order_max;
+    const order = hi == null ? null : "Stream order " + (lo != null && lo !== hi ? lo + "–" + hi : hi);
+    return { title: p.named && p.name ? String(p.name) : "Unnamed stream", layerName: "Rivers", qualifier: order, props: {},
+      attribution: "River network: NIWA REC2. Names: LINZ Topo50 (CC BY 4.0) and Environment Canterbury." };
   }
   // ECan consent points (#243): current ones are drawn; a consent whose status says it has ended is past, shown only
   // when the person asks for past consents.
@@ -583,5 +640,5 @@
     return letters.toUpperCase();
   };
 
-  return { dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  return { riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });

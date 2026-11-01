@@ -60,6 +60,7 @@
   let drawn = null;                // the farm payload on the map now, for focus()
   let farmZoom = null;             // the zoom the farm's own frame settled at (photo pins show once zoomed in past it)
   const photoEntries = [];         // the Photos rows: their pins are drawn by curatePins, not by setVisible alone
+  let rivers = null;               // the Rivers row (DM2): its rows are read for the map in view while it is on
 
   const accent = () => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
 
@@ -102,6 +103,7 @@
     // the zoom the farm's own frame settled at, and the photo pins curated against it (FP.photoModel.pinsShown)
     map.on("moveend", () => { if (map && !touched && !photo && drawn?.extent && framed === drawn.extent && !map.isMoving()) farmZoom = map.getZoom(); curatePins(); });
     map.on("zoomend", curatePins);
+    map.on("moveend", readRivers);
     map.on("data", (e) => { if (e.sourceId && e.sourceId === map?.getTerrain?.()?.source) reground(); });
     map.on("mousemove", (e) => {
       const ids = [...interactive.keys()].filter((id) => map.getLayer(id));
@@ -125,7 +127,24 @@
     }
     added = [];
     interactive.clear();
-    drawn = null; farmZoom = null; photoEntries.length = 0;
+    drawn = null; farmZoom = null; photoEntries.length = 0; rivers = null;
+  }
+
+  // Rivers for the map in view (DM2): read once the map has come to rest, while the row is on, unless the last read's
+  // box already holds the view at the same stream-order cut. A read overtaken by a newer one is dropped.
+  async function readRivers() {
+    const r = rivers;
+    if (!map || !r?.on || !map.getSource("rivers")) return;
+    const b = map.getBounds(), bounds = [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]], zoom = map.getZoom();
+    const want = FP.farmModel.riverBox(bounds, zoom);
+    if (!want) { r.read = null; map.getSource("rivers").setData(NONE); return; }
+    if (FP.farmModel.riverBoxCovers(r.read, bounds, zoom)) return;
+    const mine = ++r.asked;
+    const { data, error } = await FP.sb.rpc("waterways_in_view", want);
+    if (mine !== r.asked || r !== rivers || !map?.getSource("rivers")) return;
+    if (error) { console.warn("Rivers could not be read:", error.message || error); return; }
+    r.read = want;
+    map.getSource("rivers").setData(FP.farmModel.riverFeatures(data));
   }
 
   function source(id, data) {
@@ -535,6 +554,9 @@
           (f) => ({ title: `${f.properties.code} ${f.properties.name || ""}`.trim(), qualifier: FP.farmModel.sourceLine(l),
                     props: { area_ha: f.properties.area_ha } })));
       }
+      // DM2: a farm's own waterways layer the shared network has set aside has nothing left to draw: not listed (it is
+      // kept, and named under the network's `replaces`); Rivers below is the waterways layer
+      if (l.theme === "waterways" && !count(l.features)) return;
       if (l.theme === "photos") { e.markers = photoPins(l, i); e.photoLayer = i; photoEntries.push(e); }
       if (l.theme === "actions") {
         e.markers = [];
@@ -582,6 +604,16 @@
       const past = consents ? [layer({ id: sid + "-past", type: "circle", source: sid, filter: ["all", POINT, ["==", ["get", "fp_past"], true]], paint: {
         "circle-color": "#78909c", "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } }, describe)] : null;
       entries.push({ key: r.key || "reference-" + i, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}) });
+    }
+
+    // Rivers (DM2): the shared waterways layer, merged by name and labelled once per run, read for the part of the map in
+    // view as the person pans (waterways_in_view), not clipped to the farm. Labels need the basemap's glyphs (none in the demo).
+    if (!FP.demo?.active) {
+      source("rivers", NONE);
+      const describe = (f) => FP.farmModel.riverPopup(f.properties);
+      const ids = FP.farmModel.riverLayers("rivers", { labels: !!map.getStyle()?.glyphs }).map((spec) => layer(spec, spec.type === "line" && /-line$/.test(spec.id) ? describe : null));
+      rivers = { key: "rivers", name: "Rivers", sub: null, section: "reference", ids, rivers: true, read: null, asked: 0 };
+      entries.push(rivers);
     }
 
     // What an answer is about, when one of its lines is chosen (focus, #224): the rest of the farm dims, and the chosen
@@ -653,6 +685,7 @@
     for (const id of entry.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
     for (const id of entry.past?.ids || []) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on && entry.past.on ? "visible" : "none");
     if (entry.photoLayer != null) { curatePins(); return; }
+    if (entry.rivers && on) readRivers();
     for (const m of entry.markers || []) m.getElement().style.display = on ? "" : "none";
     if (entry.markers?.length && declutter) declutter();
   }

@@ -35,6 +35,8 @@ FP.basemaps = (() => {
   function style(initial = "aerial") {
     const s = { version: 8, sources: {}, layers: [{ id: "bm-blank", type: "background", paint: { "background-color": getComputedStyle(document.documentElement).getPropertyValue("--map-background").trim() } }] };
     if (!key) return s;
+    // LINZ's own font glyphs, for map labels drawn by MapLibre (river names, DM2); the vector styles use the same server
+    s.glyphs = `${ROOT}/fonts/{fontstack}/{range}.pbf?${api}`;
     s.sources["bm-aerial"] = { type: "raster", tiles: tiles("aerial", "webp"), tileSize: 256, maxzoom: 22, attribution: ATTRIB };
     s.layers.push({ id: "bm-aerial", type: "raster", source: "bm-aerial", layout: { visibility: initial === "aerial" ? "visible" : "none" } });
     s.sources["bm-dem"] = { type: "raster-dem", tiles: tiles("elevation", "png", "&pipeline=terrain-rgb"), tileSize: 256, maxzoom: 18, encoding: "mapbox", attribution: ATTRIB };
