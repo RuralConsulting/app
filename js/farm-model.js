@@ -225,10 +225,12 @@
       const when = day(a.valid_to), code = a.consent_no || ruleRef(a);
       // A consent with none of its conditions recorded says so: on its expiry line, or on a line of its own.
       const bare = a.kind === "consent" && !obligations.some((o) => o.authorisation_id === a.id), unrecorded = "Its conditions aren't recorded yet.";
+      // A consent with none of its conditions recorded can fetch them from ECan (CC1): on its own line, or its expiry line.
+      const fetch = bare && /^CRC[0-9]{6}(\.[0-9]{1,2})?$/.test(String(a.consent_no || "").trim().toUpperCase()) ? { fetch_consent: String(a.consent_no).trim().toUpperCase() } : {};
       if (when) checklist.push({ id: "expiry-" + a.id, consent: code || null, text: name(a), reason: farmer && code ? "the expiry date of " + code : "the consent's expiry date", due: when, verb: "expires",
-        note: bare ? unrecorded : null, detail: (when < today ? "expired " : "expires ") + date(when) });
+        note: bare ? unrecorded : null, ...fetch, detail: (when < today ? "expired " : "expires ") + date(when) });
       else if (bare) checklist.push({ id: "conditions-" + a.id, text: "Conditions of " + (farmer ? lower(name(a)) : name(a)), reason: "the consent is recorded, its conditions aren't yet", state: "unknown",
-        needs: "the consent's conditions", detail: "conditions not recorded" });
+        needs: "the consent's conditions", ...fetch, detail: "conditions not recorded" });
     }
     const stateOf = (i) => (i.record || i.done_on ? "done" : i.state === "ongoing" ? "ongoing" : i.due ? (i.due < today ? "passed" : "due") : "unknown");
     const byDate = (a, b) => a.due.localeCompare(b.due) || a.id.localeCompare(b.id), byText = (a, b) => a.text.localeCompare(b.text) || a.id.localeCompare(b.id);
@@ -271,7 +273,8 @@
     // Who may mark a condition done (a check) and add its record (a document linked through an entry): the farm's
     // editors (a view-only member reads); adding a document also needs the database's tiers (B3).
     const editor = ["owner", "admin", "edit"].includes(context.role);
-    const record = { can_tick: editor, can_attach: editor && context.documentTiers === "chosen" };
+    // Fetch conditions from ECan (CC1): the farm's editors, on a consent with none recorded (the function checks the same).
+    const record = { can_tick: editor, can_attach: editor && context.documentTiers === "chosen", can_fetch: editor };
     const rows = checklist.map(({ detail, because, eligible, ...rest }) => rest), ofIds = (ids) => rows.filter((r) => ids.has(r.id));
     // The promoted lines and the folds are drawn by the Checklist block (one line each, the line opens its fold); the
     // body of All is the Checklist block too, with what is done or recorded shown. The map is handed the farm; a line

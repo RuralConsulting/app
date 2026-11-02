@@ -91,7 +91,7 @@
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
-    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null; pendingAsk = null;
+    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null; pendingAsk = null; proposals.clear();
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
   }
@@ -191,6 +191,11 @@
       if (e.target.closest("[data-doc-cancel]")) { const box = e.target.closest(".checklist-upload"); box.replaceChildren(); box.hidden = true; }
     });
     $("#overview-cards").addEventListener("change", (e) => { const input = e.target.closest?.("[data-check-file]"); if (input) chooseRecord(input); });
+    // Consent conditions from ECan (CC1): Fetch on a What's due line, then Accept or Discard (there and in Ask's answer).
+    for (const host of [$("#overview-cards"), $("#space-content")]) host.addEventListener("click", (e) => {
+      const fetch = e.target.closest("[data-fetch-conditions]"), yes = e.target.closest("[data-cc-accept]"), no = e.target.closest("[data-cc-discard]");
+      if (fetch) fetchConditions(fetch); else if (yes) acceptConditions(yes); else if (no) discardConditions(no);
+    });
     $("#overview-cards").addEventListener("submit", (e) => { if (e.target.matches(".checklist-upload .doc-confirm-form")) { e.preventDefault(); addRecord(e.target); } });
     $("#space-content").addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");
@@ -740,6 +745,8 @@
     // ends inside a word (#240)
     const due = standing.find((m) => m.key === "due");
     $("#overview-peek").textContent = M.peek(due?.answer?.text || $('#overview-cards [data-answer-key="due"] .answer-sentence')?.textContent || "");
+    // a proposal fetched from ECan stays shown under its line through a redraw (CC1)
+    for (const [no, p] of proposals) for (const b of $("#overview-cards").querySelectorAll('[data-fetch-conditions="' + CSS.escape(no) + '"]')) showProposal(b, p);
   }
   // A line just marked done or recorded is shown where it now sits, in Everything recorded.
   function redrawDue(id) {
@@ -749,6 +756,63 @@
     if (!line) return;
     all.open = true;
     line.scrollIntoView({ block: "nearest" }); line.focus({ preventScroll: true });
+  }
+  // ---- Consent conditions from ECan (CC1) -----------------------------------------------------------------
+  // "Fetch conditions from ECan" on a consent whose conditions aren't recorded (its What's due line, or its expiry line):
+  // the consent-conditions function reads them as the person may (an editor of the farm, the farm's own consent, none
+  // recorded) and returns a proposal, shown under the line with ECan's wording and the attribution. Accept, for an advisor
+  // of the farm, records them as that person (public.accept_consent_conditions: the obligations policies decide); the
+  // line then leaves What's due's "needs a record" and the conditions take its place. Discard puts the proposal away.
+  // Nothing is written by fetching. A proposal Ask fetched (consent.conditions) shows and is accepted the same way.
+  const OBLIGATION_COLUMNS = "id,authorisation_id,code,summary,full_text,kind,parameters,due_date,recurrence,source_document_id,source_page";
+  const proposals = new Map();   // consent number -> the proposal shown for it on this farm
+  const unrecorded = (no) => { const a = (context?.authorisations || []).find((x) => x.kind === "consent" && String(x.consent_no || "").trim().toUpperCase() === no);
+    return !!a && !(context.obligations || []).some((o) => o.authorisation_id === a.id); };
+  // The proposal under its Fetch button (which gives way to it).
+  function showProposal(button, p) {
+    const box = button.closest(".checklist-fetch")?.querySelector(".checklist-proposal");
+    if (!box) return;
+    box.innerHTML = FP.consentConditions.html(p, { canAccept: !!context?.advisor }); box.hidden = false; button.hidden = true;
+  }
+  async function fetchConditions(button) {
+    const no = button.dataset.fetchConditions, farm = context?.farm.id, msg = button.closest(".checklist-fetch")?.querySelector(".checklist-msg");
+    if (!farm || !unrecorded(no)) return;
+    button.disabled = true; if (msg) msg.textContent = "Asking ECan…";
+    const r = await FP.consentConditions.request(FP.sb, farm, no);
+    if (context?.farm.id !== farm) return;
+    button.disabled = false;
+    if (r.kind !== "proposal") { if (msg) msg.textContent = r.message; return; }
+    if (msg) msg.textContent = "";
+    proposals.set(no, r.proposal);
+    for (const b of $("#overview-cards").querySelectorAll('[data-fetch-conditions="' + CSS.escape(no) + '"]')) showProposal(b, r.proposal);
+  }
+  async function acceptConditions(button) {
+    const no = button.dataset.ccAccept, farm = context?.farm.id, msg = button.closest(".cc-proposal")?.querySelector(".cc-msg");
+    const p = proposals.get(no) || (lastAsk?.farm === farm ? (lastAsk.result.proposals || []).find((x) => x.consent_no === no) : null);
+    if (!p || !context?.advisor || !unrecorded(no)) return;
+    button.disabled = true; if (msg) msg.textContent = "Recording…";
+    try {
+      await FP.consentConditions.accept(FP.sb, p);
+      if (context?.farm.id !== farm) return;
+      context.obligations = await read(FP.sb.from("obligations").select(OBLIGATION_COLUMNS).eq("farm_id", farm));
+      proposals.delete(no);
+      for (const x of lastAsk?.result.proposals || []) if (x.consent_no === no) x.state = "done";
+      drawStanding();
+      if (button.closest("#ask-answer")) showAnswer(false);
+    } catch (err) {
+      if (context?.farm.id !== farm) return;
+      button.disabled = false; if (msg) msg.textContent = err?.message || String(err);
+    }
+  }
+  function discardConditions(button) {
+    const no = button.dataset.ccDiscard;
+    proposals.delete(no);
+    for (const x of lastAsk?.result.proposals || []) if (x.consent_no === no) x.state = "dismissed";
+    for (const b of $("#overview-cards").querySelectorAll('[data-fetch-conditions="' + CSS.escape(no) + '"]')) {
+      const box = b.closest(".checklist-fetch").querySelector(".checklist-proposal");
+      box.replaceChildren(); box.hidden = true; b.hidden = false;
+    }
+    if (button.closest("#ask-answer")) showAnswer(false); else $("#overview-cards").querySelector('[data-fetch-conditions="' + CSS.escape(no) + '"]')?.focus();
   }
   // ---- Documents (B3): the sentence, then the Documents block; editors add documents and move them between tiers --
   const editor = () => ["owner", "admin", "edit"].includes(context?.role) && context.documentTiers === "chosen";
@@ -828,6 +892,15 @@
         c.state === "done" ? el("span", { class: "ask-confirm-msg", role: "status" }, "Done.") :
           el("span", { class: "ask-confirm-actions" }, el("button", { type: "button", "data-ask-confirm": String(n) }, "Confirm"),
             el("button", { type: "button", class: "link", "data-ask-dismiss": String(n) }, "Not now"), el("span", { class: "ask-confirm-msg", role: "status" }))))));
+      // Conditions Ask fetched from ECan (CC1): the same proposal as What's due's, for a consent still without them.
+      for (const p of result.proposals || []) {
+        if (p.state === "dismissed") continue;
+        if (p.state === "done") { nodes.push(el("p", { class: "ask-note", role: "status" }, "Recorded the conditions of " + p.consent_no + ".")); continue; }
+        if (!unrecorded(p.consent_no)) continue;
+        const box = el("div", { class: "ask-proposal" });
+        box.innerHTML = FP.consentConditions.html(p, { canAccept: !!context?.advisor });
+        nodes.push(box);
+      }
       for (const note of result.notes) nodes.push(el("p", { class: "ask-note" }, note));
     }
     box.replaceChildren(...nodes);

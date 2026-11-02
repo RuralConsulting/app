@@ -1,11 +1,12 @@
 // Ask: a question to the farm's Ask function, and its answer as the farm space shows it. The function reads the farm
 // as the signed-in person and answers from what the database holds; nothing here calls a model or holds a key. What
 // comes back is kept to the shapes the app knows: text, sources (a document or a condition), the map verbs the farm
-// space runs after the answer is shown, and confirmations the person can make. Pure, apart from request().
+// space runs after the answer is shown, confirmations the person can make, and consent conditions fetched from ECan
+// for an advisor to accept (CC1, consent-conditions.js). Pure, apart from request().
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === "object" && module.exports ? require("./consent-conditions.js") : root.FP.consentConditions);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.ask = api;
-})(typeof window === "undefined" ? globalThis : window, function () {
+})(typeof window === "undefined" ? globalThis : window, function (CC) {
   const UNAVAILABLE = "Ask isn't available yet.";
   // An answer with no text (the model ran out of room, or said nothing) is one plain line, never a blank panel (#256).
   const NO_ANSWER = "Ask couldn't answer that.";
@@ -22,7 +23,8 @@
     if (data.refused) return { kind: "refused", message: str(data.message) ? data.message : "That can't be answered here." };
     const text = typeof data.answer_text === "string" ? data.answer_text.trim() : "";
     return { kind: "answer", text: text || NO_ANSWER, sources: list(data.sources).filter(sourceOk),
-      ui: list(data.ui_actions).filter(uiOk), confirmations: list(data.confirmations).filter(confirmOk), notes: list(data.notes).filter(str) };
+      ui: list(data.ui_actions).filter(uiOk), confirmations: list(data.confirmations).filter(confirmOk),
+      proposals: CC ? list(data.proposals).map(CC.proposal).filter(Boolean) : [], notes: list(data.notes).filter(str) };
   }
   // A function that isn't deployed (404), is down or can't be reached says one line; its own refusal of the request
   // (sign-in, a malformed question, the model not answering) says what it said.

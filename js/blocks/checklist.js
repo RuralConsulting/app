@@ -5,10 +5,12 @@
 // written and its source, and, when the host allows, Done and Add the record. Grouped "Needs a record", "Coming up",
 // "Ongoing practice" (and "Done" when shown), in that order: by consequence, what needs a record first, said plainly
 // (a missing record, never a verdict). Data: { title?, today, items: [{ id, text, reason, state?, due?, basis?, verb?,
-// repeats?, needs?, done_on?, record?: { title, href? }, obligation_id?, note?, wording?, source?, parts?, href? }] }
+// repeats?, needs?, done_on?, record?: { title, href? }, obligation_id?, note?, wording?, source?, parts?, href?, fetch_consent? }] }
 // with dates as YYYY-MM-DD. A state is never taken on trust for a date: due and passed are worked out from `due` and
 // `today`, so nothing reads as late that the dates don't say is. Done and Add the record are buttons the host wires
-// ([data-check-done], [data-check-file]; with inline_done the Done is on the line itself); the block only draws them. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
+// ([data-check-done], [data-check-file]; with inline_done the Done is on the line itself); the block only draws them. A consent
+// whose conditions aren't recorded (fetch_consent: its CRC number) offers "Fetch conditions from ECan" ([data-fetch-conditions],
+// CC1) when the host allows (can_fetch), with a place under it for the proposal the host shows. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -99,6 +101,10 @@
         (o.can_attach ? '<label class="checklist-attach"><input type="file" class="visually-hidden" data-check-file="' + id + '" aria-label="Add the record: ' + named(item) + '"><span>Add the record</span></label>' : "") +
         '</div><div class="checklist-upload" hidden></div><p class="checklist-msg" role="status" aria-live="polite"></p>';
     };
+    // Fetch conditions from ECan (CC1): on a consent with none recorded, for someone who may edit the farm.
+    const fetchControl = (item) => o.can_fetch && /^CRC[0-9]{6}/.test(String(item.fetch_consent || "")) ?
+      '<div class="checklist-fetch"><button type="button" data-fetch-conditions="' + esc(item.fetch_consent) + '" aria-label="Fetch conditions from ECan: ' + esc(item.fetch_consent) + '">Fetch conditions from ECan</button>' +
+      '<p class="checklist-msg" role="status" aria-live="polite"></p><div class="checklist-proposal" hidden></div></div>' : "";
     const li = ({ item, state: s }) => {
       const where = standing(item, s), parts = list(item.parts).filter(text);
       const fold = (text(item.reason) ? '<p class="checklist-reason">' + esc(item.reason) + "</p>" : "") +
@@ -106,7 +112,7 @@
         (text(item.note) ? '<p class="checklist-note">' + esc(item.note) + "</p>" : "") +
         (parts.length ? '<ul class="checklist-parts">' + parts.map((p) => "<li>" + esc(p) + "</li>").join("") + "</ul>" : "") +
         (text(item.wording) ? '<p class="checklist-sub">As written</p><blockquote class="checklist-wording">' + esc(item.wording) + "</blockquote>" : "") +
-        (text(item.source) ? '<p class="checklist-source">' + esc(item.source) + "</p>" : "") + acts(item, s);
+        (text(item.source) ? '<p class="checklist-source">' + esc(item.source) + "</p>" : "") + acts(item, s) + fetchControl(item);
       // the line is a real control (a summary: keyboard and touch) when there is anything behind it
       const control = fold ? '<details class="checklist-fold"><summary class="checklist-line">' + line(item, s) + '</summary><div class="checklist-body">' + fold + "</div></details>"
         : '<p class="checklist-line">' + line(item, s) + "</p>";
@@ -140,6 +146,7 @@
       can_attach: { type: "boolean", default: false },   // Add the record (an upload linked to the condition)
       inline_done: { type: "boolean", default: false },  // Done on the line itself, one tap, not inside its fold (What's due's lines)
       status_line: { type: "boolean", default: false },  // the title, then where it stands on a line of its own (beside the map, E4)
+      can_fetch: { type: "boolean", default: false },    // Fetch conditions from ECan, on a consent with none recorded (CC1)
     },
     state, render,
   });

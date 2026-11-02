@@ -191,6 +191,25 @@
     const hit = all.find((a) => (a.match || []).some((w) => q.includes(String(w).toLowerCase()))) || all.find((a) => !(a.match || []).length);
     return hit?.reply || { answer_text: "Nothing is recorded on this farm yet.", sources: [], ui_actions: [], confirmations: [], notes: [] };
   }
+  // "Fetch conditions from ECan" in the demo (CC1): invented conditions, shaped as the consent-conditions function replies,
+  // for a demo consent with none recorded; ECan is never asked. Accept adds them to the demo's obligations, in memory.
+  const DEMO_CONDITIONS = [
+    { code: "1", heading: "Limits", kind: "practice", text: "The use of land for farming shall only be within the area shown on the plan attached to this consent (synthetic).",
+      summary: "The use of land for farming shall only be within the area shown on the plan attached to this consent (synthetic).", limits: [], dates: [], timeframes: [] },
+    { code: "2", heading: "Limits", kind: "limit", text: "The area irrigated shall not exceed 40 hectares (synthetic).",
+      summary: "The area irrigated shall not exceed 40 hectares (synthetic).", limits: [{ value: 40, unit: "ha", text: "40 hectares" }], dates: [], timeframes: [] },
+    { code: "3", heading: "Monitoring", kind: "date", text: "The consent holder shall have the water meter verified within 12 months of the grant of this consent (synthetic).",
+      summary: "The consent holder shall have the water meter verified within 12 months of the grant of this consent (synthetic).", limits: [], dates: [], timeframes: ["within 12 months of the grant of this consent"] },
+  ];
+  function demoConditions(d, body) {
+    const no = String(body?.consent_no || "").trim().toUpperCase();
+    const a = d.tables.authorisations.find((x) => x.farm_id === body?.farm_id && x.kind === "consent" && x.consent_no === no);
+    if (!a || d.tables.obligations.some((o) => o.authorisation_id === a.id)) return null;
+    return { proposal: { verb: "consent.conditions", authorisation_id: a.id, consent_no: no, label: "Record 3 conditions of " + no + " from ECan",
+      source: { consent_no: no, url: "https://data.ecan.govt.nz/data/4/RMA%20Authorisations/Consent%20conditions/CSV?RecordNo=" + no + "&zip=0", retrieved_at: d.asAt + "T09:00:00+13:00",
+        publisher: "Environment Canterbury", licence: "CC BY 4.0", attribution: "Conditions from Environment Canterbury's Open Data Portal (data.ecan.govt.nz), licensed CC BY 4.0." },
+      conditions: copy(DEMO_CONDITIONS), skipped: [{ code: "0", heading: null, reason: "definitions, not a condition" }] } };
+  }
   // The block flow's calls in memory: the parcels in a box (each flagged held: on the farm or in its holding), their
   // union (FP.blockModel.dissolve, as st_union), and a block added (the parcels as references, a new farmed boundary
   // version, the map's extent grown). The demo's farm is the only one with parcels.
@@ -292,12 +311,25 @@
         if (name === "farm_people") return result(d.people[args.f] || []);
         // As public.layer_notes_for_farm: the global notes, the advisor's organisation's, and the farm's own.
         if (name === "layer_notes_for_farm") return result((d.tables.layer_notes || []).filter((n) => n.scope === "global" || (n.scope === "group" && n.org_id === ORG) || (n.scope === "farm" && n.farm_id === args.f)));
+        // As public.accept_consent_conditions (CC1): the proposal's conditions become the consent's, once.
+        if (name === "accept_consent_conditions") {
+          const a = d.tables.authorisations.find((x) => x.id === args.p_authorisation);
+          if (!a || d.tables.obligations.some((o) => o.authorisation_id === a.id)) return error("This consent already has conditions recorded");
+          for (const c of args.p_conditions) d.tables.obligations.push({ id: "demo-new-" + ++made, farm_id: a.farm_id, authorisation_id: a.id, code: c.code, summary: c.summary, full_text: c.text,
+            kind: c.kind, parameters: { heading: c.heading, source: { url: args.p_source.url, retrieved_at: args.p_source.retrieved_at, licence: "CC BY 4.0" } },
+            due_date: null, recurrence: null, source_document_id: null, source_page: null });
+          return result(args.p_conditions.length);
+        }
         // FB1, as the database's parcels_in_view, parcel_union, add_block and farm_holding, over the invented parcels.
         if (["parcels_in_view", "parcel_union", "add_block", "farm_holding"].includes(name)) return result(...holding(d, name, args || {}));
         return error("This operation is not available in the demo");
       },
       // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.
-      functions: { invoke: async (name, options) => name === "ask" ? result(askReply((await ready).ask, options?.body?.question)) : error("The demo does not save changes") },
+      functions: { invoke: async (name, options) => {
+        if (name === "ask") return result(askReply((await ready).ask, options?.body?.question));
+        if (name === "consent-conditions") { const r = demoConditions(await ready, options?.body); return r ? result(r) : error("You can fetch the conditions only of a consent on a farm you edit, whose conditions aren't recorded yet."); }
+        return error("The demo does not save changes");
+      } },
       // Every document opens the one stand-in page; the demo's photo points name the one stand-in picture.
       storage: { from: () => ({ createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
         upload: async (path) => result({ path }) }) },

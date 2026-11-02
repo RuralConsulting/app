@@ -233,3 +233,25 @@ summary.checklist-line::before { content: ""; position: absolute; left: 2px; top
 .answer-summary .answer-all[open] > summary::before { transform: rotate(90deg); transform-origin: 25% 50%; }
 .answer-summary .answer-all > :not(summary) { margin-top: 4px; }
 .answer-summary .answer-currency { margin-top: 6px; }
+/* Fetch conditions from ECan (CC1): the button in an unrecorded consent's fold, then the proposal in its place. */
+.checklist-fetch { margin-top: 10px; }
+.checklist-fetch > button, .cc-actions > button:not(.link) { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.checklist-fetch > button[hidden] { display: none; }
+.checklist-fetch > button[disabled], .cc-actions > button[disabled] { opacity: .6; cursor: progress; }
+.cc-proposal { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; }
+.cc-head { margin: 0; font-weight: 600; }
+.cc-list { margin: 8px 0 0; padding: 0 0 0 4px; list-style: none; }
+.cc-condition { padding: 8px 0; border-top: 1px solid var(--rule); }
+.cc-condition:first-child { border-top: 0; }
+.cc-line, .cc-summary, .cc-states { margin: 0; overflow-wrap: anywhere; }
+.cc-code { font-weight: 600; }
+.cc-heading, .cc-states, .cc-skipped, .cc-attr, .cc-who { font-size: var(--text-small); color: var(--ink-2); }
+.cc-wording > summary { margin-top: 4px; font-size: var(--text-small); color: var(--ink-2); cursor: pointer; }
+.cc-wording blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--rule); white-space: pre-line; font-size: var(--text-small); }
+.cc-skipped, .cc-attr { margin: 8px 0 0; }
+.cc-attr a { color: inherit; text-underline-offset: 2px; }
+.cc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+.cc-msg:empty { display: none; }
+.cc-msg { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); }
+.ask-proposal { margin-top: 12px; }
