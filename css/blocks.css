@@ -204,3 +204,32 @@ summary.checklist-line::before { content: ""; position: absolute; left: 2px; top
 .checklist-source { margin: 6px 0 0; color: var(--ink-2); }
 .checklist-more-count { margin: 12px 0 0; color: var(--ink-2); font-size: var(--text-small); }
 .answer-all .checklist-list { padding-left: 0; }.answer-all .checklist-item { padding: 10px 0; }.answer-all .checklist-parts li { padding: 2px 0; }
+
+/* E4 (Josh, 2 Nov 2026): the standing answers beside the map (the Answer block's summary option). The heading is a
+   quiet label, the sentence a short line with its count and the rest under it, small; every row is its title, where it
+   stands on a line of its own, and its action aligned at the right; the folds read as group headings with their counts. */
+.answer-summary { padding: 14px 16px; }
+.answer-summary > :is(h1, h2, h3, h4, h5) { margin: 0 0 4px; font: 600 var(--text-small)/1.3 var(--f-ui); letter-spacing: .02em; color: var(--ink-2); }
+.answer-summary .answer-sentence { margin: 0 0 10px; font: 400 var(--text-small)/1.4 var(--f-ui); color: var(--ink-2); }
+.answer-summary .answer-lead { display: block; font: 600 var(--text-body)/1.3 var(--f-ui); color: var(--ink); }
+.answer-summary .answer-sep, .answer-summary .checklist-sep { display: none; }
+.answer-summary .answer-because { display: block; margin-top: 2px; }
+.answer-summary .answer-highlights { margin: 6px 0; font-size: var(--text-body); }
+.answer-summary .answer-highlights li { padding: 8px 0; font-weight: 600; font-size: var(--text-small); }
+.answer-summary .answer-highlights .answer-reason { display: block; margin-top: 1px; font-weight: 400; }
+.answer-summary .answer-lines { margin: 6px 0 4px; }
+.answer-summary .checklist-item { padding: 8px 0; }
+.answer-summary .checklist-row { align-items: center; }
+.answer-summary .checklist-line { font: 600 var(--text-small)/1.35 var(--f-ui); }
+.answer-summary .checklist-title { display: block; color: var(--ink); }
+.answer-summary .checklist-status { display: block; margin-top: 1px; font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.answer-summary summary.checklist-line::before { top: .45em; }
+.answer-summary .checklist-done-inline, .answer-summary .checklist-undo button { min-width: 64px; min-height: 36px; }
+.answer-summary :is(.answer-fold, .answer-all) { border-top: 1px solid var(--rule); padding: 6px 0; margin: 0; }
+.answer-summary :is(.answer-fold, .answer-all) > summary { cursor: pointer; display: flex; align-items: center; min-height: 36px; list-style: none; position: relative; padding-left: 16px;
+  font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink); }
+.answer-summary .answer-all > summary::-webkit-details-marker { display: none; }
+.answer-summary .answer-all > summary::before { content: ""; position: absolute; left: 2px; top: calc(50% - 4px); border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.answer-summary .answer-all[open] > summary::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.answer-summary .answer-all > :not(summary) { margin-top: 4px; }
+.answer-summary .answer-currency { margin-top: 6px; }

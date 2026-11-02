@@ -85,7 +85,7 @@
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
-    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null;
+    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null; pendingAsk = null;
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
   }
@@ -448,11 +448,7 @@
   function renderLayers(entries) {
     layerEntries = entries;
     const row = (e) => {
-      e.input = el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => {
-        handSet.set(e.key, ev.target.checked);
-        for (const x of layerEntries.filter((x) => x.key === e.key)) { FP.farmMap.setVisible(x, ev.target.checked); if (x.input) x.input.checked = ev.target.checked; }
-        if (e.pastInput) e.pastInput.closest("label").hidden = !ev.target.checked;
-      } });
+      e.input = el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => setLayer(e.key, ev.target.checked) });
       e.pastInput = e.past ? el("input", { type: "checkbox", role: "switch", checked: e.past.on, onchange: (ev) => FP.farmMap.setPast(e, ev.target.checked) }) : null;
       const past = e.past ? el("label", { class: "layer-past", ...(e.on ? {} : { hidden: true }) }, e.pastInput, el("span", {}, "Past consents")) : null;
       return el("li", {}, el("label", {}, e.input, el("span", {}, el("b", {}, e.name), e.sub ? el("small", {}, e.sub) : null)), past);
@@ -468,6 +464,86 @@
     }
     $("#layer-list").replaceChildren(...children);
   }
+  // A layer set by hand (its switch in the drawer, or "Show <layer>" from the command bar): it stays as set (E5).
+  function setLayer(key, on) {
+    handSet.set(key, on);
+    for (const x of layerEntries.filter((x) => x.key === key)) {
+      FP.farmMap.setVisible(x, on);
+      if (x.input) x.input.checked = on;
+      if (x.pastInput) x.pastInput.closest("label").hidden = !on;
+    }
+  }
+  // ---- The command bar (E4): one line for what the person wants. A phrase that names layers (the Layers drawer's own
+  // rows) offers "Show <layer>" as they type; anything else goes to Ask on Enter (the Ask view, filled in and asked).
+  // No new calls: it is the drawer's switch and Ask's own form. "/" focuses it; Escape clears it. ----------------------
+  let pendingAsk = null, commandPick = -1, commandOptions = [];
+  function commandBar() {
+    if ($("#command-bar")) return;
+    const input = el("input", { id: "command-input", type: "search", autocomplete: "off", spellcheck: "false", enterkeyhint: "go", role: "combobox",
+      "aria-autocomplete": "list", "aria-expanded": "false", "aria-controls": "command-list", placeholder: "Ask, or show a layer" });
+    const form = el("form", { id: "command-bar", class: "command-bar", role: "search" },
+      el("label", { for: "command-input", class: "visually-hidden" }, "Ask a question or show a layer"), input,
+      el("kbd", { class: "command-key", "aria-hidden": "true" }, "/"),
+      el("ul", { id: "command-list", class: "command-list", role: "listbox", "aria-label": "Suggestions", hidden: true }));
+    // Phone: across the top of the map. Wide: in the header row, between the farm's name and its links, so it covers
+    // none of the map (the farm keeps its frame).
+    const wideQ = window.matchMedia("(min-width: 801px)");
+    const place = () => { if (wideQ.matches) $("#farm-space-header h1").after(form); else $("#screen-map").append(form); };
+    place(); wideQ.addEventListener("change", place);
+    input.addEventListener("input", () => { commandPick = -1; suggest(); });
+    input.addEventListener("focus", suggest);
+    input.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== input) closeSuggestions(); }, 150));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (input.value) { input.value = ""; closeSuggestions(); } else input.blur(); return; }
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && commandOptions.length) {
+        e.preventDefault();
+        const n = commandOptions.length, down = e.key === "ArrowDown";
+        commandPick = commandPick < 0 ? (down ? 0 : n - 1) : (commandPick + (down ? 1 : n - 1)) % n;
+        drawSuggestions();
+      }
+    });
+    form.addEventListener("submit", (e) => { e.preventDefault(); const intent = M.commandIntent(input.value, layerEntries); run((commandOptions[commandPick] || defaultOption(intent))); });
+    $("#command-list").addEventListener("mousedown", (e) => e.preventDefault());   // a tap on a suggestion keeps the input's focus
+    $("#command-list").addEventListener("click", (e) => { const li = e.target.closest("[data-option]"); if (li) run(commandOptions[Number(li.dataset.option)]); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "/" || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || !document.body.classList.contains("farm-space-active")) return;
+      if (e.target?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])")) return;
+      e.preventDefault(); input.focus();
+    });
+  }
+  const optionsFor = (intent) => intent.kind === "none" ? [] :
+    [...intent.layers.map((l) => ({ kind: "layer", key: l.key, label: (l.on ? "Showing " : "Show ") + l.name })), { kind: "ask", text: intent.text, label: "Ask: " + intent.text }];
+  // Enter with nothing picked: the first layer when the phrase names layers, otherwise Ask.
+  const defaultIndex = (intent, all) => (intent.kind === "layer" ? 0 : all.findIndex((o) => o.kind === "ask"));
+  const defaultOption = (intent) => { const all = optionsFor(intent); return all[defaultIndex(intent, all)] || null; };
+  function suggest() {
+    const intent = M.commandIntent($("#command-input").value, layerEntries);
+    commandOptions = optionsFor(intent);
+    if (commandPick < 0 && intent.kind !== "none") commandPick = defaultIndex(intent, commandOptions);
+    drawSuggestions();
+  }
+  function drawSuggestions() {
+    const list = $("#command-list"), input = $("#command-input");
+    list.replaceChildren(...commandOptions.map((o, n) => el("li", { id: "command-option-" + n, role: "option", "data-option": String(n), "data-kind": o.kind,
+      "aria-selected": String(n === commandPick) }, o.label)));
+    list.hidden = !commandOptions.length || document.activeElement !== input;
+    input.setAttribute("aria-expanded", String(!list.hidden));
+    if (commandPick >= 0 && !list.hidden) input.setAttribute("aria-activedescendant", "command-option-" + commandPick); else input.removeAttribute("aria-activedescendant");
+  }
+  function closeSuggestions() { commandOptions = []; commandPick = -1; drawSuggestions(); }
+  function run(option) {
+    const input = $("#command-input");
+    if (!option || !context) return;
+    if (option.kind === "layer") { setLayer(option.key, true); input.value = ""; closeSuggestions(); return; }
+    const question = option.text.trim();
+    if (!question) return;
+    input.value = ""; closeSuggestions(); input.blur();
+    if (shownRoute?.view === "ask" && $("#ask-form")) { askFrom(question); return; }
+    pendingAsk = question;
+    location.hash = FP.href(M.href(context.farm.id, "ask"));
+  }
+  // Ask's own form, filled in and asked: the question shows as if typed there.
+  function askFrom(question) { $("#ask-input").value = question; $("#ask-form").requestSubmit(); }
   // ---- What's due: Done and Add the record (E5, #245) ---------------------------------------------------
   // Done writes a check (met, by the person, as farmer or advisor); Add the record uploads a document (B3's upload,
   // as supporting), writes a note entry saying what it records and links the entry to the condition and the document.
@@ -604,7 +680,7 @@
   function drawStanding() {
     unmount(answers); answers = []; $("#overview-cards").replaceChildren();
     standing = M.standingAnswers(context);
-    answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true }));
+    answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true, summary: true }));
     markFocused();
     for (const id of undoable.waiting()) showDone(id, false);   // a Done still inside its Undo window keeps its Undo through a redraw
     // Phone: the closed sheet shows What's due's first clause over the handle ("3 things need a record"), whole, and never
@@ -811,7 +887,7 @@
         if (current !== token) return;
         if (!drawn) throw Error("Map unavailable for this farm.");
         renderLayers(drawn.entries); openedMap = farm.id;
-        addLayersControl();
+        addLayersControl(); commandBar();
       }
       FP.farmMap.resize(); settleFrame();
       unmount(view); view = null;
@@ -828,7 +904,10 @@
         view = documentsView($("#space-body"), route.item);
         const selected = $("#space-body").querySelector('[data-item-id="' + CSS.escape(route.item || "") + '"]');
         if (selected) { selected.scrollIntoView({ block: "nearest" }); selected.focus({ preventScroll: true }); }
-      } else if (route.view === "ask") { $("#space-body").replaceChildren(askView()); showAnswer(false); }
+      } else if (route.view === "ask") {
+        $("#space-body").replaceChildren(askView()); showAnswer(false);
+        if (pendingAsk) { const q = pendingAsk; pendingAsk = null; askFrom(q); }
+      }
       else if (route.view === "map" && route.item) revealLine(route.item);
       else if (route.view === "create") { $("#space-body").replaceChildren(createView()); }
       else if (route.view === "people") { $("#space-body").replaceChildren(peopleView()); if (M.canManage(context.role)) await loadPeople(); }

@@ -137,7 +137,7 @@
     }
     added = [];
     interactive.clear();
-    drawn = null; farmZoom = null; photoEntries.length = 0; rivers = null;
+    drawn = null; farmZoom = null; masked = false; photoEntries.length = 0; rivers = null;
   }
 
   // Rivers for the map in view (DM2): read once the map has come to rest, while the row is on, unless the last read's
@@ -338,14 +338,15 @@
   function holdTerrain() { if (!map?.getTerrain?.()) return; FP.basemaps.setTerrain(map, false); heldTerrain = !map.getTerrain(); }
   function releaseTerrain() { if (!heldTerrain) return; heldTerrain = false; if (map) FP.basemaps.setTerrain(map, true); }
 
-  // The NZ -> farm zoom: a smooth fly, or a jump when the person asks their device for reduced motion.
+  // The NZ -> farm zoom: a gentle eased flight a person can follow (farmModel.flight, about 3.6 s), or a jump when the
+  // person asks their device for reduced motion. Shorter moves (a reframe, a chosen line) pass their own duration.
   let flightKey = null, settling = 0, framed = null, touched = false, resizing = 0, framedWidth = 0;   // framed: the extent last fitted; touched: the person has moved the map since
   const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const wide = () => window.innerWidth > 800;
-  function fit(bounds, padding, geom, duration = reduced() ? 0 : 2600) {
+  function fit(bounds, padding, geom, motion = FP.farmModel.flight(reduced())) {
     const mid = [(bounds[0][0] + bounds[1][0]) / 2, (bounds[0][1] + bounds[1][1]) / 2];
     stand(mid);   // measured from the ground there (#229)
-    map.fitBounds(bounds, { padding, duration, maxZoom: 17, pitch: 0 });   // flat: a photo's tilt never carries into a frame
+    map.fitBounds(bounds, { padding, ...(typeof motion === "number" ? { duration: motion } : motion), maxZoom: 17, pitch: 0 });   // flat: a photo's tilt never carries into a frame
     if (!map.isMoving()) stand(mid);   // a jump (reduced motion) measures the height itself, from tiles it may not have
     if (geom) { framed = geom; touched = false; framedWidth = window.innerWidth; settle(geom); }
     // a jump (reduced motion) has already ended its move: the farm frame's zoom is known now
@@ -538,6 +539,16 @@
 
     if (data.extent) {
       source("extent", { type: "Feature", geometry: data.extent, properties: {} });
+      // E4: the farm mask (farmModel.farmMask): the world outside the boundary, dimmed once the flight lands (revealMask).
+      // Under every layer this farm draws, so the boundary, the farm's layers and the reference layers around it (DM1: the
+      // farm is a lens, never a clip) stay bright and clickable over the dimmed aerial; it is never a click target itself.
+      const mask = FP.farmModel.farmMask(data.extent);
+      if (mask) {
+        source("farm-mask", { type: "Feature", geometry: mask, properties: {} });
+        layer({ id: "farm-mask", type: "fill", source: "farm-mask", paint: { "fill-color": "#000000", "fill-opacity": 0,
+          "fill-opacity-transition": { duration: FP.farmModel.maskFade(reduced()), delay: 0 } } });
+      }
+      masked = false;
       entries.push({ key: "extent", name: "Farm boundary", sub: FP.ha(data.extent_ha), section: "farm", on: true,
         ids: [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": accent(), "line-width": 3 } })] });
     }
@@ -657,8 +668,19 @@
       if (flightKey === JSON.stringify(b) && !sheet) { flightKey = null; framed = data.extent; touched = false; framedWidth = window.innerWidth; settle(data.extent); }
       else { flightKey = null; fit(b, FP.farmModel.framePadding(sheet, wide()), data.extent); }
     }
+    if (data.extent) revealMask(request);
     if (asked) showPhoto(...asked);
     return { farm: data.farm, extentHa: data.extent_ha, entries };
+  }
+
+  // Once the fly-in has landed (or at once, after a jump), the mask fades in: 0 -> 0.3 over farmModel.maskFade.
+  let masked = false;
+  function revealMask(request) {
+    const show = () => {
+      if (request !== opening || !map?.getLayer("farm-mask")) return;
+      map.setPaintProperty("farm-mask", "fill-opacity", FP.farmModel.MASK_OPACITY); masked = true;
+    };
+    if (map.isMoving()) map.once("moveend", show); else show();
   }
 
   function addActions(actions, units = []) {
@@ -765,7 +787,7 @@
     for (const m of markers) m.remove();
     markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
   }
-  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving(), terrain: !!map.getTerrain?.(), elevation: map.getCameraTargetElevation?.() ?? 0, dimmed, labelsOff: map.getContainer().querySelectorAll(".lu-label.on-line").length }, setVisible, setPast, addControl: (control, position) => init().addControl(control, position), whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => { heldTerrain = false; return FP.basemaps.setTerrain(init(), on); }, frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+  return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving(), terrain: !!map.getTerrain?.(), elevation: map.getCameraTargetElevation?.() ?? 0, dimmed, labelsOff: map.getContainer().querySelectorAll(".lu-label.on-line").length, masked, mask: map.getLayer("farm-mask") ? map.getPaintProperty("farm-mask", "fill-opacity") : null }, setVisible, setPast, addControl: (control, position) => init().addControl(control, position), whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => { heldTerrain = false; return FP.basemaps.setTerrain(init(), on); }, frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
     resize: () => map && map.resize(), closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
   }
 

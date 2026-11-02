@@ -75,12 +75,15 @@
     // The one line: the item's words, then where it stands in a few (the date, done, the record, or no record yet).
     const line = (item, s) => {
       const verb = VERBS[item.verb] || VERBS.due, rec = item.record && text(item.record.title) ? item.record : null;
-      const tail = rec ? " · record: " + link(rec, rec.title) :
-        s === "done" ? esc(isDate(item.done_on) ? " · done " + fmt(item.done_on) : " · done") :
-        s === "due" ? esc(" · " + verb[0].toLowerCase() + " " + fmt(item.due)) :
-        s === "overdue" ? esc(item.verb && item.verb !== "due" ? " · " + verb[1].toLowerCase() + " " + fmt(item.due) : " · due " + fmt(item.due) + " · no record") :
-        s === "unknown" ? esc(" · no record") : "";
-      return link(item, text(item.text) || "A recorded condition") + tail;
+      const tail = rec ? "record: " + link(rec, rec.title) :
+        s === "done" ? esc(isDate(item.done_on) ? "done " + fmt(item.done_on) : "done") :
+        s === "due" ? esc(verb[0].toLowerCase() + " " + fmt(item.due)) :
+        s === "overdue" ? esc(item.verb && item.verb !== "due" ? verb[1].toLowerCase() + " " + fmt(item.due) : "due " + fmt(item.due) + " · no record") :
+        s === "unknown" ? esc("no record") : "";
+      const title = link(item, text(item.text) || "A recorded condition");
+      // status_line: the title, then where it stands on a line of its own (the words are the same: "title · status")
+      if (o.status_line) return '<span class="checklist-title">' + title + "</span>" + (tail ? '<span class="checklist-status"><span class="checklist-sep"> · </span>' + tail + "</span>" : "");
+      return title + (tail ? " · " + tail : "");
     };
     // Done and Add the record: on a condition that is dated or needs a record and has neither yet, when the host says
     // the reader may record (a view-only member never sees them). Each control is named for its line ("Done: Have the plan
@@ -136,6 +139,7 @@
       can_tick: { type: "boolean", default: false },     // Done on a condition that is dated or needs a record
       can_attach: { type: "boolean", default: false },   // Add the record (an upload linked to the condition)
       inline_done: { type: "boolean", default: false },  // Done on the line itself, one tap, not inside its fold (What's due's lines)
+      status_line: { type: "boolean", default: false },  // the title, then where it stands on a line of its own (beside the map, E4)
     },
     state, render,
   });

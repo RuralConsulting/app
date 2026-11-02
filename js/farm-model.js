@@ -368,6 +368,52 @@
       ...list(s.reference).filter((r) => themes.has(r.theme) || keys.has(r.key)).flatMap((r) => drawn(r.features))];
   }
 
+  // E4 farm display (Josh, 2 Nov 2026). The fly-in to a farm is a gentle eased flight a person can follow (about 3.6 s);
+  // a device that asks for reduced motion jumps instead. `essential: false` lets MapLibre's own reduced-motion check
+  // agree with ours. The same easing as every other move (APP-STRUCTURE §3.7): ease in and out.
+  const FLY_MS = 3600, MASK_OPACITY = 0.3, MASK_FADE_MS = 600;
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const flight = (reduced) => (reduced ? { duration: 0, essential: false } : { duration: FLY_MS, easing: easeInOut, curve: 1.42, essential: false });
+  // Once the flight has landed, everything outside the farm fades to a 30% dim over ~600 ms (none with reduced motion).
+  const maskFade = (reduced) => (reduced ? 0 : MASK_FADE_MS);
+  // The farm mask: the world with the farm's boundary cut out (DM1: the map outside is dimmed, never removed). Each part
+  // of a multipart farm is its own hole; a hole in the farm itself (land inside the boundary that isn't the farm) is
+  // dimmed too, as an island of its own. null when there is no boundary to cut. GeoJSON geometry, lng/lat.
+  const WORLD = [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]];
+  function farmMask(extent) {
+    const g = extent?.type === "Feature" ? extent.geometry : extent;
+    const polygons = g?.type === "Polygon" ? [g.coordinates] : g?.type === "MultiPolygon" ? list(g.coordinates) : [];
+    const ring = (r) => Array.isArray(r) && r.length >= 4 && r.every((c) => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]));
+    const outers = polygons.map((p) => list(p)[0]).filter(ring);
+    if (!outers.length) return null;
+    const islands = polygons.flatMap((p) => list(p).slice(1).filter(ring).map((r) => [r]));
+    return islands.length ? { type: "MultiPolygon", coordinates: [[WORLD, ...outers], ...islands] } : { type: "Polygon", coordinates: [WORLD, ...outers] };
+  }
+  // The command bar: what someone types is a layer to show or a question to Ask. Layers come from the same rows the
+  // Layers drawer lists ({ key, name, sub?, section, job? }); a word of the text that starts a word of a layer's name,
+  // key or source matches it. A question (a "?", or a question word first) or a long sentence goes to Ask on Enter,
+  // with any layers it names still offered; a short phrase that names layers ("creek", "show bores") shows the first.
+  const ASKING = /^(who|what|whats|what's|when|where|why|which|how|is|are|was|were|do|does|did|can|could|should|will|would|has|have|tell|list|explain|summari[sz]e|mark)\b/i;
+  const SHOWING = /^(show|load|add|display|turn on|open|see|view)\s+(the\s+)?/i;
+  const FILLER = new Set(["the", "a", "an", "layer", "layers", "of", "on", "map", "me", "and", "to", "in", "farm", "farm's", "this"]);
+  const wordsOf = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}' ]+/gu, " ").split(/\s+/).filter(Boolean);
+  function commandIntent(input, entries) {
+    const raw = String(input || "").trim();
+    if (!raw) return { kind: "none", text: "", layers: [] };
+    const showing = SHOWING.test(raw), rest = raw.replace(SHOWING, "");
+    const query = wordsOf(rest).filter((w) => !FILLER.has(w) && w.length >= 2);
+    const asking = !showing && (/\?\s*$/.test(raw) || ASKING.test(raw) || wordsOf(raw).length > 4);
+    // a phrase: every word names the layer; a question: any word of it that names a layer (three letters or more)
+    const loose = query.filter((w) => w.length >= 3 && !ASKING.test(w));
+    const named = (hay) => (asking ? loose.length && loose.some((q) => hay.some((h) => h.startsWith(q))) : query.every((q) => hay.some((h) => h.startsWith(q))));
+    const seen = new Set(), layers = [];
+    if (query.length) for (const e of list(entries)) {
+      if (!e?.key || seen.has(e.key) || !String(e.name || "").trim()) continue;
+      const hay = wordsOf([e.name, e.key.replace(/[-_]/g, " "), e.sub, e.source, e.job?.title, e.job?.name].filter(Boolean).join(" "));
+      if (named(hay)) { seen.add(e.key); layers.push({ key: e.key, name: e.name, on: !!e.on }); }
+    }
+    return { kind: layers.length && !asking ? "layer" : "ask", text: raw, layers: layers.slice(0, 5) };
+  }
   // #224 What dims when a line's place is chosen: everything on the map around the farm but the chosen areas, as one
   // polygon (a wide box about the farm with each chosen area's outline as a hole). A chosen line or point dims all
   // around it and is drawn over the dim. GeoJSON geometry, lng/lat.
@@ -708,5 +754,5 @@
     };
   }
 
-  return { peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  return { flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });

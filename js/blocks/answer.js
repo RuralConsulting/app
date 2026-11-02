@@ -47,20 +47,23 @@
     };
     const selected = (item) => o.selected != null && o.selected === item.id;
     const row = (item, lead) => {
-      const said = link(item.href, item.text) + (lead ? '<span class="answer-reason"> — ' + esc(item.because) + "</span>" : item.detail ? '<p class="record-detail">' + esc(item.detail) + "</p>" : "");
+      const said = link(item.href, item.text) + (lead ? (o.summary ? '<span class="answer-sep"> — </span><span class="answer-reason">' : '<span class="answer-reason"> — ') + esc(item.because) + "</span>" : item.detail ? '<p class="record-detail">' + esc(item.detail) + "</p>" : "");
       return '<li tabindex="-1" data-item-id="' + esc(item.id) + '"' + (selected(item) ? ' class="selected-record"' : "") + ">" + said + "</li>";
     };
     // A model may hand its All to another block (the List for Documents, the Timeline for What's changed), and its
     // promoted lines and folds too (What's due: the Checklist). Each is drawn without a title of its own, one heading
     // level down; without that block loaded, All is the plain list and the lines are the plain lines.
+    // summary (the standing answers beside the map, E4): a nested block that can put each row's status on a line of its
+    // own (the Checklist's status_line) does, so every row reads title, status, action.
+    const tidy = (b) => (o.summary && "status_line" in blocks.get(b.block).options ? { status_line: true } : {});
     const nested = (b) => {
       if (!b || !blocks.list().includes(b.block)) return null;
-      return blocks.html(b.block, b.data, b.options || {}, { level: sub, nested: true, href: ctx.href }).html;
+      return blocks.html(b.block, b.data, { ...(b.options || {}), ...tidy(b) }, { level: sub, nested: true, href: ctx.href }).html;
     };
     const body = () => {
       const b = model.body;
       if (!b || !blocks.list().includes(b.block)) return null;
-      const opts = { ...(b.options || {}), ...(o.selected != null && "selected" in blocks.get(b.block).options ? { selected: o.selected } : {}) };
+      const opts = { ...(b.options || {}), ...tidy(b), ...(o.selected != null && "selected" in blocks.get(b.block).options ? { selected: o.selected } : {}) };
       return blocks.html(b.block, b.data, opts, { level: sub, nested: true, href: ctx.href }).html;
     };
     // A model whose promoted lines include a summary (What's due's practice line) gives its own count of records.
@@ -68,9 +71,14 @@
     const all = o.compact && text(model.href) ? link(model.href, allLabel, 'class="answer-all-link"') :
       '<details class="answer-all"' + (o.selected != null || o.open ? " open" : "") + "><summary>" + esc(allLabel) +
       "</summary>" + (items.length ? (body() || "<ul>" + items.map((i) => row(i, false)).join("") + "</ul>") : "<p>Nothing else recorded.</p>") + "</details>";
-    return '<section class="answer-panel' + (o.compact ? " answer-compact" : "") + '" data-answer-key="' + esc(model.key) +
+    // summary: the sentence as a short line (its count) with the rest under it in a smaller line; the same words.
+    const split = o.summary && hasAnswer;
+    const words = said.carried ? (split ? '<span class="answer-lead">' + esc(model.answer.text) + '</span><span class="answer-sep"> — </span><span class="answer-because">' : esc(model.answer.text) + " — ") +
+      link(said.carried.href, said.carried.text) + esc(", " + said.carried.because) + (split ? "</span>" : "") :
+      split ? '<span class="answer-lead">' + esc(model.answer.text) + '</span><span class="answer-sep"> — </span><span class="answer-because">' + esc(model.answer.because) + "</span>" : emptyLinked(said.text);
+    return '<section class="answer-panel' + (o.compact ? " answer-compact" : "") + (o.summary ? " answer-summary" : "") + '" data-answer-key="' + esc(model.key) +
       '" data-answer-state="' + (!hasAnswer && !highlights.length ? "empty" : "recorded") + '">' +
-      "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + (said.carried ? esc(model.answer.text) + " — " + link(said.carried.href, said.carried.text) + esc(", " + said.carried.because) : emptyLinked(said.text)) + "</p>" +
+      "<h" + h + ">" + link(o.compact ? model.href : null, model.title || "Records") + "</h" + h + '><p class="answer-sentence">' + words + "</p>" +
       (lines.length ? (model.lines && nested(model.lines) ? '<div class="answer-highlights answer-lines">' + nested(model.lines) + "</div>" :
         '<ul class="answer-highlights">' + lines.map((i) => row(i, true)).join("") + "</ul>") : "") +
       list(model.folds).map((f) => { const inner = nested(f.body); return inner && text(f.label) ? '<details class="answer-fold" data-fold="' + esc(f.key) + '"><summary>' + esc(f.label) + "</summary>" + inner + "</details>" : ""; }).join("") +
@@ -84,6 +92,7 @@
       compact: { type: "boolean", default: false },   // the standing answers beside the map: All becomes a link when there is somewhere to go
       open: { type: "boolean", default: false },      // All starts open
       selected: { type: "string", default: null },    // the record to open and mark (a route's ?item=)
+      summary: { type: "boolean", default: false },   // beside the map (E4): the sentence as a short line and a smaller one; rows with their status under the title
     },
     state, render,
   });

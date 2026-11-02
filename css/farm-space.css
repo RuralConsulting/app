@@ -38,7 +38,7 @@ body.farm-space-active:not(.farm-detail) { --peek-height: 82px; }
 #overview-toggle { padding: 0 16px; }
 /* #240: the peek is What's due's first clause ("3 things need a record"), whole: it wraps (two lines at most) rather than
    ending inside a word. */
-.overview-peek { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: normal; text-align: left; font: 400 var(--text-body)/1.3 var(--f-display); color: var(--ink); }
+.overview-peek { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: normal; text-align: left; font: 600 var(--text-body)/1.3 var(--f-ui); color: var(--ink); }
 .overview-peek:empty { display: none; }
 .overview-label { display: block; margin-top: 3px; font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink-2); }
 .overview-peek:empty + .overview-label { font: 600 var(--text-body) var(--f-ui); color: var(--ink); }
@@ -190,3 +190,31 @@ body.portfolio-active #screen-map #map { right: 0; bottom: 0; }
 #farm-scene[data-block-state="error"] { display: none; }
 body.portfolio-active #farm-scene { display: none; }
 @media (min-width: 801px) { #farm-scene { right: var(--rail-width); bottom: 0; } }
+
+/* E4: the command bar: ask a question or show a layer. Phone: over the top of the map, with the Layers drawer and an
+   open photo's card under it. Wide: in the header row (farm-space.js moves it there), so it covers none of the map. */
+.command-bar { position: absolute; z-index: 5; top: 8px; left: 8px; right: 52px; margin: 0; }
+#farm-space-header .command-bar { position: relative; z-index: 7; top: auto; left: auto; right: auto; flex: 0 1 400px; min-width: 200px; }
+body:not(.farm-space-active) .command-bar { display: none; }
+#command-input { box-sizing: border-box; width: 100%; height: 40px; padding: 0 36px 0 14px; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); color: var(--ink);
+  font: 400 var(--text-body) var(--f-ui); box-shadow: var(--shadow); -webkit-appearance: none; appearance: none; }
+#farm-space-header #command-input { height: 36px; box-shadow: none; background: var(--wash); }
+#command-input::placeholder { color: var(--ink-3); }
+#command-input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+#command-input::-webkit-search-cancel-button { display: none; }
+.command-key { position: absolute; right: 12px; top: calc(50% - 10px); min-width: 18px; height: 20px; box-sizing: border-box; padding: 0 5px; border: 1px solid var(--rule); border-radius: 4px;
+  font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink-3); text-align: center; pointer-events: none; }
+.command-bar:focus-within .command-key { display: none; }
+.command-list { position: absolute; left: 0; right: 0; top: calc(100% + 6px); list-style: none; margin: 0; padding: 4px; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow); }
+.command-list[hidden] { display: none; }
+.command-list li { padding: 9px 10px; border-radius: 6px; cursor: pointer; font-size: var(--text-small); overflow-wrap: anywhere; }
+.command-list li[data-kind="layer"] { font-weight: 600; }
+.command-list li[aria-selected="true"], .command-list li:hover { background: var(--wash); box-shadow: inset 3px 0 0 var(--brand); }
+@media (max-width: 800px) {
+  /* an open sheet leaves a strip of map for the farm: the bar gives it that room, and is back when the sheet folds */
+  #overview-rail.expanded ~ .command-bar, #space-content:not([hidden]):not(.peeked) ~ .command-bar { display: none; }
+  body.farm-space-active .layers-drawer { top: 56px; max-height: calc(100% - 68px); }
+  body.farm-space-active #map .photo-card:not(.sheet) { top: 56px; max-height: calc(100% - 96px); }
+}
+@media print { .command-bar { display: none !important; } }
