@@ -100,5 +100,46 @@
       links: [["Pull requests", links.pulls], ["Actions", links.actions], ["Data job issues", links.issues], ["The queue", links.queue]] };
   }
 
-  return { REPO, links, day, time, jobs, references, build, needsAttention, runUrl };
+  // AI recipes (AI1): how-to recipes the AI keeps, one row per version (ai_recipes). Drafts wait for a platform advisor; the
+  // AI reads approved ones only. `canDecide`: the viewer is a platform advisor, so Approve and Retire are offered (row-level
+  // security is the real gate); anyone else reads the list only.
+  const recipeWord = { draft: "Draft", approved: "Approved", retired: "Retired" };
+  const authorWord = (r) => r.author_kind === "ai" ? "Proposed by the AI" + (r.author_model ? " (" + r.author_model + ")" : "")
+    : r.author_kind === "system" ? "Seeded from what the platform's collectors know" : "Proposed by an advisor";
+  const methodWord = { get: "GET", post: "POST", page: "Page" };
+  function recipeVersion(r, canDecide) {
+    const steps = (Array.isArray(r.steps) ? r.steps : []).filter((s) => s && typeof s === "object" && typeof s.source === "string");
+    const status = recipeWord[r.status] ? r.status : "draft";
+    return {
+      id: r.id, key: r.key, version: Number.isInteger(r.version) ? r.version : null, status, badge: recipeWord[status], title: r.title || r.key,
+      when: r.when_to_use || null, tags: (Array.isArray(r.tags) ? r.tags : []).filter((t) => typeof t === "string"),
+      author: authorWord(r) + (day(r.created_at) ? ", " + day(r.created_at) : ""),
+      decided: status === "approved" && day(r.approved_at) ? "Approved " + day(r.approved_at)
+        : status === "retired" ? "Retired" + (day(r.retired_at) ? " " + day(r.retired_at) : "") + (r.retire_reason ? ": " + r.retire_reason : "") : null,
+      unverified: /not yet verified/i.test([r.title, r.when_to_use].join(" ")),
+      steps: steps.map((s, i) => (i + 1) + ". " + s.source + (s.endpoint ? " · " + (methodWord[s.method] || "GET") + " " + s.endpoint : "")),
+      actions: !canDecide ? [] : status === "draft" ? ["approve", "retire"] : status === "approved" ? ["retire"] : [],
+    };
+  }
+  function recipes(rows, canDecide) {
+    const byKey = new Map();
+    for (const r of Array.isArray(rows) ? rows : []) {
+      if (!r || typeof r.key !== "string") continue;
+      if (!byKey.has(r.key)) byKey.set(r.key, []);
+      byKey.get(r.key).push(r);
+    }
+    const items = [...byKey.entries()].map(([key, rs]) => {
+      const versions = rs.sort((a, b) => (b.version || 0) - (a.version || 0)).map((r) => recipeVersion(r, !!canDecide));
+      const approved = versions.find((v) => v.status === "approved") || null, drafts = versions.filter((v) => v.status === "draft");
+      return { key, title: (drafts[0] || approved || versions[0]).title, versions, approved: approved ? approved.version : null, drafts: drafts.length };
+    }).sort((a, b) => (b.drafts > 0) - (a.drafts > 0) || a.key.localeCompare(b.key));
+    const waiting = items.filter((i) => i.drafts), approved = items.filter((i) => i.approved !== null).length;
+    const answer = !items.length ? null : waiting.length
+      ? { text: count(waiting.reduce((n, i) => n + i.drafts, 0), "recipe waits for review", "recipes wait for review"),
+        because: waiting[0].title + "; the AI uses only approved recipes (" + (approved ? approved + " approved" : "none yet") + ")" }
+      : { text: approved ? "Every recipe is reviewed" : "No recipe is approved", because: approved + " approved; the AI uses only these" };
+    return { title: "AI recipes", answer, empty: "No how-to recipes are recorded yet.", items, canDecide: !!canDecide };
+  }
+
+  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl };
 });

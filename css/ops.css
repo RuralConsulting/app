@@ -26,6 +26,13 @@
 .ops-linklist { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px 16px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .ops-linklist a, .ops-job a { color: inherit; text-underline-offset: 2px; }
 .ops-linklist li { padding: 8px 0; border-top: 1px solid var(--rule); }
+/* AI recipes (AI1): versions under their key, steps folded away, Approve / Retire for a platform advisor. */
+.ops-steps { margin: 6px 0 0; }
+.ops-steps summary { font-size: var(--text-small); cursor: pointer; }
+.ops-steps ol { padding-left: 0; }
+.ops-recipe-msg:empty { display: none; }
+/* A draft waiting for review is carried by the word, like a job needing attention. */
+.ops-badge[data-recipe-status="draft"] { border-color: var(--ink); color: var(--ink); font-weight: 700; }
 /* LN1: Operations → Layers (advisor notes on every layer) */
 .ln-controls { display: grid; gap: 8px 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 12px 0 4px; }
 .ln-controls label { display: grid; gap: 4px; font-size: var(--text-small); color: var(--ink-2); }

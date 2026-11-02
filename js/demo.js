@@ -103,6 +103,8 @@
       checks: owned(f.checks || [], FARM), record_types: f.record_types || [], entries: owned(f.entries || [], FARM), entry_links: owned(f.entry_links || [], FARM),
       // The staff Operations page: invented job records, one failing and one late. The farmer demo is not staff.
       profiles: [{ user_id: USER, is_staff: true }], ops_job_status: f.ops.jobs, ops_reference_status: f.ops.references,
+      // Invented how-to recipes (AI1): one approved, one draft. Approve / Retire answer that the demo does not save changes.
+      ai_recipes: f.ops.recipes || [],
       // The Layers page (LN1): invented reference sources and advisor notes; the advisor's organisation is a group scope.
       reference_sources: f.ops.sources || [], layer_notes: f.ops.layer_notes || [],
       map_layers: map.layers.map((l) => ({ id: l.id, name: l.name, theme: l.theme, farm_id: FARM, org_id: null })),
@@ -119,6 +121,7 @@
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
       data.user.email = "farmer@example.test";
       data.tables.profiles = [{ user_id: USER, is_staff: false }]; data.tables.ops_job_status = []; data.tables.ops_reference_status = [];
+      data.tables.ai_recipes = (f.ops.recipes || []).filter((r) => r.status === "approved");   // what a farmer can read
     }
     if (multi) {
       // A second, small farm so the portfolio can be exercised: its own extent, one authorisation, two documents.

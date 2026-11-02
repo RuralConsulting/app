@@ -450,6 +450,24 @@
         "last_pull_partial": false
       }
     ],
+    "recipes": [
+      {
+        "id": "demo-recipe-1", "key": "ecan-water-quality-site-export", "version": 1, "status": "approved",
+        "title": "Every water-quality result for one ECan monitoring site",
+        "when_to_use": "When someone needs the measured water quality at an ECan monitoring site: its whole sampling history.",
+        "tags": ["water-quality", "ecan", "monitoring"],
+        "steps": [{ "source": "ECan per-site export", "endpoint": "https://www.ecan.govt.nz/data/water-quality-data/exportallsample/<SITE_ID>", "method": "get" }],
+        "author_kind": "system", "author_model": null, "created_at": "2026-11-02T01:00:00Z", "approved_at": "2026-11-02T03:00:00Z", "retired_at": null, "retire_reason": null
+      },
+      {
+        "id": "demo-recipe-2", "key": "ecan-consent-conditions", "version": 1, "status": "draft",
+        "title": "The conditions of an ECan resource consent (method not yet verified)",
+        "when_to_use": "When someone needs the conditions of a Canterbury resource consent. Method not yet verified.",
+        "tags": ["consent", "conditions", "crc"],
+        "steps": [{ "source": "ECan's public consent search", "endpoint": "https://www.ecan.govt.nz/data/consent-search", "method": "page" }],
+        "author_kind": "ai", "author_model": "claude-haiku-5-5", "created_at": "2026-11-02T02:00:00Z", "approved_at": null, "retired_at": null, "retire_reason": null
+      }
+    ],
     "sources": [
       { "key": "ecan-wells", "name": "Wells (ECan)", "theme": "wells", "provider": "Environment Canterbury", "summary": "ECan's register of wells and bores (synthetic summary).", "serve_to_customers": true },
       { "key": "ecan-consents", "name": "Resource consents (ECan)", "theme": "consents", "provider": "Environment Canterbury", "summary": "One point per resource consent (synthetic summary).", "serve_to_customers": true },
