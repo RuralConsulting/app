@@ -740,7 +740,10 @@
     for (const id of entry.past.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", entry.on && on ? "visible" : "none");
   }
 
+  // FB1: while a flow has the map (choosing parcels, drawing a boundary) its taps are its own: no feature popups.
+  let captured = null;
   function onClick(e) {
+    if (captured) { captured(e); return; }
     if (e.originalEvent?.target?.closest?.(".photo-pin")) return;   // a camera marker opens its photo itself
     const ids = [...interactive.keys()].filter((id) => map.getLayer(id));
     const hits = map.queryRenderedFeatures(e.point, { layers: ids });
@@ -788,6 +791,10 @@
     markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
   }
   return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving(), terrain: !!map.getTerrain?.(), elevation: map.getCameraTargetElevation?.() ?? 0, dimmed, labelsOff: map.getContainer().querySelectorAll(".lu-label.on-line").length, masked, mask: map.getLayer("farm-mask") ? map.getPaintProperty("farm-mask", "fill-opacity") : null }, setVisible, setPast, addControl: (control, position) => init().addControl(control, position), whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => { heldTerrain = false; return FP.basemaps.setTerrain(init(), on); }, frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
+    // FB1: the live MapLibre map, for a flow that draws its own layers over the farm (add-block.js); it removes them itself.
+    glMap: () => init(), loaded: () => (init(), ready), capture: (fn) => { captured = typeof fn === "function" ? fn : null; if (captured) featurePopup?.remove(); },
+    // and the farm mask lifted while the flow shows the land around the farm (put back as it was when it ends)
+    unmask: (off) => { if (map?.getLayer("farm-mask")) map.setPaintProperty("farm-mask", "fill-opacity", off ? 0 : masked ? FP.farmModel.MASK_OPACITY : 0); },
     resize: () => map && map.resize(), closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
   }
 

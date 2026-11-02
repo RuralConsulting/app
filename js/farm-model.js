@@ -516,7 +516,7 @@
   // (Topo, 1:50k) (LINZ)"); the one line under it is sourceLine().
   const THEME_NAMES = { land_units: "Land units", plantings: "Plantings", fences: "Fences", photos: "Photos", measurements: "Measured distances", contaminant_sources: "Contaminant sources",
     point_features: "Farm features", line_features: "Farm lines", proposed_actions: "Proposed fences", extent: "Farm boundary", titles: "Titles",
-    wells: "Bores", consents: "Consents", wetlands: "Wetlands", soils: "Soils", luc: "Land use capability", parcels: "Titles", actions: "Actions" };
+    wells: "Bores", consents: "Consents", wetlands: "Wetlands", soils: "Soils", luc: "Land use capability", parcels: "Titles", actions: "Actions", farmed_area: "Farmed area" };
   // Reference rows by their source. "Rivers" is the shared waterways display layer (DM2, riverLayers below), not a row of
   // farm_map; the source layers behind it (Topo50 lines and the two river networks) start off.
   const KEY_NAMES = { "ecan-wells": "Bores", "ecan-consents": "Consents", "linz-topo50-river-centrelines": "River lines (Topo50)", "niwa-rec2-rivers": "River network (REC2)", "ecan-rivers": "River network (ECan)" };
@@ -754,5 +754,14 @@
     };
   }
 
-  return { flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  // FB1: the farm's current farmed boundary (farm_holding's boundary) as one of the map's own layers, "Farmed area";
+  // null when the farm has none yet.
+  function farmedAreaLayer(holding) {
+    const b = holding && typeof holding === "object" ? holding.boundary : null;
+    if (!b?.geometry?.type) return null;
+    return { id: "farmed-area", name: "Farmed area", theme: "farmed_area", geometry_type: "polygon", epistemic_class: "observation",
+      source: "the farm's own record", as_at: String(b.valid_from || "").slice(0, 10) || null, shown_as: null,
+      features: { type: "FeatureCollection", features: [{ type: "Feature", geometry: b.geometry, properties: { name: "Farmed area", area_ha: b.area_ha ?? null } }] } };
+  }
+  return { farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
 });

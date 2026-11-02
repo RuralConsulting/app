@@ -109,7 +109,9 @@
       reference_sources: f.ops.sources || [], layer_notes: f.ops.layer_notes || [],
       map_layers: map.layers.map((l) => ({ id: l.id, name: l.name, theme: l.theme, farm_id: FARM, org_id: null })),
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)" }],
-    }, build: f.ops.build, ask: f.ask || [] };
+      // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
+      farm_parcels: [], farm_boundaries: [],
+    }, build: f.ops.build, ask: f.ask || [], parcels: parcels(extent) };
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
@@ -148,6 +150,18 @@
     data.people = people(data, { sparse, farmer });
     return data;
   }
+  // FB1: invented LINZ-style primary parcels around the illustrative extent (not a survey, not real appellations): the two
+  // the farm's rectangle is made of, and its neighbours east, south, north and west. Ids as reference_features ids.
+  function parcels(extent) {
+    const [[w, s], , [e, n]] = extent.coordinates[0], mid = (w + e) / 2;
+    const boxes = [
+      [w, s, mid, n, "Lot 1 DP 400001"], [mid, s, e, n, "Lot 2 DP 400001"],
+      [e, s, e + .015, (s + n) / 2, "Lot 1 DP 500101"], [e, (s + n) / 2, e + .015, n, "Lot 2 DP 500101"], [e + .015, s, e + .03, n, "Rural Section 4410"],
+      [w, s - .012, mid, s, "Lot 3 DP 500102"], [mid, s - .012, e, s, "Lot 4 DP 500102"], [e, s - .012, e + .03, s, "Part Rural Section 3981"],
+      [w - .015, s - .012, w, n, "Rural Section 3977"], [w - .015, n, e + .03, n + .01, "Lot 1 DP 500150"]];
+    return boxes.map(([a, b, c, d, appellation], i) => ({ id: 9001 + i, external_id: "demo-parcel-" + (i + 1), web_geom: polygon(a, b, c, d),
+      props: { appellation: appellation + " (synthetic)", parcel_intent: "Fee Simple Title", land_district: "Canterbury" }, on_farm: i < 2 }));
+  }
   // Who can open each demo farm, as farm_people (20261029000021) returns it. Invented people only.
   function people(d, { sparse, farmer }) {
     const person = (n, email, role, extra = {}) => ({ user_id: "de000000-0000-4000-8000-0000000001" + n, email, display_name: null, role,
@@ -169,13 +183,59 @@
   }
   // The tables the demo adds rows to, in memory: What's due's Done (checks) and Add the record (documents, entries, links).
   const KEPT = ["checks", "documents", "entries", "entry_links", "layer_notes"];
-  const EDITED = ["layer_notes"];   // and the one table whose rows the demo changes or removes (the Layers page)
+  const EDITED = ["layer_notes", "farm_parcels"];   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
     const q = String(question || "").toLowerCase(), all = Array.isArray(answers) ? answers : [];
     const hit = all.find((a) => (a.match || []).some((w) => q.includes(String(w).toLowerCase()))) || all.find((a) => !(a.match || []).length);
     return hit?.reply || { answer_text: "Nothing is recorded on this farm yet.", sources: [], ui_actions: [], confirmations: [], notes: [] };
+  }
+  // The block flow's calls in memory: the parcels in a box (each flagged held: on the farm or in its holding), their
+  // union (FP.blockModel.dissolve, as st_union), and a block added (the parcels as references, a new farmed boundary
+  // version, the map's extent grown). The demo's farm is the only one with parcels.
+  function holding(d, name, args) {
+    const B = typeof module === "object" && module.exports ? require("./block-model.js") : globalThis.FP.blockModel;
+    const mine = args.f === FARM, held = (p) => p.on_farm || d.tables.farm_parcels.some((h) => h.farm_id === args.f && h.external_id === p.external_id);
+    const box = (g) => { const cs = g.coordinates[0]; return [Math.min(...cs.map((c) => c[0])), Math.min(...cs.map((c) => c[1])), Math.max(...cs.map((c) => c[0])), Math.max(...cs.map((c) => c[1]))]; };
+    const row = (p) => ({ id: p.id, external_id: p.external_id, web_geom: p.web_geom, props: p.props, area_ha: B.areaHa(p.web_geom), held: held(p) });
+    if (name === "parcels_in_view") {
+      if (!mine) return [[]];
+      return [d.parcels.filter((p) => { const [w, s, e, n] = box(p.web_geom); return w < args.east && e > args.west && s < args.north && n > args.south; }).map(row)];
+    }
+    const chosen = (args.parcel_ids || []).map((id) => d.parcels.find((p) => p.id === Number(id))).filter(Boolean);
+    if (name === "parcel_union") { const g = B.dissolve(chosen.map((p) => p.web_geom)); return [g ? { geometry: g, area_ha: B.areaHa(g), parcels: chosen.length } : null]; }
+    if (name === "farm_holding") {
+      const parcelsHeld = d.tables.farm_parcels.filter((h) => h.farm_id === args.f).map((h) => { const p = d.parcels.find((x) => x.external_id === h.external_id);
+        return { type: "Feature", id: p.id, geometry: p.web_geom, properties: { ...p.props, reference_id: p.id, external_id: h.external_id, held_id: h.id, acquired_on: h.acquired_on, note: h.note, document_id: h.document_id } }; });
+      const b = d.tables.farm_boundaries.find((x) => x.farm_id === args.f && !x.valid_to);
+      return [{ parcels: collection(parcelsHeld), boundary: b ? { id: b.id, geometry: b.geometry, method: b.method, valid_from: b.valid_from, area_ha: B.areaHa(b.geometry) } : null,
+        boundary_versions: d.tables.farm_boundaries.filter((x) => x.farm_id === args.f).length }];
+    }
+    // add_block
+    if (!mine || d.tables.farm_members.find((m) => m.farm_id === args.f)?.role === "view") return [null, { message: "Only an editor of this farm can add land to it" }];
+    if (!(args.parcel_ids || []).length) return [null, { message: "Choose at least one parcel" }];
+    if (chosen.length !== args.parcel_ids.length) return [null, { message: "A chosen parcel is not a current LINZ primary parcel" }];
+    const block = args.farmed || B.dissolve(chosen.map((p) => p.web_geom)), now = new Date().toISOString();
+    const current = d.tables.farm_boundaries.find((x) => x.farm_id === args.f && !x.valid_to);
+    const geometry = B.dissolve([current ? current.geometry : d.map.extent, block]) || block;
+    const added = [];
+    for (const p of chosen) {
+      let h = d.tables.farm_parcels.find((x) => x.farm_id === args.f && x.external_id === p.external_id);
+      if (!h) {
+        h = { id: "demo-held-" + ++made, farm_id: args.f, source_key: "linz-primary-parcels", external_id: p.external_id, acquired_on: args.acquired || null,
+          note: args.block_note || null, document_id: null, added_by: d.user.id, added_at: now };
+        d.tables.farm_parcels.push(h);
+      }
+      added.push(h.id);
+    }
+    if (current) current.valid_to = now;
+    const boundary = { id: "demo-boundary-" + ++made, farm_id: args.f, geometry, method: args.farmed ? "drawn" : "parcels", valid_from: now, valid_to: null, made_by: d.user.id };
+    d.tables.farm_boundaries.push(boundary);
+    // the extent (as farm_extent): what the farm had, its held parcels whole and the farmed boundary
+    d.map.extent = B.dissolve([d.map.extent, ...chosen.map((p) => p.web_geom), geometry]) || d.map.extent;
+    d.map.extent_ha = Math.round(B.areaHa(d.map.extent) * 10) / 10;
+    return [{ parcels: added, boundary: boundary.id }];
   }
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });
@@ -202,7 +262,7 @@
         }
         // A change or removal of a Layers page note: applied in memory to the rows the filters pick.
         if (write && (changes || removing) && EDITED.includes(table) && filters.length) {
-          const hit = rows.filter((row) => filters.every(([key, val]) => row[key] === val));
+          const hit = rows.filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : row[key] === val)));
           if (removing) { for (const r of hit) rows.splice(rows.indexOf(r), 1); return result(null); }
           for (const r of hit) Object.assign(r, copy(changes), { updated_at: new Date().toISOString() });
           return singular ? (hit.length === 1 ? result(hit[0]) : error("Demo row not found")) : result(hit);
@@ -232,6 +292,8 @@
         if (name === "farm_people") return result(d.people[args.f] || []);
         // As public.layer_notes_for_farm: the global notes, the advisor's organisation's, and the farm's own.
         if (name === "layer_notes_for_farm") return result((d.tables.layer_notes || []).filter((n) => n.scope === "global" || (n.scope === "group" && n.org_id === ORG) || (n.scope === "farm" && n.farm_id === args.f)));
+        // FB1, as the database's parcels_in_view, parcel_union, add_block and farm_holding, over the invented parcels.
+        if (["parcels_in_view", "parcel_union", "add_block", "farm_holding"].includes(name)) return result(...holding(d, name, args || {}));
         return error("This operation is not available in the demo");
       },
       // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.

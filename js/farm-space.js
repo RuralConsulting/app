@@ -36,7 +36,7 @@
   const readRecords = (sb, farm) => optional(sb.from("entry_links").select("entry_id,obligation_id,document_id").eq("farm_id", farm.id)).then(M.recordLinks);
   // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
   async function load(sb, farm, user) {
-    const [member, org, maps, documents, authorisations, obligations, today, checks, records, notes] = await Promise.all([
+    const [member, org, maps, documents, authorisations, obligations, today, checks, records, notes, holding] = await Promise.all([
       read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
       read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
       read(sb.rpc("farm_map", { f: farm.id })),
@@ -49,8 +49,13 @@
       // The advisor notes on the map's layers (LN1): the narrowest shows in a layer's info panel. Optional: without
       // them the map is as it was.
       optional(sb.rpc("layer_notes_for_farm", { f: farm.id })),
+      // The farmed boundary (FB1): the area actually farmed, the farm's own record, a layer in Layers once there is one.
+      // Optional: without it the map is as it was.
+      optional(sb.rpc("farm_holding", { f: farm.id })),
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
+    const farmed = M.farmedAreaLayer(holding);
+    if (farmed) maps.layers = [...(maps.layers || []), farmed];
     maps.layer_notes = notes;
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
@@ -81,6 +86,7 @@
   }
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
   function close() {
+    FP.addBlock?.close(false);
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
@@ -511,10 +517,21 @@
       e.preventDefault(); input.focus();
     });
   }
-  const optionsFor = (intent) => intent.kind === "none" ? [] :
-    [...intent.layers.map((l) => ({ kind: "layer", key: l.key, label: (l.on ? "Showing " : "Show ") + l.name })), { kind: "ask", text: intent.text, label: "Ask: " + intent.text }];
-  // Enter with nothing picked: the first layer when the phrase names layers, otherwise Ask.
-  const defaultIndex = (intent, all) => (intent.kind === "layer" ? 0 : all.findIndex((o) => o.kind === "ask"));
+  // FB1: a statement of new land ("I've bought a block", "add land": FP.blockModel.isBlockIntent) offers the guided Add a
+  // block first, for the farm's editors, and Enter starts it. A question or show that only talks about new land ("Is the
+  // new block in the nitrate zone?": mentionsNewLand) offers it last, and Enter asks. Anything else is as before.
+  const canAddLand = () => ["owner", "admin", "edit"].includes(context?.role) && !!FP.addBlock && !!FP.blockModel;
+  const BLOCK_OPTION = { kind: "block", label: "Add a block of land to the farm" };
+  const optionsFor = (intent) => {
+    if (intent.kind === "none") return [];
+    const statement = canAddLand() && FP.blockModel.isBlockIntent(intent.text), mention = canAddLand() && !statement && FP.blockModel.mentionsNewLand(intent.text);
+    return [...(statement ? [{ ...BLOCK_OPTION, lead: true }] : []),
+      ...intent.layers.map((l) => ({ kind: "layer", key: l.key, label: (l.on ? "Showing " : "Show ") + l.name })), { kind: "ask", text: intent.text, label: "Ask: " + intent.text },
+      ...(mention ? [BLOCK_OPTION] : [])];
+  };
+  // Enter with nothing picked: Add a block for a statement of new land, the first layer when the phrase names layers,
+  // otherwise Ask.
+  const defaultIndex = (intent, all) => (all[0]?.lead ? 0 : intent.kind === "layer" ? all.findIndex((o) => o.kind === "layer") : all.findIndex((o) => o.kind === "ask"));
   const defaultOption = (intent) => { const all = optionsFor(intent); return all[defaultIndex(intent, all)] || null; };
   function suggest() {
     const intent = M.commandIntent($("#command-input").value, layerEntries);
@@ -535,12 +552,48 @@
     const input = $("#command-input");
     if (!option || !context) return;
     if (option.kind === "layer") { setLayer(option.key, true); input.value = ""; closeSuggestions(); return; }
+    if (option.kind === "block") { input.value = ""; closeSuggestions(); input.blur(); openBlock(); return; }
     const question = option.text.trim();
     if (!question) return;
     input.value = ""; closeSuggestions(); input.blur();
     if (shownRoute?.view === "ask" && $("#ask-form")) { askFrom(question); return; }
     pendingAsk = question;
     location.hash = FP.href(M.href(context.farm.id, "ask"));
+  }
+  // ---- Add a block (FB1): the guided steps over the map (add-block.js). The farm is read again once a block is saved, so
+  // its boundary and extent show the new land; a cancelled flow wrote nothing and changes nothing. ----------------------
+  function openBlock() {
+    if (!context || !canAddLand()) return false;
+    const farm = context.farm, route = shownRoute || { view: "map" };
+    if (route.view !== "map") { location.hash = FP.href(M.href(farm.id, "map")); }
+    setDrawer(false);
+    FP.addBlock.open(context, {
+      uploadDocument: (file) => blockDocument(farm.id, file),
+      onClose: async (saved) => {
+        if (!saved || context?.farm.id !== farm.id) return;
+        // Read the farm again: its boundary now takes in the block. Re-reading starts the map quiet, which dropped the
+        // layers the person had set by hand (the creek and drain, Rivers): they are put back as they were, and the new
+        // Farmed area comes up so the saved shape is seen.
+        const kept = new Map(handSet);
+        context = null; openedMap = null;
+        await open(farm, { farm: farm.id, view: "map" });
+        if (context?.farm.id !== farm.id) return;
+        for (const [key, on] of kept) if (layerEntries.some((e) => e.key === key)) setLayer(key, on);
+        if (layerEntries.some((e) => e.key === "farmed_area")) setLayer("farmed_area", true);
+      },
+    });
+    return true;
+  }
+  // A document about the new block: filed as the documents block would guess it (the same file already here is reused).
+  async function blockDocument(farm, file) {
+    const D = FP.documentsBlock, a = D.arrange(context.documents), mains = [...a.primaries, ...a.more].map((p) => p.doc);
+    const [it] = D.guessBatch([file], mains);
+    if (it.tooBig) throw Error("too large to add here (over 100 MB)");
+    const sha = await D.sha256Hex(await file.arrayBuffer()), same = context.documents.find((d) => d.sha256 === sha);
+    if (same) return same.id;
+    const id = await documentStore(farm, () => []).add({ file, title: it.guess.title, doc_type: it.guess.doc_type, tier: it.guess.tier, relates_to: it.guess.tier === "supporting" ? it.guess.relates_to : null });
+    if (context?.farm.id === farm) context.documents = await readDocuments(FP.sb, context.farm).catch(() => context.documents);
+    return id;
   }
   // Ask's own form, filled in and asked: the question shows as if typed there.
   function askFrom(question) { $("#ask-input").value = question; $("#ask-form").requestSubmit(); }
@@ -796,6 +849,7 @@
     for (const a of actions) {
       if (a.verb === "map.layers") askSet = a.set;
       else if (a.verb === "map.frame") frame = askPlace(a.place, context, standing);
+      else if (a.verb === "block.add") { applyScene(); openBlock(); return; }   // FB1: the AI opens the steps; only the person saves
       else if (a.verb === "plan.open" && (context.documents || []).some((d) => String(d.id) === a.document_id)) {
         applyScene(); location.hash = FP.href(M.href(context.farm.id, "documents", a.document_id)); return;
       }
@@ -914,5 +968,5 @@
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }
-  return { load, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace };
+  return { load, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock };
 });

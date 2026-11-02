@@ -12,7 +12,7 @@
   const list = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => typeof v === "string" && v.trim() !== "";
   const SETS = ["quiet", "fep", "photos", "water", "consents", "all"];
-  const uiOk = (a) => !!a && ((a.verb === "map.frame" && str(a.place)) || (a.verb === "map.layers" && SETS.includes(a.set)) || (a.verb === "plan.open" && str(a.document_id)));
+  const uiOk = (a) => !!a && ((a.verb === "map.frame" && str(a.place)) || (a.verb === "map.layers" && SETS.includes(a.set)) || (a.verb === "plan.open" && str(a.document_id)) || a.verb === "block.add");
   const confirmOk = (c) => !!c && str(c.obligation_id) && str(c.label) && (c.verb === "obligation.done" || (c.verb === "document.attach" && str(c.document_id)));
   const sourceOk = (s) => !!s && (s.kind === "obligation" || s.kind === "document") && str(s.id) && str(s.label);
 
