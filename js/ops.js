@@ -5,10 +5,11 @@
   const M = FP.opsModel, { $, $$, el, sb } = FP;
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ext = (href, label) => href ? '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + esc(label) + "</a>" : "";
-  let staff = false, token = 0;
+  let staff = false, token = 0, me = null;
 
   // Whether this sign-in is RCL staff (profiles.is_staff, readable by its owner). Anything unexpected means not staff.
   async function checkStaff(user) {
+    me = user || null;
     try {
       const { data, error } = await sb.from("profiles").select("is_staff").eq("user_id", user.id).maybeSingle();
       staff = !error && data?.is_staff === true;
@@ -71,6 +72,8 @@
     FP.show("screen-ops");
     document.title = "Operations | " + FP.brand?.product;
     $("#ops-back").setAttribute("href", FP.href(""));
+    $("#ops-title").textContent = "Operations";
+    const tab = $("#ops-tab"); tab.textContent = "Layers"; tab.setAttribute("href", FP.href("#/ops/layers"));
     box.innerHTML = '<p class="ops-wait">Reading the job records…</p>';
     try {
       const [jobRows, refRows, v] = await Promise.all([
@@ -84,5 +87,5 @@
   }
   function close() { token++; }
 
-  FP.ops = { checkStaff, isStaff: () => staff, open, close, render: { jobsPanel, referencesPanel, buildPanel } };
+  FP.ops = { checkStaff, isStaff: () => staff, user: () => me, open, close, render: { jobsPanel, referencesPanel, buildPanel } };
 })();

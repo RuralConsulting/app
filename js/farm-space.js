@@ -36,7 +36,7 @@
   const readRecords = (sb, farm) => optional(sb.from("entry_links").select("entry_id,obligation_id,document_id").eq("farm_id", farm.id)).then(M.recordLinks);
   // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
   async function load(sb, farm, user) {
-    const [member, org, maps, documents, authorisations, obligations, today, checks, records] = await Promise.all([
+    const [member, org, maps, documents, authorisations, obligations, today, checks, records, notes] = await Promise.all([
       read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
       read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
       read(sb.rpc("farm_map", { f: farm.id })),
@@ -46,8 +46,12 @@
       Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,full_text,kind,parameters,due_date,recurrence,source_document_id,source_page").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
       sb.today ? sb.today() : nzToday(),
       readChecks(sb, farm), readRecords(sb, farm),
+      // The advisor notes on the map's layers (LN1): the narrowest shows in a layer's info panel. Optional: without
+      // them the map is as it was.
+      optional(sb.rpc("layer_notes_for_farm", { f: farm.id })),
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
+    maps.layer_notes = notes;
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
     return { farm, user, role: member.role, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",

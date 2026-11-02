@@ -1,7 +1,8 @@
 // Demo mode: synthetic, memory-only data from tests/app/fixtures/demo-farm.json. Never constructs a Supabase client.
 // What's due's two verbs work in the demo (E5): marking a condition done and adding its record (an upload, an entry
 // and its links) are kept in this page's memory until it is left or reloaded. Nothing else is saved. Ask answers from
-// the fixture's own answers (nothing is sent anywhere), so the demo shows an answer's shape.
+// the fixture's own answers (nothing is sent anywhere), so the demo shows an answer's shape. The Operations Layers page
+// (LN1) writes its advisor notes to memory too, and the map's info panels read them.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -40,6 +41,7 @@
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
     if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
+    if (suffix === "/ops/layers" && !multi) return "#/ops/layers";   // and its Layers page (advisor notes)
     if (suffix === "/blocks" && !multi) return "#/blocks" + (query ? "?" + query : "");   // the block gallery
     if (suffix === "/plans" && !multi) return "#/plans" + (query ? "?" + query : "");     // the FEP and FWFP documents
     // Two farms: "#/demo/multi" is the portfolio; "#/demo/multi/farm-1" and ".../farm-2" open one.
@@ -55,6 +57,7 @@
   function href(hash, sparse = false, farmer = false, multi = false) {
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/ops") return "#/demo/ops";
+    if (hash === "#/ops/layers") return "#/demo/ops/layers";
     if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
     if (!farm) return hash;
@@ -100,6 +103,10 @@
       checks: owned(f.checks || [], FARM), record_types: f.record_types || [], entries: owned(f.entries || [], FARM), entry_links: owned(f.entry_links || [], FARM),
       // The staff Operations page: invented job records, one failing and one late. The farmer demo is not staff.
       profiles: [{ user_id: USER, is_staff: true }], ops_job_status: f.ops.jobs, ops_reference_status: f.ops.references,
+      // The Layers page (LN1): invented reference sources and advisor notes; the advisor's organisation is a group scope.
+      reference_sources: f.ops.sources || [], layer_notes: f.ops.layer_notes || [],
+      map_layers: map.layers.map((l) => ({ id: l.id, name: l.name, theme: l.theme, farm_id: FARM, org_id: null })),
+      organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)" }],
     }, build: f.ops.build, ask: f.ask || [] };
     if (sparse) {
       farm.name = "Example farm — almost empty";
@@ -158,7 +165,8 @@
       authorisation_count: mine("authorisations"), document_count: mine("documents") };
   }
   // The tables the demo adds rows to, in memory: What's due's Done (checks) and Add the record (documents, entries, links).
-  const KEPT = ["checks", "documents", "entries", "entry_links"];
+  const KEPT = ["checks", "documents", "entries", "entry_links", "layer_notes"];
+  const EDITED = ["layer_notes"];   // and the one table whose rows the demo changes or removes (the Layers page)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
@@ -170,24 +178,31 @@
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
     function query(table) {
-      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null;
+      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false;
       const q = {
         select() { return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
         order(key, options) { orders.push([key, options?.ascending !== false]); return q; },
-        insert(rows) { write = true; adding = rows; return q; }, update() { write = true; return q; }, delete() { write = true; return q; },
+        insert(rows) { write = true; adding = rows; return q; }, update(values) { write = true; changes = values || null; return q; }, delete() { write = true; removing = true; return q; },
         single() { singular = true; return execute(); }, maybeSingle() { singular = true; maybe = true; return execute(); },
         then(resolve, reject) { return execute().then(resolve, reject); },
       };
       async function execute() {
         const d = await ready, rows = d.tables[table];
         if (write && adding && KEPT.includes(table)) {
-          const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...copy(r) }));
+          const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}), ...copy(r) }));
           for (const r of added) {
             if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
             rows.push(r);
             if (table === "documents") d.tables.document_relations.push({ id: r.id, tier: r.tier, relates_to: r.relates_to || null, superseded_by: null });
           }
           return result(singular ? added[0] : added);
+        }
+        // A change or removal of a Layers page note: applied in memory to the rows the filters pick.
+        if (write && (changes || removing) && EDITED.includes(table) && filters.length) {
+          const hit = rows.filter((row) => filters.every(([key, val]) => row[key] === val));
+          if (removing) { for (const r of hit) rows.splice(rows.indexOf(r), 1); return result(null); }
+          for (const r of hit) Object.assign(r, copy(changes), { updated_at: new Date().toISOString() });
+          return singular ? (hit.length === 1 ? result(hit[0]) : error("Demo row not found")) : result(hit);
         }
         if (write) return error("The demo does not save changes");
         if (!rows) return error("This demo does not provide " + table);
@@ -212,6 +227,8 @@
         const d = await ready;
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         if (name === "farm_people") return result(d.people[args.f] || []);
+        // As public.layer_notes_for_farm: the global notes, the advisor's organisation's, and the farm's own.
+        if (name === "layer_notes_for_farm") return result((d.tables.layer_notes || []).filter((n) => n.scope === "global" || (n.scope === "group" && n.org_id === ORG) || (n.scope === "farm" && n.farm_id === args.f)));
         return error("This operation is not available in the demo");
       },
       // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.

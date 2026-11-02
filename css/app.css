@@ -147,3 +147,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .maplibregl-ctrl-scale { background: var(--panel); color: var(--ink); border-color: var(--ink-2); font: var(--text-small) var(--f-ui); }
 .terrain-toggle { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: var(--text-body); cursor: pointer; }
 .terrain-toggle[hidden] { display: none; }
+/* LN1: a layer's advisor note in its info panel, folded, read-only */
+.pop-note { margin: 8px 0 0; border-top: 1px solid var(--rule); padding-top: 6px; font-size: var(--text-small); }
+.pop-note > summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.pop .pop-note dl { grid-template-columns: 1fr; gap: 0; max-height: 200px; }
+.pop .pop-note dt { text-transform: none; margin-top: 6px; }
+.pop-note-from { color: var(--ink-3); }

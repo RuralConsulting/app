@@ -450,6 +450,26 @@
         "last_pull_partial": false
       }
     ],
+    "sources": [
+      { "key": "ecan-wells", "name": "Wells (ECan)", "theme": "wells", "provider": "Environment Canterbury", "summary": "ECan's register of wells and bores (synthetic summary).", "serve_to_customers": true },
+      { "key": "ecan-consents", "name": "Resource consents (ECan)", "theme": "consents", "provider": "Environment Canterbury", "summary": "One point per resource consent (synthetic summary).", "serve_to_customers": true },
+      { "key": "ecan-lri", "name": "Land Resource Inventory and LUC, Canterbury (NZLRI via ECan)", "theme": "luc", "provider": "Manaaki Whenua – Landcare Research", "summary": "Land Use Capability per map unit, about 1:50,000 (synthetic summary).", "serve_to_customers": true },
+      { "key": "ecan-wetland-areas", "name": "Wetland areas, DOC desktop study (ECan)", "theme": "wetlands", "provider": "Environment Canterbury; Department of Conservation", "summary": "Desktop-mapped wetlands, not field verified (synthetic summary).", "serve_to_customers": true },
+      { "key": "ecan-nutrient-zones", "name": "LWRP nutrient allocation zones (ECan)", "theme": "zones", "provider": "Environment Canterbury", "summary": "Nutrient allocation zones from the regional plan (synthetic summary).", "serve_to_customers": true },
+      { "key": "niwa-rec2-rivers", "name": "River network (REC2)", "theme": "waterways", "provider": "NIWA", "summary": "The national river network, segment by segment (synthetic summary).", "serve_to_customers": true }
+    ],
+    "layer_notes": [
+      { "id": "demo-note-1", "source_key": "ecan-wells", "map_layer_id": null, "scope": "global", "org_id": null, "farm_id": null,
+        "what_it_is": null, "useful_for": "Finding the bores near a farm before a water-quality conversation; pairing with the groundwater level sites (synthetic).",
+        "caveats": "A point is where the bore was drilled, not a working bore: many are capped or gone (synthetic).", "show_to_group": "When the group talks about groundwater nitrate, with the monitoring results beside it (synthetic).",
+        "notes": null, "updated_at": "2026-11-02T09:00:00+13:00" },
+      { "id": "demo-note-2", "source_key": "ecan-lri", "map_layer_id": null, "scope": "global", "org_id": null, "farm_id": null,
+        "what_it_is": "Land Use Capability from the national inventory, by map unit (synthetic).", "useful_for": "A first read of land capability where no farm-scale LUC survey exists (synthetic).",
+        "caveats": "About 1:50,000: a map unit can hide very different paddocks; a farm survey governs (synthetic).", "show_to_group": null, "notes": null, "updated_at": "2026-11-02T09:10:00+13:00" },
+      { "id": "demo-note-3", "source_key": null, "map_layer_id": "demo-waterways", "scope": "farm", "org_id": null, "farm_id": "de000000-0000-4000-8000-000000000001",
+        "what_it_is": null, "useful_for": "The setback for winter grazing is measured from these lines (synthetic).",
+        "caveats": "The drain runs dry in summer; it still counts as a drain for the setback (synthetic).", "show_to_group": null, "notes": "Walked in spring 2026 (synthetic).", "updated_at": "2026-11-02T09:20:00+13:00" }
+    ],
     "build": {
       "version": "202610291405-3f9a2c1"
     }

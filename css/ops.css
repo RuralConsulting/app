@@ -26,4 +26,30 @@
 .ops-linklist { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px 16px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .ops-linklist a, .ops-job a { color: inherit; text-underline-offset: 2px; }
 .ops-linklist li { padding: 8px 0; border-top: 1px solid var(--rule); }
+/* LN1: Operations → Layers (advisor notes on every layer) */
+.ln-controls { display: grid; gap: 8px 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 12px 0 4px; }
+.ln-controls label { display: grid; gap: 4px; font-size: var(--text-small); color: var(--ink-2); }
+.ln-controls select, .ln-controls input, .ln-form textarea { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--panel); color: var(--ink); font: inherit; font-size: var(--text-body); box-sizing: border-box; }
+.ln-list { margin-top: 8px; }
+.ln-row { border-top: 1px solid var(--rule); }
+.answer-panel .ln-pick { display: grid; gap: 2px; width: 100%; min-height: 44px; padding: 10px 4px; border: 0; border-radius: 0; background: none; text-align: left; overflow-wrap: anywhere; }
+.answer-panel .ln-pick[disabled] { cursor: default; opacity: .6; }
+.ln-row.selected .ln-pick { background: var(--wash); }
+.ln-name { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.ln-name b { font-weight: 600; }
+.ops-badge[data-status="drafted"] { border-color: var(--ink); color: var(--ink); }
+#ln-editor h3 { margin: 0 0 4px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.ln-what { color: var(--ink-3); }
+.ln-others { margin: 10px 0 0; font-size: var(--text-small); }
+.ln-others dl { margin: 6px 0 0; }
+.ln-others dt { margin-top: 6px; color: var(--ink-3); }
+.ln-others dd { margin: 0; }
+.ln-form { display: grid; gap: 10px; margin-top: 12px; }
+.ln-field { display: grid; gap: 4px; }
+.ln-field small { color: var(--ink-3); font-weight: 400; }
+.ln-form textarea { resize: vertical; line-height: 1.4; }
+.ln-actions { margin: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.answer-panel .ln-actions .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.answer-panel .ln-actions .link { border: 0; background: none; padding: 6px 0; text-decoration: underline; text-underline-offset: 2px; }
 @media print { #screen-ops { display: none !important; } }

@@ -23,7 +23,14 @@ FP.popup = (() => {
     return photoCache.get(path);
   }
 
-  // hit: {title, qualifier, props, kind}
+  // The layer's advisor note (LN1, FP.layerNotes.applicable): read-only, folded, each part saying whose note it came from.
+  function note(n) {
+    const dl = FP.el("dl");
+    for (const p of n.parts) dl.append(FP.el("dt", {}, p.label), FP.el("dd", {}, p.text, n.narrowed ? FP.el("small", { class: "pop-note-from" }, " (" + p.from + ")") : null));
+    return FP.el("details", { class: "pop-note" }, FP.el("summary", {}, "Advisor note"), dl);
+  }
+
+  // hit: {title, qualifier, props, kind, note}
   function content(hit) {
     const box = FP.el("div", { class: "pop" });
     box.append(FP.el("h3", {}, hit.title));
@@ -44,6 +51,7 @@ FP.popup = (() => {
       for (const [k, v] of r) dl.append(FP.el("dt", {}, k), FP.el("dd", {}, v));
       box.append(dl);
     }
+    if (hit.note?.parts?.length) box.append(note(hit.note));
     if (hit.link?.href) box.append(FP.el("p", { class: "pop-link" }, FP.el("a", { href: hit.link.href, target: "_blank", rel: "noopener noreferrer" }, hit.link.text)));
     if (hit.attribution) box.append(FP.el("p", { class: "pop-attr" }, hit.attribution));
     return box;
@@ -79,5 +87,5 @@ FP.popup = (() => {
     return box;
   }
 
-  return { content, photo };
+  return { content, photo, note };
 })();

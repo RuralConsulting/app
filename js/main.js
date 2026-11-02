@@ -1,5 +1,5 @@
 // Screens and routing: sign in -> the farm (or the portfolio if there are several) -> the farm space.
-// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops (RCL staff).
+// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops and #/ops/layers (RCL staff).
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [];
@@ -53,8 +53,10 @@
     if (FP.demo?.active && /^#\/blocks(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.open(hash); return; }
     FP.gallery.close();
     // Operations: RCL staff only. Anyone else asking for it is simply taken to their farms.
-    if (hash === "#/ops" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.ops.open(); return; }
-    FP.ops.close();
+    if (hash === "#/ops" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.opsLayers.close(); FP.ops.open(); return; }
+    // Operations → Layers (LN1): the advisor notes on every layer, for RCL staff.
+    if (hash === "#/ops/layers" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.ops.close(); FP.opsLayers.open(); return; }
+    FP.ops.close(); FP.opsLayers.close();
     const route = FP.farmModel.match(hash);
     const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
     if (farm) FP.farmSpace.open(farm, route?.farm === farm.id ? route : { farm: farm.id, view: "map" });

@@ -168,6 +168,9 @@
     return spec.id;
   }
 
+  // A layer's advisor note (LN1), as its info panel shows it: each part from the narrowest note that has one.
+  const noteFor = (key) => FP.layerNotes?.applicable(drawn?.layer_notes, key) || null;
+
   // the layers of one farm layer, by geometry: [polygonIds, lineIds, pointIds] filled in by pass
   function farmLayer(l, i, pass) {
     const sid = `fl-${i}`;
@@ -175,7 +178,7 @@
     const describe = (f) => ({
       title: f.properties.name || f.properties.Name || f.properties.type || f.properties.label || l.name,
       layerName: l.name, qualifier: FP.farmModel.sourceLine(l), props: f.properties,
-      resolution: FP.farmModel.resolutionLine(f.properties),
+      resolution: FP.farmModel.resolutionLine(f.properties), note: l.id ? noteFor("layer:" + String(l.id).toLowerCase()) : null,
     });
     const ids = [];
     if (pass === "polygon" && l.geometry_type === "polygon") {
@@ -598,10 +601,10 @@
         const { fp_past, ...props } = f.properties;
         // DM1: the farm map shows each layer around the farm too, so off the farm is "near" unless linked to a permit
         const where = props.on_farm ? "On the farm" : props.linked ? "Off the farm, linked to the farm's permit" : "Near the farm";
-        if (consents) return FP.farmModel.consentPopup(props, r, where);
+        if (consents) return { ...FP.farmModel.consentPopup(props, r, where), note: noteFor("source:" + r.key) };
         const named = props.name || props.Name || props.NAME;
         return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
-          qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution };
+          qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution, note: noteFor("source:" + r.key) };
       };
       const ids = [
         layer({ id: sid + "-fill", type: "fill", source: sid, filter: AREA, paint: { "fill-color": "#bfe8ff", "fill-opacity": 0.25 } }, describe),
@@ -735,6 +738,8 @@
     const popup = new maplibregl.Popup({ maxWidth: Math.min(320, map.getContainer().clientWidth - 24) + "px" }).setLngLat(e.lngLat).setDOMContent(FP.popup.content(hit)).addTo(map);
     featurePopup = popup; popup.on("close", () => { if (featurePopup === popup) featurePopup = null; });
     keepInside(popup);
+    // Opening the layer's Advisor note (LN1) makes the popup taller: keep it inside the map again.
+    popup.getElement().addEventListener("toggle", () => keepInside(popup), true);
   }
 
   // The auto anchor is fixed from the size at open; re-anchor once layout/fonts settle, then pan whatever still overflows.
