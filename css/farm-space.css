@@ -158,6 +158,22 @@ body.block-flow-active #block-open { display: none; }
 .layer-list .layer-past[hidden] { display: none; }
 .layer-list .layer-past input[role="switch"] { transform: scale(.85); transform-origin: left center; }
 .layers-drawer { position: absolute; z-index: 5; top: 12px; left: 12px; width: 310px; max-width: calc(100% - 30px); max-height: calc(100% - 24px); overflow: auto; padding: 16px; border-radius: 10px; background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+/* Sources (PROV1): a folded entry in the Layers drawer; each source folds again to its description */
+.drawer-sources { margin: 12px 0 0; padding-top: 8px; border-top: 1px solid var(--rule); font-size: var(--text-small); color: var(--ink-2); }
+.drawer-sources > summary { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; cursor: pointer; min-height: 32px; font: 600 var(--text-small) var(--f-head); color: var(--ink-2); }
+.drawer-sources > summary small { font-weight: 400; color: var(--ink-3); }
+.sources-note { margin: 6px 0 4px; color: var(--ink-3); }
+.sources-list { list-style: none; margin: 0; padding: 0; }
+.sources-list > li { padding: 6px 0; border-top: 1px solid var(--rule); }
+.sources-list b { display: block; font-weight: 600; color: var(--ink); }
+.sources-list small { display: block; margin-top: 2px; color: var(--ink-3); font-size: var(--text-small); line-height: 1.3; }
+.sources-list details > summary { cursor: pointer; min-height: 28px; list-style: none; }
+.sources-list details > summary::-webkit-details-marker { display: none; }
+.sources-list details > summary b::before { content: "\25B8\00a0"; color: var(--ink-3); }
+.sources-list details[open] > summary b::before { content: "\25BE\00a0"; }
+.sources-list .source-summary, .sources-list .source-attr { margin: 4px 0 0; line-height: 1.4; color: var(--ink-2); }
+.sources-list .source-attr { color: var(--ink-3); }
+.sources-list .source-state { color: var(--ink-2); }
 .drawer-sub { margin: 14px 0 8px; font: 600 var(--text-small) var(--f-head); color: var(--ink-2); }
 .drawer-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }.drawer-heading h2 { font: 600 var(--text-heading) var(--f-head); margin: 0; }
 .action-label { color: var(--map-label); font: 600 var(--text-small) var(--f-head); text-shadow: var(--map-label-shadow); pointer-events: none; }

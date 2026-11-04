@@ -95,6 +95,9 @@ button, input { font: inherit; color: inherit; }
 .pop dt { color: var(--ink-3); text-transform: capitalize; }
 .pop dd { margin: 0; word-break: break-word; }
 .pop-attr { margin: 8px 0 0; font-size: var(--text-small); color: var(--ink-3); }
+/* Provenance (PROV1): where a reference layer came from, in one quiet line under its details */
+.pop-prov { margin: 8px 0 0; font-size: var(--text-small); line-height: 1.35; color: var(--ink-3); }
+.pop-prov + .pop-prov, .pop-prov + .pop-attr { margin-top: 2px; }
 .pop-link { margin: 6px 0 0; font-size: var(--text-small); }
 .pop-link a { color: inherit; text-underline-offset: 2px; }
 

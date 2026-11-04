@@ -100,13 +100,13 @@
   }
   // The Chart block's data for a site and parameter: the series read, the unit, the source's attribution and the provisional
   // flag from the latest row. No bands (none are passed), so the chart says "not assessed". A comparison site is a second series.
-  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands }) {
+  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance }) {
     const points = (rows) => list(rows).filter((r) => r && r.value !== null && r.value !== undefined).map((r) => ({
       t: r.sampled_at, value: Number(r.value), qualifier: CENSORED.includes(r.qualifier) ? r.qualifier : null, text: text(r.value_text) || null }));
     return {
       title: (name || parameter) + " at " + (site?.name || "this site"),
       parameter: { key: parameter, name: name || parameter, unit: unit || text(list(series)[0]?.unit) },
-      attribution: attribution || "", provisional: !!provisional, ...(bands ? { bands } : {}),
+      attribution: attribution || "", provisional: !!provisional, ...(bands ? { bands } : {}), ...(provenance ? { provenance } : {}),
       series: [{ id: "site-" + site?.id, label: site?.name || "This site", owner: site?.owner || "", points: points(series) },
         ...(compare?.site ? [{ id: "site-" + compare.site.id, label: compare.site.name, owner: compare.site.owner || "", points: points(compare.series) }] : [])],
     };

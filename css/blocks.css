@@ -80,6 +80,8 @@
 .list-table .list-number { text-align: right; font-variant-numeric: tabular-nums; width: 64px; }.list-table .list-act { width: 84px; text-align: right; padding-right: 0; }
 .list-dense .list-table :is(th, td) { padding-top: 5px; padding-bottom: 5px; }
 .list-more { margin: 12px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+/* Provenance (PROV1): the reference source behind a list or chart, one quiet line each */
+.prov-line { margin: 6px 0; font: 400 var(--text-small)/1.4 var(--f-ui); color: var(--ink-3); }
 @container (min-width: 560px) {
   .list-cards { display: none; }
   .list-table-wrap { display: block; }

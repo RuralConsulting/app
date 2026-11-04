@@ -23,7 +23,8 @@
 
   // sb: the Supabase client (or the demo's); farm: the farm row; extent: the farm's boundary (GeoJSON); map: FP.farmMap.
   // sitesRead: how the sites are read, when not wq_sites_near for the farm (the group space reads group_wq_sites, S5).
-  function create({ sb, farm, extent, map = FP.farmMap, sitesRead = null }) {
+  // provenance: (source key) -> the provenance line of that reference source (FP.provenance.lineFor), or null (PROV1).
+  function create({ sb, farm, extent, map = FP.farmMap, sitesRead = null, provenance = () => null }) {
     let sites = [], opened = false, selected = null, destroyed = false, markers = [];
     const panels = new Map();   // site id -> { panel, latest, chart, handle, parameter }
     const node = el("details", { class: "wq-line", "data-wq": "", hidden: true });
@@ -40,6 +41,11 @@
       count.textContent = M().summary(sites);
       draw(); node.hidden = false;
     }).catch(() => {});
+
+    // The reference source behind a site's results (the dataset's key, e.g. ecan-wq): its provenance line, if it is a reference
+    // source. A farm's own sampling is not one, so it has none.
+    // The latest sample's date stands as the as-at of a results dataset, which the reference refresh never dates.
+    const lineOf = (latest) => provenance(latest?.rows?.find((r) => r.source_key)?.source_key, latest?.rows?.map((r) => r.sampled_at).filter(Boolean).sort().pop()) || null;
 
     function draw() {
       body.replaceChildren(
@@ -107,6 +113,7 @@
               el("span", { class: "wq-assess" }, r.assessment))))),
           el("p", { class: "wq-attribution" }, [latest.provisional ? el("span", { class: "wq-provisional" }, "Provisional") : null, latest.provisional ? " " : null,
             latest.attribution || (latest.source ? "Source: " + latest.source + "." : "")]),
+          lineOf(latest) ? el("p", { class: "wq-provenance prov-line" }, lineOf(latest)) : null,
           entry.chart);
       } catch (e) {
         entry.panel.replaceChildren(el("p", { class: "wq-status", role: "status" }, "Couldn't read this site's results."));
@@ -142,7 +149,7 @@
         el("button", { type: "button", class: "link wq-chart-close", onclick: () => { entry.handle?.destroy(); entry.handle = null; entry.chart.replaceChildren(); for (const b of entry.panel.querySelectorAll(".wq-value")) b.setAttribute("aria-expanded", "false"); } }, "Close chart"));
       entry.chart.replaceChildren(bar, host);
       const data = M().chartData({ site, parameter: row.parameter, name: row.name, unit: row.unit, series: entry.series, attribution: entry.latest.attribution || (entry.latest.source ? "Source: " + entry.latest.source + "." : ""),
-        provisional: row.provisional, compare: entry.compare });
+        provisional: row.provisional, compare: entry.compare, provenance: lineOf(entry.latest) });
       entry.handle = FP.blocks.render(host, { block: "chart", owner: { farm: farm.id } }, { read: () => data, level: 4, href: FP.href });
     }
 

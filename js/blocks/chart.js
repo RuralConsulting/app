@@ -5,7 +5,7 @@
 // the source's attribution and a "provisional" flag. Beneath the picture a sentence (count, period, latest) and the
 // results as a table, so nothing depends on seeing the drawing. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
 //
-// Data: { title?, parameter: { name, unit }, attribution?, provisional?,
+// Data: { title?, parameter: { name, unit }, attribution?, provenance? (a line or lines naming a reference source, its as-at date and licence), provisional?,
 //         series: [{ id?, label, owner?, points: [{ t, value, qualifier?, text? }] }],     // first = the site, second = comparison
 //         bands?: { label, demo?, ranges: [{ label, from, to }] } }                         // from/to numbers, null = open ended
 // t is an ISO time or epoch ms; value is the number (the limit, for a censored result); qualifier is "<", ">", "≤" or "≥";
@@ -156,6 +156,11 @@
     return '<ul class="chart-legend" aria-label="Key">' + items.join("") + "</ul>";
   }
 
+  // Where the series comes from when it is drawn from a reference source (PROV1): one or more provenance lines
+  // (FP.provenance.line: source, provider, as-at date, licence), quiet, under the attribution.
+  const provenanceLines = (data) => list(typeof data?.provenance === "string" ? [data.provenance] : data?.provenance).filter(text)
+    .map((l) => '<p class="chart-provenance prov-line">' + esc(l) + "</p>").join("");
+
   function render(data, o, ctx, width = 560) {
     const series = clean(data?.series).slice(0, o.compare === false ? 1 : 2);
     if (!series[0]?.points.length) return "";
@@ -177,7 +182,7 @@
       "<h" + h + ' class="block-title">' + esc(title) + (data?.provisional ? ' <span class="chart-provisional" title="The source says these results are provisional">Provisional</span>' : "") + "</h" + h + ">" +
       '<p class="chart-summary">' + esc(describe(data, o)) + "</p>" +
       '<div class="chart-plot" data-chart-width="' + width + '">' + svg(data, o, width, height, id) + "</div>" + legend(series, anyCensored, o, data) + assess +
-      (text(data?.attribution) ? '<p class="chart-attribution">' + esc(data.attribution) + "</p>" : "") + table + "</section>";
+      (text(data?.attribution) ? '<p class="chart-attribution">' + esc(data.attribution) + "</p>" : "") + provenanceLines(data) + table + "</section>";
   }
 
   // In a browser the picture is drawn at the width it has (so its type stays readable on a phone); the HTML above is the same at a default width.

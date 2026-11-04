@@ -168,6 +168,8 @@
     return spec.id;
   }
 
+  // The two sources behind the shared Rivers layer, with the name to use if their rows cannot be read (PROV1).
+  const RIVER_SOURCES = [["niwa-rec2-rivers", "River network (REC2), NIWA"], ["linz-topo50-river-centrelines", "River lines (Topo50), LINZ"]];
   // A layer's advisor note (LN1), as its info panel shows it: each part from the narrowest note that has one.
   const noteFor = (key) => FP.layerNotes?.applicable(drawn?.layer_notes, key, drawn?.viewer) || null;
 
@@ -613,10 +615,12 @@
         // DM1: the farm map shows each layer around the farm too, so off the farm is "near" unless linked to a permit
         // a group's map (S5) flags what is in or near the group's area instead
         const where = props.in_area ? "In or near the group's area" : props.on_farm ? "On the farm" : props.linked ? "Off the farm, linked to the farm's permit" : "Near the farm";
-        if (consents) return { ...FP.farmModel.consentPopup(props, r, where), note: noteFor("source:" + r.key) };
+        // PROV1: the source, provider, as-at date and licence from reference_sources (drawn.sources), in every reference popup
+        const provenance = FP.provenance?.lineFor(drawn?.sources, r.key, r) || null;
+        if (consents) return { ...FP.farmModel.consentPopup(props, r, where), note: noteFor("source:" + r.key), provenance };
         const named = props.name || props.Name || props.NAME;
         return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
-          qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution, note: noteFor("source:" + r.key) };
+          qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution, note: noteFor("source:" + r.key), provenance };
       };
       const ids = [
         layer({ id: sid + "-fill", type: "fill", source: sid, filter: AREA, paint: { "fill-color": "#bfe8ff", "fill-opacity": 0.25 } }, describe),
@@ -635,7 +639,8 @@
     // view as the person pans (waterways_in_view), not clipped to the farm. Labels need the basemap's glyphs (none in the demo).
     if (!FP.demo?.active) {
       source("rivers", NONE);
-      const describe = (f) => FP.farmModel.riverPopup(f.properties);
+      // PROV1: the shared waterways layer is drawn from two sources (the river network and the Topo50 centrelines)
+      const describe = (f) => ({ ...FP.farmModel.riverPopup(f.properties), provenance: RIVER_SOURCES.map(([key, name]) => FP.provenance?.lineFor(drawn?.sources, key, { name })).filter(Boolean) });
       const ids = FP.farmModel.riverLayers("rivers", { labels: !!map.getStyle()?.glyphs }).map((spec) => layer(spec, spec.type === "line" && /-line$/.test(spec.id) ? describe : null));
       rivers = { key: "rivers", name: "Rivers", sub: null, section: "reference", ids, rivers: true, read: null, asked: 0 };
       entries.push(rivers);

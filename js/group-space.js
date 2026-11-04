@@ -25,7 +25,7 @@
   async function load(group) {
     const sb = FP.sb, today = typeof sb.today === "function" ? await sb.today() : G().isoDay(Date.now());
     const since = new Date(Date.parse(String(today).slice(0, 10) + "T00:00:00Z") - 30 * 86400000).toISOString();
-    const [map, summary, members, own, documents, shared, sharedDocs, obligations, types] = await Promise.all([
+    const [map, summary, members, own, documents, shared, sharedDocs, obligations, types, sources] = await Promise.all([
       read(sb.rpc("group_map", { g: group.id })),
       optional(sb.rpc("group_member_summary", { g: group.id })),
       optional(sb.rpc("group_member_farms", { g: group.id })),
@@ -35,7 +35,10 @@
       optional(sb.rpc("group_shared_documents", { group_id: group.id })),
       optional(sb.from("obligations").select("id,code,summary,kind,due_date,recurrence").eq("org_id", group.id)),
       optional(sb.from("record_types").select("id,key,label")),
+      // PROV1: where the reference layers came from (the popups' provenance line and the Layers card's Sources entry)
+      optional(sb.from("reference_sources").select(FP.provenance.COLUMNS).eq("serve_to_customers", true)),
     ]);
+    if (map) map.sources = list(sources);
     const typeKey = new Map(list(types).map((t) => [t.id, t.key])), label = new Map(list(types).map((t) => [t.key, t.label]));
     return { group, today: String(today).slice(0, 10), since, map, summary: summary || {}, members: list(members), types: list(types),
       typeLabel: (k) => label.get(k) || String(k || "record").replace(/_/g, " "),
@@ -111,8 +114,15 @@
     if (mapHandle !== handle || !drawn) return;
     surface = drawn.surface || null; entries = drawn.entries || [];
     if (!wq && FP.wq && surface) {
-      wq = FP.wq.create({ sb: FP.sb, farm: { id: data.group.id }, extent: data.map.extent, map: surface,
+      wq = FP.wq.create({ sb: FP.sb, farm: { id: data.group.id }, extent: data.map.extent, map: surface, provenance: (key, at) => FP.provenance.lineFor(data.map.sources, key, null, at),
         sitesRead: () => FP.sb.rpc("group_wq_sites", { g: data.group.id }).then((r) => { if (r.error) throw r.error; return r.data || []; }) });
+      wq.ready.then(() => {
+        const slot = document.querySelector(".group-sources");
+        if (!slot) return;
+        const open = slot.querySelector("details")?.open, node = sourcesNode();
+        if (node && open) node.open = true;
+        slot.replaceChildren(...(node ? [node] : []));
+      });
     }
   }
 
@@ -142,7 +152,14 @@
       const input = el("input", { type: "checkbox", role: "switch", ...(e.on ? { checked: true } : {}), onchange: (ev) => surface?.setVisible(e, ev.target.checked) });
       const sub = e.key === "member_farms" ? "shared by each farm, at the level both allow" : e.section === "farm" && own.has(e.key) ? "the group's own map" : e.section === "reference" ? "shared reference" : null;
       return el("li", {}, el("label", {}, input, el("span", {}, e.name), sub ? el("small", {}, sub) : null));
-    })));
+    })), el("div", { class: "group-sources" }, sourcesNode()));
+  }
+  // The Sources entry (PROV1): the same call the farm's drawer makes. A results dataset is judged by the results the group's water-quality
+  // line holds (heldBy), so the entry is drawn again once those sites are known.
+  function sourcesNode() {
+    const held = FP.provenance.heldBy(wq?.sites?.() || []);
+    return FP.provenance.section(ctx?.data?.map?.sources, { keys: [...entries.filter((e) => e.section === "reference").map((e) => e.key), ...held.keys],
+      loadedKeys: held.loadedKeys, asAt: held.asAt, region: ctx?.data?.group?.region });
   }
 
   // ---- Documents ---------------------------------------------------------------------------------------------------------------

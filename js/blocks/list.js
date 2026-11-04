@@ -3,7 +3,8 @@
 // in the markup and the host's width (a container query in css/blocks.css) picks one, so the block never asks the
 // window how big it is. Data: { kind, title?, rows: [{id, title, group?, href?, open?, ...one field per column}],
 // groups?: [[key, label]], collapsed?: [key] (groups shown folded, when another group is open), rows may carry
-// fold: "<plural noun>" (two or more rows with the same fold in a group are one folded line). Dates are YYYY-MM-DD and shown here. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
+// fold: "<plural noun>" (two or more rows with the same fold in a group are one folded line); provenance?: a line or lines naming the
+// reference sources the rows are drawn from (FP.provenance.line), shown under the list. Dates are YYYY-MM-DD and shown here. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -127,7 +128,9 @@
       groups.map(([key, label, g]) => label == null ? inner(g) : collapsed.has(key) && shown ?
         '<details class="list-group list-collapsed" data-list-group="' + esc(key) + '"' + (holds(g) ? " open" : "") + "><summary>" + esc(label) + " (" + g.length + ")</summary>" + inner(g) + "</details>" :
         '<section class="list-group" data-list-group="' + esc(key) + '"><h' + sub + ">" + esc(label) + " (" + g.length + ")</h" + sub + ">" + inner(g) + "</section>").join("") +
-      (rows.length < all.length ? '<p class="list-more">Showing ' + rows.length + " of " + all.length + "</p>" : "") + "</section>";
+      (rows.length < all.length ? '<p class="list-more">Showing ' + rows.length + " of " + all.length + "</p>" : "") +
+      // PROV1: a list drawn from reference sources names them, one quiet line each (FP.provenance.line: source, provider, as-at date, licence)
+      list(typeof data.provenance === "string" ? [data.provenance] : data.provenance).filter(text).map((l) => '<p class="list-provenance prov-line">' + esc(l) + "</p>").join("") + "</section>";
   }
 
   const block = blocks.define({

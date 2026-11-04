@@ -32,7 +32,7 @@ FP.popup = (() => {
     return FP.el("details", { class: "pop-note" }, FP.el("summary", {}, "Advisor note"), dl, by);
   }
 
-  // hit: {title, qualifier, props, kind, note}
+  // hit: {title, qualifier, props, kind, note, provenance (a line, or lines, from FP.provenance)}
   function content(hit) {
     const box = FP.el("div", { class: "pop" });
     box.append(FP.el("h3", {}, hit.title));
@@ -55,6 +55,8 @@ FP.popup = (() => {
     }
     if (hit.note?.parts?.length) box.append(note(hit.note));
     if (hit.link?.href) box.append(FP.el("p", { class: "pop-link" }, FP.el("a", { href: hit.link.href, target: "_blank", rel: "noopener noreferrer" }, hit.link.text)));
+    // Provenance (PROV1): for a reference layer, the source, provider, as-at date and licence, in one quiet line (FP.provenance.line).
+    for (const l of [].concat(hit.provenance || [])) if (l) box.append(FP.el("p", { class: "pop-prov" }, l));
     if (hit.attribution) box.append(FP.el("p", { class: "pop-attr" }, hit.attribution));
     return box;
   }

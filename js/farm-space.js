@@ -35,8 +35,9 @@
     .then((rows) => rows.filter((c) => c.obligation_id && c.status === "met" && !c.superseded_at));
   const readRecords = (sb, farm) => optional(sb.from("entry_links").select("entry_id,obligation_id,document_id").eq("farm_id", farm.id)).then(M.recordLinks);
   // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
+  const SOURCE_COLUMNS = "key,name,theme,provider,licence,attribution,summary,refreshed_at,effective_from,feature_count,coverage,serve_to_customers";
   async function load(sb, farm, user) {
-    const [member, org, maps, documents, authorisations, obligations, today, checks, records, notes, holding] = await Promise.all([
+    const [member, org, maps, documents, authorisations, obligations, today, checks, records, notes, holding, sources] = await Promise.all([
       read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
       read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
       read(sb.rpc("farm_map", { f: farm.id })),
@@ -52,10 +53,14 @@
       // The farmed boundary (FB1): the area actually farmed, the farm's own record, a layer in Layers once there is one.
       // Optional: without it the map is as it was.
       optional(sb.rpc("farm_holding", { f: farm.id })),
+      // Where the reference layers came from (PROV1): each served source's provider, licence, as-at date and summary. Optional:
+      // without them a popup still names its layer's source, and the Layers drawer has no Sources entry.
+      optional(sb.from("reference_sources").select(SOURCE_COLUMNS).eq("serve_to_customers", true)),
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
     const farmed = M.farmedAreaLayer(holding);
     if (farmed) maps.layers = [...(maps.layers || []), farmed];
+    maps.sources = sources;   // the reference_sources rows, for the provenance lines in popups and the Sources list
     maps.layer_notes = notes; maps.viewer = user.id;   // the notes, and who is reading them (a note says "you" for its own writer)
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
@@ -522,6 +527,20 @@
       for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group job" }, M.jobHeading(job)), ...es.map(row));
     }
     $("#layer-list").replaceChildren(...children);
+  }
+  // The Layers drawer's Sources entry (PROV1): the served sources this farm's map draws (and its water-quality sources), with
+  // when each was refreshed, its licence and what it is; sources registered but empty say "Not loaded yet". Folded by default.
+  // The group space's drawer calls the same FP.provenance.section with its own reference rows and keys.
+  function renderSources() {
+    const slot = $("#drawer-sources-slot");
+    if (!slot || !context || !FP.provenance?.section) return;
+    const open = slot.querySelector("details")?.open;
+    // a results dataset (ecan-wq) is judged by the results this farm's water-quality line holds, not by a refresh date it never gets
+    const held = FP.provenance.heldBy(wq?.sites?.() || []);
+    const keys = [...(context.maps?.reference || []).map((r) => r.key), ...held.keys];
+    const node = FP.provenance.section(context.maps?.sources, { keys, loadedKeys: held.loadedKeys, asAt: held.asAt, region: context.farm?.region || context.maps?.farm?.region });
+    if (node && open) node.open = true;
+    slot.replaceChildren(...(node ? [node] : []));
   }
   // A layer set by hand (its switch in the drawer, or "Show <layer>" from the command bar): it stays as set (E5).
   function setLayer(key, on) {
@@ -1141,7 +1160,7 @@
         const drawn = await scene.ready;
         if (current !== token) return;
         if (!drawn) throw Error("Map unavailable for this farm.");
-        renderLayers(drawn.entries); openedMap = farm.id;
+        renderLayers(drawn.entries); renderSources(); openedMap = farm.id;
         addLayersControl(); commandBar();
       }
       FP.farmMap.resize(); settleFrame();
@@ -1150,7 +1169,10 @@
       if (focused) { focused = null; FP.farmMap.focus(null); }   // a new view starts on the farm
       askSet = null;   // and an answer's layers go with the Ask view
       // Water quality nearby: one line per farm. Another view closes it, so its sites leave the quiet map.
-      if (!wq && FP.wq) wq = FP.wq.create({ sb: FP.sb, farm, extent: context.maps.extent });
+      if (!wq && FP.wq) {
+        wq = FP.wq.create({ sb: FP.sb, farm, extent: context.maps.extent, provenance: (key, at) => FP.provenance?.lineFor(context?.maps?.sources, key, null, at) || null });
+        wq.ready.then(renderSources);   // the water-quality sources join the Sources list once the sites are known
+      }
       if (route.view !== "map") wq?.collapse({ reframe: true });
       // and on the quiet map, with what this view brings (the plan selected in Documents: the FEP's layers); a photo
       // opened in an earlier view no longer counts
