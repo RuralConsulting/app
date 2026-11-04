@@ -125,7 +125,7 @@
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)", kind: "consultancy" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
       farm_parcels: [], farm_boundaries: [],
-    }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, onboardingEffort: f.ops.onboarding_effort || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
+    }, reference: { [FARM]: f.reference || [] }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, onboardingEffort: f.ops.onboarding_effort || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
@@ -626,6 +626,18 @@
       async rpc(name, args) {
         const d = await ready;
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
+        // PERF1b, as public.farm_reference_counts and public.farm_reference_context (PERF1a): the farm's reference entries
+        // (d.reference by farm; the fixture's `reference`, none in the demo) counted, and one served source's entry read on
+        // its own (no features here: its entry with none; not served or no such farm: null). farm_map's `reference` is [].
+        if (name === "farm_reference_counts" || name === "farm_reference_context") {
+          if (args.f !== FARM && !(args.f === FARM2 && d.map2)) return result(null);
+          const entries = (d.reference || {})[args.f] || [], n = (r) => (r.features?.features || []).length;
+          if (name === "farm_reference_counts") return result(Object.fromEntries(entries.filter((r) => n(r) > 0).map((r) => [r.key, n(r)])));
+          const src = (d.tables.reference_sources || []).find((s) => s.key === args.source && s.serve_to_customers);
+          if (!src) return result(null);
+          return result(copy(entries.find((r) => r.key === args.source) || { key: src.key, name: src.name, theme: src.theme, attribution: src.attribution || null,
+            replaces_in_extent: [], features: collection([]) }));
+        }
         if (name === "farm_people") return result(d.people[args.f] || []);
         // As public.layer_notes_for_farm: the global notes, the advisor's organisation's, and the farm's own.
         if (name === "layer_notes_for_farm") return result((d.tables.layer_notes || []).filter((n) => n.scope === "global" || (n.scope === "group" && n.org_id === ORG) || (n.scope === "farm" && n.farm_id === args.f)));

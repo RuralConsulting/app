@@ -36,17 +36,12 @@
   const readRecords = (sb, farm) => optional(sb.from("entry_links").select("entry_id,obligation_id,document_id").eq("farm_id", farm.id)).then(M.recordLinks);
   // Everything a farm space shows, in one round of caller-scoped reads (row-level security decides what comes back).
   const SOURCE_COLUMNS = "key,name,theme,provider,licence,attribution,summary,refreshed_at,effective_from,feature_count,coverage,serve_to_customers";
-  async function load(sb, farm, user) {
-    const [member, org, maps, documents, authorisations, obligations, today, checks, records, notes, holding, sources] = await Promise.all([
-      read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
-      read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
+  // PERF1b: two halves read at once. The map's (loadMap: farm_map, the farm's own layers since PERF1a, with what its popups
+  // and Layers need) is all the farm needs to be drawn; the rest (loadRest) is the standing answers' and the views'. The
+  // space draws the farm as soon as the map's half is back and fills in the rest when it comes.
+  async function loadMap(sb, farm, user) {
+    const [maps, notes, holding, sources] = await Promise.all([
       read(sb.rpc("farm_map", { f: farm.id })),
-      readDocuments(sb, farm),
-      read(sb.from("authorisations").select("id,kind,title,consent_no,rule_ref,valid_from,valid_to,created_at").eq("farm_id", farm.id).order("title")),
-      // Optional: if the dates can't be read, "What's due" says so rather than claiming nothing is due.
-      Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,full_text,kind,parameters,due_date,recurrence,source_document_id,source_page").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
-      sb.today ? sb.today() : nzToday(),
-      readChecks(sb, farm), readRecords(sb, farm),
       // The advisor notes on the map's layers (LN1): the narrowest shows in a layer's info panel. Optional: without
       // them the map is as it was.
       optional(sb.rpc("layer_notes_for_farm", { f: farm.id })),
@@ -60,12 +55,38 @@
     if (!maps) throw Error("This farm isn't shared with your login.");
     const farmed = M.farmedAreaLayer(holding);
     if (farmed) maps.layers = [...(maps.layers || []), farmed];
+    maps.reference = maps.reference || [];   // [] since PERF1a; a database before it still fills it in (read as the cache)
     maps.sources = sources;   // the reference_sources rows, for the provenance lines in popups and the Sources list
     maps.layer_notes = notes; maps.viewer = user.id;   // the notes, and who is reading them (a note says "you" for its own writer)
+    return maps;
+  }
+  // How many features each served source has in the farm's context (PERF1a's farm_reference_counts, no geometry): the
+  // Layers drawer's reference rows and the Sources list. Null when it can't be read (a database before PERF1a: farm_map's
+  // own reference entries say instead).
+  const readCounts = (sb, farm) => Promise.resolve(sb.rpc("farm_reference_counts", { f: farm.id }))
+    .then((r) => (r.error || !r.data || typeof r.data !== "object" ? null : r.data), () => null);
+  function loadRest(sb, farm, user) {
+    return Promise.all([
+      read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
+      read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
+      readDocuments(sb, farm),
+      read(sb.from("authorisations").select("id,kind,title,consent_no,rule_ref,valid_from,valid_to,created_at").eq("farm_id", farm.id).order("title")),
+      // Optional: if the dates can't be read, "What's due" says so rather than claiming nothing is due.
+      Promise.resolve(sb.from("obligations").select("id,authorisation_id,code,summary,full_text,kind,parameters,due_date,recurrence,source_document_id,source_page").eq("farm_id", farm.id)).then((r) => r, (e) => ({ error: e })),
+      sb.today ? sb.today() : nzToday(),
+      readChecks(sb, farm), readRecords(sb, farm), readCounts(sb, farm),
+    ]);
+  }
+  function assemble(sb, farm, user, maps, [member, org, documents, authorisations, obligations, today, checks, records, counts]) {
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
     return { farm, user, role: member.role, orgRole: org?.role || null, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
-      obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error, checks, records };
+      obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error, checks, records, referenceCounts: counts };
+  }
+  // Both halves, as one context (what the tests and a re-read use).
+  async function load(sb, farm, user) {
+    const [maps, rest] = await Promise.all([loadMap(sb, farm, user), loadRest(sb, farm, user)]);
+    return assemble(sb, farm, user, maps, rest);
   }
   // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
   // read (load) only when that farm is opened.
@@ -84,7 +105,12 @@
   // Ask (the farm's Ask function): the layer set its answer brought up (until the view changes), and the last answer on
   // this farm, kept so the Ask tab shows it again after a source or the plan was opened.
   let askSet = null, lastAsk = null, askToken = 0;
+  // PERF1b: the farm being read (its map's half, and the id it is for), and its reference sources (farm-reference.js),
+  // read one at a time when something switches one on; the drawn scene's own rows until the Layers rows are made.
+  let mapsPending = null, pendingFor = null, refs = null, sceneEntries = [];
   const unmount = (...handles) => { for (const h of handles.flat()) h?.destroy(); };
+  // A farm left: what was being read for it is dropped (a read still on its way is ignored when it lands).
+  function forget() { pending = null; mapsPending = null; pendingFor = null; refs?.destroy(); refs = null; sceneEntries = []; }
   // Each answer is an Answer block in its own host, so the space never writes answer HTML itself.
   function answer(host, model, options) {
     const node = el("div", { class: "block-host" });
@@ -96,7 +122,7 @@
     FP.addBlock?.close(false);
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
-    $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
+    $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; forget(); openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
     wq?.destroy(); wq = null;
     layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null; pendingAsk = null; proposals.clear();
@@ -169,12 +195,18 @@
     });
     // Opening a What's due line (its fold) whose condition records its place frames the map on it, marks it and brings
     // the layers that place needs; closing it goes back to the farm and the quiet map. A line with no place moves nothing.
+    const isOpen = (id) => $("#overview-cards").querySelectorAll('[data-item-id="' + CSS.escape(id || "") + '"] details.checklist-fold[open]').length > 0;
     const choose = (id, open) => {
       const place = id && standing.find((m) => m.places?.[id])?.places[id];
       if (!place) return false;
       const next = open ? id : focused === id ? null : focused;
       if (next === focused) return true;
-      if (!FP.farmMap.focus(next ? place : null)) return true;   // nothing on this map for it: say nothing, move nothing
+      if (!FP.farmMap.focus(next ? place : null)) {
+        // PERF1b: its bores may not be read yet: read them, then frame it if its line is still open (once: whenRead
+        // reads only sources not tried yet, so a second miss moves nothing)
+        if (next) whenRead(place, () => { if (isOpen(id)) choose(id, true); });
+        return true;   // nothing on this map for it: say nothing, move nothing
+      }
       focused = next; focusPlace = next ? place : null;
       applyScene(); markFocused();
       return true;
@@ -184,7 +216,7 @@
       const fold = e.target;
       if (!fold.matches?.("details.checklist-fold")) return;
       const id = fold.closest("[data-item-id]")?.dataset.itemId;
-      const stillOpen = $("#overview-cards").querySelectorAll('[data-item-id="' + CSS.escape(id || "") + '"] details.checklist-fold[open]').length > 0;
+      const stillOpen = isOpen(id);
       choose(id, fold.open || stillOpen);
     }, true);
     // Done and Add the record (E5): a condition marked done, or a document added and linked to it.
@@ -307,7 +339,7 @@
   async function showPortfolio() {
     const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
     flushDone();
-    context = null; pending = null; openedMap = null;
+    context = null; forget(); openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
     wq?.destroy(); wq = null;
     document.body.classList.remove("farm-space-active", "farm-detail");
@@ -341,7 +373,8 @@
     const name = $("#space-farm-name");
     name.textContent = farm.name; name.href = FP.href(M.href(farm.id, "map"));
     if (route.view === "map") name.setAttribute("aria-current", "page"); else name.removeAttribute("aria-current");
-    const person = FP.demo?.active ? (context.advisor ? "Demo advisor" : "Demo farmer") : user.user_metadata?.display_name || user.email;
+    // (drawn first with the farm's map, before the farm's roles are read: People and Layer notes come with them)
+    const person = FP.demo?.active ? (context?.advisor ? "Demo advisor" : "Demo farmer") : user.user_metadata?.display_name || user.email;
     $("#space-person").textContent = person;
     $("#account-initials").textContent = M.initials(FP.demo?.active ? person : user.user_metadata?.display_name, user.email);
     const select = $("#farm-switch");
@@ -352,10 +385,12 @@
     $("#farm-actions").replaceChildren(...[["map", "What's due"], ...M.views].map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
     const people = $("#space-people");
-    people.hidden = !M.canManage(context.role); people.href = FP.href(M.href(farm.id, "people"));
+    people.hidden = !M.canManage(context?.role); people.href = FP.href(M.href(farm.id, "people"));
     // Layer notes (LN2): offered to the farm's editors and to the advisors of the organisation that services it, never to a viewer.
     const layerNotes = $("#space-layers");
-    layerNotes.hidden = !FP.layerNotes?.offersNotes({ farmRole: context.role, orgRole: context.orgRole }); layerNotes.href = FP.href("#/layers");
+    if (!context) layerNotes.hidden = true;
+    else layerNotes.hidden = !FP.layerNotes?.offersNotes({ farmRole: context.role, orgRole: context.orgRole });
+    layerNotes.href = FP.href("#/layers");
     if (route.view === "people") people.setAttribute("aria-current", "page"); else people.removeAttribute("aria-current");
     $("#account-open").toggleAttribute("data-current", route.view === "people");
   }
@@ -445,7 +480,10 @@
   const GOVERNS = { waterways: ["rivers"], wells: ["ecan-wells"] };
   // The layer sets an answer in Ask can bring up (the action list's map.layers): water is the rivers and bores.
   const ASK_SETS = { quiet: [], fep: FEP_LAYERS, photos: ["photos"], water: ["waterways", ...GOVERNS.waterways, ...GOVERNS.wells], consents: ["consents", "ecan-consents"] };
-  const mapKeys = (m) => ["extent", "titles", ...(m?.layers || []).map((l) => l.theme), ...(m?.reference || []).map((r, i) => r.key || "reference-" + i), "rivers"];
+  // Every row the farm's map has: its own layers, the reference sources counted in its context (PERF1b: listed before
+  // they are read) and those farm_map carried itself, and Rivers.
+  const mapKeys = (m, counts) => ["extent", "titles", ...(m?.layers || []).map((l) => l.theme), ...(m?.reference || []).map((r, i) => r.key || "reference-" + i),
+    ...Object.entries(counts || {}).filter(([, n]) => Number(n) > 0).map(([k]) => k), "rivers"];
   function sceneFor(view, focus, context) {
     const on = new Set(globalThis.FP_CONFIG?.farmView?.defaultOn || QUIET), f = focus || {}, v = view || {};
     if (v.view === "documents" && v.item) {
@@ -459,8 +497,15 @@
     }
     if (f.photo) on.add("photos");
     // an answer in Ask brings the set it names (all: every layer the farm's map has)
-    for (const k of f.set === "all" ? mapKeys(context?.maps) : ASK_SETS[f.set] || []) on.add(k);
+    for (const k of f.set === "all" ? mapKeys(context?.maps, context?.referenceCounts) : ASK_SETS[f.set] || []) on.add(k);
     return on;
+  }
+  // A row turned on or off (PERF1b): a reference source not read yet is read now, its switch busy (on, not off) until it
+  // has come; the map draws it then (arrive). Turning a row off never reads anything.
+  function show(e, on) {
+    FP.farmMap.setVisible(e, on);
+    if (on && e.pending && refs) refs.want([e.key]);
+    rowState(e);
   }
   // Every row as the scene says, unless the person set it by hand; the drawer's switches follow.
   function applyScene() {
@@ -468,10 +513,84 @@
     const want = sceneFor(shownRoute, { place: focusPlace, photo: photoShown, set: askSet }, context);
     for (const e of layerEntries) {
       const on = handSet.has(e.key) ? handSet.get(e.key) : want.has(e.key);
-      if (e.on !== on) FP.farmMap.setVisible(e, on);
+      if (e.on !== on) show(e, on);
       if (e.input) e.input.checked = on;
       if (e.pastInput) e.pastInput.closest("label").hidden = !on;
     }
+  }
+  // ---- Reference sources read on demand (PERF1b, farm-reference.js) ----------------------------------------------------
+  // The Layers rows of the reference sources this farm's context holds, before their features are read: a row with no
+  // map layers yet (pending), filled in when the source arrives. Consents keep their "Past consents" switch.
+  const placeholder = (s) => ({ key: s.key, name: M.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true,
+    ...(s.theme === "consents" || s.key === "ecan-consents" ? { past: { ids: [], on: false } } : {}) });
+  // The drawer's rows: the farm's own, then a row per reference source by name (drawn already, or to be read), then Rivers.
+  function layerRows(entries) {
+    const drawnRefs = new Map(entries.filter((e) => e.section === "reference" && !e.rivers).map((e) => [e.key, e]));
+    const refRows = (refs?.index || []).map((s) => drawnRefs.get(s.key) || placeholder(s));
+    for (const [key, e] of drawnRefs) if (!refs?.has(key)) refRows.push(e);
+    return [...entries.filter((e) => e.section !== "reference"), ...refRows, ...entries.filter((e) => e.rivers)];
+  }
+  function startReference() {
+    refs?.destroy();
+    const farm = context.farm.id, mine = refs = FP.farmReference.create({ sb: FP.sb, farm, counts: context.referenceCounts, sources: context.maps.sources,
+      preloaded: context.maps.reference, onArrive: (entry) => { if (refs === mine) arrive(entry); }, onChange: (key) => { if (refs === mine) changed(key); } });
+  }
+  // A source has come: it joins the scene on the map (the Map scene's addReference), shown as its row now says.
+  function arrive(entry) {
+    const rows = layerEntries.filter((e) => e.key === entry.key && e.pending);
+    if (!rows.length) return;
+    const drawn = FP.farmMap.addReference(entry);
+    if (!drawn) return;
+    for (const e of rows) {
+      e.ids = drawn.ids; e.pending = false;
+      if (e.past && drawn.past) e.past.ids = drawn.past.ids;
+      FP.farmMap.setVisible(e, e.on);
+      if (e.past) FP.farmMap.setPast(e, e.past.on);
+    }
+    // a chosen line (or an answer's frame) waiting on this source is framed again, now that its features are on the map
+    if (focusPlace && FP.farmReference.placeKeys(focusPlace, [refs.index.find((s) => s.key === entry.key)].filter(Boolean), GOVERNS).length) FP.farmMap.focus(focusPlace);
+  }
+  // A source's state changed (reading, read, couldn't be read): its switch, and the Sources list.
+  function changed(key) {
+    for (const e of layerEntries.filter((x) => x.key === key)) {
+      if (refs.state(key) === "failed" && e.pending) {
+        // nothing was drawn: the switch reads off, and the next switch (or the next line that needs it) reads it again
+        handSet.delete(key); FP.farmMap.setVisible(e, false);
+        if (e.input) e.input.checked = false;
+        if (e.pastInput) e.pastInput.closest("label").hidden = true;
+      }
+      rowState(e);
+    }
+    renderSources();
+  }
+  // The row's switch: busy while its source is on its way (still on), a line under the name once it couldn't be read.
+  function rowState(e) {
+    if (!e.input || !refs?.has(e.key)) return;
+    const st = refs.state(e.key), li = e.input.closest("li");
+    e.input.setAttribute("aria-busy", String(st === "loading"));
+    li?.classList.toggle("layer-loading", st === "loading");
+    let note = li?.querySelector(".layer-state");
+    const text = st === "loading" ? "Loading…" : st === "failed" ? "Couldn't load just now" : "";
+    if (!text) { note?.remove(); return; }
+    if (!note && li) { note = el("small", { class: "layer-state", role: "status" }); e.input.closest("label").querySelector("span")?.append(note); }
+    if (note) note.textContent = text;
+  }
+  // The sources a place needs before it can be framed (its themes, the rows that govern them, the layers it names), not
+  // tried yet; read, then `then` runs (once: a source that still can't be read doesn't loop).
+  function whenRead(place, then) {
+    const keys = refs ? FP.farmReference.placeKeys(place, refs.index, GOVERNS).filter((k) => refs.state(k) === "pending") : [];
+    if (!keys.length) return false;
+    const mine = token;
+    refs.want(keys).then(() => { if (mine === token) then(); });
+    return true;
+  }
+  // After the farm is drawn and the map is idle: the short list the standing answers most often bring up, read ahead one
+  // at a time (config farmView.prefetch), never the region-wide zones; hidden until something switches them on.
+  function prefetchWhenIdle() {
+    const mine = refs, list = globalThis.FP_CONFIG?.farmView?.prefetch || FP.farmReference.PREFETCH;
+    const go = () => { if (refs === mine && mine) mine.prefetch(list, { readRivers: () => FP.farmMap.readRiversAhead?.() }); };
+    const idle = () => (typeof requestIdleCallback === "function" ? requestIdleCallback(go, { timeout: 4000 }) : setTimeout(go, 500));
+    Promise.resolve(FP.farmMap.atRest?.()).then(idle, idle);
   }
   let drawerFolded = [];   // the sheets (and their state) the drawer folded under it on a phone: put back when it closes
   function setDrawer(open) {
@@ -527,6 +646,7 @@
       for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group job" }, M.jobHeading(job)), ...es.map(row));
     }
     $("#layer-list").replaceChildren(...children);
+    for (const e of entries) rowState(e);
   }
   // The Layers drawer's Sources entry (PROV1): the served sources this farm's map draws (and its water-quality sources), with
   // when each was refreshed, its licence and what it is; sources registered but empty say "Not loaded yet". Folded by default.
@@ -537,8 +657,11 @@
     const open = slot.querySelector("details")?.open;
     // a results dataset (ecan-wq) is judged by the results this farm's water-quality line holds, not by a refresh date it never gets
     const held = FP.provenance.heldBy(wq?.sites?.() || []);
-    const keys = [...(context.maps?.reference || []).map((r) => r.key), ...held.keys];
-    const node = FP.provenance.section(context.maps?.sources, { keys, loadedKeys: held.loadedKeys, asAt: held.asAt, region: context.farm?.region || context.maps?.farm?.region });
+    // PERF1b: the sources counted in the farm's context (farm_reference_counts), read or not, so a line reads the same as
+    // when farm_map carried every source; one that couldn't be read just now says so
+    const keys = [...(refs ? refs.keys() : []), ...(context.maps?.reference || []).map((r) => r.key), ...held.keys];
+    const node = FP.provenance.section(context.maps?.sources, { keys, loadedKeys: held.loadedKeys, asAt: held.asAt, region: context.farm?.region || context.maps?.farm?.region,
+      failedKeys: refs ? refs.failedKeys() : [] });
     if (node && open) node.open = true;
     slot.replaceChildren(...(node ? [node] : []));
   }
@@ -546,7 +669,7 @@
   function setLayer(key, on) {
     handSet.set(key, on);
     for (const x of layerEntries.filter((x) => x.key === key)) {
-      FP.farmMap.setVisible(x, on);
+      show(x, on);
       if (x.input) x.input.checked = on;
       if (x.pastInput) x.pastInput.closest("label").hidden = !on;
     }
@@ -649,8 +772,9 @@
         // Read the farm again: its boundary now takes in the block. Re-reading starts the map quiet, which dropped the
         // layers the person had set by hand (the creek and drain, Rivers): they are put back as they were, and the new
         // Farmed area comes up so the saved shape is seen.
+        // PERF1b: the reference sources are read again for the new extent, those set by hand as they are put back.
         const kept = new Map(handSet);
-        context = null; openedMap = null;
+        context = null; forget(); openedMap = null;
         await open(farm, { farm: farm.id, view: "map" });
         if (context?.farm.id !== farm.id) return;
         for (const [key, on] of kept) if (layerEntries.some((e) => e.key === key)) setLayer(key, on);
@@ -1050,7 +1174,9 @@
     const [kind, ...rest] = String(place || "").split(":"), v = rest.join(":");
     if (kind === "land_unit") return { land_units: [v], themes: [] };
     if (kind === "obligation") return (models || []).find((m) => m.places?.["obligation-" + v])?.places["obligation-" + v] || null;
-    if (kind === "layer") return (ctx?.maps?.reference || []).some((r) => r.key === v) ? { land_units: [], themes: [], layers: [v] } : { land_units: [], themes: [v] };
+    // a reference source of the farm's context (PERF1b: counted, read or not), or a layer's theme
+    const reference = (ctx?.maps?.reference || []).some((r) => r.key === v) || Number(ctx?.referenceCounts?.[v]) > 0;
+    if (kind === "layer") return reference ? { land_units: [], themes: [], layers: [v] } : { land_units: [], themes: [v] };
     return null;
   }
   // The answer's map verbs, in order, once it is shown: the layer set it names and the place it frames (the last one
@@ -1067,7 +1193,12 @@
       }
     }
     if (frame === undefined) { if (focusPlace) { focusPlace = null; FP.farmMap.focus(null); } }
-    else if (!frame || !FP.farmMap.focus(frame)) { focusPlace = null; FP.farmMap.focus(null); }
+    else if (!frame || !FP.farmMap.focus(frame)) {
+      focusPlace = null; FP.farmMap.focus(null);
+      // PERF1b: the layer it frames may not be read yet: read it, then frame it if the answer's arrangement still stands
+      const set = askSet;
+      if (frame) whenRead(frame, () => { if (askSet === set && !focusPlace && FP.farmMap.focus(frame)) focusPlace = frame; });
+    }
     else focusPlace = frame;
     applyScene();
   }
@@ -1138,13 +1269,18 @@
     $("#space-handle-label").textContent = M.viewLabel(route.view) || "";
     setSheet("due", "peek", false); setSheet("space", "open", false);
     FP.farmMap.closePopup?.();   // UI1: a feature popup belongs to the view it was opened in
-    if (context?.farm.id !== farm.id) {
-      context = null; openedMap = null;
+    // (a farm whose read is still on its way is not read again: a second route to it waits for the same reads)
+    if (context?.farm.id !== farm.id && pendingFor !== farm.id) {
+      context = null; openedMap = null; forget();
       unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
       wq?.destroy(); wq = null;
       layerEntries = []; handSet = new Map();
       $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren(); $("#overview-peek").textContent = "";
-      pending = load(FP.sb, farm, user);
+      // PERF1b: the map's half and the rest are read at once; the farm is drawn as soon as the map's half is back
+      const maps = loadMap(FP.sb, farm, user), rest = loadRest(FP.sb, farm, user);
+      pendingFor = farm.id; mapsPending = maps;
+      pending = Promise.all([maps, rest]).then(([m, r]) => assemble(FP.sb, farm, user, m, r));
+      pending.catch(() => {});   // the failure is shown by whichever await meets it first
     }
     FP.show("screen-map");
     document.body.classList.toggle("farm-detail", route.view !== "map");
@@ -1152,6 +1288,23 @@
     $("#overview-rail").hidden = route.view !== "map";
     $("#map-msg").hidden = false; $("#map-msg").textContent = "Loading the farm…";
     try {
+      header(farm, route); reserveHeader();
+      if (openedMap !== farm.id) {
+        const maps = context?.maps || await mapsPending;
+        if (current !== token) return;
+        // A sheet that opens with the view (Ask, Create, Documents) covers part of the map: the first fly lands clear of it.
+        framedOverlap = measureSheet();
+        // The Map scene block draws the farm on the space's one map (FP.farmMap), so the NZ -> farm zoom carries on.
+        unmount(scene);
+        scene = FP.blocks.render($("#farm-scene"), { block: "map-scene", owner: { farm: farm.id } }, { read: () => context?.maps || maps, surface: FP.farmMap, level: 2 });
+        const drawn = await scene.ready;
+        if (current !== token) return;
+        if (!drawn) throw Error("Map unavailable for this farm.");
+        sceneEntries = drawn.entries; openedMap = farm.id;
+        // the farm is on the map: the message goes now, not when the standing answers have been read (PERF1b)
+        $("#map-msg").hidden = true; farmDrawn(farm.id);
+        addLayersControl(); commandBar();
+      }
       const loaded = context || await pending;
       if (current !== token) return;
       context = loaded;
@@ -1159,18 +1312,8 @@
       FP.capture?.start({ sb: FP.sb, user: context.user });   // B4b: what waits on this phone uploads once a farm is open
       document.title = farm.name + (route.view === "map" ? "" : " · " + M.viewLabel(route.view)) + " | " + FP.brand?.product;
       try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, M.href(farm.id, route.view)); } catch {}
-      if (openedMap !== farm.id) {
-        // A sheet that opens with the view (Ask, Create, Documents) covers part of the map: the first fly lands clear of it.
-        framedOverlap = measureSheet();
-        // The Map scene block draws the farm on the space's one map (FP.farmMap), so the NZ -> farm zoom carries on.
-        unmount(scene);
-        scene = FP.blocks.render($("#farm-scene"), { block: "map-scene", owner: { farm: farm.id } }, { read: () => context.maps, surface: FP.farmMap, level: 2 });
-        const drawn = await scene.ready;
-        if (current !== token) return;
-        if (!drawn) throw Error("Map unavailable for this farm.");
-        renderLayers(drawn.entries); renderSources(); openedMap = farm.id;
-        addLayersControl(); commandBar();
-      }
+      // the Layers rows once the farm's counts are known: the reference sources listed, each read when switched on
+      if (!refs) { startReference(); renderLayers(layerRows(sceneEntries)); renderSources(); prefetchWhenIdle(); }
       FP.farmMap.resize(); settleFrame();
       if (blockButton) blockButton.hidden = !canAddLand();   // Add a block: for the farm's editors only
       unmount(view); view = null;
@@ -1202,7 +1345,29 @@
       else if (route.view === "people") { $("#space-body").replaceChildren(peopleView()); if (M.canManage(context.role)) await loadPeople(); }
       else if (route.view === "onboarding") { $("#space-body").replaceChildren(); view = onboardingView($("#space-body"), route.item); }
       $("#map-msg").hidden = true;
-    } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
+    } catch (e) {
+      if (!context && pendingFor === farm.id) forget();   // a farm that couldn't be read is read again when next opened
+      if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); }
+    }
   }
-  return { load, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock };
+  // PERF1b (4): measured, not guessed. The first farm drawn on this page (its boundary on the map, "Loading the farm…"
+  // gone) is marked, and the measure from the page's start (guard.js marks it, the first script in the page) kept for this
+  // browser's tab, so Operations can show it to staff beside the build version. Never throws: a browser without the
+  // performance or storage APIs just has no figure.
+  const DRAWN_KEY = "fp-farm-drawn";
+  function farmDrawn(farm) {
+    try {
+      if (performance.getEntriesByName("fp-farm-drawn", "mark").length) return;   // a returning visit is the page's first farm
+      performance.mark("fp-farm-drawn");
+      const start = performance.getEntriesByName("fp-page-start", "mark").length ? "fp-page-start" : undefined;
+      const m = performance.measure("farm-drawn", start, "fp-farm-drawn");
+      const ms = Math.round(m?.duration ?? performance.getEntriesByName("farm-drawn", "measure").pop()?.duration);
+      if (Number.isFinite(ms)) sessionStorage.setItem(DRAWN_KEY, JSON.stringify({ ms, farm, at: new Date().toISOString() }));
+    } catch { /* no figure on this browser */ }
+  }
+  // The last figure for this browser's tab: { ms, farm, at }, or null.
+  function lastDrawn() {
+    try { const v = JSON.parse(sessionStorage.getItem(DRAWN_KEY) || "null"); return v && Number.isFinite(v.ms) ? v : null; } catch { return null; }
+  }
+  return { load, loadMap, loadRest, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock, lastDrawn, GOVERNS, ASK_SETS };
 });

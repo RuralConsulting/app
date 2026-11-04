@@ -17,6 +17,10 @@ window.FP_CONFIG = {
   // Layers. Layers made for a job (measured distances for a consent AEE) are listed under that job.
   farmView: {
     defaultOn: ["extent", "photos"],
+    // PERF1b: the reference rows read ahead, one at a time, once the farm is drawn and the map is idle: what the standing
+    // answers most often bring up (Rivers, bores, consents, water-quality sites). Every other source is read when
+    // something switches it on; the region-wide zone polygons are never read ahead.
+    prefetch: ["rivers", "ecan-wells", "ecan-consents", "ecan-wq-sites"],
   },
 
   photoLinkSeconds: 3600,

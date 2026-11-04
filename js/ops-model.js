@@ -100,6 +100,13 @@
         : { text: "The app's version isn't available", because: "it is read from the published files" },
       links: [["Pull requests", links.pulls], ["Actions", links.actions], ["Data job issues", links.issues], ["The queue", links.queue]] };
   }
+  // PERF1b: how long this browser took to draw the last farm it opened, from the page's start (the `farm-drawn` measure,
+  // farm-space.js; kept for the tab). Null when there is no figure. Seconds to one place; the farm is not named.
+  function drawnLine(v) {
+    const ms = v && v.ms != null ? Number(v.ms) : NaN;
+    if (!Number.isFinite(ms) || ms < 0) return null;
+    return "Farm drawn in " + (ms / 1000).toFixed(1) + " s on this browser's last open, from the page's start";
+  }
 
   // AI recipes (AI1): how-to recipes the AI keeps, one row per version (ai_recipes). Drafts wait for a platform advisor; the
   // AI reads approved ones only. `canDecide`: the viewer is a platform advisor, so Approve and Retire are offered (row-level
@@ -325,5 +332,5 @@
     };
   }
 
-  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl, loadGaps, ratchet, ratchetPeriod, onboarding };
+  return { REPO, links, day, time, jobs, references, build, drawnLine, recipes, needsAttention, runUrl, loadGaps, ratchet, ratchetPeriod, onboarding };
 });

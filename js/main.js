@@ -36,15 +36,29 @@
     }
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
     $("#pw-email").value = user.email;
-    const { data, error } = await sb.from("farms").select("id, name, region, org_id").order("name");
+    // PERF1b: the farms, the person's memberships (then their organisations, only if there are any) and the staff flag
+    // are read at once; a link straight to one of the person's farms is followed as soon as the farms are known, so
+    // the farm's own reads start before the group and staff reads finish.
+    const farmsRead = Promise.resolve(sb.from("farms").select("id, name, region, org_id").order("name")).then((r) => r, (e) => ({ error: e }));
+    const groupsRead = readGroups(user), staffRead = Promise.resolve(FP.ops.checkStaff(user)).catch(() => false);
+    const { data, error } = await farmsRead;
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     allFarms = data; farms = data;
     FP.farmSpace.setPortfolio(farms, user);
-    groups = await readGroups(user);
+    FP.ops.showLinks?.();   // the farm space's header exists now: its Operations link as the staff read says (or will)
+    const early = farmLink();
+    if (early) { readyToRoute = true; route(); }
+    groups = await groupsRead;
     FP.groupSpace.setGroups(groups, user);
     FP.groupSpace.hasPortfolio = () => farms.length + groups.length > 1;
-    await FP.ops.checkStaff(user);
-    readyToRoute = true; route();
+    await staffRead;
+    readyToRoute = true;
+    if (early !== location.hash) route();   // the farm already open stays as it is; anything else is routed now
+  }
+  // The address names one of the person's farms (a view of it): followed before the groups and the staff flag are known.
+  function farmLink() {
+    const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash, r = hash && FP.farmModel.match(hash);
+    return r && allFarms.some((f) => f.id === r.farm) ? location.hash : null;
   }
 
   // The catchment groups the person belongs to (S5). A failure here leaves the farms as they were.

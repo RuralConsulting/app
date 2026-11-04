@@ -102,10 +102,13 @@
   // A measurements-theme source (the results of a monitoring dataset, e.g. ecan-wq) is never "refreshed" by the reference tool, so it is
   // judged by what the space holds: `loadedKeys` are the datasets whose results the space has (see heldBy), `asAt` their latest sample dates.
   // Without results it is listed in neither list; it is not "not loaded" on the strength of an empty refresh date.
-  function sourcesFor(rows, { keys = [], region = null, loadedKeys = [], asAt = {} } = {}) {
-    const want = new Set(keys), held = new Set(loadedKeys);
+  // PERF1b: `failedKeys` are sources the space reads one at a time that couldn't be read just now: still listed with the
+  // loaded ones (the database holds them), flagged `failed`, so the list says so rather than dropping them.
+  function sourcesFor(rows, { keys = [], region = null, loadedKeys = [], asAt = {}, failedKeys = [] } = {}) {
+    const want = new Set(keys), held = new Set(loadedKeys), failed = new Set(failedKeys);
     const all = [...index(rows).values()].filter((s) => s.served).filter((s) => s.theme !== "measurements" || held.has(s.key))
-      .map((s) => (held.has(s.key) ? { ...withSample(s, asAt[s.key]), loaded: true } : s));
+      .map((s) => (held.has(s.key) ? { ...withSample(s, asAt[s.key]), loaded: true } : s))
+      .map((s) => (failed.has(s.key) && s.loaded && want.has(s.key) ? { ...s, failed: true } : s));
     const byName = (a, b) => a.name.localeCompare(b.name, "en-NZ", { sensitivity: "base" });
     return {
       loaded: all.filter((s) => s.loaded && want.has(s.key)).sort(byName),
@@ -130,9 +133,11 @@
 
   // What a source not loaded says, in one plain sentence (never an error).
   const NOT_LOADED = "Not loaded yet: nothing from this source is on the map or in answers.";
+  // A source the map reads when it is switched on (PERF1b) that couldn't be read this time: said plainly, never an error.
+  const COULD_NOT_LOAD = "Couldn't load just now: it is read again when the layer is next switched on.";
 
   // The reference_sources columns the app reads for provenance (the farm space and the group space both ask for these).
   const COLUMNS = "key,name,theme,provider,licence,attribution,summary,refreshed_at,effective_from,feature_count,coverage,serve_to_customers";
 
-  return { heldBy, COLUMNS, dateText, licenceName, normalise, index, parts, line, lineFor, linesFor, reaches, sourcesFor, NOT_LOADED };
+  return { heldBy, COLUMNS, dateText, licenceName, normalise, index, parts, line, lineFor, linesFor, reaches, sourcesFor, NOT_LOADED, COULD_NOT_LOAD };
 });

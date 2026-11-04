@@ -7,9 +7,9 @@
 
   function item(s) {
     const p = P.parts(s);
-    if (!s.loaded) {
-      return FP.el("li", { class: "source source-empty", "data-source": s.key }, FP.el("b", {}, s.name),
-        FP.el("small", {}, [s.provider, p.licence].filter(Boolean).join(" · ")), FP.el("small", { class: "source-state" }, P.NOT_LOADED));
+    if (!s.loaded || s.failed) {
+      return FP.el("li", { class: "source source-empty", "data-source": s.key, ...(s.failed ? { "data-source-state": "failed" } : {}) }, FP.el("b", {}, s.name),
+        FP.el("small", {}, [s.provider, s.failed ? p.asAt : null, p.licence].filter(Boolean).join(" · ")), FP.el("small", { class: "source-state" }, s.failed ? P.COULD_NOT_LOAD : P.NOT_LOADED));
     }
     const head = FP.el("summary", {}, FP.el("b", {}, s.name), FP.el("small", {}, [s.provider, p.asAt, p.licence].filter(Boolean).join(" · ")));
     return FP.el("li", { class: "source", "data-source": s.key }, FP.el("details", {}, head,
@@ -21,7 +21,8 @@
   function section(rows, options) {
     const { loaded, notLoaded } = P.sourcesFor(rows, options);
     if (!loaded.length && !notLoaded.length) return null;
-    const count = [loaded.length ? loaded.length + " loaded" : null, notLoaded.length ? notLoaded.length + " not loaded" : null].filter(Boolean).join(", ");
+    const failed = loaded.filter((s) => s.failed).length, read = loaded.length - failed;
+    const count = [read ? read + " loaded" : null, failed ? failed + " couldn't load just now" : null, notLoaded.length ? notLoaded.length + " not loaded" : null].filter(Boolean).join(", ");
     return FP.el("details", { class: "drawer-sources", id: "drawer-sources" },
       FP.el("summary", {}, FP.el("span", {}, "Sources"), FP.el("small", {}, count)),
       FP.el("p", { class: "sources-note" }, "Where the reference layers on this map come from, and how recent they are."),

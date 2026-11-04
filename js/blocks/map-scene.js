@@ -4,6 +4,10 @@
 // (distances for a job) is advisor-side job tooling and never drawn here (ARCHITECTURE.md "Reference data and how a
 // farm sees it"). The block draws on a surface: its own map in the frame it is given, or a live one the
 // host hands it as ctx.surface (the farm space keeps one map for the session, so the NZ -> farm zoom is unbroken).
+// PERF1b: a farm's payload carries no reference features (farm_map's `reference` is []); the farm space reads each
+// source when it is switched on (farm-reference.js) and hands it to the surface's addReference(entry), which joins it to
+// the scene on the map without drawing the scene again. A payload that does carry reference entries (a group's map, a
+// database before PERF1a) is drawn whole, as before.
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -137,14 +141,16 @@
     }
     added = [];
     interactive.clear();
-    drawn = null; farmZoom = null; masked = false; photoEntries.length = 0; rivers = null;
+    drawn = null; farmZoom = null; masked = false; photoEntries.length = 0; rivers = null; refDrawn = [];
   }
 
   // Rivers for the map in view (DM2): read once the map has come to rest, while the row is on, unless the last read's
   // box already holds the view at the same stream-order cut. A read overtaken by a newer one is dropped.
-  async function readRivers() {
+  // ahead === true: read while the row is off (PERF1b's idle prefetch), so switching it on draws from what is already
+  // here (a moveend event passed in is not that).
+  async function readRivers(ahead) {
     const r = rivers;
-    if (!map || !r?.on || !map.getSource("rivers")) return;
+    if (!map || !(r?.on || ahead === true) || !map.getSource("rivers")) return;
     const b = map.getBounds(), bounds = [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]], zoom = map.getZoom();
     const want = FP.farmModel.riverBox(bounds, zoom);
     if (!want) { r.read = null; map.getSource("rivers").setData(NONE); return; }
@@ -161,8 +167,8 @@
     map.addSource(id, { type: "geojson", data });
     added.push({ kind: "source", id });
   }
-  function layer(spec, describe) {
-    map.addLayer(spec);
+  function layer(spec, describe, before) {
+    if (before && map.getLayer(before)) map.addLayer(spec, before); else map.addLayer(spec);
     added.push({ kind: "layer", id: spec.id });
     if (describe) interactive.set(spec.id, describe);
     return spec.id;
@@ -172,6 +178,59 @@
   const RIVER_SOURCES = [["niwa-rec2-rivers", "River network (REC2), NIWA"], ["linz-topo50-river-centrelines", "River lines (Topo50), LINZ"]];
   // A layer's advisor note (LN1), as its info panel shows it: each part from the narrowest note that has one.
   const noteFor = (key) => FP.layerNotes?.applicable(drawn?.layer_notes, key, drawn?.viewer) || null;
+
+  // Reference layers, each drawn by its geometry (#243): lines as light blue lines on a dark casing, areas as a fill
+  // and outline, points as circles; one describe per layer, so every popup says what it is and where it came from.
+  // Consents: current ones only, until "Past consents" adds the rest (the row's own second switch). `before`: the
+  // MapLibre layer they go under (none while the scene is drawn: they are drawn in the payload's order).
+  const AREA = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], LINE = ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString"]]],
+    POINT = ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]];
+  let refDrawn = [], refAdded = 0;   // the reference sources on the map, in drawing order ({key, name, first layer id}); sources added since
+  function referenceLayers(r, sid, key, before) {
+    const consents = r.theme === "consents" || r.key === "ecan-consents";
+    const features = consents ? { ...r.features, features: (r.features?.features || []).map((f) => ({ ...f, properties: { ...f.properties, fp_past: FP.farmModel.pastConsent(f.properties) } })) } : r.features;
+    source(sid, features);
+    const describe = (f) => {
+      const { fp_past, ...props } = f.properties;
+      // DM1: the farm map shows each layer around the farm too, so off the farm is "near" unless linked to a permit
+      // a group's map (S5) flags what is in or near the group's area instead
+      const where = props.in_area ? "In or near the group's area" : props.on_farm ? "On the farm" : props.linked ? "Off the farm, linked to the farm's permit" : "Near the farm";
+      // PROV1: the source, provider, as-at date and licence from reference_sources (drawn.sources), in every reference popup
+      const provenance = FP.provenance?.lineFor(drawn?.sources, r.key, r) || null;
+      if (consents) return { ...FP.farmModel.consentPopup(props, r, where), note: noteFor("source:" + r.key), provenance };
+      const named = props.name || props.Name || props.NAME;
+      return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
+        qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution, note: noteFor("source:" + r.key), provenance };
+    };
+    const ids = [
+      layer({ id: sid + "-fill", type: "fill", source: sid, filter: AREA, paint: { "fill-color": "#bfe8ff", "fill-opacity": 0.25 } }, describe, before),
+      layer({ id: sid + "-outline", type: "line", source: sid, filter: AREA, paint: { "line-color": "#bfe8ff", "line-width": 1.5 } }, null, before),
+      layer({ id: sid + "-casing", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#000000", "line-opacity": 0.5, "line-width": 5 } }, null, before),
+      layer({ id: sid + "-line", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bfe8ff", "line-width": 2.5 } }, describe, before),
+      layer({ id: sid + "-pt", type: "circle", source: sid, filter: consents ? ["all", POINT, ["!=", ["get", "fp_past"], true]] : POINT, paint: {
+        "circle-color": "#1e88e5", "circle-radius": 7, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } }, describe, before),
+    ];
+    const past = consents ? [layer({ id: sid + "-past", type: "circle", source: sid, filter: ["all", POINT, ["==", ["get", "fp_past"], true]], paint: {
+      "circle-color": "#78909c", "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } }, describe, before)] : null;
+    refDrawn.push({ key, name: String(r.name || key), first: ids[0] });
+    return { key, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}) };
+  }
+  // PERF1b: one reference source's entry (farm_reference_context's shape, as farm_map gave it) joins the scene on the map
+  // now, without drawing it again: under the reference sources after it by name, Rivers and the focus mark, so the order
+  // is the one farm_map gave. Drawn hidden: the host turns it on (setVisible) as its row says. Returns the row's layer ids
+  // ({key, name, ids, past?}), or null when no farm is drawn. A source already on the map returns its row as it is.
+  function addReference(r) {
+    if (!map || !drawn || !r?.key) return null;
+    const had = refDrawn.find((x) => x.key === r.key);
+    if (had) return null;
+    const next = refDrawn.filter((x) => x.name.localeCompare(String(r.name || r.key)) > 0).map((x) => x.first).find((id) => map.getLayer(id));
+    const before = next || (rivers?.ids || []).find((id) => map.getLayer(id)) || (map.getLayer("focus-dim") ? "focus-dim" : undefined);
+    const row = referenceLayers(r, "ref-on-" + ++refAdded, r.key, before);
+    refDrawn.sort((a, b) => a.name.localeCompare(b.name));
+    if (!(drawn.reference || []).some((x) => x.key === r.key)) drawn.reference = [...(drawn.reference || []), r];   // focus() and popups find it
+    setVisible(row, false);
+    return row;
+  }
 
   // the layers of one farm layer, by geometry: [polygonIds, lineIds, pointIds] filled in by pass
   function farmLayer(l, i, pass) {
@@ -601,39 +660,10 @@
     layer({ id: "photo-cone-casing", type: "line", source: "photo-cone", paint: { "line-color": "#000", "line-opacity": 0.35, "line-width": 3.5 } });
     layer({ id: "photo-cone-line", type: "line", source: "photo-cone", paint: { "line-color": "#ffffff", "line-width": 1.5 } });
 
-    // Reference layers, each drawn by its geometry (#243): lines as light blue lines on a dark casing, areas as a fill
-    // and outline, points as circles; one describe per layer, so every popup says what it is and where it came from.
-    // Consents: current ones only, until "Past consents" adds the rest (the row's own second switch).
-    const AREA = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], LINE = ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString"]]],
-      POINT = ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]];
-    for (const [i, r] of data.reference.entries()) {
-      const sid = `ref-${i}`, consents = r.theme === "consents" || r.key === "ecan-consents";
-      const features = consents ? { ...r.features, features: (r.features?.features || []).map((f) => ({ ...f, properties: { ...f.properties, fp_past: FP.farmModel.pastConsent(f.properties) } })) } : r.features;
-      source(sid, features);
-      const describe = (f) => {
-        const { fp_past, ...props } = f.properties;
-        // DM1: the farm map shows each layer around the farm too, so off the farm is "near" unless linked to a permit
-        // a group's map (S5) flags what is in or near the group's area instead
-        const where = props.in_area ? "In or near the group's area" : props.on_farm ? "On the farm" : props.linked ? "Off the farm, linked to the farm's permit" : "Near the farm";
-        // PROV1: the source, provider, as-at date and licence from reference_sources (drawn.sources), in every reference popup
-        const provenance = FP.provenance?.lineFor(drawn?.sources, r.key, r) || null;
-        if (consents) return { ...FP.farmModel.consentPopup(props, r, where), note: noteFor("source:" + r.key), provenance };
-        const named = props.name || props.Name || props.NAME;
-        return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
-          qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution, note: noteFor("source:" + r.key), provenance };
-      };
-      const ids = [
-        layer({ id: sid + "-fill", type: "fill", source: sid, filter: AREA, paint: { "fill-color": "#bfe8ff", "fill-opacity": 0.25 } }, describe),
-        layer({ id: sid + "-outline", type: "line", source: sid, filter: AREA, paint: { "line-color": "#bfe8ff", "line-width": 1.5 } }),
-        layer({ id: sid + "-casing", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#000000", "line-opacity": 0.5, "line-width": 5 } }),
-        layer({ id: sid + "-line", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bfe8ff", "line-width": 2.5 } }, describe),
-        layer({ id: sid + "-pt", type: "circle", source: sid, filter: consents ? ["all", POINT, ["!=", ["get", "fp_past"], true]] : POINT, paint: {
-          "circle-color": "#1e88e5", "circle-radius": 7, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } }, describe),
-      ];
-      const past = consents ? [layer({ id: sid + "-past", type: "circle", source: sid, filter: ["all", POINT, ["==", ["get", "fp_past"], true]], paint: {
-        "circle-color": "#78909c", "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } }, describe)] : null;
-      entries.push({ key: r.key || "reference-" + i, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}) });
-    }
+    // Reference layers (referenceLayers): those the payload carries (a group's map, or a database before PERF1a); a
+    // farm's sources join later, one at a time (addReference).
+    refDrawn = []; refAdded = 0;
+    for (const [i, r] of data.reference.entries()) entries.push(referenceLayers(r, `ref-${i}`, r.key || "reference-" + i));
 
     // Rivers (DM2): the shared waterways layer, merged by name and labelled once per run, read for the part of the map in
     // view as the person pans (waterways_in_view), not clipped to the farm. Labels need the basemap's glyphs (none in the demo).
@@ -820,7 +850,9 @@
     glMap: () => init(), loaded: () => (init(), ready), capture: (fn) => { captured = typeof fn === "function" ? fn : null; if (captured) featurePopup?.remove(); },
     // and the farm mask lifted while the flow shows the land around the farm (put back as it was when it ends)
     unmask: (off) => { if (map?.getLayer("farm-mask")) map.setPaintProperty("farm-mask", "fill-opacity", off ? 0 : masked ? FP.farmModel.MASK_OPACITY : 0); },
-    resize: () => map && map.resize(), closePopup, atRest, closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
+    resize: () => map && map.resize(), closePopup, atRest, closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove,
+    // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.
+    addReference, readRiversAhead: () => readRivers(true) };
   }
 
   return { block, state, engine };
