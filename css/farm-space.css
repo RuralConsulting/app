@@ -59,12 +59,26 @@ body.farm-space-active:not(.farm-detail) { --peek-height: 82px; }
 #space-content.peeked { height: var(--peek-height); }
 #space-handle { flex: none; display: block; width: 100%; height: var(--peek-height); padding: 0; border: 0; background: var(--panel); color: var(--ink); font: 600 var(--text-body) var(--f-ui); cursor: pointer; }
 #space-handle::before { content: ""; display: block; width: 32px; height: 3px; background: var(--ink-3); border-radius: 3px; margin: 0 auto 7px; }
-#space-content:not(.peeked) #space-handle { height: 28px; }
-#space-content:not(.peeked) #space-handle::before { margin: 0 auto; position: relative; top: 12px; }
-/* The open handle looks 28px tall; its tap area reaches 16px further down over the top of the sheet's body (44px in all). */
-#space-content:not(.peeked) #space-handle { position: relative; }
-#space-content:not(.peeked) #space-handle::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 16px; }
-#space-content:not(.peeked) #space-handle-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* UI1: the sheets' controls are words, not a drag gesture. Each sheet's bar is the view's name, Collapse / Open (the bar
+   itself) and Expand / Reduce (full height, for reading or a form); the grip is only decoration. Open, the bar is 44px. */
+.sheet-head { display: flex; align-items: stretch; background: var(--panel); }
+#overview-toggle, #space-handle { position: relative; width: auto; flex: 1 1 0; min-width: 0; }
+.sheet-act { position: absolute; right: 14px; bottom: 9px; font: 600 var(--text-small)/1 var(--f-ui); color: var(--ink-2); }
+.sheet-size { flex: none; min-width: 78px; padding: 0 14px; border: 0; border-left: 1px solid var(--rule); background: var(--panel); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.sheet-size[hidden] { display: none; }
+#space-content:not(.peeked) #space-handle { height: 44px; padding: 8px 0 0; }
+#space-content:not(.peeked) #space-handle::before { margin: 0 auto 5px; }
+#space-content:not(.peeked) .sheet-act { bottom: 12px; }
+#space-content:not(.peeked) .sheet-head { border-bottom: 1px solid var(--rule); }
+#space-handle-label { display: block; }
+#space-content:not(.peeked) #space-handle, #overview-rail.expanded #overview-toggle { text-align: left; padding-left: 16px; }
+#overview-rail.expanded .overview-label { margin-top: 0; }
+#overview-rail.expanded .sheet-head { position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--rule); }
+#overview-rail.expanded .sheet-act { bottom: 19px; }
+@media (max-width: 800px) {
+  /* full height: the whole map area under the header, so a long answer or a form can be read; the farm keeps the frame it had */
+  #space-content.full, #overview-rail.expanded.full { height: 100%; border-radius: 0; }
+}
 #space-body { flex: 1; min-height: 0; overflow: auto; padding: 0 12px 12px; }
 #space-content.peeked #space-body { display: none; }
 .space-view { background: var(--panel); color: var(--ink); padding: 20px; border: 1px solid var(--rule); border-radius: var(--radius); }
@@ -129,6 +143,10 @@ body.farm-space-active:not(.farm-detail) { --peek-height: 82px; }
   font: 600 var(--text-small) var(--f-ui); cursor: pointer; border-radius: 4px; }
 .layers-ctrl .layers-open[aria-expanded="true"] { box-shadow: inset 0 0 0 2px var(--brand); }
 body:not(.farm-space-active) .layers-ctrl { display: none; }
+.layers-ctrl { display: flex; flex-direction: column; }
+.layers-ctrl .layers-open[hidden] { display: none; }
+.layers-ctrl .layers-open + .layers-open { border-top: 1px solid var(--rule); }
+body.block-flow-active #block-open { display: none; }
 .layer-list .layer-past { display: flex; align-items: center; gap: 8px; grid-template-columns: none; padding: 0 0 8px 44px; font-size: var(--text-small); color: var(--ink-2); }
 .layer-list .layer-past[hidden] { display: none; }
 .layer-list .layer-past input[role="switch"] { transform: scale(.85); transform-origin: left center; }
@@ -155,7 +173,7 @@ body:not(.farm-space-active) .layers-ctrl { display: none; }
   #space-content, #space-content.peeked { display: block; height: auto; }
   #space-content.peeked #space-body { display: block; }
   #space-content[hidden] { display: none; }
-  #space-handle { display: none; }
+  #space-handle, .sheet-head { display: none; }
   #space-body { overflow: visible; padding: 0; }
   #overview-toggle { display: none; }
   #overview-cards { display: grid; padding: 0; }
@@ -214,7 +232,11 @@ body:not(.farm-space-active) .command-bar { display: none; }
 @media (max-width: 800px) {
   /* an open sheet leaves a strip of map for the farm: the bar gives it that room, and is back when the sheet folds */
   #overview-rail.expanded ~ .command-bar, #space-content:not([hidden]):not(.peeked) ~ .command-bar { display: none; }
-  body.farm-space-active .layers-drawer { top: 56px; max-height: calc(100% - 68px); }
+  /* UI1: the Layers drawer is a panel over the lower map, above the closed sheet's bar: the command bar and the map's controls
+     (zoom, compass, Layers, Add a block) stay clear, and the farm stays in view above it. Its heading, with Close, stays put. */
+  body.farm-space-active .layers-drawer { top: auto; left: 0; right: 0; bottom: var(--peek-height); width: auto; max-width: none; max-height: min(50%, 400px); padding-top: 0; border-radius: 14px 14px 0 0; }
+  .drawer-heading { position: sticky; top: 0; z-index: 1; margin-bottom: 8px; padding: 12px 0 8px; background: var(--panel); }
+  .drawer-heading button { min-height: 40px; }
   body.farm-space-active #map .photo-card:not(.sheet) { top: 56px; max-height: calc(100% - 96px); }
 }
 @media print { .command-bar { display: none !important; } }

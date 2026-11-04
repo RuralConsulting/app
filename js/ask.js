@@ -2,11 +2,13 @@
 // as the signed-in person and answers from what the database holds; nothing here calls a model or holds a key. What
 // comes back is kept to the shapes the app knows: text, sources (a document or a condition), the map verbs the farm
 // space runs after the answer is shown, confirmations the person can make, and consent conditions fetched from ECan
-// for an advisor to accept (CC1, consent-conditions.js). Pure, apart from request().
+// for an advisor to accept (CC1, consent-conditions.js), and water-quality analyses the platform calculated, for an editor
+// to confirm (X1, wq-analysis.js). Pure, apart from request().
 (function (root, factory) {
-  const api = factory(typeof module === "object" && module.exports ? require("./consent-conditions.js") : root.FP.consentConditions);
+  const node = typeof module === "object" && module.exports;
+  const api = factory(node ? require("./consent-conditions.js") : root.FP.consentConditions, node ? require("./wq-analysis.js") : root.FP.wqAnalysis);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.ask = api;
-})(typeof window === "undefined" ? globalThis : window, function (CC) {
+})(typeof window === "undefined" ? globalThis : window, function (CC, WQ) {
   const UNAVAILABLE = "Ask isn't available yet.";
   // An answer with no text (the model ran out of room, or said nothing) is one plain line, never a blank panel (#256).
   const NO_ANSWER = "Ask couldn't answer that.";
@@ -24,7 +26,8 @@
     const text = typeof data.answer_text === "string" ? data.answer_text.trim() : "";
     return { kind: "answer", text: text || NO_ANSWER, sources: list(data.sources).filter(sourceOk),
       ui: list(data.ui_actions).filter(uiOk), confirmations: list(data.confirmations).filter(confirmOk),
-      proposals: CC ? list(data.proposals).map(CC.proposal).filter(Boolean) : [], notes: list(data.notes).filter(str) };
+      proposals: CC ? list(data.proposals).map(CC.proposal).filter(Boolean) : [],
+      analyses: WQ ? list(data.analyses).map(WQ.preview).filter(Boolean) : [], notes: list(data.notes).filter(str) };
   }
   // A function that isn't deployed (404), is down or can't be reached says one line; its own refusal of the request
   // (sign-in, a malformed question, the model not answering) says what it said.

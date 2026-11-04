@@ -264,6 +264,12 @@ summary.checklist-line::before { content: ""; position: absolute; left: 2px; top
 .answer-summary .checklist-line { font: 600 var(--text-small)/1.35 var(--f-ui); }
 .answer-summary .checklist-title { display: block; color: var(--ink); }
 .answer-summary .checklist-status { display: block; margin-top: 1px; font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* UI1: the state is in the line's words ("overdue since ...", "upcoming, due ...", "recorded: ...", "done ..."); the styling only
+   backs the words up, in ink alone: a passed date reads firmer, a line that is recorded or done reads quieter. No verdict colour. */
+.checklist-item[data-check-state="overdue"] .checklist-status { color: var(--ink); font-weight: 600; }
+.checklist-item[data-check-state="done"] .checklist-title { color: var(--ink-2); font-weight: 500; }
+.checklist-item[data-check-state="done"] .checklist-status { color: var(--ink-2); }
+.checklist-item[data-check-recorded] .checklist-status a { text-underline-offset: 2px; }
 .answer-summary summary.checklist-line::before { top: .45em; }
 .answer-summary .checklist-done-inline, .answer-summary .checklist-undo button { min-width: 64px; min-height: 36px; }
 .answer-summary :is(.answer-fold, .answer-all) { border-top: 1px solid var(--rule); padding: 6px 0; margin: 0; }
@@ -296,3 +302,25 @@ summary.checklist-line::before { content: ""; position: absolute; left: 2px; top
 .cc-msg:empty { display: none; }
 .cc-msg { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); }
 .ask-proposal { margin-top: 12px; }
+
+/* Water-quality analysis cards in Ask's answer (X1): the platform's figures as a small table, the method, caveats, Confirm. */
+.ask-analysis { margin-top: 12px; }
+.wq-card { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; }
+.wq-title { margin: 0; font: 600 var(--text-body) var(--f-ui); }
+.wq-period, .wq-method, .wq-attr, .wq-who, .wq-caveats { font-size: var(--text-small); color: var(--ink-2); }
+.wq-period, .wq-method, .wq-attr, .wq-unavailable { margin: 6px 0 0; overflow-wrap: anywhere; }
+.wq-table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: var(--text-small); }
+.wq-table th, .wq-table td { padding: 4px 6px; border-top: 1px solid var(--rule); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.wq-table th { width: 45%; font-weight: 600; }
+.wq-caveats { margin: 6px 0 0; padding-left: 18px; }
+.wq-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+.wq-actions > button:not(.link) { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.wq-actions button[disabled] { opacity: .6; cursor: progress; }
+.wq-adjust { width: 100%; font-size: var(--text-small); }
+.wq-adjust label, .wq-note-label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.wq-adjust input, .wq-adjust select { min-height: 36px; max-width: 12em; }
+.wq-note-label { width: 100%; flex-direction: column; align-items: stretch; font-size: var(--text-small); }
+.wq-note-label textarea { width: 100%; box-sizing: border-box; }
+.wq-msg:empty { display: none; }
+.wq-msg { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); }

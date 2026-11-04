@@ -660,6 +660,9 @@
   const roles = [["view", "View"], ["edit", "Edit"], ["admin", "Admin"]];
   const roleNames = { owner: "Owner", admin: "Admin", edit: "Edit", view: "View" };
   const canManage = (role) => role === "owner" || role === "admin";
+  // Who may change what the farm holds (add a block, mark a condition done, link a record): the farm_members roles the app
+  // already reads (UI1: the one rule behind every "may edit" control, so Add a block is never shown to a viewer).
+  const canEdit = (role) => role === "owner" || role === "admin" || role === "edit";
   function people(rows, today) {
     return list(rows).map((r) => ({
       id: r.user_id, email: r.email || "No email recorded", name: r.display_name || null, role: r.role, roleName: roleNames[r.role] || r.role,
@@ -766,5 +769,5 @@
       source: "the farm's own record", as_at: String(b.valid_from || "").slice(0, 10) || null, shown_as: null,
       features: { type: "FeatureCollection", features: [{ type: "Feature", geometry: b.geometry, properties: { name: "Farmed area", area_ha: b.area_ha ?? null } }] } };
   }
-  return { farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, people };
+  return { farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, canEdit, people };
 });

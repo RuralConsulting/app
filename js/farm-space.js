@@ -130,16 +130,12 @@
     });
     // The phone sheets (What's due, and Ask, Create and Documents) open over the map: the farm is re-framed in
     // what stays visible above them, and back again when they close.
-    $("#overview-toggle").addEventListener("click", () => {
-      const rail = $("#overview-rail"), expanded = rail.classList.toggle("expanded");
-      $("#overview-toggle").setAttribute("aria-expanded", String(expanded));
-      settleFrame();
-    });
-    $("#space-handle").addEventListener("click", () => {
-      const peeked = $("#space-content").classList.toggle("peeked");
-      $("#space-handle").setAttribute("aria-expanded", String(!peeked));
-      settleFrame();
-    });
+    // UI1: each sheet is a peek, open, or full height (a reading or form state); every change is a visible button
+    // (Open / Collapse on the bar, Expand / Reduce beside it), never only a drag.
+    $("#overview-toggle").addEventListener("click", () => setSheet("due", sheetState("due") === "peek" ? "open" : "peek"));
+    $("#space-handle").addEventListener("click", () => setSheet("space", sheetState("space") === "peek" ? "open" : "peek"));
+    $("#overview-size").addEventListener("click", () => setSheet("due", sheetState("due") === "full" ? "open" : "full"));
+    $("#space-size").addEventListener("click", () => setSheet("space", sheetState("space") === "full" ? "open" : "full"));
     // A photo opened on a phone's map takes the bottom of the map as its sheet: the other sheets fold to their peek
     // first (without re-framing the farm), so the photo is framed in the map left above it.
     $("#map").addEventListener("fp-photo", () => {
@@ -148,8 +144,8 @@
       for (const fold of $("#overview-cards").querySelectorAll("details.checklist-fold[open]"))   // and a chosen line folds away with its mark
         if (standing.some((m) => m.places?.[fold.closest("[data-item-id]")?.dataset.itemId])) fold.open = false;
       if (window.innerWidth > 800) return;
-      $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
-      if (!$("#space-content").hidden) { $("#space-content").classList.add("peeked"); $("#space-handle").setAttribute("aria-expanded", "false"); }
+      setSheet("due", "peek", false);
+      if (!$("#space-content").hidden) setSheet("space", "peek", false);
       framedOverlap = measureSheet();
     });
     $("#layers-close").addEventListener("click", () => { setDrawer(false); layersButton?.focus(); });
@@ -162,7 +158,7 @@
       if (shownRoute?.view === "people" && !over && !typing) $("#space-farm-name").click();
       if ($("#account-menu").classList.contains("open")) { $("#account-menu").classList.remove("open"); $("#account-open").setAttribute("aria-expanded", "false"); $("#account-open").focus(); }
       setDrawer(false);
-      $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
+      setSheet("due", "peek", false);
       if (FP.farmMap.photoOpen()) FP.farmMap.dismissPhoto();
       settleFrame();
     });
@@ -198,6 +194,11 @@
     for (const host of [$("#overview-cards"), $("#space-content")]) host.addEventListener("click", (e) => {
       const fetch = e.target.closest("[data-fetch-conditions]"), yes = e.target.closest("[data-cc-accept]"), no = e.target.closest("[data-cc-discard]");
       if (fetch) fetchConditions(fetch); else if (yes) acceptConditions(yes); else if (no) discardConditions(no);
+    });
+    // Water-quality analyses in Ask's answer (X1): Confirm, Recalculate with the person's settings, Save as note.
+    $("#space-content").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-wq-confirm], [data-wq-recalc], [data-wq-note]");
+      if (b) wqAction(b);
     });
     $("#overview-cards").addEventListener("submit", (e) => { if (e.target.matches(".checklist-upload .doc-confirm-form")) { e.preventDefault(); addRecord(e.target); } });
     $("#space-content").addEventListener("click", async (e) => {
@@ -256,11 +257,30 @@
       n.classList.toggle("has-place", place); n.classList.toggle("framed-record", place && n.dataset.itemId === focused);
     }
   }
+  // The phone sheets (UI1): "peek" (the bar only), "open" (about 60%) or "full" (the whole map area, for reading or a form).
+  // Wide screens have no sheets: the same markup is the rail beside the map and these controls are hidden there.
+  const sheetBox = (which) => $(which === "space" ? "#space-content" : "#overview-rail");
+  function sheetState(which) {
+    const box = sheetBox(which), open = which === "space" ? !box.classList.contains("peeked") : box.classList.contains("expanded");
+    return !open ? "peek" : box.classList.contains("full") ? "full" : "open";
+  }
+  function setSheet(which, state, frame = true) {
+    const space = which === "space", box = sheetBox(which), open = state !== "peek", name = space ? $("#space-handle-label").textContent || "this view" : "What's due";
+    if (space) box.classList.toggle("peeked", !open); else box.classList.toggle("expanded", open);
+    box.classList.toggle("full", state === "full");
+    $(space ? "#space-handle" : "#overview-toggle").setAttribute("aria-expanded", String(open));
+    $(space ? "#space-act" : "#overview-act").textContent = open ? "Collapse" : "Open";
+    const size = $(space ? "#space-size" : "#overview-size");
+    size.hidden = !open; size.textContent = state === "full" ? "Reduce" : "Expand"; size.setAttribute("aria-pressed", String(state === "full"));
+    size.setAttribute("aria-label", (state === "full" ? "Reduce " : "Expand ") + name + (state === "full" ? " from full height" : " to full height"));
+    if (open && window.innerWidth <= 800) FP.farmMap.closePopup?.();   // a popup would sit under the sheet
+    if (frame) settleFrame();
+  }
   // Phone: how far the open sheet covers the map (--sheet-overlap, read by the map when it frames the farm).
   function measureSheet() {
     let overlap = 0;
     const sheet = window.innerWidth <= 800 && [$("#space-content"), $("#overview-rail")].find((n) => !n.hidden);
-    if (sheet) overlap = M.sheetOverlap($("#map").getBoundingClientRect().bottom, sheet.getBoundingClientRect().top);
+    if (sheet) overlap = sheet.classList.contains("full") ? framedOverlap : M.sheetOverlap($("#map").getBoundingClientRect().bottom, sheet.getBoundingClientRect().top);   // full height: the farm keeps the frame it had
     document.documentElement.style.setProperty("--sheet-overlap", overlap + "px");
     return overlap;
   }
@@ -443,18 +463,37 @@
       if (e.pastInput) e.pastInput.closest("label").hidden = !on;
     }
   }
+  let drawerFolded = [];   // the sheets (and their state) the drawer folded under it on a phone: put back when it closes
   function setDrawer(open) {
+    const was = !$("#layers-drawer").hidden;
     $("#layers-drawer").hidden = !open;
     layersButton?.setAttribute("aria-expanded", String(open));
-    if (open) $("#layers-close").focus();
+    if (!open) { if (was) for (const [which, state] of drawerFolded) if (sheetState(which) === "peek") setSheet(which, state, false); drawerFolded = []; }
+    if (open) {
+      // UI1: a popup would sit under the drawer, so it is put away. Phone: the drawer is a panel over the lower map, so an open
+      // sheet folds to its bar under it (the farm keeps the frame it had, in the map above); the command bar and the map's
+      // controls stay clear.
+      FP.farmMap.closePopup?.();
+      if (window.innerWidth <= 800 && !was) {
+        drawerFolded = ["due", "space"].filter((w) => !(w === "space" && $("#space-content").hidden) && sheetState(w) !== "peek").map((w) => [w, sheetState(w)]);
+        for (const [which] of drawerFolded) setSheet(which, "peek", false);
+      }
+      $("#layers-close").focus();
+    }
   }
   // Layers: a button on the map itself, under the zoom and compass, that needs no explanation (an icon and the word).
   const LAYERS_ICON = '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 2 1 6.5l9 4.5 9-4.5zm-6.8 7.6L1 10.7l9 4.5 9-4.5-2.2-1.1L10 13zm0 4.2L1 14.9l9 4.5 9-4.5-2.2-1.1L10 17.2z"/></svg>';
+  // Add a block (UI1): a visible action on the map for the farm's editors (M.canEdit, the farm_members role the space already
+  // read: no new query), under Layers. Hidden for a viewer; the typed command and Ask's block.add stay as they were.
+  const BLOCK_ICON = '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M9 3h2v6h6v2h-6v6H9v-6H3V9h6z"/></svg>';
+  let blockButton = null;
   function addLayersControl() {
     if (layersButton) return;
     const button = el("button", { type: "button", id: "layers-open", class: "layers-open", "aria-controls": "layers-drawer", "aria-expanded": "false", onclick: () => setDrawer($("#layers-drawer").hidden) });
     button.innerHTML = LAYERS_ICON + "<span>Layers</span>";
-    const box = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group layers-ctrl" }, button);
+    blockButton = el("button", { type: "button", id: "block-open", class: "layers-open", hidden: true, title: "Add a block of land to the farm", onclick: () => openBlock() });
+    blockButton.innerHTML = BLOCK_ICON + "<span>Add a block</span>";
+    const box = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group layers-ctrl" }, button, blockButton);
     FP.farmMap.addControl({ onAdd: () => box, onRemove: () => box.remove() }, "top-right");
     layersButton = button;
   }
@@ -529,7 +568,7 @@
   // FB1: a statement of new land ("I've bought a block", "add land": FP.blockModel.isBlockIntent) offers the guided Add a
   // block first, for the farm's editors, and Enter starts it. A question or show that only talks about new land ("Is the
   // new block in the nitrate zone?": mentionsNewLand) offers it last, and Enter asks. Anything else is as before.
-  const canAddLand = () => ["owner", "admin", "edit"].includes(context?.role) && !!FP.addBlock && !!FP.blockModel;
+  const canAddLand = () => M.canEdit(context?.role) && !!FP.addBlock && !!FP.blockModel;
   const BLOCK_OPTION = { kind: "block", label: "Add a block of land to the farm" };
   const optionsFor = (intent) => {
     if (intent.kind === "none") return [];
@@ -877,7 +916,7 @@
     lastAsk = { farm, question, result };
     showAnswer(true);
   }
-  const canChange = () => ["owner", "admin", "edit"].includes(context?.role);
+  const canChange = () => M.canEdit(context?.role);
   // An offered change the farm space can make: a condition of this farm that What's due lists (and, to attach, one of
   // its documents). A condition What's due doesn't list is never offered.
   const offered = (c) => canChange() && (context.obligations || []).some((o) => String(o.id) === c.obligation_id) &&
@@ -906,10 +945,39 @@
         box.innerHTML = FP.consentConditions.html(p, { canAccept: !!context?.advisor });
         nodes.push(box);
       }
+      // Water-quality analyses (X1): a card each, the figures from the platform's library; an editor confirms one to record it.
+      (result.analyses || []).forEach((p, n) => {
+        const box = el("div", { class: "ask-analysis" });
+        box.innerHTML = FP.wqAnalysis.html(p, { n, canConfirm: canChange() });
+        nodes.push(box);
+      });
       for (const note of result.notes) nodes.push(el("p", { class: "ask-note" }, note));
     }
     box.replaceChildren(...nodes);
     if (run && result.kind === "answer") runAsk(result.ui);
+  }
+  // ---- Water-quality analysis (X1) --------------------------------------------------------------------------------
+  // A card's buttons: Recalculate asks the analysis function for a new preview with the person's settings; Confirm sends the
+  // preview they see, which the function recalculates and records as them only if it is unchanged (otherwise the new one is
+  // shown to confirm); Save as note adds the text to the farm's own note on the site layer. Nothing is recorded otherwise.
+  async function wqAction(button) {
+    const farm = context?.farm.id, all = lastAsk?.farm === farm ? lastAsk.result.analyses || [] : [];
+    const n = Number(button.dataset.wqConfirm ?? button.dataset.wqRecalc ?? button.dataset.wqNote), p = all[n], card = button.closest(".wq-card");
+    if (!p || !canChange() || !card) return;
+    const W = FP.wqAnalysis, owner = { farm_id: farm };
+    button.disabled = true;
+    if (button.dataset.wqNote !== undefined) {
+      try { await W.saveNote(FP.sb, farm, p, card.querySelector("[data-wq-note-text]")?.value); p.noteSaved = true; p.message = ""; }
+      catch (err) { p.message = err?.message || String(err); }
+    } else {
+      const recalc = button.dataset.wqRecalc !== undefined, overrides = recalc ? W.overridesFrom(card, p) : p.overrides;
+      const r = await W.request(FP.sb, W.body(p, recalc ? "preview" : "confirm", owner, overrides));
+      if (context?.farm.id !== farm) return;
+      if (r.kind === "preview" || r.kind === "changed") all[n] = { ...r.preview, overrides, message: r.kind === "changed" ? r.message : "" };
+      else if (r.kind === "saved") all[n] = { ...r.preview, overrides, state: "saved", message: "" };
+      else p.message = r.message;
+    }
+    showAnswer(false);
   }
   // Where a map.frame verb points: a land unit, a condition's recorded place, one of the map's layers; null is the farm.
   function askPlace(place, ctx, models) {
@@ -966,7 +1034,7 @@
     if (outer) outer.open = true;
     const fold = line.querySelector("details.checklist-fold");
     if (fold) fold.open = true;
-    $("#overview-rail").classList.add("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "true");
+    setSheet("due", "open", false);
     line.scrollIntoView({ block: "nearest" }); line.focus({ preventScroll: true });
   }
   function askView() {
@@ -987,9 +1055,9 @@
     document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
     document.body.classList.add("farm-space-active");
     setDrawer(false);
-    $("#overview-rail").classList.remove("expanded"); $("#overview-toggle").setAttribute("aria-expanded", "false");
-    $("#space-content").classList.remove("peeked"); $("#space-handle").setAttribute("aria-expanded", "true");
     $("#space-handle-label").textContent = M.viewLabel(route.view) || "";
+    setSheet("due", "peek", false); setSheet("space", "open", false);
+    FP.farmMap.closePopup?.();   // UI1: a feature popup belongs to the view it was opened in
     if (context?.farm.id !== farm.id) {
       context = null; openedMap = null;
       unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
@@ -1023,6 +1091,7 @@
         addLayersControl(); commandBar();
       }
       FP.farmMap.resize(); settleFrame();
+      if (blockButton) blockButton.hidden = !canAddLand();   // Add a block: for the farm's editors only
       unmount(view); view = null;
       if (focused) { focused = null; FP.farmMap.focus(null); }   // a new view starts on the farm
       askSet = null;   // and an answer's layers go with the Ask view

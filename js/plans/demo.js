@@ -13,9 +13,9 @@
   const BRANDS = [["rcl", "Rural Consulting"], ["group", "Example Plains Catchment Group"], ["none", "Unbranded"]];
   const DATA = [["full", "Full"], ["sparse", "Sparse"], ["empty", "Empty"]];
   // The template version each demo definition is: the newest PUBLISHED platform version of its family, copied
-  // unchanged from templates/plans/<family>/v<n>.json (tests/app/plans.test.cjs checks both). fep-cant-s7 v3 is a
-  // draft until Josh publishes it; the demo moves to it then.
-  const VERSIONS = { "fep-cant-s7": 2, "fwfp-cant-s7": 2, "fwfp-cant": 1, "fwfp-nz": 1 };
+  // unchanged from templates/plans/<family>/v<n>.json (tests/app/plans.test.cjs checks both). fep-cant-s7 v3 was
+  // published on 4 Nov 2026 (PL19); fwfp-cant-s7 v3 is a draft until Josh publishes it, and the demo moves to it then.
+  const VERSIONS = { "fep-cant-s7": 3, "fwfp-cant-s7": 2, "fwfp-cant": 1, "fwfp-nz": 1 };
   const definitionFile = (family) => family + ".v" + VERSIONS[family] + ".json";
   // A demo definition is its template file less what the page never uses or should not show: the crosswalks (only
   // imports read them) and the local source paths in the description.

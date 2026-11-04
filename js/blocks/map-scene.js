@@ -767,6 +767,25 @@
     popup.getElement().addEventListener("toggle", () => keepInside(popup), true);
   }
 
+  // UI1: a feature popup belongs to the view it was opened in: the farm space closes it when the view changes (Ask, Create,
+  // Documents) or a sheet opens over it.
+  function closePopup() { featurePopup?.remove(); featurePopup = null; }
+  // Resolves once the camera has come to rest with nothing queued to move it again: the 3.6 s fly-in has landed, the frame
+  // has settled and been re-grounded. An explicit signal for checks that measure the frame (moveend and the queued re-ground,
+  // not a longer sleep); it also resolves if the map is removed.
+  function atRest() {
+    return new Promise((resolve) => {
+      let quiet = 0;
+      const look = () => {
+        if (!map) return resolve();
+        quiet = map.isMoving() || regroundQueued ? 0 : quiet + 1;
+        if (quiet >= 3) return resolve();   // three looks in a row, the last after the re-ground's own 250 ms delay
+        setTimeout(look, 120);
+      };
+      look();
+    });
+  }
+
   // The auto anchor is fixed from the size at open; re-anchor once layout/fonts settle, then pan whatever still overflows.
   function keepInside(popup) {
     const fit = () => {
@@ -795,7 +814,7 @@
     glMap: () => init(), loaded: () => (init(), ready), capture: (fn) => { captured = typeof fn === "function" ? fn : null; if (captured) featurePopup?.remove(); },
     // and the farm mask lifted while the flow shows the land around the farm (put back as it was when it ends)
     unmask: (off) => { if (map?.getLayer("farm-mask")) map.setPaintProperty("farm-mask", "fill-opacity", off ? 0 : masked ? FP.farmModel.MASK_OPACITY : 0); },
-    resize: () => map && map.resize(), closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
+    resize: () => map && map.resize(), closePopup, atRest, closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove };
   }
 
   return { block, state, engine };
