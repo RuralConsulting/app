@@ -1016,7 +1016,12 @@
       const r = await W.request(FP.sb, W.body(p, recalc ? "preview" : "confirm", owner, overrides));
       if (context?.farm.id !== farm) return;
       if (r.kind === "preview" || r.kind === "changed") all[n] = { ...r.preview, overrides, message: r.kind === "changed" ? r.message : "" };
-      else if (r.kind === "saved") all[n] = { ...r.preview, overrides, state: "saved", message: "" };
+      else if (r.kind === "saved") {
+        all[n] = { ...r.preview, overrides, state: "saved", message: "", analysis_id: r.id };
+        // RD1: the recorded analysis's review state (a line only when something could not be fingerprinted or has changed).
+        all[n].review = (await W.reviews(FP.sb, [r.id]))[r.id] || null;
+        if (context?.farm.id !== farm) return;
+      }
       else p.message = r.message;
     }
     showAnswer(false);

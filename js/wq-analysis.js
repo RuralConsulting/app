@@ -6,6 +6,9 @@
 // with its REC group). After confirming, "Save as note" adds the text to the farm's own advisor note on the site layer
 // (layer_notes, as the person), offered only when every input is shared reference data. Pure, apart from request() and saveNote().
 // The chart block (B8) plugs in where the card marks it: until then results are text and a table.
+// RD1: a recorded analysis carries its review state (public.analysis_review: whether what it was computed from has changed since);
+// the card shows it as one quiet line, "Review due: <reason>", and changes nothing. reviewLine(row) is the hook any list of
+// recorded analyses uses (the catchment space, S5, renders the same line for the analyses it shows).
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.wqAnalysis = api;
@@ -61,6 +64,29 @@
     return status && status !== 404 && data && str(data.error) ? { kind: "error", message: data.error } : { kind: "error", message: UNAVAILABLE };
   }
 
+  // RD1: the review line for a row of public.analysis_review ({review_due, review_status, reasons: [{status, text}]}): "Review due:
+  // <first changed reason>" when something changed, "Review status unknown: <reason>" when it could not be checked (an analysis
+  // recorded before fingerprints were kept), "" when everything checked is as recorded. The reasons name only sources the reader
+  // may read (the database says "A source has changed" otherwise), so the line shows them as given.
+  function reviewLine(row) {
+    if (!obj(row)) return "";
+    const reasons = list(row.reasons).filter((r) => obj(r) && str(r.text));
+    const changed = reasons.filter((r) => r.status === "changed"), unknown = reasons.filter((r) => r.status === "unknown");
+    const more = (n) => (n > 1 ? " (and " + (n - 1) + " more)" : "");
+    if (row.review_due === true && changed.length) return "Review due: " + changed[0].text + more(changed.length);
+    if (row.review_due === true) return "Review due: what this analysis was computed from has changed.";
+    if (row.review_due === null && row.review_status === "unknown") return "Review status unknown: " + (unknown[0]?.text || "nothing to compare with was recorded.") + more(unknown.length);
+    return "";
+  }
+  // The review state of recorded analyses, by id (public.analysis_review, as the reader: only analyses they can read).
+  async function reviews(sb, ids) {
+    const want = [...new Set(list(ids).filter(str))];
+    if (!want.length) return {};
+    const { data, error } = await sb.from("analysis_review").select("analysis_id,review_due,review_status,reasons").in("analysis_id", want);
+    if (error) return {};
+    return Object.fromEntries(list(data).map((r) => [String(r.analysis_id), r]));
+  }
+
   // The note a person may save: the statement and the caveats, which they can edit first.
   const noteText = (p) => [p.statement, ...p.caveats].filter(str).join(" ").slice(0, 1500);
   // Adds the text to the farm's own note on the site's layer (one note per layer, scope and owner), as the person.
@@ -106,11 +132,11 @@
   }
 
   const TITLES = { summary: "Summary", band: "NPS-FM attribute band", trend: "Trend (indicative)", compare: "Comparison with council sites", exceedance: "Exceedance of a framework limit" };
-  // The card. o: {n (its index), canConfirm (an editor of the farm)}.
+  // The card. o: {n (its index), canConfirm (an editor of the farm), review (its public.analysis_review row, once recorded)}.
   function html(p, o = {}) {
     const n = esc(o.n ?? 0), site = p.site.name ? esc(p.site.name) : "Site " + esc(p.site.monitoring_site_id);
     const period = str(p.parameters.from) ? esc(p.parameters.from) + " to " + esc(p.parameters.to) : "";
-    const table = rows(p);
+    const table = rows(p), review = reviewLine(o.review ?? p.review);
     const body = p.unavailable
       ? '<p class="wq-unavailable">Not available: ' + esc(p.unavailable.detail) + "</p>"
       : '<table class="wq-table"><tbody>' + table.map(([k, v]) => "<tr><th scope=\"row\">" + esc(k) + "</th><td>" + esc(v) + "</td></tr>").join("") + "</tbody></table>" +
@@ -140,7 +166,8 @@
         '<label>REC group <input type="text" maxlength="20" data-wq-set="rec_group" placeholder="e.g. CD_Low_HS"></label><button type="button" class="link" data-wq-recalc="' + n + '">Recalculate</button></details>';
     }
     return '<div class="wq-card" data-wq-card="' + n + '"><h3 class="wq-title">' + esc(TITLES[p.tool]) + ": " + site + "</h3>" +
-      (period ? '<p class="wq-period">' + esc(p.parameters.parameter || p.parameters.attribute || "") + ", " + period + "</p>" : "") + body + method + caveats + attr +
+      (period ? '<p class="wq-period">' + esc(p.parameters.parameter || p.parameters.attribute || "") + ", " + period + "</p>" : "") +
+      (review ? '<p class="wq-review">' + esc(review) + "</p>" : "") + body + method + caveats + attr +
       '<div class="wq-actions">' + actions + '</div><p class="wq-msg" role="status" aria-live="polite">' + esc(p.message || "") + "</p></div>";
   }
   // The settings a person changed in the card's Adjust method, as overrides (with any made before): a setting left as the
@@ -155,5 +182,5 @@
     }
     return out;
   }
-  return { UNAVAILABLE, preview, body, request, html, rows, noteText, saveNote, overridesFrom };
+  return { UNAVAILABLE, preview, body, request, html, rows, noteText, saveNote, overridesFrom, reviewLine, reviews };
 });

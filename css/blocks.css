@@ -309,6 +309,8 @@ summary.checklist-line::before { content: ""; position: absolute; left: 2px; top
 .wq-title { margin: 0; font: 600 var(--text-body) var(--f-ui); }
 .wq-period, .wq-method, .wq-attr, .wq-who, .wq-caveats { font-size: var(--text-small); color: var(--ink-2); }
 .wq-period, .wq-method, .wq-attr, .wq-unavailable { margin: 6px 0 0; overflow-wrap: anywhere; }
+/* RD1: a recorded analysis whose inputs have changed since: one quiet line, never a banner. */
+.wq-review { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); font-style: italic; overflow-wrap: anywhere; }
 .wq-table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: var(--text-small); }
 .wq-table th, .wq-table td { padding: 4px 6px; border-top: 1px solid var(--rule); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
 .wq-table th { width: 45%; font-weight: 600; }
