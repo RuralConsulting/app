@@ -127,6 +127,46 @@
   }
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
+  // ---- onboarding readiness (ON2) -----------------------------------------------------------------------------------------
+  // public.group_readiness(g) as the database returns it for a group admin: ON1's findings per member farm, counted by
+  // readiness state and by finding type (null = held back for small numbers), and per-farm rows only where the farm's
+  // level lets the group see it (a name at named, a label made from the opaque ref at anonymous). Wording only here.
+  const READINESS = [["missing", "Something missing"], ["to_check", "To check"], ["to_confirm", "To confirm"], ["ready", "Nothing open"]];
+  // ON1's finding rules (app/js/onboarding-model.js RULES; the database's app.onboarding_finding_states), in plain words.
+  const FINDINGS = {
+    "holding.none": "Land not identified yet (no parcels chosen)",
+    "parcel.not_current": "A held parcel is no longer a current LINZ parcel",
+    "area.mismatch": "A document's stated area differs from the land held",
+    "consent.not_in_ecan": "A consent number isn't in ECan's data",
+    "consent.status_differs": "The consent register and ECan's data differ",
+    "consent.not_recorded": "An ECan consent on the farm isn't in its register",
+    "consent.no_conditions": "A consent's conditions aren't recorded",
+    "consent.no_decision": "No consent decision on file",
+    "document.duplicate": "Possible duplicate documents",
+    "document.tier_unconfirmed": "A document's kind isn't confirmed",
+    "document.held": "No documents yet",
+    "fep.missing": "No Farm Environment Plan or Freshwater Farm Plan on file",
+    "fep.not_read": "A plan not read in yet",
+    "fep.confirm_report": "A plan's confirm report waiting",
+  };
+  const farmsText = (n) => n == null ? SUPPRESSED : plural(Number(n), "farm", "farms");
+  function readiness(r) {
+    if (!r || typeof r !== "object") return null;
+    const assessed = r.farms_assessed, linked = Number(r.linked_farms) || 0;
+    const byState = new Map((Array.isArray(r.by_state) ? r.by_state : []).map((s) => [s.state, s.farms]));
+    const summary = !linked ? "No member farms are linked in the tool yet."
+      : "Farms in group totals checked: " + (assessed == null ? SUPPRESSED : String(assessed)) + " of " + plural(linked, "linked farm", "linked farms") + ".";
+    const states = READINESS.map(([key, label]) => ({ key, label, farms: byState.get(key) ?? null, text: label + ": " + farmsText(byState.get(key)) }));
+    const findings = (Array.isArray(r.by_finding) ? r.by_finding : []).filter((f) => f.farms == null || Number(f.farms) > 0)
+      .map((f) => ({ rule: f.rule, state: f.state, held: f.farms == null, text: (FINDINGS[f.rule] || f.rule) + ": " + farmsText(f.farms) }));
+    const rows = (Array.isArray(r.farms) ? r.farms : []).map((f) => ({
+      ref: f.ref, level: f.level, label: f.level === "named" && f.name ? f.name : f.label || "A member farm (not named)",
+      readiness: (READINESS.find(([k]) => k === f.readiness) || [null, f.readiness])[1],
+      findings: Object.entries(f.findings || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => (FINDINGS[k] || k) + (Number(n) > 1 ? " (" + n + ")" : "")) }));
+    return { summary, states, statesHeld: states.every((s) => s.farms == null), findings, rows,
+      empty: assessed === 0 || !linked };
+  }
+
   return { match, href, views, viewLabel, LEVELS, LEVEL_TEXT, K, level, canManage, canWrite, memberLines, contributing, attribution,
-    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED };
+    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED, READINESS, FINDINGS, readiness };
 });

@@ -25,7 +25,7 @@
   async function load(group) {
     const sb = FP.sb, today = typeof sb.today === "function" ? await sb.today() : G().isoDay(Date.now());
     const since = new Date(Date.parse(String(today).slice(0, 10) + "T00:00:00Z") - 30 * 86400000).toISOString();
-    const [map, summary, members, own, documents, shared, sharedDocs, obligations, types, sources] = await Promise.all([
+    const [map, summary, members, own, documents, shared, sharedDocs, obligations, types, sources, readiness] = await Promise.all([
       read(sb.rpc("group_map", { g: group.id })),
       optional(sb.rpc("group_member_summary", { g: group.id })),
       optional(sb.rpc("group_member_farms", { g: group.id })),
@@ -37,13 +37,15 @@
       optional(sb.from("record_types").select("id,key,label")),
       // PROV1: where the reference layers came from (the popups' provenance line and the Layers card's Sources entry)
       optional(sb.from("reference_sources").select(FP.provenance.COLUMNS).eq("serve_to_customers", true)),
+      // ON2: onboarding readiness of member farms, for group admins only (the database returns null to anyone else)
+      G().canManage(group.role) ? optional(sb.rpc("group_readiness", { g: group.id })) : null,
     ]);
     if (map) map.sources = list(sources);
     const typeKey = new Map(list(types).map((t) => [t.id, t.key])), label = new Map(list(types).map((t) => [t.key, t.label]));
     return { group, today: String(today).slice(0, 10), since, map, summary: summary || {}, members: list(members), types: list(types),
       typeLabel: (k) => label.get(k) || String(k || "record").replace(/_/g, " "),
       ownEntries: list(own).map((e) => ({ ...e, record_type: typeKey.get(e.type_id) || "note" })), documents: list(documents),
-      sharedEntries: list(shared), sharedDocuments: list(sharedDocs), obligations: list(obligations) };
+      sharedEntries: list(shared), sharedDocuments: list(sharedDocs), obligations: list(obligations), readiness: readiness || null };
   }
 
   // ---- the screen ----------------------------------------------------------------------------------------------------------
@@ -142,9 +144,28 @@
       ? el("ul", { class: "group-lines" }, ...changes.slice(0, 12).map((c) => el("li", {}, el("span", {}, c.text), el("small", {}, c.date + " · " + c.who))))
       : el("p", {}, "Nothing new from the group or shared by member farms in the last 30 days."));
     const out = [members, dueCard, changedCard];
+    if (G().canManage(data.group.role) && data.readiness) out.push(readinessCard(data.readiness));
     // DQ1's hook: what the last group load set aside, for the group's admins (the database decides what each person sees)
     if (G().canManage(data.group.role) && FP.ops?.groupGaps) { const gaps = el("div", { class: "group-gaps" }); FP.ops.groupGaps(gaps, data.group.id); out.push(gaps); }
     return out;
+  }
+  // ON2: the onboarding readiness of member farms (group admins). Counts by readiness state and by finding type, as the
+  // database returned them; a farm listed only at the level the group and the farm both allow.
+  function readinessCard(result) {
+    const r = G().readiness(result);
+    const box = el("section", { class: "group-card group-readiness", "data-card": "readiness" }, el("h2", {}, "Onboarding readiness"),
+      el("p", { class: "group-fine" }, "The onboarding report's checks, run on each member farm in group totals. Counts of farms; a farm is listed only where both the group and its owner allow it. Figures from fewer than " + G().K + " farms are never shown, and no farm's private documents are read."),
+      el("p", {}, r.summary));
+    if (r.empty) return box;
+    box.append(el("h3", {}, "By readiness"), r.statesHeld
+      ? el("p", {}, "Not shown: a state would count fewer than " + G().K + " farms, and the other states would give it away.")
+      : el("ul", { class: "group-lines" }, ...r.states.map((s) => el("li", { "data-state": s.key }, s.text))));
+    box.append(el("h3", {}, "What the checks found"), r.findings.length
+      ? el("ul", { class: "group-lines" }, ...r.findings.map((f) => el("li", { "data-rule": f.rule }, f.text)))
+      : el("p", {}, "Nothing open on any farm in group totals."));
+    if (r.rows.length) box.append(el("h3", {}, "Farms shown in detail"), el("ul", { class: "group-lines readiness-farms" }, ...r.rows.map((f) =>
+      el("li", {}, el("span", {}, f.label + " · " + f.readiness), el("small", {}, f.findings.join("; ") || "Nothing open")))));
+    return box;
   }
   function layersCard() {
     const own = new Set(list(ctx?.data?.map?.layers).filter((l) => l.group_own).map((l) => l.theme));

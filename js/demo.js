@@ -170,13 +170,20 @@
   // the lower of the two, none without a farm share. The demo's rows stand in for group_map, group_member_summary,
   // group_member_farms, group_shared_entries/documents and group_wq_sites.
   const MEMBERS = [
-    { id: "de000000-0000-4000-8000-0000000002a1", name: "Ridge Road (synthetic)", share: "named", area_ha: 420, box: [172.032, -43.004, 172.05, -42.988] },
-    { id: "de000000-0000-4000-8000-0000000002a2", name: "Downs Station (synthetic)", share: "anonymous", area_ha: 610, box: [172.055, -43.03, 172.08, -43.01] },
-    { id: "de000000-0000-4000-8000-0000000002a3", name: "Gorge Flats (synthetic)", share: "aggregated", area_ha: 380, box: [172.065, -42.985, 172.085, -42.968] },
-    { id: "de000000-0000-4000-8000-0000000002a4", name: "Mill Road (synthetic)", share: "aggregated", area_ha: 290, box: [171.99, -43.03, 172.005, -43.012] },
-    { id: "de000000-0000-4000-8000-0000000002a5", name: "Lagoon Block (synthetic)", share: null, area_ha: 510, box: [172.09, -43.045, 172.105, -43.03] },
-    { id: "de000000-0000-4000-8000-0000000002a6", name: "Terrace Downs (synthetic)", share: "aggregated", area_ha: 350, box: [171.975, -42.975, 171.995, -42.96] },
+    { id: "de000000-0000-4000-8000-0000000002a1", name: "Ridge Road (synthetic)", share: "named", area_ha: 420, findings: { "fep.not_read": 1, "consent.no_decision": 1, "document.tier_unconfirmed": 2 }, box: [172.032, -43.004, 172.05, -42.988] },
+    { id: "de000000-0000-4000-8000-0000000002a2", name: "Downs Station (synthetic)", share: "anonymous", area_ha: 610, findings: { "fep.missing": 1, "consent.no_conditions": 1, "document.tier_unconfirmed": 1 }, box: [172.055, -43.03, 172.08, -43.01] },
+    { id: "de000000-0000-4000-8000-0000000002a3", name: "Gorge Flats (synthetic)", share: "aggregated", area_ha: 380, findings: { "fep.missing": 1, "document.tier_unconfirmed": 1 }, box: [172.065, -42.985, 172.085, -42.968] },
+    { id: "de000000-0000-4000-8000-0000000002a4", name: "Mill Road (synthetic)", share: "aggregated", area_ha: 290, findings: { "fep.missing": 1, "document.tier_unconfirmed": 3 }, box: [171.99, -43.03, 172.005, -43.012] },
+    { id: "de000000-0000-4000-8000-0000000002a5", name: "Lagoon Block (synthetic)", share: null, area_ha: 510, findings: { "holding.none": 1, "document.held": 1, "fep.missing": 1 }, box: [172.09, -43.045, 172.105, -43.03] },
+    { id: "de000000-0000-4000-8000-0000000002a6", name: "Terrace Downs (synthetic)", share: "aggregated", area_ha: 350, findings: { "fep.missing": 1, "area.mismatch": 1, "document.tier_unconfirmed": 1 }, box: [171.975, -42.975, 171.995, -42.96] },
   ];
+  // The demo's stand-in for the database's HMAC farm ref label (app.group_farm_ref): a hash of group and farm, never the id itself
+  const demoRefLabel = (id) => { let h = 2166136261; for (const ch of "demo-group:" + id) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h.toString(16).padStart(8, "0").slice(0, 6).toUpperCase(); };
+  // ON1's finding rules and their states (as app.onboarding_finding_states), for the demo's group readiness
+  const READINESS_RULES = { "holding.none": "gap", "consent.no_decision": "gap", "document.held": "gap", "fep.missing": "gap",
+    "area.mismatch": "verify", "consent.not_in_ecan": "verify", "consent.status_differs": "verify", "document.duplicate": "verify",
+    "document.tier_unconfirmed": "verify", "parcel.not_current": "verify",
+    "consent.no_conditions": "propose", "consent.not_recorded": "propose", "fep.confirm_report": "propose", "fep.not_read": "propose" };
   const LEVELS = ["aggregated", "anonymous", "named"];
   const levelOf = (setting, share) => (share ? LEVELS[Math.min(LEVELS.indexOf(setting), LEVELS.indexOf(share))] : "none");
   function groupDemo(data) {
@@ -211,7 +218,7 @@
     const g = d.group, level = (m) => levelOf(g.setting, m.share), detail = (m) => ["anonymous", "named"].includes(level(m));
     const shown = () => MEMBERS.filter(detail);
     const farmId = (id) => { const m = MEMBERS.find((x) => x.id === id); return m && detail(m) ? id : null; };
-    if (!g || (args.g ?? args.group_id) !== GROUP) return name === "group_map" || name === "group_member_summary" ? [null] : [[]];
+    if (!g || (args.g ?? args.group_id) !== GROUP) return ["group_map", "group_member_summary", "group_readiness"].includes(name) ? [null] : [[]];
     if (name === "group_member_farms") return [shown().map((m) => ({ farm_ref: m.id, name: level(m) === "named" ? m.name : null, level: level(m), extent: polygon(...m.box), area_ha: m.area_ha }))];
     if (name === "group_shared_entries") return [g.shared.map((e) => ({ id: e.id, farm_id: farmId(e.farm), record_type: e.record_type, captured_at: e.captured_at, period_start: null, period_end: null,
       location: e.location, body: e.body, data: null, tags: [] })).sort((a, b) => b.captured_at.localeCompare(a.captured_at))];
@@ -221,6 +228,24 @@
       g.setting = args.level; return [null];
     }
     if (name === "group_wq_sites") return [wqOf(d).sites.filter((x) => !x.owner_farm_id)];
+    if (name === "group_readiness") {
+      // as the database (public.group_readiness): a group admin only; ON1's findings per farm in totals (invented here),
+      // counted with the same k = 3 rule, the readiness states held back together, rows only at anonymous or named
+      if (d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role !== "admin") return [null];
+      const inTotals = MEMBERS.filter((m) => level(m) !== "none"), small = (n) => n > 0 && n < 3, suppressed = [];
+      const fig = (key, ms) => { if (small(ms.length) || small(ms.filter((m) => m.share === "aggregated").length)) { suppressed.push(key); return null; } return ms.length; };
+      const readiness = (f) => ["gap", "verify", "propose"].map((st, i) => Object.keys(f).some((r) => READINESS_RULES[r] === st) && ["missing", "to_check", "to_confirm"][i]).find(Boolean) || "ready";
+      const assessed = fig("farms_assessed", inTotals);
+      const states = ["missing", "to_check", "to_confirm", "ready"].map((st) => ({ state: st, farms: fig("state:" + st, inTotals.filter((m) => readiness(m.findings) === st)) }));
+      const heldStates = states.some((x) => x.farms === null);
+      for (const k of suppressed.filter((x) => x.startsWith("state:"))) suppressed.splice(suppressed.indexOf(k), 1);
+      if (heldStates) suppressed.push("by_state");
+      const byFinding = Object.entries(READINESS_RULES).map(([rule, state]) => ({ rule, state, farms: fig("finding:" + rule, inTotals.filter((m) => m.findings[rule])) }));
+      return [{ schema: "group-readiness/1", k: 3, member_detail: g.setting, linked_farms: MEMBERS.length, farms_assessed: assessed,
+        by_state: states.map((x) => ({ state: x.state, farms: heldStates ? null : x.farms })), by_finding: byFinding,
+        farms: inTotals.filter(detail).map((m) => ({ ref: m.id, label: level(m) === "named" ? m.name : "Member farm " + demoRefLabel(m.id),
+          name: level(m) === "named" ? m.name : null, level: level(m), readiness: readiness(m.findings), findings: m.findings })), suppressed: suppressed.sort() }];
+    }
     if (name === "group_member_summary") {
       const inTotals = MEMBERS.filter((m) => level(m) !== "none"), from = args.p_from ? Date.parse(args.p_from) : -Infinity, to = args.p_to ? Date.parse(args.p_to) : Infinity;
       const period = g.shared.filter((e) => Date.parse(e.captured_at) >= from && Date.parse(e.captured_at) < to), farms = new Set(period.map((e) => e.farm));
@@ -528,7 +553,7 @@
         }
         if (name === "wq_site_latest") return result(wqLatest(wqOf(d), args.site));
         // S5's group functions by name (group_load_gaps is DQ1's, below)
-        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
+        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
         if (name === "measurement_series") {
