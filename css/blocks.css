@@ -180,7 +180,7 @@
 .chart-band { fill: var(--accent); stroke: none; }
 .chart-band-0 { opacity: .1; }
 .chart-band-1 { opacity: .2; }
-.chart-band-label { font: 600 var(--text-small) var(--f-ui); fill: var(--ink-2); }
+.chart-band-label { font: 600 var(--text-small) var(--f-ui); fill: var(--ink-2); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
 .chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .chart-line.chart-s0 { stroke: var(--accent); }
 .chart-line.chart-s1 { stroke: var(--ink); stroke-dasharray: 7 4; }

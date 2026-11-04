@@ -23,6 +23,7 @@
   const BELOW = ["<", "≤"];
   const SPARSE_BELOW = 6;           // fewer results than this: sparse (still drawn)
   const TABLE_ROWS = 60;            // the table shows the latest rows; the sentence above it says how many there are
+  const DRAW_MAX = 2000;            // most points drawn per series; a longer series is thinned for the picture only (below)
   const NZ = "Pacific/Auckland";
   const dateFormat = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: NZ });
   const monthFormat = new Intl.DateTimeFormat("en-NZ", { month: "short", year: "numeric", timeZone: "UTC" });
@@ -72,16 +73,66 @@
     return span < 70 * 86400000 ? dayFormat.format(new Date(t)) : monthFormat.format(new Date(t));
   }
 
+  // Thin a long series for drawing: by time bucket, each bucket keeps its lowest and highest result; every censored
+  // result, the first and last, and the overall lowest and highest are always kept. The text summary and the table use the full series.
+  function thin(points, max = DRAW_MAX) {
+    const n = points.length;
+    if (n <= max) return points;
+    const buckets = Math.max(1, Math.floor(max / 2)), t0 = points[0].ms, span = points[n - 1].ms - t0 || 1;
+    const keep = new Uint8Array(n), lo = new Int32Array(buckets).fill(-1), hi = new Int32Array(buckets).fill(-1);
+    let gmin = 0, gmax = 0;
+    for (let i = 0; i < n; i++) {
+      const p = points[i], b = Math.min(buckets - 1, Math.floor((p.ms - t0) / span * buckets));
+      if (censored(p)) keep[i] = 1;
+      if (lo[b] < 0 || p.value < points[lo[b]].value) lo[b] = i;
+      if (hi[b] < 0 || p.value > points[hi[b]].value) hi[b] = i;
+      if (p.value < points[gmin].value) gmin = i;
+      if (p.value > points[gmax].value) gmax = i;
+    }
+    for (let b = 0; b < buckets; b++) if (lo[b] >= 0) { keep[lo[b]] = 1; keep[hi[b]] = 1; }
+    keep[0] = keep[n - 1] = keep[gmin] = keep[gmax] = 1;
+    const out = [];
+    for (let i = 0; i < n; i++) if (keep[i]) out.push(points[i]);
+    return out;
+  }
+
+  // Where each band's label sits: the first corner of its band where no drawn point or line segment would run under the text.
+  // Tried bottom-left, top-left, bottom-right, top-right; if every corner is crossed, the first (the label is drawn on top with a halo).
+  const LABEL_CHAR = 7.2, LABEL_H = 14;
+  function placeBandLabels(bands, series, P) {
+    const crosses = (box) => series.some((s) => s.points.some((p, i, ps) => {
+      if (p.cx >= box.x0 - 6 && p.cx <= box.x1 + 6 && p.cy >= box.y0 - 6 && p.cy <= box.y1 + 6) return true;
+      if (!i) return false;
+      const a = ps[i - 1], dx = p.cx - a.cx, dy = p.cy - a.cy;
+      let t0 = 0, t1 = 1;
+      for (const [d, q] of [[-dx, a.cx - box.x0], [dx, box.x1 - a.cx], [-dy, a.cy - box.y0], [dy, box.y1 - a.cy]]) {
+        if (d === 0) { if (q < 0) return false; continue; }
+        const r = q / d;
+        if (d < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+      }
+      return true;
+    }));
+    for (const b of bands) {
+      if (!b.label || b.y1 - b.y0 < 15) { b.labelAt = null; continue; }
+      const w = b.label.length * LABEL_CHAR;
+      const tries = [[P.x0 + 6, "start", b.y1 - 5], [P.x0 + 6, "start", b.y0 + LABEL_H - 2], [P.x1 - 6, "end", b.y1 - 5], [P.x1 - 6, "end", b.y0 + LABEL_H - 2]];
+      const found = tries.find(([x, anchor, y]) => { const x0 = anchor === "start" ? x : x - w; return !crosses({ x0, x1: x0 + w, y0: y - LABEL_H + 2, y1: y + 3 }); });
+      const [x, anchor, y] = found || tries[0];
+      b.labelAt = { x, y, anchor, clear: Boolean(found) };
+    }
+  }
+
   // The chart's geometry and everything drawn, as numbers, in a box of width x height. Pure, so the tests check scaling.
   function layout(data, o = {}, width = 560, height = 300) {
     const series = clean(data?.series).slice(0, o.compare === false ? 1 : 2);
     const all = series.flatMap((s) => s.points);
     const m = { l: 46, r: 12, t: 26, b: 28 }, w = Math.max(width, 240) - m.l - m.r, h = height - m.t - m.b;
-    let t0 = Math.min(...all.map((p) => p.ms)), t1 = Math.max(...all.map((p) => p.ms));
-    if (!all.length) { t0 = t1 = 0; }
+    // Plain loops: spreading tens of thousands of values into the Math min or max functions throws in Safari.
+    let t0 = Infinity, t1 = -Infinity, vmin = 0, vmax = -Infinity;
+    for (const p of all) { if (p.ms < t0) t0 = p.ms; if (p.ms > t1) t1 = p.ms; if (p.value < vmin) vmin = p.value; if (p.value > vmax) vmax = p.value; }
+    if (!all.length) { t0 = t1 = 0; vmax = 1; }
     if (t1 - t0 < 1) { t0 -= 15 * 86400000; t1 += 15 * 86400000; }
-    const vals = all.map((p) => p.value);
-    const y = niceScale(Math.min(0, ...(vals.length ? vals : [0])), Math.max(...(vals.length ? vals : [1])) * 1.05, 4);
+    const y = niceScale(vmin, vmax * 1.05, 4);
     const x = (t) => m.l + ((t - t0) / (t1 - t0)) * w, yy = (v) => m.t + h - ((v - y.lo) / (y.hi - y.lo)) * h;
     const tt = timeTicks(t0, t1);
     const bands = o.bands === false ? [] : list(data?.bands?.ranges).map((r) => {
@@ -90,11 +141,13 @@
       const lo = Math.max(from, y.lo), hi = Math.min(to, y.hi);
       return { label: text(r.label), from: r.from ?? null, to: r.to ?? null, y0: yy(hi), y1: yy(lo) };
     }).filter(Boolean);
+    const drawn = series.map((s) => ({ ...s, total: s.points.length, points: thin(s.points).map((p) => ({ ...p, cx: x(p.ms), cy: yy(p.value), censored: censored(p) })) }));
+    placeBandLabels(bands, drawn, { x0: m.l, x1: m.l + w, y0: m.t, y1: m.t + h });
     return {
       width, height, margin: m, plot: { x0: m.l, x1: m.l + w, y0: m.t, y1: m.t + h }, t0, t1, y, x, y_: yy,
       xticks: tt.ticks.map((t) => ({ t, x: x(t), label: timeLabel(t, tt.step, t1 - t0) })),
       yticks: y.ticks.map((v) => ({ v, y: yy(v), label: number(v) })), bands,
-      series: series.map((s) => ({ ...s, points: s.points.map((p) => ({ ...p, cx: x(p.ms), cy: yy(p.value), censored: censored(p) })) })),
+      series: drawn,
     };
   }
 
@@ -116,7 +169,6 @@
     for (const b of g.bands) parts.push('<rect class="chart-band chart-band-' + (g.bands.indexOf(b) % 2) + '" x="' + P.x0 + '" y="' + b.y0.toFixed(1) + '" width="' + (P.x1 - P.x0) + '" height="' + Math.max(b.y1 - b.y0, 0).toFixed(1) + '"/>');
     for (const t of g.yticks) parts.push('<line class="chart-grid" x1="' + P.x0 + '" x2="' + P.x1 + '" y1="' + t.y.toFixed(1) + '" y2="' + t.y.toFixed(1) + '"/><text class="chart-tick" x="' + (P.x0 - 6) + '" y="' + (t.y + 4).toFixed(1) + '" text-anchor="end">' + esc(t.label) + "</text>");
     for (const t of g.xticks) parts.push('<line class="chart-tickmark" x1="' + t.x.toFixed(1) + '" x2="' + t.x.toFixed(1) + '" y1="' + P.y1 + '" y2="' + (P.y1 + 4) + '"/><text class="chart-tick" x="' + t.x.toFixed(1) + '" y="' + (P.y1 + 18) + '" text-anchor="middle">' + esc(t.label) + "</text>");
-    for (const b of g.bands) if (b.label && b.y1 - b.y0 >= 15) parts.push('<text class="chart-band-label" x="' + (P.x0 + 6) + '" y="' + (b.y1 - 5).toFixed(1) + '">' + esc(b.label) + "</text>");
     parts.push('<line class="chart-axis" x1="' + P.x0 + '" x2="' + P.x1 + '" y1="' + P.y1 + '" y2="' + P.y1 + '"/><line class="chart-axis" x1="' + P.x0 + '" x2="' + P.x0 + '" y1="' + P.y0 + '" y2="' + P.y1 + '"/>');
     parts.push('<text class="chart-unit" x="' + P.x0 + '" y="14">' + esc(name + (unit ? " (" + unit + ")" : "")) + "</text>");
     g.series.forEach((s, c) => {
@@ -127,6 +179,8 @@
       }
       for (const p of s.points) parts.push(marker(MARK[c], c, p).replace("/>", "><title>" + esc(s.label + ", " + when(p.ms) + ": " + shown(p) + (unit ? " " + unit : "")) + "</title></" + (p.censored ? "path" : MARK[c] === "square" ? "rect" : "circle") + ">"));
     });
+    // Band labels last, so they sit above the lines and markers (a halo in the panel colour keeps them readable), at a corner the data does not cross.
+    for (const b of g.bands) if (b.labelAt) parts.push('<text class="chart-band-label" x="' + b.labelAt.x.toFixed(1) + '" y="' + b.labelAt.y.toFixed(1) + '" text-anchor="' + b.labelAt.anchor + '">' + esc(b.label) + "</text>");
     return '<svg class="chart-svg" viewBox="0 0 ' + width + " " + height + '" width="' + width + '" height="' + height + '" role="img" aria-labelledby="' + id + '-t ' + id + '-d" focusable="false">' +
       '<title id="' + id + '-t">' + esc(name + (unit ? " in " + unit : "") + " over time") + '</title><desc id="' + id + '-d">' + esc(describe(data, o)) + "</desc>" + parts.join("") + "</svg>";
   }
@@ -176,7 +230,7 @@
       '<div class="chart-table-scroll"><table><thead><tr><th scope="col">Date</th>' + (series.length > 1 ? '<th scope="col">Site</th>' : "") + '<th scope="col">Result' + (unit ? " (" + esc(unit) + ")" : "") + "</th></tr></thead><tbody>" +
       rows.map(({ s, p }) => "<tr><td>" + esc(when(p.ms)) + "</td>" + (series.length > 1 ? "<td>" + esc(s.label) + "</td>" : "") + "<td>" + esc(shown(p)) + (censored(p) ? " (limit, not exact)" : "") + "</td></tr>").join("") + "</tbody></table></div></details>";
     const assess = rangesGiven
-      ? '<p class="chart-assess" data-assessed="true">Bands: ' + esc(text(bands.label) || "no method named") + (bands.demo ? ' <span class="chart-demo">demo bands, invented</span>' : "") + "</p>"
+      ? '<p class="chart-assess" data-assessed="true">Bands: ' + esc(text(bands.label) || "no method named") + (bands.demo ? ' <span class="chart-demo">· invented for the demo, not a standard or a grading</span>' : "") + "</p>"
       : '<p class="chart-assess" data-assessed="false">Bands and trend: not assessed.</p>';
     return '<section class="chart-block" data-chart-series="' + series.length + '">' +
       "<h" + h + ' class="block-title">' + esc(title) + (data?.provisional ? ' <span class="chart-provisional" title="The source says these results are provisional">Provisional</span>' : "") + "</h" + h + ">" +
@@ -213,5 +267,5 @@
     },
     state, render, mounted,
   });
-  return { block, state, layout, niceScale, timeTicks, describe, clean, shown, svg, SPARSE_BELOW };
+  return { block, state, layout, thin, DRAW_MAX, niceScale, timeTicks, describe, clean, shown, svg, SPARSE_BELOW };
 });

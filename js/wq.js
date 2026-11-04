@@ -136,7 +136,7 @@
       const host = el("div", { class: "block-host wq-chart-host" });
       const others = sites.filter((s) => s.id !== site.id);
       const select_ = el("select", { class: "wq-compare-select", "aria-label": "Compare with another site" }, el("option", { value: "" }, "No comparison"),
-        ...others.map((s) => el("option", { value: String(s.id), ...(entry.compare?.site.id === s.id ? { selected: true } : {}) }, s.name + " (" + (s.distance || "") + ")")));
+        ...others.map((s) => el("option", { value: String(s.id), ...(entry.compare?.site.id === s.id ? { selected: true } : {}) }, M().compareLabel(s))));
       select_.addEventListener("change", async () => {
         const other = others.find((s) => String(s.id) === select_.value);
         if (!other) { entry.compare = null; drawChart(site, entry, row); return; }

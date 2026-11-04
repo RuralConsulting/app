@@ -52,6 +52,8 @@
   const dateFormat = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "Pacific/Auckland" });
   const date = (t) => { const d = new Date(t); return Number.isFinite(d.getTime()) ? dateFormat.format(d) : "date not recorded"; };
   const distanceText = (m) => !Number.isFinite(Number(m)) ? "" : Number(m) < 1000 ? Math.round(Number(m) / 10) * 10 + " m" : (Number(m) / 1000).toFixed(Number(m) < 10000 ? 1 : 0) + " km";
+  // A site in the Compare picker: its name and how far it is; the farm's own site is "on this farm", never "(0 m)".
+  const compareLabel = (s) => s.name + (Number(s.distance_m) === 0 ? " (on this farm)" : s.distance ? " (" + s.distance + ")" : "");
   const CENSORED = ["<", ">", "≤", "≥"];
   // A result as the source reported it: "<0.002" stays "<0.002". The qualifier is never dropped, the limit never shown as exact.
   function valueText(row) {
@@ -112,5 +114,5 @@
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData };
+  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData };
 });

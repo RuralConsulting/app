@@ -45,7 +45,7 @@
       const s = site(id), p = wq.params[key], latest = W.latest(demo.wqLatest(wq, id)).rows.find((r) => r.parameter === key);
       return W.chartData({ site: s, parameter: key, name: p[0], unit: p[1], series: rows(id, key), attribution: wq.sources[rows(id, key)[0]?.source_key || "ecan-wq"].attribution, provisional: latest?.provisional, ...extra });
     };
-    const demoBands = { label: "Demo bands v0, invented for this gallery and not a standard or a grading", demo: true,
+    const demoBands = { label: "Demo bands v0", demo: true,
       ranges: [{ label: "Demo band A", from: null, to: 0.015 }, { label: "Demo band B", from: 0.015, to: 0.025 }, { label: "Demo band C", from: 0.025, to: null }] };
     return {
       answer: {
