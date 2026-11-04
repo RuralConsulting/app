@@ -4,9 +4,9 @@
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./registry.js") : root.FP.blocks, node ? require("../farm-model.js") : root.FP.farmModel,
-    node ? require("../demo-documents.js") : root.FP.demoDocuments);
+    node ? require("../demo-documents.js") : root.FP.demoDocuments, node ? require("../wq-model.js") : root.FP.wqModel, node ? require("../demo.js") : root.FP.demo);
   if (node) module.exports = api; else root.FP.gallery = api;
-})(typeof window === "undefined" ? globalThis : window, function (blocks, M, demoDocuments) {
+})(typeof window === "undefined" ? globalThis : window, function (blocks, M, demoDocuments, W, demo) {
   const root = typeof window === "undefined" ? globalThis : window;
   const STATES = blocks.STATES;
   const LABELS = { full: "Full", sparse: "Sparse", empty: "Empty" };
@@ -36,6 +36,17 @@
     // the demo farm's one condition marked done and one with its record linked (E5), so both are shown
     const kept = { checks: t.checks || [], records: M.recordLinks(t.entry_links) };
     const onePractice = t.obligations.filter((o) => o.id === "obl-meter");
+    // The chart: the demo's invented monitoring sites (wqDemo). Full: a creek site's phosphorus over six years, some results
+    // "<0.01" (censored), with the farm's own drain point to compare, and demo bands (invented, labelled so). Sparse: a site with three
+    // results. Empty: a site with none. The bands are data given to the block; it computes none.
+    const wq = demo.wqOf(data), site = (id) => { const s = W.sites(wq.sites, farm.id).find((x) => x.id === id); return s; };
+    const rows = (id, key) => wq.series[id + "|" + key] || [];
+    const chart = (id, key, extra = {}) => {
+      const s = site(id), p = wq.params[key], latest = W.latest(demo.wqLatest(wq, id)).rows.find((r) => r.parameter === key);
+      return W.chartData({ site: s, parameter: key, name: p[0], unit: p[1], series: rows(id, key), attribution: wq.sources[rows(id, key)[0]?.source_key || "ecan-wq"].attribution, provisional: latest?.provisional, ...extra });
+    };
+    const demoBands = { label: "Demo bands v0, invented for this gallery and not a standard or a grading", demo: true,
+      ranges: [{ label: "Demo band A", from: null, to: 0.015 }, { label: "Demo band B", from: 0.015, to: 0.025 }, { label: "Demo band C", from: 0.025, to: null }] };
     return {
       answer: {
         options: {},
@@ -72,6 +83,12 @@
         full: checks({ documents: t.documents, authorisations: t.authorisations, obligations: t.obligations, ...kept }),
         sparse: checks({ authorisations: oneConsent, obligations: onePractice }),
         empty: checks(),
+      },
+      chart: {
+        options: {},
+        full: chart(9101, "drp", { bands: demoBands, compare: { site: site(9106), series: rows(9106, "drp") } }),
+        sparse: chart(9104, "nitrate-nitrite-n"),
+        empty: chart(9105, "drp"),
       },
       "map-scene": {
         // the full scene opens on a photo, framed the way its camera looked, with its card and view cone

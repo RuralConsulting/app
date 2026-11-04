@@ -111,13 +111,14 @@
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
       farm_parcels: [], farm_boundaries: [],
-    }, build: f.ops.build, ask: f.ask || [], parcels: parcels(extent) };
+    }, build: f.ops.build, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
       data.tables.documents = []; data.tables.authorisations = []; data.tables.obligations = [];
       data.tables.checks = []; data.tables.entries = []; data.tables.entry_links = [];
       data.ask = [];
+      data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
@@ -256,6 +257,68 @@
     d.map.extent_ha = Math.round(B.areaHa(d.map.extent) * 10) / 10;
     return [{ parcels: added, boundary: boundary.id }];
   }
+  // M1b: invented monitoring sites around the illustrative extent and their results (a labelled demo, not any real site or
+  // sample): shared sites "run by ECan" (provisional) and one the farm samples itself. Values are a fixed function of the
+  // month, so the demo and its screenshots read the same on every day. Shaped as wq_sites_near / wq_site_latest /
+  // measurement_series return them (the geometry in NZTM, as the database stores it).
+  const WQ_PARAMS = { "nitrate-nitrite-n": ["Nitrate-nitrite nitrogen (NNN)", "mg/L"], drp: ["Dissolved reactive phosphorus", "mg/L"], "e-coli": ["E. coli", "/100 mL"], turbidity: ["Turbidity", "NTU"] };
+  const WQ_SOURCES = {
+    "ecan-wq": { name: "Environment Canterbury", attribution: "Source: Environment Canterbury (invented demo values). Results are provisional until reviewed by ECan.", provisional: true },
+    "demo-farm-wq": { name: "Example farm's own sampling (synthetic)", attribution: "Source: the farm's own sampling (invented demo values).", provisional: false },
+  };
+  function wqDemo(extent) {
+    const M = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel;
+    const [[w, s], , [e, n]] = extent.coordinates[0];
+    const place = (lng, lat) => { const [x, y] = M.lngLatToNztm(lng, lat); return { type: "Point", coordinates: [Math.round(x * 100) / 100, Math.round(y * 100) / 100] }; };
+    const toBox = (lng, lat) => Math.round(Math.hypot(Math.max(w - lng, 0, lng - e) * 81500, Math.max(s - lat, 0, lat - n) * 111200));   // metres to the extent
+    const defs = [
+      { id: 9101, external_id: "DEMO-01", name: "Demo Creek at the farm bridge (synthetic)", lng: 172.0315, lat: -42.989, type: "river", params: ["nitrate-nitrite-n", "drp", "e-coli", "turbidity"], from: [2020, 6], base: 1.6 },
+      { id: 9102, external_id: "DEMO-02", name: "Demo Creek at the Mill Road ford (synthetic)", lng: 172.012, lat: -43.0125, type: "river", params: ["nitrate-nitrite-n", "drp", "e-coli", "turbidity"], from: [2020, 6], base: 2.3 },
+      { id: 9103, external_id: "DEMO-03", name: "Demo River at the gorge (synthetic)", lng: 172.062, lat: -42.968, type: "river", params: ["nitrate-nitrite-n", "drp"], from: [2023, 0], base: 0.7 },
+      { id: 9104, external_id: "DEMO-04", name: "Tributary drain at the boundary (synthetic)", lng: 171.9705, lat: -42.995, type: "stream", params: ["nitrate-nitrite-n"], from: [2026, 5], base: 3.1, count: 3 },
+      { id: 9105, external_id: "DEMO-05", name: "Lagoon outlet (synthetic)", lng: 172.098, lat: -43.041, type: "lake", params: [], from: [2026, 0], base: 0 },
+      { id: 9106, external_id: "FARM-B1", name: "Farm drain sample point (synthetic)", lng: 172.0125, lat: -42.9915, type: "drain", params: ["nitrate-nitrite-n", "drp"], from: [2022, 8], base: 2.0, own: true },
+    ];
+    const sites = defs.map((d) => ({ site_id: d.id, external_id: d.external_id, name: d.name, site_type: d.type, distance_m: toBox(d.lng, d.lat), geom: place(d.lng, d.lat),
+      source_key: d.own ? "demo-farm-wq" : "ecan-wq-sites", owner_farm_id: d.own ? FARM : null, owner_org_id: null }));
+    const series = {};
+    const wave = (i, k) => Math.sin(i * 0.52 + k) * 0.5 + Math.sin(i * 1.7 + k * 3) * 0.25;
+    for (const d of defs) {
+      const months = [];
+      for (let y = d.from[0], m = d.from[1]; y < 2026 || (y === 2026 && m <= 8); m++) { if (m > 11) { y++; m = 0; } if (y > 2026 || (y === 2026 && m > 8)) break; months.push([y, m]); }
+      if (d.count) months.length = d.count;
+      d.params.forEach((key, k) => {
+        series[d.id + "|" + key] = months.map(([y, m], i) => {
+          const sampled_at = new Date(Date.UTC(y, m, 8 + ((i * 5 + k) % 12), 21, 0, 0)).toISOString();
+          let value, qualifier = null;
+          if (key === "nitrate-nitrite-n") value = Math.max(0.01, d.base * (1 + 0.45 * wave(i, k) + (m >= 5 && m <= 8 ? 0.25 : 0)));
+          else if (key === "drp") { value = Math.max(0.002, 0.008 * (d.base + 0.4) * (1 + 0.6 * wave(i, k + 2))); if (value < 0.01) { value = 0.01; qualifier = "<"; } }   // below the lab's limit: kept as "<0.01"
+          else if (key === "e-coli") { value = Math.round(Math.max(1, 110 * d.base * (1 + 1.4 * wave(i, k + 1)) * (1 + (m >= 10 || m <= 1 ? 0.5 : 0)))); if (value > 2419) { value = 2419; qualifier = ">"; } }
+          else value = Math.max(0.3, 2.6 * d.base * (1 + 0.8 * wave(i, k + 4)));
+          if (key !== "e-coli") value = Number(value.toPrecision(3));
+          return { sampled_at, value, qualifier, value_text: (qualifier || "") + String(value), unit: WQ_PARAMS[key][1], sample_id: d.external_id + "-" + (i + 1), series: "", replicate_no: 1,
+            datetime_flag: null, source_key: d.own ? "demo-farm-wq" : "ecan-wq", superseded_at: null, aggregate: "", n_values: null };
+        });
+      });
+    }
+    for (const site of sites) {   // the last sample date is read off the series (null: no results yet)
+      const all = Object.entries(series).filter(([k]) => k.startsWith(site.site_id + "|")).flatMap(([, rows]) => rows);
+      site.last_sampled = all.length ? all.map((r) => r.sampled_at).sort().pop() : null;
+    }
+    return { sites, series, params: WQ_PARAMS, sources: WQ_SOURCES };
+  }
+  function wqOf(d) {
+    if (!d.wq) { const w = wqDemo(d.map.extent); d.wq = d.wqEmpty ? { ...w, sites: [], series: {} } : w; }
+    return d.wq;
+  }
+  // wq_site_latest: the newest result of each parameter at a site, with who it is from and whether it is provisional.
+  function wqLatest(wq, site) {
+    return Object.entries(wq.series).filter(([k]) => k.startsWith(site + "|")).map(([k, rows]) => {
+      const key = k.split("|")[1], last = rows[rows.length - 1], src = wq.sources[last.source_key];
+      return { parameter: key, parameter_name: wq.params[key][0], value: last.value, qualifier: last.qualifier, value_text: last.value_text, unit: last.unit, sampled_at: last.sampled_at, ambiguous_dst: false,
+        source_key: last.source_key, source_name: src.name, attribution: src.attribution, provisional: src.provisional };
+    });
+  }
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
@@ -322,6 +385,16 @@
         }
         // FB1, as the database's parcels_in_view, parcel_union, add_block and farm_holding, over the invented parcels.
         if (["parcels_in_view", "parcel_union", "add_block", "farm_holding"].includes(name)) return result(...holding(d, name, args || {}));
+        // M1b, as the database's wq_sites_near, wq_site_latest and measurement_series, over the invented sites (wqDemo).
+        if (name === "wq_sites_near") {
+          if (args.farm_id !== FARM) return result([]);
+          return result(wqOf(d).sites.filter((x) => x.distance_m <= (args.km ?? 10) * 1000).sort((a, b) => a.distance_m - b.distance_m || a.external_id.localeCompare(b.external_id)));
+        }
+        if (name === "wq_site_latest") return result(wqLatest(wqOf(d), args.site));
+        if (name === "measurement_series") {
+          const from = args.from_time ? Date.parse(args.from_time) : -Infinity, to = args.to_time ? Date.parse(args.to_time) : Infinity;
+          return result((wqOf(d).series[args.site + "|" + args.parameter_key] || []).filter((r) => Date.parse(r.sampled_at) >= from && Date.parse(r.sampled_at) < to));
+        }
         return error("This operation is not available in the demo");
       },
       // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.
@@ -335,5 +408,5 @@
         upload: async (path) => result({ path }) }) },
     };
   }
-  return { FARM, FARM2, USER, ORG, askReply, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };
+  return { FARM, FARM2, USER, ORG, wqOf, wqLatest, askReply, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };
 });

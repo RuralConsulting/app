@@ -250,3 +250,47 @@ body.block-flow-active .command-bar, body.block-flow-active #overview-rail, body
   body.block-flow-active #overview-rail { display: block; visibility: hidden; }
 }
 @media print { .block-flow { display: none !important; } }
+
+/* Water quality nearby (M1b, wq.js): a card after the standing answers; its sites are on the map only while it is open. */
+.wq-line { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0 16px; }
+.wq-line[hidden] { display: none; }
+.wq-summary { cursor: pointer; list-style: none; min-height: 48px; display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; position: relative; padding: 8px 0 8px 18px; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.wq-summary::-webkit-details-marker { display: none; }
+.wq-summary::before { content: ""; position: absolute; left: 2px; top: calc(50% - 4px); border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.wq-line[open] > .wq-summary::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.wq-title { flex: 1 0 100%; }
+.wq-count { font-weight: 400; color: var(--ink-2); font-size: var(--text-small); }
+.wq-body { padding-bottom: 12px; }
+.wq-source, .wq-assess-note, .wq-attribution, .wq-status { margin: 4px 0 8px; font: 400 var(--text-small)/1.4 var(--f-ui); color: var(--ink-2); }
+.wq-sites { list-style: none; margin: 0; padding: 0; }
+.wq-site { border-top: 1px solid var(--rule); }
+.wq-site-button { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 10px; align-items: center; width: 100%; min-height: 48px; padding: 8px 0; margin: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.wq-site-button .wq-site-name { overflow-wrap: anywhere; }
+.wq-site-button small { grid-column: 2; font: 400 var(--text-small)/1.35 var(--f-ui); color: var(--ink-2); }
+.wq-site-button[aria-expanded="true"] .wq-site-name { text-decoration: underline; text-underline-offset: 3px; }
+.wq-n { grid-row: 1; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font: 600 var(--text-small) var(--f-ui); }
+.wq-line, .wq-body, .wq-site, .wq-site-panel, .wq-chart { min-width: 0; }
+.wq-site-panel { padding: 0 0 12px; }
+.wq-site-panel[hidden] { display: none; }
+.wq-values { list-style: none; margin: 0; padding: 0; }
+.wq-value { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; width: 100%; min-height: 48px; padding: 6px 0; margin: 0; border: 0; border-top: 1px solid var(--rule); background: none; color: inherit; text-align: left; cursor: pointer; font: 400 var(--text-body)/1.3 var(--f-ui); }
+.wq-values li:first-child .wq-value { border-top: 0; }
+.wq-value[aria-expanded="true"] .wq-name { text-decoration: underline; text-underline-offset: 3px; }
+.wq-val { font-weight: 600; text-align: right; white-space: nowrap; }
+.wq-date, .wq-assess { font: 400 var(--text-small)/1.35 var(--f-ui); color: var(--ink-2); }
+.wq-assess { text-align: right; font-style: italic; }
+.wq-provisional { display: inline-block; padding: 0 8px; border: 1px solid var(--ink-2); border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.wq-chart-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; font: 400 var(--text-small) var(--f-ui); }
+.wq-chart-bar label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.wq-compare-select { min-width: 0; width: 100%; max-width: 100%; min-height: 36px; font: 400 var(--text-small) var(--f-ui); }
+.wq-chart-bar label { flex: 1 1 220px; flex-direction: column; align-items: stretch; }
+.wq-chart .chart-block { padding: 8px 0 0; border: 0; background: none; }
+.wq-chart .block-host { margin: 0; }
+/* the map's pins: numbered like the list; the name shows for the chosen site only */
+.wq-pin { display: block; border: 0; background: none; padding: 8px; cursor: pointer; color: var(--map-label); font: 600 var(--text-small) var(--f-head); text-shadow: var(--map-label-shadow); }
+.wq-pin i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); border: 2px solid var(--map-label); box-shadow: var(--map-pin-shadow); font-style: normal; text-shadow: none; }
+.wq-pin span { display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 180px; text-align: center; line-height: 1.15; }
+.wq-pin.selected { z-index: 2; }
+.wq-pin.selected i { outline: 3px solid var(--map-label); }
+.wq-pin.selected span { display: block; }
+@media print { .wq-pin { display: none; } }

@@ -160,6 +160,47 @@
 .doc-actions button[type="submit"]:disabled { opacity: .6; cursor: progress; }
 /* The Documents view: its sentence, then the block, as two panels with the standing answers' gap. */
 .documents-view { display: grid; gap: 10px; }
+
+/* Chart block (B8): hand-drawn SVG. Series are told apart by line style and marker shape as well as colour; a censored result is
+   an open triangle and the line into it is dotted, so it is never read as an exact value. Band ranges are shaded by the data given. */
+.chart-block { background: var(--panel); color: var(--ink); padding: 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.chart-block > :is(h1, h2, h3, h4, h5) { margin: 0 0 8px; font: 600 var(--text-body)/1.25 var(--f-head); overflow-wrap: anywhere; }
+.chart-provisional { display: inline-block; margin-left: 6px; padding: 0 8px; border: 1px solid var(--ink-2); border-radius: 999px; font: 600 var(--text-small)/1.5 var(--f-ui); color: var(--ink-2); white-space: nowrap; vertical-align: 1px; }
+.chart-summary, .chart-assess, .chart-attribution { margin: 8px 0; font: 400 var(--text-small)/1.4 var(--f-ui); color: var(--ink-2); }
+.chart-demo { font-weight: 600; }
+.chart-plot { min-width: 0; }
+.chart-svg { display: block; width: 100%; height: auto; max-width: 100%; overflow: visible; }
+.chart-grid { stroke: var(--rule); stroke-width: 1; }
+.chart-axis { stroke: var(--ink-3); stroke-width: 1; }
+.chart-tickmark { stroke: var(--ink-3); stroke-width: 1; }
+.chart-tick { font: 400 var(--text-small) var(--f-ui); fill: var(--ink-2); }
+.chart-unit { font: 600 var(--text-small) var(--f-ui); fill: var(--ink); }
+.chart-band { fill: var(--accent); stroke: none; }
+.chart-band-0 { opacity: .1; }
+.chart-band-1 { opacity: .2; }
+.chart-band-label { font: 600 var(--text-small) var(--f-ui); fill: var(--ink-2); }
+.chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.chart-line.chart-s0 { stroke: var(--accent); }
+.chart-line.chart-s1 { stroke: var(--ink); stroke-dasharray: 7 4; }
+.chart-line.chart-line-censored { stroke-dasharray: 1 5; stroke-linecap: round; }
+.chart-mark.chart-s0 { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s1 { fill: var(--ink); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-censored { fill: var(--panel); stroke-width: 2; }
+.chart-mark.chart-censored.chart-s0 { stroke: var(--accent); }
+.chart-mark.chart-censored.chart-s1 { stroke: var(--ink); }
+.chart-legend { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font: 400 var(--text-small)/1.35 var(--f-ui); }
+.chart-key { display: flex; gap: 8px; align-items: center; }
+.chart-key > span { min-width: 0; overflow-wrap: anywhere; }
+.chart-swatch { flex: none; overflow: visible; }
+.chart-table { margin-top: 8px; font: 400 var(--text-small)/1.4 var(--f-ui); }
+.chart-table > summary { cursor: pointer; font-weight: 600; min-height: 28px; display: flex; align-items: center; }
+.chart-table p { margin: 4px 0; color: var(--ink-2); }
+.chart-table-scroll { max-height: 240px; overflow: auto; border: 1px solid var(--rule); border-radius: 6px; }
+.chart-table table { width: 100%; border-collapse: collapse; }
+.chart-table :is(th, td) { text-align: left; padding: 4px 8px; border-top: 1px solid var(--rule); white-space: nowrap; }
+.chart-table thead th { position: sticky; top: 0; background: var(--wash); border-top: 0; }
+@media print { .chart-table-scroll { max-height: none; } }
+
 /* Checklist (js/blocks/checklist.js): one line per item, its reason under it, where it stands in words. No mark
    beside it (a ring reads as a box to tick, and nothing here is ticked): status is carried by words and position,
    never colour. */

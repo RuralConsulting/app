@@ -69,6 +69,8 @@
   let portfolio = [], user = null, context = null, pending = null, token = 0, openedMap = null, framedOverlap = 0, reserveHeader = () => {};
   // The blocks this space has mounted (docs/BUILDING-BLOCKS.md §2): the map scene, the standing answers, the open view.
   let scene = null, answers = [], view = null;
+  // Water quality nearby (M1b, wq.js): a line after the standing answers; its sites are on the map only while it is open.
+  let wq = null;
   // The standing answers' models, and the What's due line whose place the map is framed on (null: the farm).
   let standing = [], focused = null;
   // What the map shows (E5, #244): the layer rows drawn for this farm, the route it is showing, the place a chosen
@@ -91,6 +93,7 @@
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
+    wq?.destroy(); wq = null;
     layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null; pendingAsk = null; proposals.clear();
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
@@ -279,6 +282,7 @@
     flushDone();
     context = null; pending = null; openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
+    wq?.destroy(); wq = null;
     document.body.classList.remove("farm-space-active", "farm-detail");
     document.body.classList.add("portfolio-active");
     $("#farm-space-header")?.setAttribute("hidden", "");
@@ -739,6 +743,7 @@
     unmount(answers); answers = []; $("#overview-cards").replaceChildren();
     standing = M.standingAnswers(context);
     answers = standing.map((m) => answer($("#overview-cards"), m, { compact: true, summary: true }));
+    if (wq) $("#overview-cards").append(wq.node);   // after the standing answers, with its open state kept through a redraw
     markFocused();
     for (const id of undoable.waiting()) showDone(id, false);   // a Done still inside its Undo window keeps its Undo through a redraw
     // Phone: the closed sheet shows What's due's first clause over the handle ("3 things need a record"), whole, and never
@@ -988,6 +993,7 @@
     if (context?.farm.id !== farm.id) {
       context = null; openedMap = null;
       unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
+      wq?.destroy(); wq = null;
       layerEntries = []; handSet = new Map();
       $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren(); $("#overview-peek").textContent = "";
       pending = load(FP.sb, farm, user);
@@ -1020,6 +1026,9 @@
       unmount(view); view = null;
       if (focused) { focused = null; FP.farmMap.focus(null); }   // a new view starts on the farm
       askSet = null;   // and an answer's layers go with the Ask view
+      // Water quality nearby: one line per farm. Another view closes it, so its sites leave the quiet map.
+      if (!wq && FP.wq) wq = FP.wq.create({ sb: FP.sb, farm, extent: context.maps.extent });
+      if (route.view !== "map") wq?.collapse({ reframe: true });
       // and on the quiet map, with what this view brings (the plan selected in Documents: the FEP's layers); a photo
       // opened in an earlier view no longer counts
       shownRoute = { view: route.view, item: route.item || null }; focusPlace = null; photoShown = false;
