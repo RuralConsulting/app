@@ -58,7 +58,8 @@
     { "id": "check-meter", "obligation_id": "obl-meter", "status": "met", "explanation": "Marked done in the app", "author_kind": "advisor", "author_user": "de000000-0000-4000-8000-000000000003", "due_date": "2027-07-31", "superseded_at": null, "created_at": "2026-10-12T02:00:00Z" }
   ],
   "record_types": [
-    { "id": "rt-note", "key": "note", "label": "Note", "farm_id": null, "org_id": null }
+    { "id": "rt-note", "key": "note", "label": "Note", "farm_id": null, "org_id": null },
+    { "id": "rt-photo", "key": "photo", "label": "Photo", "farm_id": null, "org_id": null }
   ],
   "entries": [
     { "id": "entry-report", "type_id": "rt-note", "body": "Record for CRC000101 condition 10: Nutrient budget 2025/26 (synthetic)", "visibility": "farm", "created_at": "2026-10-20T03:00:00Z" }

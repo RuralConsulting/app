@@ -113,7 +113,7 @@
       farms: [farm], farm_members: [{ farm_id: FARM, user_id: USER, role: "admin" }], org_members: [{ org_id: ORG, user_id: USER, role: "advisor" }],
       documents: owned(f.documents, FARM), authorisations: owned(f.authorisations, FARM), obligations: owned(f.obligations, FARM),
       // one condition marked done and one with its record linked, so What's due and the gallery show both
-      checks: owned(f.checks || [], FARM), record_types: f.record_types || [], entries: owned(f.entries || [], FARM), entry_links: owned(f.entry_links || [], FARM),
+      checks: owned(f.checks || [], FARM), record_types: f.record_types || [], entries: owned(f.entries || [], FARM), entry_links: owned(f.entry_links || [], FARM), entry_files: [],
       // The staff Operations page: invented job records, one failing and one late. The farmer demo is not staff.
       profiles: [{ user_id: USER, is_staff: true }], ops_job_status: f.ops.jobs, ops_reference_status: f.ops.references,
       // Invented how-to recipes (AI1): one approved, one draft. Approve / Retire answer that the demo does not save changes.
@@ -306,7 +306,9 @@
       authorisation_count: mine("authorisations"), document_count: mine("documents") };
   }
   // The tables the demo adds rows to, in memory: What's due's Done (checks) and Add the record (documents, entries, links).
-  const KEPT = ["checks", "documents", "entries", "entry_links", "layer_notes"];
+  // B4b: the capture queue's entries and entry files too (ids made on the phone; a second insert of one id is refused as
+  // the database refuses it, 23505, which the queue reads as "already written").
+  const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes"];
   const EDITED = ["layer_notes", "farm_parcels"];   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
@@ -487,7 +489,7 @@
       const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false;
       const q = {
         select() { return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
-        order(key, options) { orders.push([key, options?.ascending !== false]); return q; },
+        order(key, options) { orders.push([key, options?.ascending !== false]); return q; }, limit() { return q; },
         insert(rows) { write = true; adding = rows; return q; }, update(values) { write = true; changes = values || null; return q; }, delete() { write = true; removing = true; return q; },
         single() { singular = true; return execute(); }, maybeSingle() { singular = true; maybe = true; return execute(); },
         then(resolve, reject) { return execute().then(resolve, reject); },
@@ -495,7 +497,9 @@
       async function execute() {
         const d = await ready, rows = d.tables[table];
         if (write && adding && KEPT.includes(table)) {
-          const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}), ...copy(r) }));
+          const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
+            ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));
+          if (added.some((r) => rows.some((x) => x.id === r.id))) return result(null, { code: "23505", message: "duplicate key value violates unique constraint" });
           for (const r of added) {
             if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
             rows.push(r);
@@ -556,6 +560,17 @@
         if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
+        // B4b, as public.sync_entry_edit: applied on the version it was made on, else kept as a conflict; once per edit id.
+        if (name === "sync_entry_edit") {
+          const e = d.tables.entries.find((x) => x.id === args.p_entry);
+          if (!e) return result(null, { code: "42501", message: "That entry is not available to edit" });
+          d.syncOps = d.syncOps || {};
+          if (!d.syncOps[args.p_op]) {
+            if ((e.updated_at || null) === (args.p_base || null)) { e.body = args.p_body; e.updated_at = new Date().toISOString(); d.syncOps[args.p_op] = "applied"; }
+            else d.syncOps[args.p_op] = "conflict";
+          }
+          return result(d.syncOps[args.p_op]);
+        }
         if (name === "measurement_series") {
           const from = args.from_time ? Date.parse(args.from_time) : -Infinity, to = args.to_time ? Date.parse(args.to_time) : Infinity;
           return result((wqOf(d).series[args.site + "|" + args.parameter_key] || []).filter((r) => Date.parse(r.sampled_at) >= from && Date.parse(r.sampled_at) < to));

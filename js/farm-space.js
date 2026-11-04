@@ -1114,6 +1114,13 @@
     const view = el("section", { class: "space-view", "data-view": "create" }, el("h2", {}, "Create"),
       el("p", {}, "These can't be made here yet."),
       el("ul", { class: "output-list" }, ...M.outputs.map(([key, label]) => el("li", { "data-output": key }, el("span", {}, label)))));
+    // A note or a photo from the paddock (B4b): kept on the phone without coverage, uploaded when back online; the farm's
+    // recent notes and photos below it, each with its upload state. Placed first: it is what a farmer comes here for.
+    if (FP.capture) {
+      const host = el("div", { class: "capture-host" });
+      view.querySelector("h2").after(host, el("h3", { class: "output-heading" }, "Reports"));
+      FP.capture.mount(host, { sb: FP.sb, farm: context.farm, user: context.user, el, canEdit: canChange() });
+    }
     // Water-quality results from a spreadsheet (the farm's own, or a group's the person edits): upload, check, confirm.
     if (canChange() && FP.wqImport) {
       const open = el("button", { type: "button", class: "wq-open" }, "Import water-quality results");
@@ -1149,6 +1156,7 @@
       if (current !== token) return;
       context = loaded;
       header(farm, route); reserveHeader();
+      FP.capture?.start({ sb: FP.sb, user: context.user });   // B4b: what waits on this phone uploads once a farm is open
       document.title = farm.name + (route.view === "map" ? "" : " · " + M.viewLabel(route.view)) + " | " + FP.brand?.product;
       try { sessionStorage.setItem("fp-view-" + user.id + "-" + farm.id, M.href(farm.id, route.view)); } catch {}
       if (openedMap !== farm.id) {
