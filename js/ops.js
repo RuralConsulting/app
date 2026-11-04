@@ -131,11 +131,51 @@
       if (msg) msg.textContent = "Couldn't " + act + " that recipe: " + (e?.message || e);
     }
   }
+  // AI evaluation (EV1): per flow, the proposals made, accepted and dismissed, corrections per 100 accepted and the AI cost, for a
+  // chosen period, from public.ai_ratchet_evaluation (counts only). A figure the records do not hold says "not recorded yet" and,
+  // under "What would record it", what would; nothing is estimated.
+  let ratchetKey = "30d";
+  const dot = (t) => /[.!?]$/.test(t) ? t : t + ".";
+  function flowItem(f) {
+    return '<li class="ops-job" data-flow="' + esc(f.key) + '"><div class="ops-job-head"><b>' + esc(f.name) + "</b></div>" +
+      '<dl class="ops-figures">' + f.cells.map((c) => '<div data-figure="' + esc(c.key) + '"' + (c.recorded ? "" : ' data-recorded="no"') + "><dt>" + esc(c.label) + "</dt><dd>" +
+        (c.recorded ? esc(c.text) : '<span class="ops-gap">not recorded yet</span>') + "</dd></div>").join("") + "</dl>" +
+      f.detail.map((l) => '<p class="ops-line">' + esc(l) + "</p>").join("") +
+      (f.gaps.length ? '<details class="ops-steps"><summary>What would record the missing figures (' + f.gaps.length + ')</summary><ul class="ops-list">' +
+        f.gaps.map((g) => '<li class="ops-line" data-gap-for="' + esc(g.what) + '"><b>' + esc(g.what) + ":</b> " + esc(dot(g.why)) + " Would record it: " + esc(dot(g.would)) + "</li>").join("") + "</ul></details>" : "") + "</li>";
+  }
+  function ratchetPanel(v, period) {
+    const p = period || M.ratchetPeriod(ratchetKey);
+    const picker = '<p class="ops-line"><label>Period <select id="ops-ratchet-period">' + p.options.map((o) =>
+      '<option value="' + esc(o.key) + '"' + (o.key === p.key ? " selected" : "") + ">" + esc(o.label) + "</option>").join("") + "</select></label></p>";
+    if (!v) return '<section class="answer-panel answer-compact ops-panel" data-ops="ai-evaluation"><h2>AI evaluation</h2>' + picker + '<p class="answer-sentence" role="alert">Couldn\'t read the AI evaluation.</p></section>';
+    return '<section class="answer-panel answer-compact ops-panel" data-ops="ai-evaluation" data-answer-state="recorded"><h2>' + esc(v.title) + '</h2><p class="answer-sentence">' +
+      esc(v.answer.text + " — " + v.answer.because) + "</p>" + picker + '<ul class="ops-list">' + v.flows.map(flowItem).join("") + "</ul>" +
+      '<p class="ops-line" data-ai-total>' + esc(v.total.text + (v.total.purposes.length ? " (" + v.total.purposes.map((x) => x.purpose + " " + x.calls).join(", ") + ")" : "") + ".") + "</p>" +
+      '<p class="ops-line" data-eval>' + esc(v.evaluation.text) + " " + ext(v.evaluation.url, "Latest CI runs") + "</p></section>";
+  }
+  async function readRatchet() {
+    const p = M.ratchetPeriod(ratchetKey);
+    let raw = null;
+    try { raw = await read(sb.rpc("ai_ratchet_evaluation", { p_from: p.from, p_to: p.to })); } catch { raw = null; }
+    return ratchetPanel(M.ratchet(raw, p), p);
+  }
+  async function changePeriod(select) {
+    ratchetKey = select.value;
+    const panel = $('[data-ops="ai-evaluation"]'), current = token;
+    if (!panel) return;
+    const html = await readRatchet();
+    if (current !== token || !panel.isConnected) return;
+    panel.outerHTML = html;
+    $("#ops-ratchet-period")?.focus();
+  }
+
   let wired = false;
   function wire(box) {
     if (wired || !box?.addEventListener) return;
     wired = true;
     box.addEventListener("click", (e) => { const b = e.target?.closest?.(".ops-recipe-act"); if (b) decide(b); });
+    box.addEventListener("change", (e) => { if (e.target?.id === "ops-ratchet-period") changePeriod(e.target); });
   }
 
   async function version() {
@@ -158,20 +198,21 @@
     box.innerHTML = '<p class="ops-wait">Reading the job records…</p>';
     wire(box);
     try {
-      const [jobRows, refRows, v, recipeRows, gapRows] = await Promise.all([
+      const [jobRows, refRows, v, recipeRows, gapRows, ratchetHtml] = await Promise.all([
         read(sb.from("ops_job_status").select("*").order("job_key")),
         read(sb.from("ops_reference_status").select("*").order("name")), version(),
-        // The recipes and group-gaps panels fail on their own: the rest of the page still shows.
+        // The recipes, group-gaps and AI-evaluation panels fail on their own: the rest of the page still shows.
         read(sb.from("ai_recipes").select(RECIPE_COLUMNS).order("key")).catch(() => null),
-        Promise.resolve().then(() => read(sb.rpc("group_load_gaps", { group_id: null }))).catch(() => null)]);
+        Promise.resolve().then(() => read(sb.rpc("group_load_gaps", { group_id: null }))).catch(() => null),
+        readRatchet()]);
       if (current !== token) return;
       box.innerHTML = jobsPanel(M.jobs(jobRows)) + referencesPanel(M.references(refRows)) + gapsPanel(gapRows ? M.loadGaps(gapRows) : null) +
-        recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + buildPanel(M.build(v));
+        recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + ratchetHtml + buildPanel(M.build(v));
     } catch (e) {
       if (current === token) box.innerHTML = '<p class="msg" role="alert">Couldn\'t read the job records: ' + esc(e.message || e) + "</p>";
     }
   }
   function close() { token++; }
 
-  FP.ops = { checkStaff, isStaff: () => staff, user: () => me, open, close, decide, groupGaps, render: { jobsPanel, referencesPanel, gapsPanel, recipesPanel, buildPanel } };
+  FP.ops = { checkStaff, isStaff: () => staff, user: () => me, open, close, decide, groupGaps, render: { jobsPanel, referencesPanel, gapsPanel, recipesPanel, ratchetPanel, buildPanel } };
 })();

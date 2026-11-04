@@ -505,6 +505,16 @@
         ]
       }
     ],
+    "ratchet": {
+      "from": null, "to": null,
+      "d2": { "files": 6, "as_proposed": 3, "after_fix": 1, "code_mapping": 1, "not_loaded": 1, "calls": 8, "cost_usd": 0.01240, "unknown_cost_calls": 1, "saved_mapping_imports": 4 },
+      "x1": { "actions_run": 9, "accepted": 7, "accepted_with_overrides": 2, "overrides": 3 },
+      "cc1": { "consents_accepted": 5, "conditions_accepted": 41, "ask_lookups": 2 },
+      "by_purpose": [
+        { "purpose": "ask", "calls": 31, "refused": 1, "cost_usd": 0.18300, "unknown_cost_calls": 0 },
+        { "purpose": "classify", "calls": 8, "refused": 0, "cost_usd": 0.01240, "unknown_cost_calls": 1 }
+      ]
+    },
     "build": {
       "version": "202610291405-3f9a2c1"
     }

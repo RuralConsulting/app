@@ -30,6 +30,7 @@
   };
   const num = (n) => Number(n).toLocaleString("en-NZ");
   const count = (n, one, many) => (n === 1 ? "One " + one : n + " " + many);
+  const cnt = (n, one, many) => (n === 1 ? "one " + one : n + " " + many);
 
   const healthWord = { ok: "OK", late: "Late", failing: "Failing", never_run: "Never run" };
   const runWord = { success: "succeeded", partial: "finished with some failures", failed: "failed", skipped: "was skipped" };
@@ -184,5 +185,84 @@
     return { title: "Group data completeness", answer, empty: "No group load is recorded yet.", groups };
   }
 
-  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl, loadGaps };
+  // The ratchet evaluation (EV1): per AI flow, for a period, the proposals made, accepted and dismissed, the corrections per 100
+  // accepted and the AI cost, from public.ai_ratchet_evaluation() (counts only; RCL staff only). A figure the records do not hold
+  // is a `gap` that says what would record it, never an estimate and never a zero: `null` is "not recorded yet".
+  const PERIODS = [["30d", "Last 30 days", 30], ["7d", "Last 7 days", 7], ["90d", "Last 90 days", 90], ["all", "All time", null]];
+  const PHRASE = { "30d": "in the last 30 days", "7d": "in the last 7 days", "90d": "in the last 90 days", all: "over all time" };
+  function ratchetPeriod(key, nowMs) {
+    const p = PERIODS.find(([k]) => k === key) || PERIODS[0], now = Number.isFinite(nowMs) ? nowMs : Date.now();
+    return { key: p[0], label: p[1], phrase: PHRASE[p[0]], from: p[2] === null ? null : new Date(now - p[2] * 86400000).toISOString(), to: new Date(now).toISOString(),
+      options: PERIODS.map(([k, l]) => ({ key: k, label: l })) };
+  }
+  const int = (v) => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0; };
+  const usd = (n) => "US$" + (n === 0 ? "0.00" : n < 0.01 ? n.toFixed(4) : n.toFixed(2));
+  const cost = (c, n) => n > 0 ? "US$" + c.toFixed(4) + " known; " + cnt(n, "call has no cost recorded", "calls have no cost recorded") : usd(c);
+  const per100 = (n, of) => of > 0 ? Math.round(n / of * 1000) / 10 : null;
+  const GAP = {
+    dismissed: "A proposal that is dismissed, or left unconfirmed, leaves no record.",
+    modelCost: "The model-call rows in ai_calls carry no action name, so one flow's share of the AI's cost is not recorded.",
+  };
+  const WOULD = {
+    dismissed: "A one-line record when a person dismisses the proposal.",
+    modelCost: "The action name on the model call's own ai_calls row.",
+  };
+  function ratchet(raw, period) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const d2 = raw.d2 || {}, x1 = raw.x1 || {}, cc = raw.cc1 || {};
+    const files = int(d2.files), asIs = int(d2.as_proposed), fixed = int(d2.after_fix), plain = int(d2.code_mapping), open = int(d2.not_loaded);
+    const d2done = asIs + fixed, d2cost = Number(d2.cost_usd) || 0, d2unknown = int(d2.unknown_cost_calls);
+    const made = int(x1.actions_run), done = int(x1.accepted), over = int(x1.overrides);
+    const consents = int(cc.consents_accepted), conds = int(cc.conditions_accepted), lookups = int(cc.ask_lookups);
+    const gap = (what, why, would) => ({ what, why, would });
+    const flows = [{
+      key: "plan-mapping", name: "Plan mapping", made: null, accepted: null, dismissed: null, corrections: null, per100: null, cost: null,
+      detail: ["Nothing is stored yet: the AI fallback builds its proposals but is not connected to the plan import, and the import's confirm report is a file, not a record."],
+      gaps: [gap("All figures", "no proposal is recorded", "The confirm report (plan-import-report/1) kept as a plan_import_report document once the AI fallback feeds it: each AI line, and whether it was accepted.")],
+    }, {
+      key: "consent-conditions", name: "Consent conditions", made: null, accepted: consents, dismissed: null, corrections: null, per100: null,
+      cost: "No model is called",
+      detail: [count(consents, "consent has its ECan conditions accepted", "consents have their ECan conditions accepted") + " (" + cnt(conds, "condition", "conditions") + ").",
+        "Ask fetched conditions " + (lookups === 1 ? "once" : lookups + " times") + "; the What's due button leaves no record."],
+      gaps: [gap("Made", "a lookup is not recorded", "A record of each proposal shown (the consent and the time)."),
+        gap("Dismissed", GAP.dismissed, WOULD.dismissed),
+        gap("Corrections", "Accept records the proposal as shown and later edits are not tied to it", "The accepted conditions compared with the proposal.")],
+    }, {
+      key: "import-mapping", name: "Spreadsheet import mapping", made: files, accepted: d2done, dismissed: null, corrections: fixed, per100: per100(fixed, d2done),
+      cost: cost(d2cost, d2unknown),
+      detail: [count(files, "file", "files") + " the AI was asked to map columns of: " + asIs + " loaded as the AI proposed, " + fixed + " after a person fixed the mapping, " +
+          plain + " with the code's own mapping, " + open + " not loaded (set aside or still open).",
+        count(int(d2.saved_mapping_imports), "import was", "imports were") + " loaded from a saved mapping, with no AI asked."],
+      gaps: [gap("Dismissed", GAP.dismissed + " Not loaded may still be open.", WOULD.dismissed)],
+    }, {
+      key: "analyses", name: "Water-quality analyses", made, accepted: done, dismissed: null, corrections: over, per100: per100(over, done), cost: null,
+      detail: [count(made, "analysis was", "analyses were") + " run by the AI; " + cnt(done, "was", "were") + " confirmed from AI-proposed inputs, " +
+        int(x1.accepted_with_overrides) + " with at least one input changed (" + cnt(over, "input", "inputs") + ")."],
+      gaps: [gap("Dismissed", GAP.dismissed, WOULD.dismissed), gap("AI cost", GAP.modelCost, WOULD.modelCost)],
+    }];
+    for (const f of flows) {
+      const text = (v) => v === null || v === undefined ? null : typeof v === "number" ? num(v) : String(v);
+      f.cells = [["made", "Proposals made", text(f.made)], ["accepted", "Accepted", text(f.accepted)], ["dismissed", "Dismissed", text(f.dismissed)],
+        ["corrections", "Corrections per 100 accepted", f.corrections === null ? null : f.per100 === null ? "None accepted yet" : f.per100 + " (" + num(f.corrections) + " in " + num(f.accepted) + ")"],
+        ["cost", "AI cost", text(f.cost)]].map(([key, label, t]) => ({ key, label, text: t, recorded: t !== null }));
+    }
+    const withMade = flows.filter((f) => f.made !== null);
+    const made_ = withMade.reduce((n, f) => n + f.made, 0), acc = flows.reduce((n, f) => n + (f.accepted || 0), 0);
+    const purposes = (Array.isArray(raw.by_purpose) ? raw.by_purpose : []).filter((p) => p && typeof p.purpose === "string").map((p) =>
+      ({ purpose: p.purpose, calls: int(p.calls), refused: int(p.refused), cost: Number(p.cost_usd) || 0, unknown: int(p.unknown_cost_calls) }));
+    const totalCalls = purposes.reduce((n, p) => n + p.calls, 0), totalCost = purposes.reduce((n, p) => n + p.cost, 0), totalUnknown = purposes.reduce((n, p) => n + p.unknown, 0);
+    const when = period?.phrase || "in the period";
+    const silent = flows.filter((f) => f.made === null).length;
+    return {
+      title: "AI evaluation", period: period || ratchetPeriod("30d"), flows,
+      answer: { text: made_ || acc ? num(made_) + (made_ === 1 ? " proposal" : " proposals") + " made where it is recorded, " + num(acc) + " accepted, " + when
+          : "No proposals are recorded " + when,
+        because: silent + (silent === 1 ? " flow records" : " flows record") + " too little to measure; each says what would record it" },
+      total: { calls: totalCalls, text: num(totalCalls) + (totalCalls === 1 ? " AI call" : " AI calls") + " " + when + ", " + cost(totalCost, totalUnknown), purposes },
+      evaluation: { text: "The held-out-site evaluation (a held-out site's overrides N to 0, and a negative site refused) runs in CI and is recorded only in that run's summary.",
+        url: links.workflow("ci.yml") },
+    };
+  }
+
+  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl, loadGaps, ratchet, ratchetPeriod };
 });

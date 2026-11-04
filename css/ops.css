@@ -33,6 +33,13 @@
 .ops-recipe-msg:empty { display: none; }
 /* A draft waiting for review is carried by the word, like a job needing attention. */
 .ops-badge[data-recipe-status="draft"] { border-color: var(--ink); color: var(--ink); font-weight: 700; }
+/* EV1: AI evaluation. Five figures per flow, two across on a phone; a missing one is carried by its words, not a colour. */
+.ops-figures { display: grid; gap: 8px 14px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin: 8px 0 4px; }
+.ops-figures > div { display: grid; gap: 2px; align-content: start; }
+.ops-figures dt { font-size: var(--text-small); color: var(--ink-2); }
+.ops-figures dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.ops-figures .ops-gap { font-weight: 400; font-style: italic; color: var(--ink-2); }
+.ops-panel label select { min-height: 40px; margin-left: 6px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); color: var(--ink); font: inherit; }
 /* LN1: Operations → Layers (advisor notes on every layer) */
 .ln-controls { display: grid; gap: 8px 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 12px 0 4px; }
 .ln-controls label { display: grid; gap: 4px; font-size: var(--text-small); color: var(--ink-2); }
