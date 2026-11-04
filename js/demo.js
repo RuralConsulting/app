@@ -110,6 +110,7 @@
         source: "a farm walk", as_at: "2024-10-02", shown_as: null, features: collection(photos) }] : [])],
     };
     const data = { asAt: f.as_at, map, map2: null, user: { id: USER, email: "advisor@example.test" }, tables: {
+      places: [],      // the farm demo has none; the group demo's area is in groupTables (WQ4)
       farms: [farm], farm_members: [{ farm_id: FARM, user_id: USER, role: "admin" }], org_members: [{ org_id: ORG, user_id: USER, role: "advisor" }],
       documents: owned(f.documents, FARM), authorisations: owned(f.authorisations, FARM), obligations: owned(f.obligations, FARM),
       // one condition marked done and one with its record linked, so What's due and the gallery show both
@@ -188,7 +189,10 @@
   const levelOf = (setting, share) => (share ? LEVELS[Math.min(LEVELS.indexOf(setting), LEVELS.indexOf(share))] : "none");
   function groupDemo(data) {
     // The group's rows sit beside the farm's (merged into reads), so the farm's and the gallery's counts are unchanged.
-    const t = data.groupTables = { organisations: [], org_members: [], record_types: [], entries: [], documents: [], obligations: [] }, at = (d) => d + "T09:30:00+12:00";
+    const t = data.groupTables = { organisations: [], org_members: [], record_types: [], entries: [], documents: [], obligations: [], places: [] }, at = (d) => d + "T09:30:00+12:00";
+    // WQ4: the group's area, as the loader makes it (the preset's applies_to.area is this code)
+    t.places.push({ id: "demo-g-area", org_id: GROUP, kind: "area", code: "hdlg-catchment", name: "HDLG (example) catchment", method: "member_blocks_buffer_1km",
+      description: "Working boundary: the group's member blocks plus 1 km (synthetic).", valid_to: null });
     t.organisations.push({ id: GROUP, name: "HDLG (example)", kind: "catchment_group" });
     t.org_members.push({ org_id: GROUP, user_id: USER, role: "admin" });
     t.record_types.push({ id: "rt-planting", key: "planting", label: "Planting", farm_id: null, org_id: null },

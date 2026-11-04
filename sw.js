@@ -2,7 +2,7 @@
 // never farm data, sign-in or map tiles (all other origins pass straight through). VERSION is set by build.sh.
 // APP names this app's caches: only caches that start with it are cleared on activate. The capture queue (capture-queue.js)
 // is the page's IndexedDB, not a cache: a new version activating never touches it, so what waits to upload survives it.
-const VERSION = "202611042105-3529939";
+const VERSION = "202611042114-712a80a";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
 const SHELL = ["./", "index.html", "css/tokens.css", "css/app.css", "manifest.webmanifest",

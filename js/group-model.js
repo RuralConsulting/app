@@ -167,6 +167,27 @@
       empty: assessed === 0 || !linked };
   }
 
+  // ---- the group's area (WQ4) --------------------------------------------------------------------------------------------
+  // The group's area is its current `places` row of kind area. tools/load_group.py makes it as the member blocks plus 1 km (method
+  // member_blocks_buffer_1km) when the group has none; the group replaces it with an agreed boundary (method agreed_boundary).
+  // ON2's card shows it as a readiness line: a group with no area is a finding with its action, because the group's water-quality
+  // methods apply to that area. `rows` are the rows the caller read, or null when they could not be read (then nothing is claimed).
+  const AREA_NOTES = {
+    member_blocks_buffer_1km: "Working boundary: the member blocks plus 1 km, made when the group was set up. Replace it with the boundary the group agrees.",
+    agreed_boundary: "Agreed boundary.",
+  };
+  function groupArea(rows) {
+    if (!Array.isArray(rows)) return null;
+    const current = rows.filter((r) => r && !r.valid_to).sort((a, b) => String(a.code || a.name).localeCompare(String(b.code || b.name)));
+    if (!current.length) return { state: "missing", text: "Group area: missing. The group has no area.",
+      detail: "The group's water-quality methods apply to its area, so none can be published for it, and the group's monitoring sites are not found, until it has one.",
+      action: "RCL's group load makes the area from the member blocks plus 1 km as a working boundary that the group can replace with an agreed one." };
+    const a = current[0];
+    return { state: a.method === "member_blocks_buffer_1km" ? "working" : "set", code: a.code || null, name: a.name || a.code, method: a.method || null,
+      text: "Group area: " + (a.name || a.code) + (current.length > 1 ? " (and " + (current.length - 1) + " more)" : ""),
+      detail: AREA_NOTES[a.method] || (a.description ? String(a.description) : "Area recorded."), action: null };
+  }
+
   return { match, href, views, viewLabel, LEVELS, LEVEL_TEXT, K, level, canManage, canWrite, memberLines, contributing, attribution,
-    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED, READINESS, FINDINGS, readiness };
+    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED, READINESS, FINDINGS, readiness, groupArea };
 });
