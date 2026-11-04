@@ -13,11 +13,12 @@
   const day = (d) => isDate(d) ? d.slice(0, 10) : null;
   const addDays = (d, n) => new Date(Date.parse(d.slice(0, 10) + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
   // Places reached from the header rather than the three actions: People is for a farm's owner and admins.
-  const otherViews = [["people", "People"]];
+  // Onboarding (ON1) is reached from the command bar and from Documents.
+  const otherViews = [["people", "People"], ["onboarding", "Onboarding"]];
   const viewLabel = (key) => [...views, ...otherViews].find(([k]) => k === key)?.[1] || null;
   const href = (f, view, id) => "#/farm/" + f + (view && view !== "map" ? "/" + view : "") + (id ? "?item=" + encodeURIComponent(id) : "");
   function match(hash) {
-    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(ask|create|documents|people))?(?:\?item=([^&#]+))?$/);
+    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(ask|create|documents|people|onboarding))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[2] || "map", item: m[3] ? decodeURIComponent(m[3]) : null } : null; } catch { return null; }
   }
   // A consent's or document's title as the app quotes it in a sentence or a line: without the full stop its record may
@@ -29,7 +30,7 @@
   const ruleRef = (a) => { const r = typeof a?.rule_ref === "string" ? a.rule_ref.trim() : ""; return r && !PLACEHOLDER_REF.test(r) ? r : null; };
   const authName = (a) => [a.consent_no || ruleRef(a), title(a.title)].filter(Boolean).join(" · ") || "Recorded authorisation";
   const count = (n, one, many) => (n === 1 ? "One " + one : n + " " + many);
-  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", plan_issue: "Issued document", consent_decision: "Consent decision", consent_application: "Consent application",
+  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", plan_issue: "Issued document", onboarding_report: "Onboarding report", consent_decision: "Consent decision", consent_application: "Consent application",
     overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
     ghg_report: "Greenhouse gas report", consent_correspondence: "Consent correspondence", correspondence: "Correspondence",
     smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract", map_extract: "Map extract", fep_audit: "FEP audit", nzfap_checklist: "NZFAP+ checklist", land_unit_map: "Land unit map",
@@ -47,7 +48,7 @@
     fep: ["primary", 0], fwfp: ["primary", 0], farm_environment_plan: ["primary", 0], freshwater_farm_plan: ["primary", 0], plan_issue: ["primary", 0],
     consent_decision: ["primary", 1], consent_application: ["primary", 1], consent: ["primary", 1], aee: ["primary", 1], nzfap_checklist: ["primary", 1],
     overseer_report: ["primary", 2], nutrient_budget: ["primary", 2], land_unit_map: ["primary", 3], farm_map: ["primary", 3],
-    luc_report: ["primary", 4], ghg_report: ["primary", 4],
+    luc_report: ["primary", 4], ghg_report: ["primary", 4], onboarding_report: ["primary", 5],
     consent_correspondence: ["supporting", 0], correspondence: ["supporting", 0], memo: ["supporting", 1], fep_audit: ["supporting", 0],
     smap_factsheet: ["supporting", 2], gis_artifact: ["supporting", 3], image: ["supporting", 4],
   };

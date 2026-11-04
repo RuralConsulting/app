@@ -27,7 +27,7 @@
   const ORG = "de000000-0000-4000-8000-000000000004";
   const FARM2 = "de000000-0000-4000-8000-000000000005";
   const PHOTO = "demo/photo-synthetic.svg";   // a drawn stand-in: no real photo is in the demo
-  const VIEWS = /^$|^\/(ask|create|documents|people)$/;
+  const VIEWS = /^$|^\/(ask|create|documents|people|onboarding)$/;
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|\?|$)/.test(hash);
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|\?|$)/.test(hash);
@@ -216,6 +216,44 @@
   // The block flow's calls in memory: the parcels in a box (each flagged held: on the farm or in its holding), their
   // union (FP.blockModel.dissolve, as st_union), and a block added (the parcels as references, a new farmed boundary
   // version, the map's extent grown). The demo's farm is the only one with parcels.
+  // ON1: the onboarding report's inputs for a demo farm, shaped as public.onboarding_report_inputs returns them. Its records
+  // are the fixture's; the public context is invented (synthetic sources, names and counts).
+  function onboardingInputs(d, f) {
+    const B = typeof module === "object" && module.exports ? require("./block-model.js") : globalThis.FP.blockModel;
+    const farm = d.tables.farms.find((x) => x.id === f);
+    if (!farm) return null;
+    const rel = new Map(d.tables.document_relations.map((r) => [r.id, r.relates_to]));
+    const crcs = (x) => [...new Set((String(x.title || "") + " " + String(x.original_name || "")).toUpperCase().match(/CRC\s?\d{6}(\.\d{1,2})?/g) || [])].map((s) => s.replace(/\s/g, ""));
+    const docs = d.tables.documents.filter((x) => x.farm_id === f).map((x) => ({ id: x.id, title: x.title, doc_type: x.doc_type, original_name: x.original_name || null,
+      date_prepared: x.date_prepared || null, created_at: x.created_at, tier: x.tier || "primary", tiered_at: x.tiered_at || null, relates_to: rel.get(x.id) ?? x.relates_to ?? null,
+      visibility: x.visibility || "farm", by_person: true, storage_path: x.storage_path || null, mime_type: x.mime_type || null, size_bytes: x.size_bytes || null, crcs: crcs(x) }));
+    const consents = d.tables.authorisations.filter((a) => a.farm_id === f && a.kind === "consent");
+    const mine = f === FARM, area = mine && d.map?.extent ? B.areaHa(d.map.extent) : null, as = "2026-10-28T00:00:00Z";
+    const src = (key, name, theme, provider) => ({ key, name, theme, provider, licence: "CC BY 4.0", licence_status: "open", attribution: provider, refreshed_at: as, served: true, feature_count: null });
+    return {
+      schema: "onboarding-inputs/1", as_at: d.asAt + "T09:00:00Z", farm: { id: farm.id, name: farm.name, region: farm.region, created_at: "2026-03-01T09:00:00Z", catchment_share: mine ? "aggregated" : null },
+      holding: { parcels: [], titles: { count: mine ? 2 : 0, area_ha: area || 0 }, boundary: null, extent_area_ha: area },
+      sources: [src("linz-primary-parcels", "NZ Primary Parcels (LINZ)", "parcels", "LINZ"), src("niwa-rec2-rivers", "River Environment Classification 2 (NIWA)", "rivers", "NIWA"),
+        src("ecan-wq-sites", "Water quality monitoring sites (ECan)", "monitoring_sites", "Environment Canterbury"), src("ecan-wells", "Wells and bores (ECan)", "wells", "Environment Canterbury"),
+        src("ecan-consents", "Resource consents (ECan)", "consents", "Environment Canterbury"), src("smap", "S-map soils (Manaaki Whenua)", "soils", "Manaaki Whenua")],
+      context: mine ? { in_context: [{ source_key: "smap", count: 5, on_farm: 3 }, { source_key: "ecan-consents", count: 4, on_farm: 2 }, { source_key: "ecan-wells", count: 6, on_farm: 1 }],
+        downstream: { starts: 2, reaches: [{ name: "Example Stream (synthetic)", cum_km: 0.8 }, { name: "Example River (synthetic)", cum_km: 7.4 }], max_km: 50, end_reasons: ["max_km"] },
+        sites: [{ source_key: "ecan-wq-sites", external_id: "SYN-1", site_kind: "wq", site_name: "Example Stream at Ford Road (synthetic)", distance_km_along: 2.6 }],
+        groundwater: { allocation_zone: { groundwater: [{ name: "Example groundwater zone (synthetic)" }], surface_water: [] },
+          wells: [{ external_id: "SYN/0001", well_no: "SYN/0001", distance_m: 140, on_farm: true, depth_m: 38 }, { external_id: "SYN/0002", well_no: "SYN/0002", distance_m: 820, on_farm: false, depth_m: 61 }] },
+        surface_water: { count: 4, on_farm: 1, named: [{ name: "Example Stream (synthetic)", on_farm: true, distance_m: 0 }] } } : {},
+      consents: { register: consents.map((a) => ({ id: a.id, consent_no: a.consent_no, title: a.title, status: a.status || null, valid_from: a.valid_from || null, valid_to: a.valid_to || null,
+          source_document_id: a.source_document_id || null, has_conditions: d.tables.obligations.some((o) => o.authorisation_id === a.id), conditions_accepted: 0 })),
+        ecan_served: true, ecan_as_at: as, ecan: [...new Set([...consents.map((a) => a.consent_no), ...docs.flatMap((x) => x.crcs)])].sort().map((n) => ({ consent_no: n, found: n !== "CRC000199", status: null, valid_to: null })),
+        candidates: mine ? [{ consent_no: "CRC000150", consent_type: "Water permit", permit_type: "Take groundwater", status: "Issued - Active", valid_from: "2019-04-01", valid_to: "2034-04-01", already_registered: false, dismissed: false, live: true }] : [],
+        dismissed: 0 },
+      documents: docs, facts: mine ? [{ fact_type: "farm_area", value_num: Math.round((area || 0) * 1.25), unit: "ha", method: "document", source_document_id: docs.find((x) => x.doc_type === "fep")?.id || null, source_page: 4, as_at: "2024-08-01" }].filter((x) => x.source_document_id) : [],
+      sharing: { catchment_share: mine ? "aggregated" : null, groups: mine ? [{ org_id: ORG, name: "Example catchment group (synthetic)", status: "active" }] : [], entries: { group: 0, public: 0 }, documents: { group: 0, public: 0 } },
+      effort: { farm_created_at: "2026-03-01T09:00:00Z", parcels_by_person: 0, first_parcel_at: null, boundaries_drawn: 0, documents_by_person: docs.length, first_document_at: docs.map((x) => x.created_at).sort()[0] || null,
+        tiers_chosen: docs.filter((x) => x.tiered_at).length, dismissals: 0, conditions_accepted: 0, consents_registered: consents.length },
+      timings_ms: { holding: 1, context: 1, consents: 1, documents: 1, sharing: 1 }, errors: {},
+    };
+  }
   function holding(d, name, args) {
     const B = typeof module === "object" && module.exports ? require("./block-model.js") : globalThis.FP.blockModel;
     const mine = args.f === FARM, held = (p) => p.on_farm || d.tables.farm_parcels.some((h) => h.farm_id === args.f && h.external_id === p.external_id);
@@ -393,6 +431,8 @@
           return result(wqOf(d).sites.filter((x) => x.distance_m <= (args.km ?? 10) * 1000).sort((a, b) => a.distance_m - b.distance_m || a.external_id.localeCompare(b.external_id)));
         }
         if (name === "wq_site_latest") return result(wqLatest(wqOf(d), args.site));
+        // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
+        if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
         if (name === "measurement_series") {
           const from = args.from_time ? Date.parse(args.from_time) : -Infinity, to = args.to_time ? Date.parse(args.to_time) : Infinity;
           return result((wqOf(d).series[args.site + "|" + args.parameter_key] || []).filter((r) => Date.parse(r.sampled_at) >= from && Date.parse(r.sampled_at) < to));

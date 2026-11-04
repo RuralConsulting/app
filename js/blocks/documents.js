@@ -53,6 +53,9 @@
       const when = day(d.date_prepared) || day(d.created_at), version = /^\d+$/.test(String(d.model_version ?? "")) ? "version " + d.model_version : null;
       return ["Issued " + (when ? M.date(when) : "on a date not recorded"), version, d.author_org || null].filter(Boolean).join(" · ");
     }
+    // An onboarding report (ON1): when it was saved; it opens in the checklist view.
+    if (String(d.doc_type || "").toLowerCase() === "onboarding_report")
+      return ["Onboarding report", day(d.created_at) ? "saved " + M.date(day(d.created_at)) : null, "opens as a checklist"].filter(Boolean).join(" · ");
     const kind = M.docKind(d.doc_type), title = String(M.docTitle(d)).toLowerCase();
     const who = d.author_org || d.author, when = day(d.date_prepared) || day(d.period_end);
     const parts = [kind && kind !== "Other" && (!title.includes(kind.toLowerCase()) || (!who && !when)) ? kind : null, who || null, when ? M.date(when) : null];

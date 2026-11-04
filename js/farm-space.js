@@ -205,6 +205,8 @@
       const button = e.target.closest("[data-open-document]");
       const doc = button && context?.documents.find((d) => d.id === button.dataset.openDocument);
       if (!doc?.storage_path) return;
+      // An onboarding report (ON1) opens in the checklist view, as it was saved.
+      if (String(doc.doc_type || "").toLowerCase() === "onboarding_report") { location.hash = FP.href(M.href(context.farm.id, "onboarding", doc.id)); return; }
       button.disabled = true;
       const { data, error } = await FP.sb.storage.from("documents").createSignedUrl(doc.storage_path, 3600);
       button.disabled = false;
@@ -573,10 +575,12 @@
   // new block in the nitrate zone?": mentionsNewLand) offers it last, and Enter asks. Anything else is as before.
   const canAddLand = () => M.canEdit(context?.role) && !!FP.addBlock && !!FP.blockModel;
   const BLOCK_OPTION = { kind: "block", label: "Add a block of land to the farm" };
+  const ONBOARDING_OPTION = { kind: "onboarding", label: "Open the onboarding checklist" };
   const optionsFor = (intent) => {
     if (intent.kind === "none") return [];
     const statement = canAddLand() && FP.blockModel.isBlockIntent(intent.text), mention = canAddLand() && !statement && FP.blockModel.mentionsNewLand(intent.text);
-    return [...(statement ? [{ ...BLOCK_OPTION, lead: true }] : []),
+    const onboarding = !!FP.onboardingModel?.isIntent(intent.text);
+    return [...(onboarding ? [{ ...ONBOARDING_OPTION, lead: true }] : []), ...(statement ? [{ ...BLOCK_OPTION, lead: true }] : []),
       ...intent.layers.map((l) => ({ kind: "layer", key: l.key, label: (l.on ? "Showing " : "Show ") + l.name })), { kind: "ask", text: intent.text, label: "Ask: " + intent.text },
       ...(mention ? [BLOCK_OPTION] : [])];
   };
@@ -604,6 +608,7 @@
     if (!option || !context) return;
     if (option.kind === "layer") { setLayer(option.key, true); input.value = ""; closeSuggestions(); return; }
     if (option.kind === "block") { input.value = ""; closeSuggestions(); input.blur(); openBlock(); return; }
+    if (option.kind === "onboarding") { input.value = ""; closeSuggestions(); input.blur(); location.hash = FP.href(M.href(context.farm.id, "onboarding")); return; }
     const question = option.text.trim();
     if (!question) return;
     input.value = ""; closeSuggestions(); input.blur();
@@ -864,9 +869,29 @@
   // ---- Documents (B3): the sentence, then the Documents block; editors add documents and move them between tiers --
   const editor = () => ["owner", "admin", "edit"].includes(context?.role) && context.documentTiers === "chosen";
   let documentsNotice = null;
+  // ---- Onboarding (ON1): the guided checklist of what the platform holds for the farm, what it can propose and what needs
+  // a person (onboarding.js). A saved report (?item=) opens as it was saved. ------------------------------------------------
+  function onboardingView(host, item) {
+    const farm = context.farm, node = el("div", { class: "onboarding-host" });
+    host.append(node);
+    let gone = false;
+    const editsFarm = ["owner", "admin", "edit"].includes(context.role);
+    FP.onboarding.mount(node, { sb: FP.sb, farm, user: { id: user.id, name: user.user_metadata?.display_name || null }, canEdit: editsFarm, item: item || null,
+      docs: context.documents, store: documentStore(farm.id, () => []), liveHref: FP.href(M.href(farm.id, "onboarding")),
+      onAction: (kind, id) => {
+        if (gone) return;
+        if (kind === "add_block") { openBlock(); return; }
+        if (kind === "documents") { location.hash = FP.href(M.href(farm.id, "documents", id || undefined)); return; }
+        if (kind === "whats_due") location.hash = FP.href(M.href(farm.id, "map"));
+      },
+      onSaved: async () => { if (context?.farm.id === farm.id) context.documents = await readDocuments(FP.sb, context.farm); } });
+    return { destroy: () => { gone = true; node.onclick = node.onsubmit = null; } };
+  }
   function documentsView(host, item) {
     const sentence = el("div", { class: "block-host" }), list = el("div", { class: "block-host documents-host" });
-    const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, list);
+    const onboarding = el("p", { class: "documents-onboarding" }, el("a", { href: FP.href(M.href(context.farm.id, "onboarding")) }, "Onboarding checklist"),
+      " · what the platform holds for this farm and what needs a person");
+    const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, onboarding, list);
     host.append(wrap);
     const farm = context.farm.id, handles = [];
     const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), notice: documentsNotice });
@@ -880,7 +905,7 @@
   function documentStore(farm, handles) {
     const D = FP.documentsBlock;
     return {
-      async add({ file, title, doc_type, tier, relates_to }) {
+      async add({ file, title, doc_type, tier, relates_to, visibility }) {
         const bytes = await file.arrayBuffer(), sha = await D.sha256Hex(bytes);
         const same = context.documents.find((d) => d.sha256 === sha);
         if (same) throw Error("already here as " + M.docTitle(same));
@@ -889,7 +914,8 @@
         // The same bytes uploaded before but never described: describe them now (the database checks they are yours).
         if (up.error && !/exist|duplicate|409/i.test(String(up.error.message || "") + (up.error.statusCode || ""))) throw up.error;
         const { data, error } = await FP.sb.from("documents").insert({ farm_id: farm, title, doc_type, original_name: file.name, mime_type: mime,
-          sha256: sha, size_bytes: file.size, storage_path: path, tier, relates_to: relates_to || null, tiered_at: new Date().toISOString() }).select("id").single();
+          sha256: sha, size_bytes: file.size, storage_path: path, tier, relates_to: relates_to || null, tiered_at: new Date().toISOString(),
+          ...(visibility === "private" ? { visibility } : {}) }).select("id").single();
         if (error) throw error;
         return data.id;
       },
@@ -1119,6 +1145,7 @@
       else if (route.view === "map" && route.item) revealLine(route.item);
       else if (route.view === "create") { $("#space-body").replaceChildren(createView()); }
       else if (route.view === "people") { $("#space-body").replaceChildren(peopleView()); if (M.canManage(context.role)) await loadPeople(); }
+      else if (route.view === "onboarding") { $("#space-body").replaceChildren(); view = onboardingView($("#space-body"), route.item); }
       $("#map-msg").hidden = true;
     } catch (e) { if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); } }
   }

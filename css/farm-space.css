@@ -316,3 +316,30 @@ body.block-flow-active .command-bar, body.block-flow-active #overview-rail, body
 .wq-pin.selected i { outline: 3px solid var(--map-label); }
 .wq-pin.selected span { display: block; }
 @media print { .wq-pin { display: none; } }
+
+/* ON1: the onboarding checklist (onboarding.js). Tokens only; the state is a word, never colour alone. */
+.documents-onboarding { margin: 0 0 12px; font-size: var(--text-small); color: var(--ink-2); }
+.onboarding-view h3 { margin: 20px 0 6px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.onboarding-status { margin: 0 0 6px; font-weight: 600; }
+.onboarding-intro, .onboarding-msg, .onboarding-private, .onboarding-who { margin: 0 0 8px; color: var(--ink-2); font-size: var(--text-small); }
+.onboarding-msg { color: var(--ink); }
+.onboarding-list, .onboarding-effort, .onboarding-values { list-style: none; margin: 0; padding: 0; }
+.onboarding-item { border-top: 1px solid var(--rule); padding: 8px 0; }
+.onboarding-line { margin: 0; overflow-wrap: anywhere; }
+summary.onboarding-line { cursor: pointer; list-style: none; padding-left: 16px; position: relative; min-height: 24px; }
+summary.onboarding-line::-webkit-details-marker { display: none; }
+summary.onboarding-line::before { content: ""; position: absolute; left: 2px; top: .5em; border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.onboarding-fold[open] > summary.onboarding-line::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.onboarding-body { padding: 4px 0 2px 16px; font-size: var(--text-small); }
+.onboarding-body p { margin: 4px 0; }
+.onboarding-state { display: inline-block; min-width: 6.5em; font: 600 var(--text-small)/1.4 var(--f-ui); color: var(--ink-2); }
+.onboarding-item[data-state="propose"] .onboarding-state, .onboarding-item[data-state="verify"] .onboarding-state,
+.onboarding-item[data-state="gap"] .onboarding-state { color: var(--accent); }
+.onboarding-item[data-checked] .onboarding-state { color: var(--ink-3); }
+.onboarding-tickmark, .onboarding-source { color: var(--ink-3); }
+.onboarding-values li { padding: 2px 0; overflow-wrap: anywhere; }
+.onboarding-tick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.onboarding-tick input { flex: 1 1 100%; min-height: 36px; font: inherit; }
+.onboarding-tick button, .onboarding-go, [data-onboarding-untick], .onboarding-save button { min-height: 36px; font: inherit; }
+.onboarding-save { display: grid; gap: 6px; margin-top: 12px; max-width: 28rem; }
+.onboarding-save input { min-height: 36px; font: inherit; max-width: 10rem; }
