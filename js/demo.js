@@ -169,7 +169,7 @@
   // S5: the catchment group "HDLG (example)" with invented member farms, records, documents and its own layers. Each member
   // farm's own share choice is `share`; how it is shown follows the group's setting (memory only) by the database's rule:
   // the lower of the two, none without a farm share. The demo's rows stand in for group_map, group_member_summary,
-  // group_member_farms, group_shared_entries/documents and group_wq_sites.
+  // group_member_farms, group_shared_entries/documents, group_wq_sites and group_wq_pick.
   const MEMBERS = [
     { id: "de000000-0000-4000-8000-0000000002a1", name: "Ridge Road (synthetic)", share: "named", area_ha: 420, findings: { "fep.not_read": 1, "consent.no_decision": 1, "document.tier_unconfirmed": 2 }, box: [172.032, -43.004, 172.05, -42.988] },
     { id: "de000000-0000-4000-8000-0000000002a2", name: "Downs Station (synthetic)", share: "anonymous", area_ha: 610, findings: { "fep.missing": 1, "consent.no_conditions": 1, "document.tier_unconfirmed": 1 }, box: [172.055, -43.03, 172.08, -43.01] },
@@ -232,6 +232,7 @@
       g.setting = args.level; return [null];
     }
     if (name === "group_wq_sites") return [wqOf(d).sites.filter((x) => !x.owner_farm_id)];
+    if (name === "group_wq_pick") return [demoPick(wqOf(d), args)];
     if (name === "group_wq_presets") return [[DEMO_PRESET]];
     if (name === "group_readiness") {
       // as the database (public.group_readiness): a group admin only; ON1's findings per farm in totals (invented here),
@@ -513,8 +514,32 @@
     9103: { n: 30, median: 0.74, band: { reason: "insufficient_record", detail: "Not enough data for a band: 30 of 60 months and 10 of 20 quarters have a result; the rule (LAWA factsheet: Calculating water quality state for rivers) needs at least 54 months and 18 quarters over 5 years." } },
     9201: { n: 24, median: 1.38 }, 9202: { n: 18, median: 0.95 },
   };
+  // WQ3, as public.group_wq_pick: the ECan sites of the demo's group area that are active, with at least 40 nitrate-nitrite-N sampling times
+  // in the last 5 years (the demo's series end in Sep 2026); LAWA-matched first (demoLawa), then the longer record (years, then n), then the
+  // id; a site in a monitoring location comes as the location, labelled with its current site (the invented location 9301 is the farm
+  // bridge site's, as WQ2's demo has it). Never nearest.
+  const DEMO_LOCATION = { id: 9301, key: "demo-creek-at-the-farm-bridge", name: "Demo Creek at the farm bridge, synthetic location", current_site_id: 9101,
+    members: [{ monitoring_site_id: 9101, source_key: "ecan-wq-sites", external_id: "DEMO-01", name: "Demo Creek at the farm bridge (synthetic)", role: "current", valid_from: "2020-07-01", valid_to: null, samples: 60 },
+      { monitoring_site_id: 9107, source_key: "ecan-wq-sites", external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", role: "predecessor", valid_from: "2016-07-01", valid_to: "2020-06-30", samples: 0 }] };
+  function demoPick(wq, args) {
+    const since = Date.UTC(2021, 8, 1), recent = Date.UTC(2025, 8, 1);
+    const rows = wq.sites.filter((s) => s.source_key === "ecan-wq-sites" && !s.owner_org_id && !s.owner_farm_id).map((s) => {
+      const nnn = wq.series[s.site_id + "|" + (args.p_parameter === "nitrate-n" ? "nitrate-nitrite-n" : args.p_parameter)] || [];
+      const at = nnn.map((r) => Date.parse(r.sampled_at));
+      return { s, n: nnn.length, years: new Set(nnn.map((r) => r.sampled_at.slice(0, 4))).size, n5: at.filter((t) => t >= since).length, active: at.some((t) => t >= recent) };
+    }).filter((x) => x.active && x.n5 >= 40);
+    const lawa = (x) => demoLawa(x.s.site_id).length > 0;
+    rows.sort((a, b) => lawa(b) - lawa(a) || b.years - a.years || b.n - a.n || a.s.external_id.localeCompare(b.s.external_id));
+    return rows.map((x, i) => {
+      const loc = x.s.site_id === DEMO_LOCATION.current_site_id ? DEMO_LOCATION : null;
+      return { pick_rank: i + 1, site_id: x.s.site_id, external_id: x.s.external_id, name: x.s.name, site_type: x.s.site_type, source_key: x.s.source_key, family: "nitrate",
+        parameter_keys: ["nitrate-nitrite-n"], n: x.n, years: x.years, n_last_5y: x.n5, first_sampled: null, last_sampled: x.s.last_sampled, lawa_matched: lawa(x),
+        location_id: loc ? loc.id : null, location_key: loc ? loc.key : null, location_name: loc ? loc.name : null, member_site_ids: [x.s.site_id], total: rows.length };
+    });
+  }
   function demoAnalysis(d, body) {
-    const site = wqOf(d).sites.find((s) => s.site_id === body?.params?.site_id), res = DEMO_RESULTS[site?.site_id];
+    const loc = body?.params?.location_id === DEMO_LOCATION.id ? DEMO_LOCATION : null;
+    const site = wqOf(d).sites.find((s) => s.site_id === (loc ? loc.current_site_id : body?.params?.site_id)), res = DEMO_RESULTS[site?.site_id];
     if (!site || body.mode !== "preview") return null;
     const band = !!body.preset_id, ds = site.source_key === "ecan-wq-sites" ? "ecan-wq" : site.source_key, src = WQ_SOURCES[ds];
     // the band, as the library: nitrate-N, else nitrate-nitrite-N where only that is measured (the demo's sites measure NNN)
@@ -531,8 +556,9 @@
     return { preset: band ? { family: DEMO_PRESET.family, version: 1, title: DEMO_PRESET.title, group: "HDLG (example)", applied: true } : null,
       tool: band ? "band" : "summary", tool_version: "x1-wq 1.0.0", method: { id: band ? "x1-band v1" : "x1-summary v1", name: band ? "NPS-FM attribute band: Nitrate (toxicity)" : "Summary statistics of every sample (replicates collapsed)",
         ...(band ? { table: "Appendix 2A Table 6 – Nitrate (toxicity)" } : {}), percentile: "Hazen", censoring: "x1-censored-bounds v1" },
-      parameters: { tool: band ? "band" : "summary", site_id: site.site_id, parameter, ...(band ? { attribute: "nitrate-toxicity", dataset: "ecan-wq" } : {}), ...window },
+      parameters: { tool: band ? "band" : "summary", ...(loc ? { location_id: loc.id } : { site_id: site.site_id }), parameter, ...(band ? { attribute: "nitrate-toxicity", dataset: "ecan-wq" } : {}), ...window },
       site: { monitoring_site_id: site.site_id, source_key: site.source_key, external_id: site.external_id, name: site.name },
+      ...(loc ? { location: { location_id: loc.id, key: loc.key, name: loc.name, members: loc.members } } : {}),
       measurement_sources: has ? [ds] : [], source_versions: has ? { [ds]: { rows: res.n, last_load_run_id: 1, max_updated_at: "2026-09-30T00:00:00Z", rows_sha256: "0".repeat(64) } } : {},
       attribution: has ? [{ dataset: ds, name: src.name, statement: src.attribution, provisional: src.provisional ? "Provisional until reviewed by ECan." : null }] : [],
       result, unavailable, caveats, statement: "", ai_proposed_inputs: null, advisor_overrides: {}, note_allowed: false,
@@ -623,7 +649,7 @@
         // D3, as public.wq_state_trend_for_site: LAWA's results through the crosswalk (one invented matched site)
         if (name === "wq_state_trend_for_site") return result(demoLawa(args.site));
         // S5's group functions by name (group_load_gaps is DQ1's, below)
-        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_presets|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
+        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_pick|wq_presets|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
         // B4b, as public.sync_entry_edit: applied on the version it was made on, else kept as a conflict; once per edit id.

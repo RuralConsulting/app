@@ -6,9 +6,13 @@
 // (with censoring bounds), the NPS-FM band only where the preset's method yields one (else "not assessed" and why), the
 // library's caveats, LAWA's state and trend where ECan's site is matched to a LAWA site (D3), and the sources of every line.
 // Nothing here calculates a statistic: this file picks the sites and the requests, and words what came back.
-// Sites: group_wq_sites (S5's list, the one B8's chart uses), kept to the group's own and shared reference sites. A farm's
-// own site is never in the group's answer, even when the person can read it as a member of that farm: S5's member levels and
-// k = 3 are not touched. Pure, apart from build(), which makes the reads through the client it is given.
+// Sites (WQ3): the group's own come from group_wq_sites (S5's list, the one B8's chart uses); ECan's come from group_wq_pick,
+// not from "the nearest": the ECan sites in the group's area (the preset's area) that are active and have a long record of the
+// answer's parameter family (at least 40 sampling times in the last 5 years), LAWA-matched first, then the longer record. A site
+// that belongs to a monitoring location (WQ2) is one line, named for the location and labelled with its current site's id, and
+// its combined record is what is analysed. A farm's own site is never in the group's answer, even when the person can read it as
+// a member of that farm: S5's member levels and k = 3 are not touched. Pure, apart from build(), which makes the reads through
+// the client it is given.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./wq-analysis.js") : root.FP.wqAnalysis);
@@ -43,24 +47,39 @@
     const p = list(rows).find((r) => obj(r) && str(r.preset_id) && obj(r.definition) && r.definition.tool === "band" && ATTRIBUTES[r.definition.parameters?.attribute]);
     return p ? { id: p.preset_id, family: String(p.family || p.definition.family), version: Number(p.version), title: String(p.title || p.definition.title || ""), definition: p.definition } : null;
   }
-  // The sites in the answer: the group's own (owner is this group) and shared reference sites (no owner, a known list), in
-  // group_wq_sites' order (nearest the group's area first). A farm's site, or another organisation's, is never included.
-  function pickSites(rows, groupId) {
+  // The sites in the answer. The group's own: rows of group_wq_sites whose owner is this group, in its order. ECan's: the rows of
+  // group_wq_pick (WQ3), already in the pick's order (LAWA-matched, then the longer record, then the id: never distance), of a
+  // known shared list only; a row for a monitoring location carries the location and is labelled with its current site. A farm's
+  // site, or another organisation's, is never included; ECan rows of group_wq_sites are not read here.
+  function pickSites(rows, groupId, picks = []) {
     const own = [], reference = [];
+    const named = (r) => ({ id: Number(r.site_id), name: str(r.name) ? r.name : "Site " + r.external_id, external_id: String(r.external_id ?? ""), source_key: String(r.source_key ?? "") });
+    const count = (v) => (v !== null && v !== undefined && Number.isFinite(Number(v)) ? Number(v) : null);
     for (const r of list(rows)) {
       if (!obj(r) || !Number.isInteger(Number(r.site_id))) continue;
-      const site = { id: Number(r.site_id), name: str(r.name) ? r.name : "Site " + r.external_id, external_id: String(r.external_id ?? ""), source_key: String(r.source_key ?? "") };
-      if (!r.owner_farm_id && r.owner_org_id && r.owner_org_id === groupId) own.push({ ...site, role: "own", dataset: site.source_key });
-      else if (!r.owner_farm_id && !r.owner_org_id && REFERENCE[site.source_key]) reference.push({ ...site, role: "reference", dataset: REFERENCE[site.source_key].dataset, who: REFERENCE[site.source_key].who });
+      if (!r.owner_farm_id && r.owner_org_id && r.owner_org_id === groupId) { const site = named(r); own.push({ ...site, role: "own", dataset: site.source_key }); }
+    }
+    for (const r of list(picks)) {
+      if (!obj(r) || !Number.isInteger(Number(r.site_id)) || r.owner_farm_id || r.owner_org_id || !REFERENCE[String(r.source_key ?? "")]) continue;
+      const site = named(r), ref = REFERENCE[site.source_key];
+      const location = Number.isInteger(Number(r.location_id)) && str(r.location_name) ? { id: Number(r.location_id), key: str(r.location_key) ? r.location_key : null, name: r.location_name } : null;
+      reference.push({ ...site, role: "reference", dataset: ref.dataset, who: ref.who, location,
+        record: { n: count(r.n), years: count(r.years), n_last_5y: count(r.n_last_5y), lawa_matched: r.lawa_matched === true } });
     }
     return { own: own.slice(0, MAX_OWN), reference: reference.slice(0, MAX_REFERENCE), more: Math.max(own.length - MAX_OWN, 0) + Math.max(reference.length - MAX_REFERENCE, 0) };
   }
+  // What the pick asks for: the answer's parameter (its family finds the sites that have either key) and the preset's area.
+  const pickArgs = (groupId, preset) => ({ g: groupId, p_parameter: ATTRIBUTES[preset.definition.parameters.attribute].parameters[0],
+    p_area: str(preset.definition.applies_to?.area) ? preset.definition.applies_to.area : null });
   // The analysis function's preview requests (POST /functions/v1/analysis; nothing is stored). The band names the preset, so
   // the library takes its tool and settings and refuses a site it does not apply to; the summary is the same parameter and
   // window (the preset's end year, 5 hydrological years, as the band).
-  const bandRequest = (groupId, preset, site) => ({ mode: "preview", owner: { org_id: groupId }, params: { site_id: site.id }, preset_id: preset.id });
+  // A site in a monitoring location is analysed as the location (WQ2: its members' results, each within its dates, labelled with
+  // its current site); any other site as itself.
+  const subject = (site) => (site.location ? { location_id: site.location.id } : { site_id: site.id });
+  const bandRequest = (groupId, preset, site) => ({ mode: "preview", owner: { org_id: groupId }, params: subject(site), preset_id: preset.id });
   const summaryRequest = (groupId, site, parameter, endYear) => ({ mode: "preview", owner: { org_id: groupId },
-    params: { tool: "summary", site_id: site.id, parameter, years: 5, ...(Number.isInteger(endYear) ? { end_year: endYear } : {}) } });
+    params: { tool: "summary", ...subject(site), parameter, years: 5, ...(Number.isInteger(endYear) ? { end_year: endYear } : {}) } });
   // Why the preset's method gives no band at a site before anything is asked: it bands one dataset and this site's results
   // are another (the group's own sampling against ECan's record, say). The library would only say "no results".
   function bandSkipped(preset, site, groupName) {
@@ -86,6 +105,12 @@
     };
   }
 
+  // A monitoring location's members as the function recorded them in the preview (WQ2's `location`): role, dates, samples.
+  const ROLE_WORDS = { current: "current", successor: "successor", predecessor: "predecessor", co_located: "co-located" };
+  const memberOf = (m) => ({ external_id: String(m.external_id), role: ROLE_WORDS[m.role] || String(m.role || ""), from: str(m.valid_from) ? m.valid_from : null,
+    to: str(m.valid_to) ? m.valid_to : null, samples: m.samples !== null && m.samples !== undefined && Number.isFinite(Number(m.samples)) ? Number(m.samples) : null });
+  const memberText = (m) => m.external_id + " (" + [m.role, m.from ? "from " + day(m.from) : "", m.to ? "to " + day(m.to) : "", m.samples !== null ? plural(m.samples, "sample", "samples") : ""].filter(Boolean).join(", ") + ")";
+
   // One line of the answer from what the function and LAWA returned for one site. band/summary: {kind, preview|message}.
   function line(site, { band = null, skipped = null, summary = null, lawa = null, lawaError = false, preset = null, groupName = "" } = {}) {
     const s = summary?.preview || null, b = band?.preview || null, r = s?.result || null;
@@ -93,7 +118,11 @@
     const parameter = s?.parameters?.parameter || b?.parameters?.parameter || null;
     const out = { id: "site-" + site.id, site: { id: site.id, name: site.name, external_id: site.external_id, source_key: site.source_key }, role: site.role, parameter,
       window: s?.parameters?.from ? { from: s.parameters.from, to: s.parameters.to } : b?.parameters?.from ? { from: b.parameters.from, to: b.parameters.to } : null,
-      dataset: null, summary: null, summary_note: null, band: null, not_assessed: null, lawa: null, lawa_note: null, caveats: [], sources: [], error: null };
+      location: null, record: site.record || null, dataset: null, summary: null, summary_note: null, band: null, not_assessed: null, lawa: null, lawa_note: null, caveats: [], sources: [], error: null };
+    // WQ3/WQ2: a monitoring location is named for the location and labelled with its current site's id (the site on this line); its
+    // members and their dates are as the function recorded them in the preview
+    if (site.location) out.location = { id: site.location.id, key: site.location.key, name: site.location.name, current: site.external_id,
+      members: list((s?.location || b?.location)?.members).filter((m) => obj(m) && str(m.external_id)).map(memberOf) };
     const att = list(s?.attribution)[0] || list(b?.attribution)[0] || null;
     out.dataset = { key: att?.dataset || site.dataset, name: att?.name || site.dataset, statement: att?.statement || null, provisional: att?.provisional || null,
       owner: site.role === "own" ? "the group's own data" : "shared reference data (" + (site.who || site.source_key) + ")" };
@@ -122,6 +151,7 @@
       }
     }
     if (!out.sources.length) out.sources.push({ kind: "site", dataset: out.dataset.key, site: site.source_key + " " + site.external_id });
+    if (out.location) out.sources.push({ kind: "location", location: out.location.name, current: out.location.current, members: out.location.members.map(memberText).join(", ") });
     if (out.lawa) for (const x of [...out.lawa.state, ...out.lawa.trend]) out.sources.push({ kind: "lawa", source_key: out.lawa.source_key, lawa_site_id: out.lawa.lawa_site_id, release: out.lawa.release, sheet: x.sheet, row: x.row });
     return out;
   }
@@ -129,6 +159,7 @@
   // ---- words ----------------------------------------------------------------------------------------------------------
   function sourceText(x) {
     if (x.kind === "measurements") return x.dataset + " at " + x.site + (x.rows !== null ? ", " + plural(x.rows, "result", "results") + " read" : "") + (x.as_at ? " (latest change " + day(x.as_at) + ")" : "") + (x.method ? ", " + x.method : "") + (x.preview ? ", preview " + x.preview : "");
+    if (x.kind === "location") return "monitoring location " + x.location + ", labelled with its current site " + x.current + (x.members ? "; combined record of " + x.members : "");
     if (x.kind === "lawa") return "LAWA " + x.lawa_site_id + (x.release ? ", release " + x.release : "") + (x.sheet ? ", " + x.sheet + (x.row !== null ? " row " + x.row : "") : "");
     return x.dataset + " at " + x.site;
   }
@@ -142,9 +173,11 @@
   // A line as the Answer block's item: the site; a short reason (figures, band, source); the whole line behind All.
   function item(l) {
     const who = l.role === "own" ? "the group's own site" : "ECan site";
-    const text = l.site.name + " (" + who + ")";
+    const text = l.location ? l.location.name + " (" + who + " " + l.location.current + ")" : l.site.name + " (" + who + ")";
     const because = figures(l) + "; " + (l.band ? "band " + l.band.band : "not banded") + " · source " + l.dataset.key;
     const detail = [l.site.source_key + " " + l.site.external_id + ", " + l.dataset.name + " (" + l.dataset.key + "), " + l.dataset.owner + ".",
+      l.location ? "Monitoring location " + l.location.name + ", labelled with its current site " + l.location.current +
+        (l.location.members.length ? ": the combined record of " + l.location.members.map(memberText).join(", ") + ". Each site's results count only within its dates." : ".") : null,
       (l.parameter ? (PARAMETER[l.parameter] || l.parameter) + (l.window ? ", " + day(l.window.from) + " to " + day(l.window.to) : "") + ": " : "") + figures(l) + ".",
       bandText(l) + ".", l.role === "reference" ? lawaText(l) : null,
       l.caveats.length ? "Caveats: " + l.caveats.map((c) => c.replace(/\.$/, "")).join("; ") + "." : null,
@@ -156,7 +189,7 @@
   function answer(r) {
     const base = { key: "group-wq", title: QUESTION, rank: "given", allLabel: "Every site, in full", items: [] };
     if (!r || r.state === "no_preset") return { ...base, empty: { text: "No water-quality method is published for this group yet. When the group's advisor publishes one (an analysis preset), this answer is written from it, by code, for the group's own sites and ECan's." } };
-    if (r.state === "no_sites") return { ...base, empty: { text: "Neither the group's own monitoring sites nor ECan's are recorded in the group's area, so there is nothing to compare yet." } };
+    if (r.state === "no_sites") return { ...base, empty: { text: "Neither the group's own monitoring sites nor ECan's active long-term sites (a current record of this parameter, at least 40 samples in the last 5 years) are recorded in the group's area, so there is nothing to compare yet." } };
     if (r.state === "unavailable") return { ...base, empty: { text: "The water-quality analysis couldn't be run just now: " + (r.message || W.UNAVAILABLE) } };
     const lines = list(r.lines), own = lines.filter((l) => l.role === "own"), ref = lines.filter((l) => l.role === "reference");
     const attr = ATTRIBUTES[r.preset.definition.parameters.attribute], w = lines.find((l) => l.window)?.window;
@@ -169,7 +202,8 @@
       (lawa.length ? "; LAWA's state and trend at " + plural(lawa.length, "ECan site", "ECan sites") : "");
     return { ...base, answer: { text, because }, items, total: items.length,
       currency: "Written by code from the platform's tested water-quality library (" + dedupe(lines.flatMap((l) => l.sources.map((x) => x.method))).join(", ") + ") as you can read it now; nothing is stored and no AI is used. " +
-        "Datasets are never pooled. " + (r.more ? plural(r.more, "more site", "more sites") + " in the area are under Water quality nearby. " : "") + "The chart below shows the results themselves." };
+        "Datasets are never pooled. " + "ECan's sites are the active ones in the group's area with a long record of this parameter (at least 40 samples in the last 5 years), LAWA-matched first, then the longest record; not the nearest. " +
+        (r.more ? plural(r.more, "more site", "more sites") + " with such a record are not shown here. " : "") + "The chart below shows the results themselves." };
   }
 
   // ---- the reads (as the signed-in person) -----------------------------------------------------------------------------
@@ -180,11 +214,11 @@
   }
   // build({sb, group, sites?, presets?, request?}): the group's preset and site list (read here unless given), then for each
   // site the band (preset) and the summary from the analysis function, and LAWA's results for ECan's sites.
-  async function build({ sb, group, sites = null, presets = null, request = W.request }) {
+  async function build({ sb, group, sites = null, picks = null, presets = null, request = W.request }) {
     const rpc = async (name, args) => { const { data, error } = await sb.rpc(name, args); if (error) throw error; return data || []; };
     const preset = pickPreset(presets ?? await rpc("group_wq_presets", { g: group.id }).catch(() => []));
     if (!preset) return { state: "no_preset" };
-    const picked = pickSites(sites ?? await rpc("group_wq_sites", { g: group.id }), group.id);
+    const picked = pickSites(sites ?? await rpc("group_wq_sites", { g: group.id }), group.id, picks ?? await rpc("group_wq_pick", pickArgs(group.id, preset)));
     const all = [...picked.own, ...picked.reference];
     if (!all.length) return { state: "no_sites", preset };
     const attr = ATTRIBUTES[preset.definition.parameters.attribute];
@@ -211,5 +245,5 @@
     return { state: "answered", preset, groupName: group.name, lines, more: picked.more };
   }
 
-  return { QUESTION, MAX_OWN, MAX_REFERENCE, ATTRIBUTES, pickPreset, pickSites, bandRequest, summaryRequest, bandSkipped, lawaOf, line, item, answer, build };
+  return { QUESTION, MAX_OWN, MAX_REFERENCE, ATTRIBUTES, pickPreset, pickSites, pickArgs, bandRequest, summaryRequest, bandSkipped, lawaOf, line, item, answer, build };
 });
