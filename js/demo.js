@@ -9,16 +9,16 @@
   else {
     root.FP = root.FP || {};
     const hash = root.location.hash;
-    const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash);
+    const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash), group = api.isGroup(hash);
     const ready = active ? fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }).then((fixture) => api.dataset(fixture, { sparse, farmer, multi })) : null;
-    root.FP.demo = { ...api, active, sparse, farmer, href: (h) => api.href(h, sparse, farmer, multi), ready, client: active ? api.client(ready) : null };
+    }).then((fixture) => api.dataset(fixture, { sparse, farmer, multi, group })) : null;
+    root.FP.demo = { ...api, active, sparse, farmer, group, href: (h) => api.href(h, sparse, farmer, multi, group), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
       const h = root.location.hash;
-      if (api.isRoute(h) !== active || api.isSparse(h) !== sparse || api.isFarmer(h) !== farmer || api.isMulti(h) !== multi) { event.stopImmediatePropagation(); root.location.reload(); }
+      if (api.isRoute(h) !== active || api.isSparse(h) !== sparse || api.isFarmer(h) !== farmer || api.isMulti(h) !== multi || api.isGroup(h) !== group) { event.stopImmediatePropagation(); root.location.reload(); }
     });
   }
 })(typeof window === "undefined" ? globalThis : window, function () {
@@ -26,6 +26,7 @@
   const USER = "de000000-0000-4000-8000-000000000003";
   const ORG = "de000000-0000-4000-8000-000000000004";
   const FARM2 = "de000000-0000-4000-8000-000000000005";
+  const GROUP = "de000000-0000-4000-8000-000000000006";   // the catchment group (S5): "HDLG (example)", invented members
   const PHOTO = "demo/photo-synthetic.svg";   // a drawn stand-in: no real photo is in the demo
   const VIEWS = /^$|^\/(ask|create|documents|people|onboarding)$/;
   const copy = (v) => structuredClone(v);
@@ -33,9 +34,17 @@
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|\?|$)/.test(hash);
   const isFarmer = (hash) => /^#\/demo\/farmer(?:\/|\?|$)/.test(hash);
   const isMulti = (hash) => /^#\/demo\/multi(?:\/|\?|$)/.test(hash);
+  // The catchment group demo (S5): the advisor is also an admin of "HDLG (example)", a group with invented members.
+  const isGroup = (hash) => /^#\/demo\/group(?:\/|\?|$)/.test(hash);
   // "#/demo..." -> the app's own "#/farm/<id>..." route ("" is the portfolio, null is not a demo route).
   function routeHash(hash) {
     const multi = isMulti(hash);
+    // "#/demo/group" is the group's space, ".../documents", ".../create", ".../settings" its views, ".../farms" the portfolio.
+    if (isGroup(hash)) {
+      const suffix = hash.split("?")[0].slice("#/demo/group".length);
+      if (suffix === "/farms") return "";
+      return /^(?:\/(?:documents|create|settings))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+    }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
     if (suffix === "/") suffix = "";
@@ -55,12 +64,14 @@
     if (!VIEWS.test(suffix)) return null;
     return "#/farm/" + farm + suffix + (query ? "?" + query : "");
   }
-  function href(hash, sparse = false, farmer = false, multi = false) {
+  function href(hash, sparse = false, farmer = false, multi = false, group = false) {
+    if (group && hash === "") return "#/demo/group/farms";
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
     if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
+    if (hash.startsWith("#/group/" + GROUP)) return "#/demo/group" + hash.slice(("#/group/" + GROUP).length);
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
     if (!farm) return hash;
     return "#/demo" + (multi ? "/multi/farm-" + (farm === FARM2 ? 2 : 1) : sparse ? "/empty" : farmer ? "/farmer" : "") + hash.slice(("#/farm/" + farm).length);
@@ -69,7 +80,7 @@
   const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
   const collection = (features) => ({ type: "FeatureCollection", features });
   const owned = (rows, farm) => rows.map((r) => ({ ...r, farm_id: farm }));
-  function dataset(fixture, { sparse = false, farmer = false, multi = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -110,7 +121,7 @@
       // The Layers page (LN1): invented reference sources and advisor notes; the advisor's organisation is a group scope.
       reference_sources: f.ops.sources || [], layer_notes: f.ops.layer_notes || [],
       map_layers: map.layers.map((l) => ({ id: l.id, name: l.name, theme: l.theme, farm_id: FARM, org_id: null })),
-      organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)" }],
+      organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)", kind: "consultancy" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
       farm_parcels: [], farm_boundaries: [],
     }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
@@ -122,6 +133,7 @@
       data.ask = [];
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
+    if (group) groupDemo(data);
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
       data.user.email = "farmer@example.test";
@@ -152,6 +164,90 @@
     data.tables.farm_summaries = data.tables.farms.map((x) => summary(data, x));
     data.people = people(data, { sparse, farmer });
     return data;
+  }
+  // S5: the catchment group "HDLG (example)" with invented member farms, records, documents and its own layers. Each member
+  // farm's own share choice is `share`; how it is shown follows the group's setting (memory only) by the database's rule:
+  // the lower of the two, none without a farm share. The demo's rows stand in for group_map, group_member_summary,
+  // group_member_farms, group_shared_entries/documents and group_wq_sites.
+  const MEMBERS = [
+    { id: "de000000-0000-4000-8000-0000000002a1", name: "Ridge Road (synthetic)", share: "named", area_ha: 420, box: [172.032, -43.004, 172.05, -42.988] },
+    { id: "de000000-0000-4000-8000-0000000002a2", name: "Downs Station (synthetic)", share: "anonymous", area_ha: 610, box: [172.055, -43.03, 172.08, -43.01] },
+    { id: "de000000-0000-4000-8000-0000000002a3", name: "Gorge Flats (synthetic)", share: "aggregated", area_ha: 380, box: [172.065, -42.985, 172.085, -42.968] },
+    { id: "de000000-0000-4000-8000-0000000002a4", name: "Mill Road (synthetic)", share: "aggregated", area_ha: 290, box: [171.99, -43.03, 172.005, -43.012] },
+    { id: "de000000-0000-4000-8000-0000000002a5", name: "Lagoon Block (synthetic)", share: null, area_ha: 510, box: [172.09, -43.045, 172.105, -43.03] },
+    { id: "de000000-0000-4000-8000-0000000002a6", name: "Terrace Downs (synthetic)", share: "aggregated", area_ha: 350, box: [171.975, -42.975, 171.995, -42.96] },
+  ];
+  const LEVELS = ["aggregated", "anonymous", "named"];
+  const levelOf = (setting, share) => (share ? LEVELS[Math.min(LEVELS.indexOf(setting), LEVELS.indexOf(share))] : "none");
+  function groupDemo(data) {
+    // The group's rows sit beside the farm's (merged into reads), so the farm's and the gallery's counts are unchanged.
+    const t = data.groupTables = { organisations: [], org_members: [], record_types: [], entries: [], documents: [], obligations: [] }, at = (d) => d + "T09:30:00+12:00";
+    t.organisations.push({ id: GROUP, name: "HDLG (example)", kind: "catchment_group" });
+    t.org_members.push({ org_id: GROUP, user_id: USER, role: "admin" });
+    t.record_types.push({ id: "rt-planting", key: "planting", label: "Planting", farm_id: null, org_id: null },
+      { id: "rt-meeting", key: "meeting", label: "Meeting", farm_id: null, org_id: null }, { id: "rt-sample", key: "water_sample", label: "Water sample", farm_id: null, org_id: null });
+    t.entries.push(
+      { id: "demo-g-e1", org_id: GROUP, type_id: "rt-meeting", body: "Field day at the ford: 14 people walked the creek with the facilitator (synthetic).", captured_at: at("2026-09-12"), visibility: "farm" },
+      { id: "demo-g-e2", org_id: GROUP, type_id: "rt-sample", body: "Group sampling run at four sites; bottles to the lab the same day (synthetic).", captured_at: at("2026-09-18"), visibility: "farm" },
+      { id: "demo-g-e3", org_id: GROUP, type_id: "rt-note", body: "Private: the facilitator's own reminder (synthetic).", captured_at: at("2026-09-20"), visibility: "private" },
+      { id: "demo-g-e4", org_id: GROUP, type_id: "rt-meeting", body: "Committee meeting: agreed the spring planting order (synthetic).", captured_at: at("2026-10-07"), visibility: "farm" });
+    t.documents.push(
+      { id: "demo-g-d1", org_id: GROUP, title: "Catchment plan 2025 (synthetic)", doc_type: "memo", author_org: "HDLG (example)", date_prepared: "2025-06-30", created_at: "2025-07-02T00:00:00Z", tier: "primary", tiered_at: "2025-07-02T00:00:00Z", visibility: "farm", storage_path: "org/demo/plan.pdf" },
+      { id: "demo-g-d2", org_id: GROUP, title: "Water sampling protocol (synthetic)", doc_type: "memo", author_org: "HDLG (example)", date_prepared: "2026-03-01", created_at: "2026-03-02T00:00:00Z", tier: "primary", tiered_at: "2026-03-02T00:00:00Z", visibility: "farm", storage_path: "org/demo/protocol.pdf" });
+    t.obligations.push(
+      { id: "demo-g-o1", org_id: GROUP, code: "G1", summary: "Annual catchment monitoring report to the regional council (synthetic)", kind: "date", due_date: "2026-12-15", recurrence: "annual" },
+      { id: "demo-g-o2", org_id: GROUP, code: "G2", summary: "Keep the group's sampling records with the lab results (synthetic)", kind: "practice", due_date: null, recurrence: null });
+    data.group = { setting: "aggregated", area: polygon(171.96, -43.05, 172.115, -42.955),
+      shared: [
+        { id: "demo-g-s1", farm: MEMBERS[0].id, record_type: "planting", body: "Planted 300 flax and carex along the creek margin (synthetic).", captured_at: at("2026-09-05"), location: { type: "Point", coordinates: [1570100, 5236200] } },
+        { id: "demo-g-s2", farm: MEMBERS[0].id, record_type: "note", body: "Stock exclusion fence finished on the south bank (synthetic).", captured_at: at("2026-09-21"), location: null },
+        { id: "demo-g-s3", farm: MEMBERS[2].id, record_type: "planting", body: "Wetland edge replanted after the flood (synthetic).", captured_at: at("2026-09-14"), location: null },
+        { id: "demo-g-s4", farm: MEMBERS[4].id, record_type: "water_sample", body: "Drain sample taken at the boundary culvert (synthetic).", captured_at: at("2026-09-25"), location: null },
+        { id: "demo-g-s6", farm: MEMBERS[5].id, record_type: "planting", body: "Shelter belt gaps replanted (synthetic).", captured_at: at("2026-09-17"), location: null },
+        { id: "demo-g-s5", farm: MEMBERS[1].id, record_type: "note", body: "Spring stock count done; no change to the wintering paddocks (synthetic).", captured_at: at("2026-10-15"), location: null }],
+      sharedDocs: [{ id: "demo-g-sd1", farm: MEMBERS[0].id, title: "Riparian planting plan (synthetic)", doc_type: "memo", created_at: "2026-09-20T03:00:00Z", tier: "primary", storage_path: "demo/riparian.pdf" }] };
+  }
+  function groupRpc(d, name, args) {
+    const g = d.group, level = (m) => levelOf(g.setting, m.share), detail = (m) => ["anonymous", "named"].includes(level(m));
+    const shown = () => MEMBERS.filter(detail);
+    const farmId = (id) => { const m = MEMBERS.find((x) => x.id === id); return m && detail(m) ? id : null; };
+    if (!g || (args.g ?? args.group_id) !== GROUP) return name === "group_map" || name === "group_member_summary" ? [null] : [[]];
+    if (name === "group_member_farms") return [shown().map((m) => ({ farm_ref: m.id, name: level(m) === "named" ? m.name : null, level: level(m), extent: polygon(...m.box), area_ha: m.area_ha }))];
+    if (name === "group_shared_entries") return [g.shared.map((e) => ({ id: e.id, farm_id: farmId(e.farm), record_type: e.record_type, captured_at: e.captured_at, period_start: null, period_end: null,
+      location: e.location, body: e.body, data: null, tags: [] })).sort((a, b) => b.captured_at.localeCompare(a.captured_at))];
+    if (name === "group_shared_documents") return [g.sharedDocs.map(({ farm, ...x }) => ({ ...x, farm_id: farmId(farm) }))];
+    if (name === "set_group_member_detail") {
+      if (d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role !== "admin") return [null, { message: "Only an admin of this catchment group can change how its member farms are shown" }];
+      g.setting = args.level; return [null];
+    }
+    if (name === "group_wq_sites") return [wqOf(d).sites.filter((x) => !x.owner_farm_id)];
+    if (name === "group_member_summary") {
+      const inTotals = MEMBERS.filter((m) => level(m) !== "none"), from = args.p_from ? Date.parse(args.p_from) : -Infinity, to = args.p_to ? Date.parse(args.p_to) : Infinity;
+      const period = g.shared.filter((e) => Date.parse(e.captured_at) >= from && Date.parse(e.captured_at) < to), farms = new Set(period.map((e) => e.farm));
+      // as the database: held back below 3 farms, in the whole figure or in the part no setting ever shows farm by farm
+      // (taken from each farm's own share, so switching the group's setting cannot isolate a farm)
+      const small = (n) => n > 0 && n < 3, suppressed = [], unseen = (ids) => ids.filter((id) => [null, "aggregated"].includes(MEMBERS.find((m) => m.id === id).share)).length;
+      if (small(inTotals.length) || small(unseen(inTotals.map((m) => m.id)))) suppressed.push("farms_in_totals", "mapped_area_ha");
+      if (small(farms.size) || small(unseen([...farms]))) suppressed.push("farms_contributing");
+      const types = new Map(); for (const e of period) types.set(e.record_type, (types.get(e.record_type) || 0) + 1);
+      const held = (key) => suppressed.includes(key);
+      return [{ k: 3, member_detail: g.setting, linked_farms: MEMBERS.length, farms_in_totals: held("farms_in_totals") ? null : inTotals.length,
+        mapped_area_ha: held("mapped_area_ha") ? null : Math.round(inTotals.reduce((a, m) => a + m.area_ha, 0) / 100) * 100,
+        farms_contributing: held("farms_contributing") ? null : farms.size, shared_records: period.length,
+        shared_by_type: [...types].map(([type, count]) => ({ type, label: type, count })), suppressed, period: { from: args.p_from || null, to: args.p_to || null } }];
+    }
+    // group_map: the farm_map shape, so the Map scene block draws it as it draws a farm
+    const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
+    const fc = (features) => ({ type: "FeatureCollection", features });
+    const layers = [
+      { id: "demo-g-l1", name: "Catchment boundary (synthetic)", theme: "catchment", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own map", features: fc([feature(g.area, { name: "HDLG catchment (synthetic)" })]) },
+      { id: "demo-g-l2", name: "Member blocks (synthetic)", theme: "farm_blocks", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own members layer",
+        features: fc(MEMBERS.map((m, i) => feature(polygon(...m.box), { member_number: "00" + (i + 1) }))) },
+    ];
+    if (shown().length) layers.push({ id: "member-farms", name: "Member farms (shared by each farm)", theme: "member_farms", geometry_type: "polygon", group_own: false, epistemic_class: "observation",
+      source: "each member farm's own map, shown at the level the farm and the group both allow", features: fc(shown().map((m) => feature(polygon(...m.box), { name: level(m) === "named" ? m.name : "Member farm (not named)", level: level(m), area_ha: m.area_ha }))) });
+    return [{ farm: { id: GROUP, name: "HDLG (example)", region: "canterbury" }, group: { id: GROUP, name: "HDLG (example)", member_detail: g.setting }, extent: g.area, extent_ha: 13000, extent_label: "Group area",
+      titles: fc([]), land_units: fc([]), layers, reference: [] }];
   }
   // FB1: invented LINZ-style primary parcels around the illustrative extent (not a survey, not real appellations): the two
   // the farm's rectangle is made of, and its neighbours east, south, north and west. Ids as reference_features ids.
@@ -391,7 +487,7 @@
         }
         if (write) return error("The demo does not save changes");
         if (!rows) return error("This demo does not provide " + table);
-        let selected = rows.filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : row[key] === val)));
+        let selected = [...rows, ...(d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : row[key] === val)));
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
         if (singular && selected.length !== 1) return maybe && !selected.length ? result(null) : error("Demo row not found");
         return result(singular ? selected[0] : selected);
@@ -431,6 +527,8 @@
           return result(wqOf(d).sites.filter((x) => x.distance_m <= (args.km ?? 10) * 1000).sort((a, b) => a.distance_m - b.distance_m || a.external_id.localeCompare(b.external_id)));
         }
         if (name === "wq_site_latest") return result(wqLatest(wqOf(d), args.site));
+        // S5's group functions by name (group_load_gaps is DQ1's, below)
+        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
         if (name === "measurement_series") {
@@ -452,5 +550,5 @@
         upload: async (path) => result({ path }) }) },
     };
   }
-  return { FARM, FARM2, USER, ORG, wqOf, wqLatest, askReply, isRoute, isSparse, isFarmer, isMulti, routeHash, href, dataset, client };
+  return { FARM, FARM2, USER, ORG, GROUP, MEMBERS, levelOf, groupRpc, wqOf, wqLatest, askReply, isRoute, isSparse, isFarmer, isMulti, isGroup, routeHash, href, dataset, client };
 });

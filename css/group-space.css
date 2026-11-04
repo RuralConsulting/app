@@ -1,0 +1,60 @@
+/* The catchment group's space (S5): a header with the group's views, its map, and a panel of standing answers or the
+   view's content. Phone: the map strip on top and the panel under it, scrolling. Wide: the map beside a panel. */
+.group-screen { position: fixed; inset: var(--demo-banner-height, 0px) 0 0 0; display: flex; flex-direction: column; background: var(--wash); color: var(--ink); font-family: var(--f-ui); }
+.group-screen[hidden] { display: none; }
+.group-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px var(--space); padding: 10px var(--space); background: var(--panel); border-bottom: 1px solid var(--rule); }
+.group-title { min-width: 0; }
+.group-title h1 { margin: 0; font-family: var(--f-display); font-size: var(--text-heading); line-height: 1.2; overflow-wrap: anywhere; }
+.group-kind { margin: 2px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.group-back { display: inline-block; margin-bottom: 2px; font-size: var(--text-small); color: var(--ink-2); }
+.group-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.group-tab { padding: 8px 12px; border-radius: var(--radius); color: var(--ink); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.group-tab[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.group-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); }
+.group-map { position: relative; min-height: 0; background: var(--wash); }
+.group-map > .map-scene, .group-map .map-scene-canvas { position: absolute; inset: 0; height: 100%; }
+.group-map-empty { display: grid; place-items: center; height: 100%; padding: var(--space); color: var(--ink-2); text-align: center; }
+.group-panel { overflow-y: auto; padding: var(--space); background: var(--panel); border-left: 1px solid var(--rule); }
+.group-panel h2 { font-size: var(--text-heading); font-family: var(--f-display); margin: 0 0 8px; }
+.group-panel h3 { font-size: var(--text-body); margin: 16px 0 6px; }
+.group-panel h4 { font-size: var(--text-body); margin: 12px 0 6px; }
+.group-card { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.group-card:last-child { border-bottom: 0; }
+.group-card h2 { font-family: var(--f-ui); font-size: var(--text-body); font-weight: 700; margin: 0 0 6px; }
+.group-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.group-lines li { display: grid; gap: 2px; overflow-wrap: anywhere; }
+.group-lines small, .group-layers small, .update-line small { color: var(--ink-2); font-size: var(--text-small); }
+.group-lines li.overdue span::before { content: "Overdue · "; font-weight: 700; }
+.group-fine { color: var(--ink-2); font-size: var(--text-small); }
+.group-status { color: var(--ink-2); }
+.group-layers { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.group-layers label { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; min-height: 44px; }
+.group-layers small { grid-column: 2; }
+.group-links[hidden] { display: none; }
+.group-links { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.group-links a { display: grid; gap: 2px; padding: 8px 0; color: var(--ink); }
+.group-links small { color: var(--ink-2); font-size: var(--text-small); }
+.group-documents .doc-open { font: inherit; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; text-decoration: underline; cursor: pointer; }
+.update-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 12px; }
+.update-controls input { font: inherit; min-height: 44px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); }
+.group-panel button.primary { font: inherit; min-height: 44px; padding: 8px 16px; border: 0; border-radius: var(--radius); background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+.group-panel button.link { font: inherit; background: none; border: 0; padding: 4px 0; color: var(--ink-2); text-decoration: underline; cursor: pointer; min-height: 32px; }
+.update-title { font-family: var(--f-display); }
+.update-lines { margin: 0; padding-left: 1.2rem; display: grid; gap: 10px; }
+.update-line { display: grid; gap: 2px; }
+.update-line textarea { font: inherit; width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); resize: vertical; }
+.update-line.stale textarea { border: 2px solid var(--ink); }
+.update-line.stale small { font-weight: 700; color: var(--ink); }
+.update-alert { font-weight: 700; }
+.group-settings fieldset { border: 1px solid var(--rule); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 12px; }
+.group-settings legend { font-weight: 700; padding: 0 4px; }
+.group-choice { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; padding: 8px 0; min-height: 44px; }
+@media (max-width: 760px) {
+  .group-screen { position: static; min-height: 100dvh; padding-top: var(--demo-banner-height, 0px); }
+  .group-head { align-items: flex-start; }
+  .group-nav { width: 100%; }
+  .group-tab { flex: 1 1 auto; justify-content: center; padding: 8px 6px; }
+  .group-body { display: block; }
+  .group-map { height: 42vh; min-height: 220px; }
+  .group-panel { border-left: 0; border-top: 1px solid var(--rule); overflow: visible; }
+}

@@ -549,7 +549,7 @@
           "fill-opacity-transition": { duration: FP.farmModel.maskFade(reduced()), delay: 0 } } });
       }
       masked = false;
-      entries.push({ key: "extent", name: "Farm boundary", sub: FP.ha(data.extent_ha), section: "farm", on: true,
+      entries.push({ key: "extent", name: data.extent_label || "Farm boundary", sub: FP.ha(data.extent_ha), section: "farm", on: true,
         ids: [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": accent(), "line-width": 3 } })] });
     }
     source("titles", data.titles);
@@ -611,7 +611,8 @@
       const describe = (f) => {
         const { fp_past, ...props } = f.properties;
         // DM1: the farm map shows each layer around the farm too, so off the farm is "near" unless linked to a permit
-        const where = props.on_farm ? "On the farm" : props.linked ? "Off the farm, linked to the farm's permit" : "Near the farm";
+        // a group's map (S5) flags what is in or near the group's area instead
+        const where = props.in_area ? "In or near the group's area" : props.on_farm ? "On the farm" : props.linked ? "Off the farm, linked to the farm's permit" : "Near the farm";
         if (consents) return { ...FP.farmModel.consentPopup(props, r, where), note: noteFor("source:" + r.key) };
         const named = props.name || props.Name || props.NAME;
         return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),

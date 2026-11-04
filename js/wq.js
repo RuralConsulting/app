@@ -22,7 +22,8 @@
   };
 
   // sb: the Supabase client (or the demo's); farm: the farm row; extent: the farm's boundary (GeoJSON); map: FP.farmMap.
-  function create({ sb, farm, extent, map = FP.farmMap }) {
+  // sitesRead: how the sites are read, when not wq_sites_near for the farm (the group space reads group_wq_sites, S5).
+  function create({ sb, farm, extent, map = FP.farmMap, sitesRead = null }) {
     let sites = [], opened = false, selected = null, destroyed = false, markers = [];
     const panels = new Map();   // site id -> { panel, latest, chart, handle, parameter }
     const node = el("details", { class: "wq-line", "data-wq": "", hidden: true });
@@ -31,7 +32,7 @@
     const body = el("div", { class: "wq-body" });
     node.append(body);
 
-    const ready = rpc(sb, "wq_sites_near", { farm_id: farm.id, km: M().RADIUS_KM }).then((rows) => {
+    const ready = (sitesRead ? sitesRead() : rpc(sb, "wq_sites_near", { farm_id: farm.id, km: M().RADIUS_KM })).then((rows) => {
       if (destroyed) return;
       sites = M().sites(rows, farm.id);
       // Nothing near, or not readable: the line is not there (the map and the standing answers stay as they were).

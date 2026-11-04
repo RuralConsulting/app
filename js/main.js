@@ -1,8 +1,9 @@
 // Screens and routing: sign in -> the farm (or the portfolio if there are several) -> the farm space.
-// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops and #/ops/layers (RCL staff).
+// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops and #/ops/layers (RCL staff);
+// #/group/<id> (a catchment group's space, S5) and its /documents, /create and /settings.
 (() => {
   const { $, $$, el, show, sb } = FP;
-  let farms = [], allFarms = [];
+  let farms = [], allFarms = [], groups = [];
   let readyToRoute = false;
 
   function msg(id, text) { $(id).textContent = text || ""; }
@@ -39,8 +40,23 @@
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     allFarms = data; farms = data;
     FP.farmSpace.setPortfolio(farms, user);
+    groups = await readGroups(user);
+    FP.groupSpace.setGroups(groups, user);
+    FP.groupSpace.hasPortfolio = () => farms.length + groups.length > 1;
     await FP.ops.checkStaff(user);
     readyToRoute = true; route();
+  }
+
+  // The catchment groups the person belongs to (S5). A failure here leaves the farms as they were.
+  async function readGroups(user) {
+    try {
+      const { data: mine, error } = await sb.from("org_members").select("org_id, role").eq("user_id", user.id);
+      if (error || !mine?.length) return [];
+      const { data: orgs, error: e2 } = await sb.from("organisations").select("id, name, kind").in("id", mine.map((m) => m.org_id));
+      if (e2) return [];
+      return (orgs || []).filter((o) => o.kind === "catchment_group").map((o) => ({ ...o, role: mine.find((m) => m.org_id === o.id)?.role || null }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    } catch { return []; }
   }
 
   function route() {
@@ -59,16 +75,25 @@
     // Layer notes (LN2): the same screen for a group's advisors and a farm's editors, scoped by their roles (the page offers nothing to a viewer).
     if (hash === "#/layers") { FP.farmSpace.close(); FP.ops.close(); FP.opsLayers.open(); return; }
     FP.ops.close(); FP.opsLayers.close();
+    // A catchment group's space (S5); a person whose only place is one group goes straight to it.
+    const groupRoute = FP.groupModel.match(hash), group = groupRoute && FP.groupSpace.find(groupRoute.group);
+    if (group) { FP.farmSpace.close(); FP.groupSpace.open(group, groupRoute); return; }
+    if (!farms.length && groups.length === 1 && !FP.farmModel.match(hash)) { FP.farmSpace.close(); FP.groupSpace.open(groups[0], { group: groups[0].id, view: "map" }); return; }
+    FP.groupSpace.close();
     const route = FP.farmModel.match(hash);
-    const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 ? farms[0] : null);
+    // one farm and no group: straight to it; with a group too, the portfolio lists both
+    const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 && !groups.length ? farms[0] : null);
     if (farm) FP.farmSpace.open(farm, route?.farm === farm.id ? route : { farm: farm.id, view: "map" });
     else listFarms();
   }
 
   function listFarms() {
+    // the catchment groups the person belongs to, under the farms (or alone, when there are no farms)
+    const links = () => groups.map((g) => el("li", {}, el("a", { href: FP.href(FP.groupModel.href(g.id)) }, el("b", {}, g.name), el("small", {}, "Catchment group"))));
+    for (const id of ["#portfolio-groups", "#farms-groups"]) { $(id).replaceChildren(...links()); $(id).hidden = !groups.length; }
     if (farms.length) { FP.farmSpace.showPortfolio(); return; }
     FP.farmSpace.close();
-    msg("#farms-msg", FP.brand.no_farms_note);
+    msg("#farms-msg", groups.length ? "" : FP.brand.no_farms_note);
     show("screen-farms");
   }
 
@@ -134,7 +159,7 @@
     t.addEventListener("change", () => FP.farmMap.terrain(t.checked));
   }
 
-  window.addEventListener("hashchange", () => { if (farms.length) route(); });
+  window.addEventListener("hashchange", () => { if (farms.length || groups.length) route(); });
   sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.farmSpace.close(); show("screen-signin"); } });
 
   // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts
@@ -151,7 +176,7 @@
       el("b", {}, "DEMO"), el("span", {}, "Synthetic data · Illustrative map"),
       el("button", { type: "button", class: "demo-switch", "aria-expanded": "false", "aria-controls": "demo-links" }, "Demos"),
       el("div", { id: "demo-links", class: "demo-links" },
-        ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"], ["#/demo/ops", "Operations"], ["#/demo/blocks", "Blocks"], ["#/demo/plans", "Farm Environment Plan"]].map(([href, label]) => el("a", { href }, label)),
+        ...[["#/demo", "Advisor demo"], ["#/demo/empty", "Almost-empty farm"], ["#/demo/farmer", "Farmer demo"], ["#/demo/multi", "Two farms"], ["#/demo/group", "Catchment group"], ["#/demo/ops", "Operations"], ["#/demo/blocks", "Blocks"], ["#/demo/plans", "Farm Environment Plan"]].map(([href, label]) => el("a", { href }, label)),
         el("a", { href: location.pathname + location.search }, "Exit")));
     document.body.prepend(banner);
     const setDemoLinks = (open) => { banner.classList.toggle("open", open); banner.querySelector(".demo-switch").setAttribute("aria-expanded", String(open)); };
