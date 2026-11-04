@@ -264,5 +264,66 @@
     };
   }
 
-  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl, loadGaps, ratchet, ratchetPeriod };
+  // The onboarding effort (MC3): per farm, per catchment group and overall, for a period, from public.onboarding_effort_rollup()
+  // (numbers only; RCL staff only). A farm's latest record in the period speaks for it (its elapsed time and steps are cumulative
+  // at each save, so versions are never added together); a group or the total is the sum of its farms. Nothing is estimated: a
+  // figure no record holds is "not recorded yet" and says what would record it.
+  const mins = (m) => m < 120 ? m + " min" : m < 48 * 60 ? Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "") : num(Math.round(m / 1440)) + " days";
+  const of = (a, b) => num(a) + " of " + num(b) + (b === 1 ? " farm" : " farms");
+  const list = (v) => Array.isArray(v) ? v.filter((x) => x && typeof x === "object") : [];
+  // The five figures for one scope. t: totals (reports_saved, farms, farms_with_*, elapsed_minutes, ...); one: a single farm.
+  function effortCells(t, one) {
+    const farms = int(t.farms), withEffort = int(t.farms_with_effort), withElapsed = int(t.farms_with_elapsed), withMinutes = int(t.farms_with_minutes);
+    const cell = (key, label, text, recorded) => ({ key, label, text, recorded });
+    return [
+      cell("reports", "Reports saved", num(int(t.reports_saved)) + (int(t.reports_without_record) ? " (" + int(t.reports_without_record) + " before effort was recorded in the database)" : ""), true),
+      cell("elapsed", "Elapsed, first step to latest report", mins(int(t.elapsed_minutes)) + (one ? "" : " across " + of(withElapsed, farms)), withElapsed > 0),
+      cell("minutes", "Minutes entered by hand", mins(int(t.minutes_by_hand)) + (one ? "" : " entered for " + of(withMinutes, farms)), withMinutes > 0),
+      cell("hand", "Steps by hand", num(int(t.hand_steps)) + (one ? "" : " across " + of(withEffort, farms)), withEffort > 0),
+      cell("automatic", "Found automatically", num(int(t.automatic)) + (one ? "" : " across " + of(withEffort, farms)), withEffort > 0)];
+  }
+  function reconciliation(r) {
+    if (!r || typeof r !== "object") return null;
+    const n = (k) => int(r[k]);
+    const cell = (key, label, text) => ({ key, label, text, recorded: true });
+    return { hasLoad: r.has_load === true, cells: [
+      cell("confirmed", "Matches confirmed", num(n("matches_confirmed")) + (n("matches_confirmed") ? " by " + (n("confirmed_by_people") === 1 ? "one person" : n("confirmed_by_people") + " people") : "")),
+      cell("resolved", "Gaps resolved with a confirmed match", num(n("gaps_resolved"))),
+      cell("waiting", "Confirmed, item still set aside now", num(n("confirmed_still_set_aside"))),
+      cell("stale", "Stale now (the business has retired)", num(n("stale_business_retired"))),
+      cell("open", "Set aside with no match now", num(n("open_unmatched")))] };
+  }
+  function onboarding(raw, period) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const all = raw.all && typeof raw.all === "object" ? raw.all : {};
+    const when = period?.phrase || "in the period";
+    const farm = (f) => ({ name: String(f.name ?? ""), groups: Array.isArray(f.groups) ? f.groups.map(String) : [], saved: int(f.reports_saved), last: f.last_saved_at ? day(f.last_saved_at) : null,
+      cells: effortCells({ farms: 1, reports_saved: f.reports_saved, reports_without_record: f.reports_without_record, farms_with_effort: int(f.records) > 0 ? 1 : 0,
+        farms_with_elapsed: f.elapsed_minutes == null ? 0 : 1, elapsed_minutes: f.elapsed_minutes, farms_with_minutes: f.minutes_by_hand == null ? 0 : 1, minutes_by_hand: f.minutes_by_hand,
+        hand_steps: f.hand_steps, automatic: f.automatic }, true),
+      versions: int(f.records), started: f.started_at ? day(f.started_at) : null });
+    const farms = list(raw.farms).map(farm);
+    const groups = list(raw.groups).map((g) => ({ name: String(g.name ?? ""), memberFarms: int(g.member_farms), farms: farms.filter((f) => f.groups.includes(String(g.name ?? ""))),
+      cells: effortCells(g.totals || {}, false), reconciliation: reconciliation(g.reconciliation), farmsWithReports: int(g.totals?.farms) }));
+    const before = int(all.reports_without_record);
+    const gap = (what, why, would) => ({ what, why, would });
+    const gaps = [
+      gap("Monthly updates", "the monthly update (group-update) records no time", "A nullable minutes-by-hand field when a monthly update is saved, kept next to it."),
+      gap("Data updates and imports", "a data update or spreadsheet import records no time", "A nullable minutes-by-hand field when an import is confirmed, kept on the import record."),
+      gap("Time saved", "no manual baseline is recorded, so no saving can be read off", "RCL's manual minutes for each task, entered once, set against the minutes entered above."),
+      gap("Stale because the file changed", "only tools/reconcile_group.py reads the group's files, so the database cannot tell a changed item from one waiting for the next load",
+        "The tool writing how many matches it found stale into the group's record each time it runs."),
+      ...(before ? [gap("Reports saved before effort was recorded in the database", before + (before === 1 ? " report holds" : " reports hold") + " its effort only inside the saved file, which the database cannot open",
+        "Saving the report again; the earlier ones cannot be recovered without opening the files.")] : [])];
+    const reports = int(all.reports_saved), n = int(all.farms);
+    return {
+      title: "Onboarding effort", period: period || ratchetPeriod("30d"), groups, farms, gaps,
+      total: { cells: effortCells(all, false), farms: n },
+      answer: { text: reports ? num(reports) + (reports === 1 ? " onboarding report" : " onboarding reports") + " saved " + when + " for " + (n === 1 ? "one farm" : n + " farms")
+          : "No onboarding report was saved " + when,
+        because: int(all.farms_with_effort) ? "effort is recorded for " + of(int(all.farms_with_effort), n) : "no effort is recorded for them in the database yet" },
+    };
+  }
+
+  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl, loadGaps, ratchet, ratchetPeriod, onboarding };
 });

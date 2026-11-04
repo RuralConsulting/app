@@ -1,5 +1,5 @@
 // The Operations page (#/ops), for RCL staff only: the data jobs, the reference sources, what each group load set aside
-// (DQ1), the AI's how-to recipes and the build, on one screen. The one thing it changes is a recipe's status (Approve / Retire, a platform advisor's, confirmed
+// (DQ1), the AI's how-to recipes, the AI evaluation (EV1), the onboarding effort (MC3) and the build, on one screen. The one thing it changes is a recipe's status (Approve / Retire, a platform advisor's, confirmed
 // first; AI1); everything else is read only, and "Run workflow" is a link to GitHub. Row-level security on the ops views
 // and on ai_recipes is the real gate; hiding the link for everyone else is a courtesy.
 (function () {
@@ -170,12 +170,62 @@
     $("#ops-ratchet-period")?.focus();
   }
 
+  // Onboarding effort (MC3): per farm and per catchment group (and overall) for a chosen period, ON1's effort records summed and
+  // A14a's reconciliation outcomes, from public.onboarding_effort_rollup (numbers only). "Not recorded yet" and what would record
+  // it, never an estimate. Reads only.
+  let onboardingKey = "30d";
+  const figures = (cells, attr) => '<dl class="ops-figures"' + (attr ? " " + attr : "") + ">" + cells.map((c) => '<div data-figure="' + esc(c.key) + '"' + (c.recorded ? "" : ' data-recorded="no"') + "><dt>" + esc(c.label) +
+    "</dt><dd>" + (c.recorded ? esc(c.text) : '<span class="ops-gap">not recorded yet</span>') + "</dd></div>").join("") + "</dl>";
+  function onboardingFarm(f) {
+    return '<li class="ops-job" data-onboarding-farm><div class="ops-job-head"><b>' + esc(f.name) + "</b></div>" + figures(f.cells) +
+      '<p class="ops-line">' + esc([f.last ? "Latest report saved " + f.last : null, f.started ? "started " + f.started : null,
+        f.versions ? f.versions + (f.versions === 1 ? " saved version" : " saved versions") + " with effort" : "no effort record"].filter(Boolean).join(" · ")) + "</p></li>";
+  }
+  function onboardingGroup(g) {
+    const r = g.reconciliation;
+    return '<section class="ops-group" data-onboarding-group="' + esc(g.name) + '"><h3>' + esc(g.name) + " · " + g.memberFarms + (g.memberFarms === 1 ? " member farm" : " member farms") + "</h3>" +
+      figures(g.cells, 'data-scope="group"') +
+      (r ? '<h4>Member reconciliation</h4>' + (r.hasLoad ? figures(r.cells, 'data-scope="reconciliation"') :
+        '<p class="ops-line"><span class="ops-gap">not recorded yet</span> — no group load has been recorded for this group, so there is nothing to reconcile.</p>') : "") +
+      (g.farms.length ? '<details class="answer-all"><summary>Farms with a report in this group (' + g.farms.length + ')</summary><ul class="ops-list">' + g.farms.map(onboardingFarm).join("") + "</ul></details>" : "") + "</section>";
+  }
+  function onboardingPanel(v, period) {
+    const p = period || M.ratchetPeriod(onboardingKey);
+    const picker = '<p class="ops-line"><label>Period <select id="ops-onboarding-period">' + p.options.map((o) =>
+      '<option value="' + esc(o.key) + '"' + (o.key === p.key ? " selected" : "") + ">" + esc(o.label) + "</option>").join("") + "</select></label></p>";
+    if (!v) return '<section class="answer-panel answer-compact ops-panel" data-ops="onboarding"><h2>Onboarding effort</h2>' + picker + '<p class="answer-sentence" role="alert">Couldn\'t read the onboarding effort.</p></section>';
+    const loose = v.farms.filter((f) => !f.groups.length);
+    return '<section class="answer-panel answer-compact ops-panel" data-ops="onboarding" data-answer-state="recorded"><h2>' + esc(v.title) + '</h2><p class="answer-sentence">' +
+      esc(v.answer.text + " — " + v.answer.because) + "</p>" + picker +
+      '<section class="ops-group" data-onboarding-group="all"><h3>All farms</h3>' + figures(v.total.cells, 'data-scope="all"') + "</section>" +
+      v.groups.map(onboardingGroup).join("") +
+      (loose.length ? '<details class="answer-all"><summary>Farms in no group (' + loose.length + ')</summary><ul class="ops-list">' + loose.map(onboardingFarm).join("") + "</ul></details>" : "") +
+      '<details class="ops-steps" data-onboarding-gaps><summary>What is not recorded, and what would record it (' + v.gaps.length + ')</summary><ul class="ops-list">' +
+      v.gaps.map((g) => '<li class="ops-line" data-gap-for="' + esc(g.what) + '"><b>' + esc(g.what) + ":</b> " + esc(dot(g.why)) + " Would record it: " + esc(dot(g.would)) + "</li>").join("") + "</ul></details>" +
+      '<p class="ops-line">A farm\'s latest report in the period speaks for it; a group or the total adds its farms. Nothing is estimated.</p></section>';
+  }
+  async function readOnboarding() {
+    const p = M.ratchetPeriod(onboardingKey);
+    let raw = null;
+    try { raw = await read(sb.rpc("onboarding_effort_rollup", { p_from: p.from, p_to: p.to })); } catch { raw = null; }
+    return onboardingPanel(M.onboarding(raw, p), p);
+  }
+  async function changeOnboardingPeriod(select) {
+    onboardingKey = select.value;
+    const panel = $('[data-ops="onboarding"]'), current = token;
+    if (!panel) return;
+    const html = await readOnboarding();
+    if (current !== token || !panel.isConnected) return;
+    panel.outerHTML = html;
+    $("#ops-onboarding-period")?.focus();
+  }
+
   let wired = false;
   function wire(box) {
     if (wired || !box?.addEventListener) return;
     wired = true;
     box.addEventListener("click", (e) => { const b = e.target?.closest?.(".ops-recipe-act"); if (b) decide(b); });
-    box.addEventListener("change", (e) => { if (e.target?.id === "ops-ratchet-period") changePeriod(e.target); });
+    box.addEventListener("change", (e) => { if (e.target?.id === "ops-ratchet-period") changePeriod(e.target); else if (e.target?.id === "ops-onboarding-period") changeOnboardingPeriod(e.target); });
   }
 
   async function version() {
@@ -198,21 +248,21 @@
     box.innerHTML = '<p class="ops-wait">Reading the job records…</p>';
     wire(box);
     try {
-      const [jobRows, refRows, v, recipeRows, gapRows, ratchetHtml] = await Promise.all([
+      const [jobRows, refRows, v, recipeRows, gapRows, ratchetHtml, onboardingHtml] = await Promise.all([
         read(sb.from("ops_job_status").select("*").order("job_key")),
         read(sb.from("ops_reference_status").select("*").order("name")), version(),
-        // The recipes, group-gaps and AI-evaluation panels fail on their own: the rest of the page still shows.
+        // The recipes, group-gaps, AI-evaluation and onboarding-effort panels fail on their own: the rest of the page still shows.
         read(sb.from("ai_recipes").select(RECIPE_COLUMNS).order("key")).catch(() => null),
         Promise.resolve().then(() => read(sb.rpc("group_load_gaps", { group_id: null }))).catch(() => null),
-        readRatchet()]);
+        readRatchet(), readOnboarding()]);
       if (current !== token) return;
       box.innerHTML = jobsPanel(M.jobs(jobRows)) + referencesPanel(M.references(refRows)) + gapsPanel(gapRows ? M.loadGaps(gapRows) : null) +
-        recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + ratchetHtml + buildPanel(M.build(v));
+        recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + ratchetHtml + onboardingHtml + buildPanel(M.build(v));
     } catch (e) {
       if (current === token) box.innerHTML = '<p class="msg" role="alert">Couldn\'t read the job records: ' + esc(e.message || e) + "</p>";
     }
   }
   function close() { token++; }
 
-  FP.ops = { checkStaff, isStaff: () => staff, user: () => me, open, close, decide, groupGaps, render: { jobsPanel, referencesPanel, gapsPanel, recipesPanel, ratchetPanel, buildPanel } };
+  FP.ops = { checkStaff, isStaff: () => staff, user: () => me, open, close, decide, groupGaps, render: { jobsPanel, referencesPanel, gapsPanel, recipesPanel, ratchetPanel, onboardingPanel, buildPanel } };
 })();

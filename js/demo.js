@@ -124,7 +124,7 @@
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)", kind: "consultancy" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
       farm_parcels: [], farm_boundaries: [],
-    }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
+    }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, onboardingEffort: f.ops.onboarding_effort || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
@@ -579,6 +579,8 @@
         if (name === "group_load_gaps") return result(d.tables.profiles[0]?.is_staff ? (d.loadGaps || []).filter((g) => !args?.group_id || g.group_id === args.group_id) : []);
         // EV1, as public.ai_ratchet_evaluation: invented counts for the demo's advisor (staff only), the same for any period.
         if (name === "ai_ratchet_evaluation") return d.tables.profiles[0]?.is_staff && d.ratchet ? result(d.ratchet) : error("The AI evaluation is for RCL staff");
+        // MC3, as public.onboarding_effort_rollup: invented numbers for the demo's advisor (staff only), the same for any period.
+        if (name === "onboarding_effort_rollup") return d.tables.profiles[0]?.is_staff && d.onboardingEffort ? result(d.onboardingEffort) : error("The onboarding effort rollup is for RCL staff");
         return error("This operation is not available in the demo");
       },
       // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.

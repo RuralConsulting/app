@@ -407,11 +407,22 @@
   }
   const fileName = (now) => "onboarding-report-" + (day(now) || "undated") + ".json";
   const title = (now) => "Onboarding report, " + date(now);
+  // MC3: the saved report's effort block as the row public.onboarding_effort_records keeps (numbers only; the stored file holds the
+  // same block). A count that is not a plain number is dropped, never guessed. null when there is no effort block.
+  function effortRecord(e) {
+    if (!e || typeof e !== "object") return null;
+    const whole = (v) => { const n = num(v); return n != null && n >= 0 && n <= 100000000 ? Math.round(n) : null; };
+    const counts = (o) => Object.fromEntries(Object.entries(o && typeof o === "object" && !Array.isArray(o) ? o : {}).map(([k, v]) => [k, whole(v)]).filter(([, v]) => v !== null));
+    const when = (v) => typeof v === "string" && Number.isFinite(Date.parse(v)) ? v : null;
+    const minutes = whole(e.minutes_by_hand);
+    return { started_at: when(e.started_at), elapsed_minutes: whole(e.elapsed_minutes), minutes_by_hand: minutes !== null && minutes <= 100000 ? minutes : null,
+      hand_steps: counts(e.hand_steps), automatic: counts(e.automatic), corrections_per_100: whole(e.corrections_per_100) };
+  }
   // Plan reader files worth fetching for proposals: a PL11 confirm report or a read-in PlanDocument, JSON, under 2 MB.
   const planFiles = (inputs) => list(inputs?.documents).filter((d) => ["plan_import", "plan_import_report"].includes(docType(d)) && d.storage_path &&
     (/json/i.test(d.mime_type || "") || /\.json$/i.test(d.storage_path)) && (num(d.size_bytes) == null || num(d.size_bytes) <= 2 * 1024 * 1024));
   const isIntent = (text) => /\bonboard(ing)?\b|\bget(ting)? started\b|\breadiness\b|\bset ?up (the|this) farm\b/i.test(String(text || ""));
 
   return { SCHEMA, RULES_VERSION, AREA_PCT, AREA_HA, STATES, VERDICTS, SECTIONS, RULES, THEMES, build, applyTicks, ticksOf, planProposals, heldArea,
-    audience, effort, effortLines, documentJson, readDocument, fromDocument, fileName, title, planFiles, isIntent, sourceLine, normTitle };
+    audience, effort, effortLines, effortRecord, documentJson, readDocument, fromDocument, fileName, title, planFiles, isIntent, sourceLine, normTitle };
 });

@@ -516,6 +516,21 @@
         { "purpose": "classify", "calls": 8, "refused": 0, "cost_usd": 0.01240, "unknown_cost_calls": 1 }
       ]
     },
+    "onboarding_effort": {
+      "from": null, "to": null,
+      "all": { "farms": 4, "reports_saved": 7, "reports_without_record": 2, "farms_with_effort": 3, "farms_with_elapsed": 3, "elapsed_minutes": 11520, "farms_with_minutes": 2, "minutes_by_hand": 330, "hand_steps": 61, "automatic": 148 },
+      "groups": [
+        { "name": "Example catchment group (synthetic)", "member_farms": 6,
+          "totals": { "farms": 3, "reports_saved": 6, "reports_without_record": 2, "farms_with_effort": 2, "farms_with_elapsed": 2, "elapsed_minutes": 8640, "farms_with_minutes": 1, "minutes_by_hand": 120, "hand_steps": 39, "automatic": 96 },
+          "reconciliation": { "matches_confirmed": 9, "confirmed_by_people": 2, "gaps_resolved": 5, "confirmed_still_set_aside": 3, "stale_business_retired": 1, "open_unmatched": 4, "has_load": true } }
+      ],
+      "farms": [
+        { "name": "Example Downs (synthetic)", "groups": ["Example catchment group (synthetic)"], "reports_saved": 3, "last_saved_at": "2026-11-03T02:10:00Z", "reports_without_record": 1, "records": 2, "started_at": "2026-10-12T21:00:00Z", "elapsed_minutes": 5760, "minutes_by_hand": 120, "hand_steps": 22, "automatic": 54 },
+        { "name": "Invented Flat (synthetic)", "groups": ["Example catchment group (synthetic)"], "reports_saved": 2, "last_saved_at": "2026-11-01T22:40:00Z", "reports_without_record": 1, "records": 1, "started_at": "2026-10-29T21:00:00Z", "elapsed_minutes": 2880, "minutes_by_hand": null, "hand_steps": 17, "automatic": 42 },
+        { "name": "Sample Hills (synthetic)", "groups": ["Example catchment group (synthetic)"], "reports_saved": 1, "last_saved_at": "2026-10-30T01:00:00Z", "reports_without_record": 0, "records": 0, "started_at": null, "elapsed_minutes": null, "minutes_by_hand": null, "hand_steps": null, "automatic": null },
+        { "name": "Lone Paddocks (synthetic)", "groups": [], "reports_saved": 1, "last_saved_at": "2026-11-02T03:00:00Z", "reports_without_record": 0, "records": 1, "started_at": "2026-10-26T21:00:00Z", "elapsed_minutes": 2880, "minutes_by_hand": 210, "hand_steps": 22, "automatic": 52 }
+      ]
+    },
     "build": {
       "version": "202610291405-3f9a2c1"
     }

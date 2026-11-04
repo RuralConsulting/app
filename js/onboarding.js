@@ -130,7 +130,13 @@
         const hash = root.FP?.documentsBlock?.sha256Hex ? await root.FP.documentsBlock.sha256Hex(new TextEncoder().encode(JSON.stringify(inputs))) : null;
         const text = M.documentJson(report, { person: env.user, now, inputs_hash: hash, minutes_by_hand: minutes });
         const file = new File([text], M.fileName(now), { type: "application/json" });
-        await env.store.add({ file, title: M.title(now), doc_type: "onboarding_report", tier: "primary", relates_to: null, ...(report.audience === "private" ? { visibility: "private" } : {}) });
+        const documentId = await env.store.add({ file, title: M.title(now), doc_type: "onboarding_report", tier: "primary", relates_to: null, ...(report.audience === "private" ? { visibility: "private" } : {}) });
+        // MC3: the same effort numbers as a row RCL staff can total (the database cannot open a file). The report is saved either
+        // way: if this row is refused or the network drops, the report still holds the numbers.
+        try {
+          const row = M.effortRecord(JSON.parse(text).effort);
+          if (row && documentId && user) await env.sb.from("onboarding_effort_records").insert({ farm_id: farm, document_id: documentId, saved_by: user, ...row });
+        } catch {}
         // the previous report goes to Archive (kept, not shown first); someone else's private one stays where it is
         for (const d of list(inputs.documents).filter((x) => x.doc_type === "onboarding_report" && x.tier !== "archive")) { try { await env.store.move(d.id, { tier: "archive" }); } catch {} }
         draft = {}; writeDraft(user, farm, draft);
