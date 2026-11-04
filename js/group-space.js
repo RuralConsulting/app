@@ -4,15 +4,15 @@
 // what member farms shared); Create → Monthly update (drafted by code, edited here, stored as a group document); Settings
 // (a group admin chooses how member farms are shown). Every read is as the signed-in person, through row-level security
 // and the group functions (group_map, group_member_summary, group_member_farms, group_shared_entries/documents,
-// group_wq_sites); nothing needs AI. Group use of the water-quality analysis (X1) is X1b's: `groupAnalysisPreset` is
-// where its preset plugs in.
+// group_wq_sites); nothing needs AI. The water-quality card opens with the group's standing answer, "What does our
+// water-quality data tell us, compared with ECan's sites?" (MC1, group-wq-answer.js): written by code from the analysis
+// library under the group's published method (X1b preset), above B8's chart.
 (function (root) {
   const FP = root.FP;
   const G = () => FP.groupModel, U = () => FP.groupUpdate;
   const el = (...a) => FP.el(...a), $ = (s) => FP.$(s);
   const DOC_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,period_start,period_end,storage_path,original_name,sha256,status,created_at,tier,tiered_at,visibility";
-  const groupAnalysisPreset = null;   // X1b: the group's "our sites compared with ECan's" analysis preset, when it lands
-  let groups = [], person = null, ctx = null, token = 0, mapHandle = null, mapReady = null, surface = null, entries = [], wq = null, draft = null, notice = null;
+  let groups = [], person = null, ctx = null, token = 0, mapHandle = null, mapReady = null, surface = null, entries = [], wq = null, wqAnswer = null, draft = null, notice = null;
 
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   const optional = (query) => Promise.resolve(query).then((r) => (r.error ? null : r.data), () => null);
@@ -51,7 +51,7 @@
   // ---- the screen ----------------------------------------------------------------------------------------------------------
   function close() {
     token++;
-    wq?.destroy(); wq = null;
+    wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
     mapHandle?.destroy(); mapHandle = null; surface = null; entries = [];
     ctx = null; draft = null;
     document.body.classList.remove("group-space-active");
@@ -71,7 +71,7 @@
     FP.show("screen-group");
     header(group, route);
     if (ctx?.group.id !== group.id) {
-      wq?.destroy(); wq = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
+      wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group, pending: load(group) };
     }
     const panel = $("#group-panel");
@@ -91,7 +91,8 @@
       panel.scrollTop = 0;
       await mapped;
       if (current !== token || !home) return;
-      if (wq) { const box = card("Water quality"); box.append(wq.node); panel.append(box); }
+      // the group's written answer first, then B8's line of sites and its chart
+      if (wq) { const box = card("Water quality"); box.append(...(wqAnswer ? [wqAnswer.node] : []), wq.node); panel.append(box); }
       if (entries.length) panel.append(layersCard());
     } catch (e) {
       if (current === token) panel.replaceChildren(el("p", { class: "group-status", role: "alert" }, "Couldn't load the group: " + (e.message || e)));
@@ -116,8 +117,12 @@
     if (mapHandle !== handle || !drawn) return;
     surface = drawn.surface || null; entries = drawn.entries || [];
     if (!wq && FP.wq && surface) {
+      // one read of the group's sites, for the line and the answer alike (the answer then keeps to the group's own and ECan's)
+      const sites = FP.sb.rpc("group_wq_sites", { g: data.group.id }).then((r) => { if (r.error) throw r.error; return r.data || []; });
+      sites.catch(() => {});
       wq = FP.wq.create({ sb: FP.sb, farm: { id: data.group.id }, extent: data.map.extent, map: surface, provenance: (key, at) => FP.provenance.lineFor(data.map.sources, key, null, at),
-        sitesRead: () => FP.sb.rpc("group_wq_sites", { g: data.group.id }).then((r) => { if (r.error) throw r.error; return r.data || []; }) });
+        sitesRead: () => sites });
+      wqAnswer = answerCard(data, sites);
       wq.ready.then(() => {
         const slot = document.querySelector(".group-sources");
         if (!slot) return;
@@ -130,6 +135,17 @@
 
   // ---- Map view: the standing answers -------------------------------------------------------------------------------------
   function card(title, ...body) { return el("section", { class: "group-card" }, el("h2", {}, title), ...body); }
+  // MC1: the group's standing water-quality answer, as the Answer block (its loading state while the analysis function works).
+  // Every figure is the analysis library's, computed now as this person (preview, nothing stored); the words are code's.
+  function answerCard(data, sites) {
+    if (!FP.groupWqAnswer || !FP.blocks) return null;
+    const host = el("div", { class: "block-host group-wq-answer", "data-card": "wq-answer" });
+    const A = FP.groupWqAnswer;
+    const handle = FP.blocks.render(host, { block: "answer", owner: { org: data.group.id }, options: { summary: true } },
+      { read: () => sites.then((rows) => A.build({ sb: FP.sb, group: data.group, sites: rows })).then(A.answer), level: 3, nested: true, href: FP.href });
+    handle.ready?.catch?.(() => {});
+    return { node: host, destroy: () => handle.destroy() };
+  }
   function mapView(data) {
     const ownLayers = list(data.map?.layers).filter((l) => l.group_own);
     const members = card("Member farms", el("ul", { class: "group-lines" }, ...G().memberLines(data.summary, { hasOwnLayers: ownLayers.length > 0 }).map((t) => el("li", {}, t))),
@@ -320,11 +336,11 @@
       // the map and figures are read again at the new level, and the map is drawn again in place
       const current = token;
       ctx = { group: data.group, pending: load(data.group) };
-      mapHandle?.destroy(); mapHandle = null; mapReady = null; wq?.destroy(); wq = null;
+      mapHandle?.destroy(); mapHandle = null; mapReady = null; wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
       try { ctx.data = await ctx.pending; if (current === token) await drawMap(ctx.data, current); } catch { /* the next view reads again */ }
     });
     return form;
   }
 
-  FP.groupSpace = { setGroups, find, open, close, load, groupAnalysisPreset, groups: () => groups, hasPortfolio: null };
+  FP.groupSpace = { setGroups, find, open, close, load, groups: () => groups, hasPortfolio: null };
 })(typeof window === "undefined" ? globalThis : window);

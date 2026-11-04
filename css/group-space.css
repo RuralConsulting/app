@@ -23,6 +23,10 @@
 .group-card h2 { font-family: var(--f-ui); font-size: var(--text-body); font-weight: 700; margin: 0 0 6px; }
 .group-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .group-lines li { display: grid; gap: 2px; overflow-wrap: anywhere; }
+/* MC1: the group's standing water-quality answer, above B8's line and chart in the Water quality card */
+.group-wq-answer { margin: 0 0 10px; }
+.group-wq-answer .answer-panel { padding: 0; }
+.group-wq-answer .answer-all li { padding: 6px 0; overflow-wrap: anywhere; }
 .group-lines small, .group-layers small, .update-line small { color: var(--ink-2); font-size: var(--text-small); }
 .group-lines li.overdue span::before { content: "Overdue · "; font-weight: 700; }
 .group-fine { color: var(--ink-2); font-size: var(--text-small); }

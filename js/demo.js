@@ -228,6 +228,7 @@
       g.setting = args.level; return [null];
     }
     if (name === "group_wq_sites") return [wqOf(d).sites.filter((x) => !x.owner_farm_id)];
+    if (name === "group_wq_presets") return [[DEMO_PRESET]];
     if (name === "group_readiness") {
       // as the database (public.group_readiness): a group admin only; ON1's findings per farm in totals (invented here),
       // counted with the same k = 3 rule, the readiness states held back together, rows only at anonymous or named
@@ -428,6 +429,7 @@
   const WQ_SOURCES = {
     "ecan-wq": { name: "Environment Canterbury", attribution: "Source: Environment Canterbury (invented demo values). Results are provisional until reviewed by ECan.", provisional: true },
     "demo-farm-wq": { name: "Example farm's own sampling (synthetic)", attribution: "Source: the farm's own sampling (invented demo values).", provisional: false },
+    "demo-hdlg-wq": { name: "HDLG (example) group sampling (synthetic)", attribution: "Source: the group's own sampling (invented demo values).", provisional: false },
   };
   function wqDemo(extent) {
     const M = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel;
@@ -441,9 +443,12 @@
       { id: 9104, external_id: "DEMO-04", name: "Tributary drain at the boundary (synthetic)", lng: 171.9705, lat: -42.995, type: "stream", params: ["nitrate-nitrite-n"], from: [2026, 5], base: 3.1, count: 3 },
       { id: 9105, external_id: "DEMO-05", name: "Lagoon outlet (synthetic)", lng: 172.098, lat: -43.041, type: "lake", params: [], from: [2026, 0], base: 0 },
       { id: 9106, external_id: "FARM-B1", name: "Farm drain sample point (synthetic)", lng: 172.0125, lat: -42.9915, type: "drain", params: ["nitrate-nitrite-n", "drp"], from: [2022, 8], base: 2.0, own: true },
+      // MC1: the catchment group's own sampling sites (D2, owned by the group): in the group's space only, never the farm's line
+      { id: 9201, external_id: "HDLG-G1", name: "Group sampling at the ford (synthetic)", lng: 172.0405, lat: -43.0005, type: "river", params: ["nitrate-nitrite-n"], from: [2023, 6], base: 1.3, group: true },
+      { id: 9202, external_id: "HDLG-G2", name: "Group sampling at the culvert (synthetic)", lng: 172.072, lat: -43.022, type: "stream", params: ["nitrate-nitrite-n"], from: [2024, 0], base: 0.9, group: true },
     ];
     const sites = defs.map((d) => ({ site_id: d.id, external_id: d.external_id, name: d.name, site_type: d.type, distance_m: toBox(d.lng, d.lat), geom: place(d.lng, d.lat),
-      source_key: d.own ? "demo-farm-wq" : "ecan-wq-sites", owner_farm_id: d.own ? FARM : null, owner_org_id: null }));
+      source_key: d.own ? "demo-farm-wq" : d.group ? "demo-hdlg-wq" : "ecan-wq-sites", owner_farm_id: d.own ? FARM : null, owner_org_id: d.group ? GROUP : null }));
     const series = {};
     const wave = (i, k) => Math.sin(i * 0.52 + k) * 0.5 + Math.sin(i * 1.7 + k * 3) * 0.25;
     for (const d of defs) {
@@ -460,7 +465,7 @@
           else value = Math.max(0.3, 2.6 * d.base * (1 + 0.8 * wave(i, k + 4)));
           if (key !== "e-coli") value = Number(value.toPrecision(3));
           return { sampled_at, value, qualifier, value_text: (qualifier || "") + String(value), unit: WQ_PARAMS[key][1], sample_id: d.external_id + "-" + (i + 1), series: "", replicate_no: 1,
-            datetime_flag: null, source_key: d.own ? "demo-farm-wq" : "ecan-wq", superseded_at: null, aggregate: "", n_values: null };
+            datetime_flag: null, source_key: d.own ? "demo-farm-wq" : d.group ? "demo-hdlg-wq" : "ecan-wq", superseded_at: null, aggregate: "", n_values: null };
         });
       });
     }
@@ -481,6 +486,52 @@
       return { parameter: key, parameter_name: wq.params[key][0], value: last.value, qualifier: last.qualifier, value_text: last.value_text, unit: last.unit, sampled_at: last.sampled_at, ambiguous_dst: false,
         source_key: last.source_key, source_name: src.name, attribution: src.attribution, provisional: src.provisional };
     });
+  }
+  // MC1: the catchment group's published method (X1b preset, as public.group_wq_presets returns it) and the analysis
+  // function's previews for its standing water-quality answer. The browser cannot run the library, so the figures here are
+  // invented demo values in the function's reply shape (the real path is tested in supabase/functions/analysis/group_answer.test.ts).
+  const DEMO_PRESET = { preset_id: "de000000-0000-4000-8000-0000000003c1", family: "hdlg-nitrate-band", version: 1, title: "HDLG nitrate toxicity band, ECan record to June 2025",
+    definition: { schema: "wq-preset/1", family: "hdlg-nitrate-band", title: "HDLG nitrate toxicity band, ECan record to June 2025", tool: "band",
+      parameters: { attribute: "nitrate-toxicity", end_year: 2025, dataset: "ecan-wq" }, applies_to: { area: "hdlg-catchment" },
+      caveats: ["The group reports state to 30 June 2025 from ECan's record; its own sampling is shown beside it, never pooled."], confirmed_overrides: ["dataset", "end_year"] } };
+  // site -> invented results over 1 Jul 2020 to 30 Jun 2025 (n is the demo series' count in that window); band: a letter, or why not
+  const DEMO_RESULTS = {
+    9101: { n: 60, median: 1.71, band: "B", p95: 2.62 }, 9102: { n: 60, median: 2.46, band: "C", p95: 3.71 },
+    9103: { n: 30, median: 0.74, band: { reason: "insufficient_record", detail: "Not enough data for a band: 30 of 60 months and 10 of 20 quarters have a result; the rule (LAWA factsheet: Calculating water quality state for rivers) needs at least 54 months and 18 quarters over 5 years." } },
+    9201: { n: 24, median: 1.38 }, 9202: { n: 18, median: 0.95 },
+  };
+  function demoAnalysis(d, body) {
+    const site = wqOf(d).sites.find((s) => s.site_id === body?.params?.site_id), res = DEMO_RESULTS[site?.site_id];
+    if (!site || body.mode !== "preview") return null;
+    const band = !!body.preset_id, ds = site.source_key === "ecan-wq-sites" ? "ecan-wq" : site.source_key, src = WQ_SOURCES[ds];
+    // the band, as the library: nitrate-N, else nitrate-nitrite-N where only that is measured (the demo's sites measure NNN)
+    const parameter = band ? (res && wqOf(d).series[site.site_id + "|nitrate-nitrite-n"] ? "nitrate-nitrite-n" : "nitrate-n") : body.params.parameter;
+    const has = !!res && !!wqOf(d).series[site.site_id + "|" + parameter];
+    const window = { end_year: 2025, years: 5, from: "2020-07-01", to: "2025-06-30" };
+    const none = { reason: "no_results", detail: "No " + parameter + " results you can read at this site between 1 Jul 2020 and 30 Jun 2025." };
+    const unavailable = !has ? none : band && typeof res.band !== "string" ? res.band : null;
+    const caveats = has ? [...(src.provisional ? [src.name + ": Provisional until reviewed by ECan."] : []), "The source does not report the laboratory or method of each result, so method comparability is not checked."] : [];
+    if (band && has) caveats.unshift("HDLG's method \"" + DEMO_PRESET.title + "\" (v1): " + DEMO_PRESET.definition.caveats[0],
+      "No nitrate-N results here, so nitrate-nitrite-N (total oxidised nitrogen) is used, as LAWA does for nitrate toxicity; it slightly overstates nitrate.");
+    const result = unavailable ? null : band ? { band: res.band, monthly_values: res.n, statistics: [{ label: "Median", display: res.median + " mg/L" }, { label: "95th percentile", display: res.p95 + " mg/L" }] }
+      : { samples: res.n, censored_below: 0, censored_above: 0, median: { lo: res.median, hi: res.median, exact: true }, unit: "mg/L" };
+    return { preset: band ? { family: DEMO_PRESET.family, version: 1, title: DEMO_PRESET.title, group: "HDLG (example)", applied: true } : null,
+      tool: band ? "band" : "summary", tool_version: "x1-wq 1.0.0", method: { id: band ? "x1-band v1" : "x1-summary v1", name: band ? "NPS-FM attribute band: Nitrate (toxicity)" : "Summary statistics of every sample (replicates collapsed)",
+        ...(band ? { table: "Appendix 2A Table 6 – Nitrate (toxicity)" } : {}), percentile: "Hazen", censoring: "x1-censored-bounds v1" },
+      parameters: { tool: band ? "band" : "summary", site_id: site.site_id, parameter, ...(band ? { attribute: "nitrate-toxicity", dataset: "ecan-wq" } : {}), ...window },
+      site: { monitoring_site_id: site.site_id, source_key: site.source_key, external_id: site.external_id, name: site.name },
+      measurement_sources: has ? [ds] : [], source_versions: has ? { [ds]: { rows: res.n, last_load_run_id: 1, max_updated_at: "2026-09-30T00:00:00Z", rows_sha256: "0".repeat(64) } } : {},
+      attribution: has ? [{ dataset: ds, name: src.name, statement: src.attribution, provisional: src.provisional ? "Provisional until reviewed by ECan." : null }] : [],
+      result, unavailable, caveats, statement: "", ai_proposed_inputs: null, advisor_overrides: {}, note_allowed: false,
+      preview_sha256: (site.site_id.toString(16) + (band ? "b" : "5") + parameter.length.toString(16)).padStart(64, "0") };
+  }
+  // D3, as public.wq_state_trend_for_site: the one invented ECan site matched to a LAWA site (invented values, LAWA's layout).
+  function demoLawa(site) {
+    if (site !== 9101) return [];
+    const base = { lawa_site_id: "demo-lawa-01", lawa_site_name: "Demo Creek at the farm bridge", council_site_id: "DEMO-01", agency: "ECan", release: "2026-10-27", file_name: "lawa-river-wq-demo.xlsx",
+      attribution: "Data sourced from LAWA (Land, Air, Water Aotearoa) and Environment Canterbury (invented demo values).", licence: "CC BY 4.0", monitoring_site_id: 9101, match_status: "matched", match_method: "council_site_id", source_key: "lawa-river-wq" };
+    return [{ ...base, kind: "state", indicator: "Nitrate nitrogen", attribute: "Nitrate (toxicity) - NO3N", unit: "mg/L", state: "B", period: "hYear 2025", sheet: "State Attribute Results", source_row: 21 },
+      { ...base, kind: "trend", indicator: "Nitrate nitrogen", state: "Likely degrading", trend_description: "Likely degrading", trend_score: -1, period: "10 years", sheet: "Trend Results", source_row: 48 }];
   }
   function client(ready) {
     const result = (data = null, error = null) => ({ data: copy(data), error });
@@ -553,11 +604,13 @@
         // M1b, as the database's wq_sites_near, wq_site_latest and measurement_series, over the invented sites (wqDemo).
         if (name === "wq_sites_near") {
           if (args.farm_id !== FARM) return result([]);
-          return result(wqOf(d).sites.filter((x) => x.distance_m <= (args.km ?? 10) * 1000).sort((a, b) => a.distance_m - b.distance_m || a.external_id.localeCompare(b.external_id)));
+          return result(wqOf(d).sites.filter((x) => !x.owner_org_id && x.distance_m <= (args.km ?? 10) * 1000).sort((a, b) => a.distance_m - b.distance_m || a.external_id.localeCompare(b.external_id)));
         }
         if (name === "wq_site_latest") return result(wqLatest(wqOf(d), args.site));
+        // D3, as public.wq_state_trend_for_site: LAWA's results through the crosswalk (one invented matched site)
+        if (name === "wq_state_trend_for_site") return result(demoLawa(args.site));
         // S5's group functions by name (group_load_gaps is DQ1's, below)
-        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
+        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_presets|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
         // B4b, as public.sync_entry_edit: applied on the version it was made on, else kept as a conflict; once per edit id.
@@ -586,6 +639,8 @@
       // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.
       functions: { invoke: async (name, options) => {
         if (name === "ask") return result(askReply((await ready).ask, options?.body?.question));
+        // MC1: the analysis function's previews for the group's standing answer (invented figures; preview only, nothing stored)
+        if (name === "analysis") { const r = demoAnalysis(await ready, options?.body); return r ? result({ preview: r }) : error("Water-quality analysis isn't available yet."); }
         if (name === "consent-conditions") { const r = demoConditions(await ready, options?.body); return r ? result(r) : error("You can fetch the conditions only of a consent on a farm you edit, whose conditions aren't recorded yet."); }
         return error("The demo does not save changes");
       } },

@@ -182,5 +182,5 @@
     }
     return out;
   }
-  return { UNAVAILABLE, preview, body, request, html, rows, noteText, saveNote, overridesFrom, reviewLine, reviews };
+  return { UNAVAILABLE, preview, body, request, html, rows, range, noteText, saveNote, overridesFrom, reviewLine, reviews };
 });
