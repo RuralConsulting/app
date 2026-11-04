@@ -1087,9 +1087,16 @@
     return el("section", { class: "space-view", "data-view": "ask" }, el("h2", {}, "Ask"), form, el("div", { id: "ask-answer", class: "ask-answer", "aria-live": "polite" }));
   }
   function createView() {
-    return el("section", { class: "space-view", "data-view": "create" }, el("h2", {}, "Create"),
+    const view = el("section", { class: "space-view", "data-view": "create" }, el("h2", {}, "Create"),
       el("p", {}, "These can't be made here yet."),
       el("ul", { class: "output-list" }, ...M.outputs.map(([key, label]) => el("li", { "data-output": key }, el("span", {}, label)))));
+    // Water-quality results from a spreadsheet (the farm's own, or a group's the person edits): upload, check, confirm.
+    if (canChange() && FP.wqImport) {
+      const open = el("button", { type: "button", class: "wq-open" }, "Import water-quality results");
+      open.addEventListener("click", () => { open.remove(); FP.wqImport.mount(view, { sb: FP.sb, farm: context.farm, el, documentsBlock: FP.documentsBlock }); });
+      view.append(open);
+    }
+    return view;
   }
   async function open(farm, route) {
     flushDone();   // going to another view (or farm) writes any Done still inside its Undo window (#258)
