@@ -27,7 +27,9 @@ FP.popup = (() => {
   function note(n) {
     const dl = FP.el("dl");
     for (const p of n.parts) dl.append(FP.el("dt", {}, p.label), FP.el("dd", {}, p.text, n.narrowed ? FP.el("small", { class: "pop-note-from" }, " (" + p.from + ")") : null));
-    return FP.el("details", { class: "pop-note" }, FP.el("summary", {}, "Advisor note"), dl);
+    // whose note it is, and when (LN2): the scope, and the capacity of the person who wrote it ("you" for your own)
+    const by = (n.by || []).length ? FP.el("p", { class: "pop-note-by" }, n.by.map((b) => b.text).join(" · ")) : null;
+    return FP.el("details", { class: "pop-note" }, FP.el("summary", {}, "Advisor note"), dl, by);
   }
 
   // hit: {title, qualifier, props, kind, note}

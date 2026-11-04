@@ -169,7 +169,7 @@
   }
 
   // A layer's advisor note (LN1), as its info panel shows it: each part from the narrowest note that has one.
-  const noteFor = (key) => FP.layerNotes?.applicable(drawn?.layer_notes, key) || null;
+  const noteFor = (key) => FP.layerNotes?.applicable(drawn?.layer_notes, key, drawn?.viewer) || null;
 
   // the layers of one farm layer, by geometry: [polygonIds, lineIds, pointIds] filled in by pass
   function farmLayer(l, i, pass) {

@@ -153,3 +153,4 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .pop .pop-note dl { grid-template-columns: 1fr; gap: 0; max-height: 200px; }
 .pop .pop-note dt { text-transform: none; margin-top: 6px; }
 .pop-note-from { color: var(--ink-3); }
+.pop-note-by { margin: 6px 0 0; color: var(--ink-3); font-size: var(--text-small); }

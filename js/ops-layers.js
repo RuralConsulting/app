@@ -1,23 +1,19 @@
-// Operations → Layers (#/ops/layers, LN1): every layer with its advisor note's status, a search and a filter, and an
-// editor for the note at the scope chosen (RCL's global note, a group's, or a farm's). RCL staff reach the page from
-// Operations; row-level security on layer_notes is the real gate on what is read and written (staff write global notes,
-// a group's advisors its notes, a farm's editors its notes). The model is js/layer-notes-model.js.
+// Layer notes (LN1, LN2): every layer with its advisor note's status, a search and a filter, and an editor for the note at the
+// scope chosen. Two routes: #/ops/layers (RCL staff, from Operations) and #/layers (anyone signed in, from a farm's header).
+// The scopes offered are the ones this person may write, from roles the app already reads (FP.layerNotes.writableScopes):
+// RCL's global note for staff, a group's note for its facilitators, advisors and admins, a farm's note for its editors,
+// admins and owners. Someone who may write none gets no editor. Row-level security on layer_notes is the real gate on what
+// is read and written; the screen only does not offer what the database would refuse. The model is js/layer-notes-model.js.
 (function () {
   const N = FP.layerNotes, { $, sb } = FP;
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const day = (ts) => FP.opsModel?.day(ts) || null;
   let token = 0, data = null, scope = { scope: "global" }, selected = null, q = "", status = "all";
 
   async function read(query) { const { data: rows, error } = await query; if (error) throw error; return rows || []; }
   const optional = (query) => Promise.resolve(query).then((r) => (r.error ? [] : r.data || []), () => []);
 
-  // The scopes this person can write: RCL's global note, the organisations they advise, the farms they edit.
-  function scopes(d) {
-    const out = [{ value: "global", label: "RCL — global note", scope: { scope: "global" } }];
-    for (const o of d.orgs) out.push({ value: "group:" + o.id, label: (o.name || "Organisation") + " — group note", scope: { scope: "group", org_id: o.id } });
-    for (const f of d.farms) out.push({ value: "farm:" + f.id, label: (f.name || "Farm") + " — farm note", scope: { scope: "farm", farm_id: f.id } });
-    return out;
-  }
+  // The scopes this person can write (the model's role rule): RCL's global note, the organisations they advise, the farms they edit.
+  const scopes = (d) => N.writableScopes(d.roles);
   const scopeValue = (s) => (s.scope === "global" ? "global" : s.scope === "group" ? "group:" + s.org_id : "farm:" + s.farm_id);
   // Owned layers listed for the scope: every organisation layer read, and the chosen farm's own layers.
   const listedLayers = (d) => d.layers.filter((l) => l.org_id || (scope.scope === "farm" && l.farm_id === scope.farm_id));
@@ -38,15 +34,16 @@
 
   function editorHtml(r) {
     if (!r) return '<h3 id="ln-editing">Note</h3><p class="answer-sentence">Choose a layer above to write its note.</p>';
-    const n = r.note || {}, others = N.applicable((data?.notes || []).filter((x) => x !== r.note && N.keyOf(x) === r.key), r.key);
+    const me = FP.ops?.user?.()?.id, n = r.note || {}, others = N.applicable((data?.notes || []).filter((x) => x !== r.note && N.keyOf(x) === r.key), r.key, me);
     const where = scope.scope === "global" ? "RCL's global note: everyone who sees this layer reads it" : scope.scope === "group" ? "This group's note: its members and its farms read it, over the global note" : "This farm's note: the farm's people read it, over the group's and the global note";
     return '<h3 id="ln-editing">' + esc(r.name) + "</h3>" + '<p class="answer-sentence">' + esc(where) + ".</p>" +
       (r.what ? '<p class="ops-line ln-what">' + esc(r.what) + "</p>" : "") +
-      (others ? '<details class="ln-others"><summary>Other notes on this layer</summary><dl>' + others.parts.map((p) => "<dt>" + esc(p.label) + " (" + esc(p.from) + ")</dt><dd>" + esc(p.text) + "</dd>").join("") + "</dl></details>" : "") +
+      (others ? '<details class="ln-others"><summary>Other notes on this layer</summary><dl>' + others.parts.map((p) => "<dt>" + esc(p.label) + " (" + esc(p.from) + ")</dt><dd>" + esc(p.text) + "</dd>").join("") + "</dl>" +
+        '<p class="ops-line ln-by">' + esc(others.by.map((b) => b.text).join(" · ")) + "</p></details>" : "") +
       '<form id="ln-form" class="ln-form">' + N.FIELDS.map(([k, label, hint]) => '<label class="ln-field"><span><b>' + esc(label) + "</b> <small>" + esc(hint) + "</small></span>" +
         '<textarea name="' + k + '" rows="' + (k === "notes" ? 4 : 2) + '" maxlength="' + N.MAX[k] + '">' + esc(n[k] || "") + "</textarea></label>").join("") +
       '<p class="ln-actions"><button type="submit" class="primary">Save note</button>' + (r.note ? ' <button type="button" class="link" id="ln-clear">Remove this note</button>' : "") + "</p>" +
-      '<p class="msg" id="ln-msg" role="status">' + (r.note?.updated_at ? "Last saved " + esc(day(r.note.updated_at) || "") : "") + "</p></form>";
+      '<p class="msg" id="ln-msg" role="status">' + (r.note ? esc(N.byline(r.note, me)?.text || "") : "") + "</p></form>";
   }
 
   function draw() {
@@ -70,7 +67,7 @@
         org_id: scope.org_id || null, farm_id: scope.farm_id || null }).select("*").single();
       if (res.error || !res.data) throw res.error || Error("That change wasn't allowed.");
       data.notes = [...data.notes.filter((x) => x.id !== res.data.id), res.data];
-      draw(); $("#ln-msg").textContent = "Saved.";
+      draw(); $("#ln-msg").textContent = "Saved. " + (N.byline(res.data, FP.ops.user()?.id)?.text || "");
     } catch (e) { msg.textContent = "Couldn't save: " + (e.message || e); form.querySelector("button[type=submit]").disabled = false; }
   }
   async function clear() {
@@ -96,13 +93,16 @@
   }
 
   async function open() {
-    const current = ++token, box = $("#ops-panels");
+    const current = ++token, box = $("#ops-panels"), staff = FP.ops.isStaff();
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     FP.show("screen-ops");
-    document.title = "Layers | " + FP.brand?.product;
-    $("#ops-title").textContent = "Layers";
+    // RCL staff reach this from Operations and go back to it; everyone else reaches it from a farm's header (LN2).
+    const title = staff ? "Layers" : "Layer notes";
+    document.title = title + " | " + FP.brand?.product;
+    $("#ops-title").textContent = title;
     $("#ops-back").setAttribute("href", FP.href(""));
     const tab = $("#ops-tab"); tab.textContent = "Operations"; tab.setAttribute("href", FP.href("#/ops"));
+    $("#ops-tab-wrap")?.toggleAttribute("hidden", !staff);
     box.innerHTML = '<p class="ops-wait">Reading the layers and their notes…</p>';
     try {
       const user = FP.ops.user();
@@ -113,17 +113,21 @@
         optional(sb.from("org_members").select("org_id,role").eq("user_id", user?.id)),
         optional(sb.from("farm_members").select("farm_id,role").eq("user_id", user?.id)),
       ]);
-      const orgIds = orgRoles.filter((m) => ["facilitator", "advisor", "admin"].includes(m.role)).map((m) => m.org_id);
-      const farmIds = farmRoles.filter((m) => ["edit", "admin", "owner"].includes(m.role)).map((m) => m.farm_id);
+      const orgIds = orgRoles.filter((m) => N.ORG_WRITERS.includes(m.role)).map((m) => m.org_id);
+      const farmIds = farmRoles.filter((m) => N.FARM_WRITERS.includes(m.role)).map((m) => m.farm_id);
       const [orgs, farms] = await Promise.all([
         orgIds.length ? optional(sb.from("organisations").select("id,name").in("id", orgIds)) : [],
         farmIds.length ? optional(sb.from("farms").select("id,name").in("id", farmIds)) : [],
       ]);
       if (current !== token) return;
       const orgName = new Map(orgs.map((o) => [o.id, o.name]));
-      data = { sources, notes, orgs, farms: [...farms].sort((a, b) => String(a.name).localeCompare(String(b.name))),
+      const roleOf = (list, key, id) => list.find((m) => m[key] === id)?.role;
+      data = { sources, notes, roles: { staff, orgs: orgs.map((o) => ({ ...o, role: roleOf(orgRoles, "org_id", o.id) })), farms: farms.map((f) => ({ ...f, role: roleOf(farmRoles, "farm_id", f.id) })) },
         layers: layers.map((l) => ({ ...l, owner_name: l.org_id ? orgName.get(l.org_id) || "Organisation layer" : "Farm layer" })) };
-      if (!scopes(data).some((o) => o.value === scopeValue(scope))) scope = { scope: "global" };
+      const offered = scopes(data);
+      // Someone who may write no note (a viewer, a group member) is offered no editor: the page says so and stops.
+      if (!offered.length) { box.innerHTML = '<section class="answer-panel answer-compact ops-panel" data-ops="layers" data-offered="none"><h2>Layer notes</h2><p class="answer-sentence" id="ln-none">Only a farm\'s editors and a group\'s advisors write layer notes.</p><p class="ops-line">You can read the advisor notes on a layer in its info panel on the map; there is nothing for you to write here.</p></section>'; return; }
+      if (!offered.some((o) => o.value === scopeValue(scope))) scope = offered[0].scope;
       box.innerHTML = shell(data);
       draw();
       $("#ln-scope").addEventListener("change", (e) => { scope = scopes(data).find((o) => o.value === e.target.value)?.scope || { scope: "global" }; selected = null; draw(); });

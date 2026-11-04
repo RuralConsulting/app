@@ -56,10 +56,10 @@
     if (!maps) throw Error("This farm isn't shared with your login.");
     const farmed = M.farmedAreaLayer(holding);
     if (farmed) maps.layers = [...(maps.layers || []), farmed];
-    maps.layer_notes = notes;
+    maps.layer_notes = notes; maps.viewer = user.id;   // the notes, and who is reading them (a note says "you" for its own writer)
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
-    return { farm, user, role: member.role, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
+    return { farm, user, role: member.role, orgRole: org?.role || null, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
       obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error, checks, records };
   }
   // The light portfolio read (0038): one caller-scoped row per farm, in one request. A farm's full record is
@@ -107,7 +107,7 @@
     h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1>' +
       '<button type="button" id="account-open" class="account-open" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account and people"><span id="account-initials" aria-hidden="true"></span></button>' +
       '<div id="account-menu" class="account-menu"><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
-      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-ops" class="link ops-link" hidden>Operations</a></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div></div>' +
+      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-layers" class="link" hidden>Layer notes</a><a id="space-ops" class="link ops-link" hidden>Operations</a></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div></div>' +
       '<nav id="farm-actions" aria-label="Farm"></nav>';
     document.body.prepend(h);
     reserveHeader = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
@@ -346,6 +346,9 @@
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
     const people = $("#space-people");
     people.hidden = !M.canManage(context.role); people.href = FP.href(M.href(farm.id, "people"));
+    // Layer notes (LN2): offered to the farm's editors and to the advisors of the organisation that services it, never to a viewer.
+    const layerNotes = $("#space-layers");
+    layerNotes.hidden = !FP.layerNotes?.offersNotes({ farmRole: context.role, orgRole: context.orgRole }); layerNotes.href = FP.href("#/layers");
     if (route.view === "people") people.setAttribute("aria-current", "page"); else people.removeAttribute("aria-current");
     $("#account-open").toggleAttribute("data-current", route.view === "people");
   }

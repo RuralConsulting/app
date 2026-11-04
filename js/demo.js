@@ -40,6 +40,7 @@
     let suffix = path.slice("#/demo".length), farm = FARM;
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
+    if (suffix === "/layers") return "#/layers";                  // Layer notes (LN2): the same screen for advisors and farm editors
     if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
     if (suffix === "/ops/layers" && !multi) return "#/ops/layers";   // and its Layers page (advisor notes)
     if (suffix === "/blocks" && !multi) return "#/blocks" + (query ? "?" + query : "");   // the block gallery
@@ -56,6 +57,7 @@
   }
   function href(hash, sparse = false, farmer = false, multi = false) {
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
+    if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
     if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
