@@ -141,5 +141,48 @@
     return { title: "AI recipes", answer, empty: "No how-to recipes are recorded yet.", items, canDecide: !!canDecide };
   }
 
-  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl };
+  // Group data completeness (DQ1): what a group load set aside rather than guess, from public.group_load_gaps(). One entry
+  // per group the viewer may see; `detail` false (a group member who is not an admin) means counts only, no list.
+  const GAP_KINDS = ["fep_unmatched", "fep_not_in_register", "paddock_held", "member_no_extent"];
+  const gapWords = {
+    fep_unmatched: { one: "FEP file not linked to a member", many: "FEP files not linked to a member", tail: "set aside, not guessed",
+      resolve: "Put the member number in the file name the way the group's load reads it, then re-run the group load." },
+    fep_not_in_register: { one: "FEP file names a member number that is not in the register", many: "FEP files name a member number that is not in the register", tail: "set aside, not guessed",
+      resolve: "Add the member to the register (the members layer or a FarmData folder), or correct the number in the file name; then re-run the group load." },
+    paddock_held: { one: "paddock held back from the map", many: "paddocks held back from the map", tail: "no member id or a placeholder id, not guessed",
+      resolve: "Give each paddock its member's id in the paddock layer, then re-run the group load." },
+    member_no_extent: { one: "member with no map extent", many: "members with no map extent", tail: "on the register, but no block to show",
+      resolve: "Add the member's block to the members layer, then re-run the group load." },
+  };
+  const kindWord = { fep_unmatched: "FEP file not linked", fep_not_in_register: "FEP file, number not in the register", paddock_held: "Paddocks held back", member_no_extent: "No map extent" };
+  const gapCount = (kind, n) => (n === 1 ? "one " : num(n) + " ") + (n === 1 ? gapWords[kind].one : gapWords[kind].many);
+  const gapLine = (kind, n) => { const c = gapCount(kind, n); return { kind, items: n, text: c[0].toUpperCase() + c.slice(1) + " — " + gapWords[kind].tail, resolve: gapWords[kind].resolve }; };
+  // One row of the list: a member on the register (its number and name as the group's register holds them), an id the
+  // source gave that is not a member, or no id at all. Never a member the load did not name itself.
+  function gapItem(i) {
+    const n = Number(i.items) || 0, id = typeof i.external_id === "string" ? i.external_id : null;
+    const who = i.business_name ? "Member " + i.member_number + ", " + i.business_name : id ? "Id " + id + ", not a member on the register" : "No member id";
+    return { kind: i.kind, who, byMember: !!(i.business_name || id), what: kindWord[i.kind], reason: i.reason || "", items: n,
+      count: i.kind === "paddock_held" ? num(n) + (n === 1 ? " paddock" : " paddocks") : i.kind.startsWith("fep_") ? num(n) + (n === 1 ? " file" : " files") : null,
+      files: i.kind === "paddock_held" || i.kind === "member_no_extent" ? [] : (Array.isArray(i.files) ? i.files : []).filter((f) => typeof f === "string"),
+      source: i.kind === "paddock_held" || i.kind === "member_no_extent" ? (Array.isArray(i.files) && typeof i.files[0] === "string" ? i.files[0] : null) : null,
+      resolve: gapWords[i.kind].resolve };
+  }
+  function loadGaps(rows) {
+    const groups = (Array.isArray(rows) ? rows : []).filter((g) => g && typeof g === "object").map((g) => {
+      const counts = g.counts && typeof g.counts === "object" ? g.counts : {};
+      const lines = GAP_KINDS.filter((k) => Number(counts[k]) > 0).map((k) => gapLine(k, Number(counts[k])));
+      const items = g.detail && Array.isArray(g.items) ? g.items.filter((i) => i && gapWords[i.kind]).map(gapItem) : [];
+      return { id: g.group_id, name: g.group_name || "Group", detail: !!g.detail, checked: day(g.checked_at), lines, total: lines.reduce((n, l) => n + l.items, 0),
+        members: items.filter((i) => i.byMember), unlinked: items.filter((i) => !i.byMember) };
+    });
+    const open = groups.filter((g) => g.total), first = open[0];
+    const answer = !groups.length ? null : open.length
+      ? { text: (open.length === 1 ? first.name + ": " + num(first.total) + (first.total === 1 ? " item" : " items") : open.length + " groups have items") + " set aside by the last group load",
+        because: first.lines.map((l) => gapCount(l.kind, l.items)).join(", ") + (first.checked ? "; load of " + first.checked : "") }
+      : { text: "Every group load placed everything", because: "nothing is set aside" };
+    return { title: "Group data completeness", answer, empty: "No group load is recorded yet.", groups };
+  }
+
+  return { REPO, links, day, time, jobs, references, build, recipes, needsAttention, runUrl, loadGaps };
 });

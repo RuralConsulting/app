@@ -490,6 +490,21 @@
         "what_it_is": null, "useful_for": "The setback for winter grazing is measured from these lines (synthetic).",
         "caveats": "The drain runs dry in summer; it still counts as a drain for the setback (synthetic).", "show_to_group": null, "notes": "Walked in spring 2026 (synthetic).", "updated_at": "2026-11-02T09:20:00+13:00" }
     ],
+    "load_gaps": [
+      {
+        "group_id": "de000000-0000-4000-8000-0000000000c1", "group_name": "Example catchment group (synthetic)", "detail": true,
+        "checked_at": "2026-11-01T08:30:00Z",
+        "counts": { "fep_unmatched": 3, "fep_not_in_register": 1, "paddock_held": 214, "member_no_extent": 2 },
+        "items": [
+          { "kind": "fep_not_in_register", "member_number": null, "business_name": null, "external_id": "99", "reason": "member number is not in the register", "items": 1, "files": ["HDLG_99 Final 2021 (synthetic).xlsm"] },
+          { "kind": "fep_unmatched", "member_number": null, "business_name": null, "external_id": null, "reason": "no member number in the file name", "items": 3, "files": ["Invented Downs farm plan.xlsm", "Invented Flat FEP 2020.pdf", "Invented Hills FEP final.xlsm"] },
+          { "kind": "member_no_extent", "member_number": "7", "business_name": "Golf Invented Ltd", "external_id": "7", "reason": "FarmData folder only, not in the members layer", "items": 1, "files": ["HDLG Members (synthetic).gpkg"] },
+          { "kind": "member_no_extent", "member_number": "8", "business_name": "Hotel Invented Ltd", "external_id": "8", "reason": "FarmData folder only, not in the members layer", "items": 1, "files": ["HDLG Members (synthetic).gpkg"] },
+          { "kind": "paddock_held", "member_number": null, "business_name": null, "external_id": null, "reason": "no member id", "items": 201, "files": ["Paddock master (synthetic).gpkg"] },
+          { "kind": "paddock_held", "member_number": null, "business_name": null, "external_id": "999", "reason": "placeholder member id", "items": 13, "files": ["Paddock master (synthetic).gpkg"] }
+        ]
+      }
+    ],
     "build": {
       "version": "202610291405-3f9a2c1"
     }

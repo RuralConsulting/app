@@ -113,7 +113,7 @@
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
       farm_parcels: [], farm_boundaries: [],
-    }, build: f.ops.build, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
+    }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
@@ -437,6 +437,8 @@
           const from = args.from_time ? Date.parse(args.from_time) : -Infinity, to = args.to_time ? Date.parse(args.to_time) : Infinity;
           return result((wqOf(d).series[args.site + "|" + args.parameter_key] || []).filter((r) => Date.parse(r.sampled_at) >= from && Date.parse(r.sampled_at) < to));
         }
+        // DQ1, as public.group_load_gaps: the invented group's gaps for staff (the demo's advisor); a farmer is in no group.
+        if (name === "group_load_gaps") return result(d.tables.profiles[0]?.is_staff ? (d.loadGaps || []).filter((g) => !args?.group_id || g.group_id === args.group_id) : []);
         return error("This operation is not available in the demo");
       },
       // The demo never sends invitations or saves changes; Ask answers from the fixture, the way the Ask function replies.

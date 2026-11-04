@@ -1,5 +1,5 @@
-// The Operations page (#/ops), for RCL staff only: the data jobs, the reference sources, the AI's how-to recipes and the
-// build, on one screen. The one thing it changes is a recipe's status (Approve / Retire, a platform advisor's, confirmed
+// The Operations page (#/ops), for RCL staff only: the data jobs, the reference sources, what each group load set aside
+// (DQ1), the AI's how-to recipes and the build, on one screen. The one thing it changes is a recipe's status (Approve / Retire, a platform advisor's, confirmed
 // first; AI1); everything else is read only, and "Run workflow" is a link to GitHub. Row-level security on the ops views
 // and on ai_recipes is the real gate; hiding the link for everyone else is a courtesy.
 (function () {
@@ -56,6 +56,38 @@
     return '<section class="answer-panel answer-compact ops-panel" data-ops="build"><h2>Build</h2><p class="answer-sentence">' + esc(b.answer.text) + " — " + esc(b.answer.because) + "</p>" +
       '<ul class="ops-linklist">' + b.links.map(([label, href]) => "<li>" + ext(href, label) + "</li>").join("") +
       (b.commitUrl ? "<li>" + ext(b.commitUrl, "This version's commit") + "</li>" : "") + "</ul></section>";
+  }
+
+  // Group data completeness (DQ1): per group, a line per kind with what would resolve it, then (group admins and staff) the
+  // list by member and the items no id ties to anyone. Nothing here links anything: it shows what the load set aside.
+  function gapItem(i) {
+    return '<li class="ops-job" data-gap-item="' + esc(i.kind) + '"><div class="ops-job-head"><b>' + esc(i.who) + '</b><span class="ops-badge">' + esc(i.what) + "</span></div>" +
+      '<p class="ops-line">' + [i.reason, i.count, i.source].filter(Boolean).map(esc).join(" · ") + "</p>" +
+      (i.files.length ? '<details class="ops-steps"><summary>' + (i.files.length === 1 ? "The file" : "The files (" + i.files.length + ")") + '</summary><ul class="ops-list">' +
+        i.files.map((f) => '<li class="ops-line">' + esc(f) + "</li>").join("") + "</ul></details>" : "") + "</li>";
+  }
+  function gapGroup(g) {
+    const list = (title, items) => items.length ? '<details class="answer-all"><summary>' + esc(title) + " (" + items.length + ')</summary><ul class="ops-list">' + items.map(gapItem).join("") + "</ul></details>" : "";
+    return '<section class="ops-group" data-gap-group="' + esc(g.id) + '"><h3>' + esc(g.name) + (g.checked ? " · load of " + esc(g.checked) : "") + "</h3>" +
+      (g.lines.length ? '<ul class="ops-list ops-promoted">' + g.lines.map((l) => '<li class="ops-job" data-gap="' + esc(l.kind) + '"><div class="ops-job-head"><b>' + esc(l.text) + "</b></div>" +
+        '<p class="ops-line">To resolve: ' + esc(l.resolve) + "</p></li>").join("") + "</ul>" : '<p class="ops-line">The last load set nothing aside.</p>') +
+      (g.detail ? list("By member", g.members) + list("Not tied to any member", g.unlinked)
+        : g.lines.length ? '<p class="ops-line">Counts only: the group\'s admins see which members and files.</p>' : "") + "</section>";
+  }
+  function gapsPanel(v) {
+    if (!v) return '<section class="answer-panel answer-compact ops-panel" data-ops="gaps"><h2>Group data completeness</h2><p class="answer-sentence" role="alert">Couldn\'t read the group load gaps.</p></section>';
+    const sentence = v.answer ? v.answer.text + " — " + v.answer.because : v.empty;
+    return '<section class="answer-panel answer-compact ops-panel" data-ops="gaps" data-answer-state="' + (v.answer ? "recorded" : "empty") + '"><h2>' + esc(v.title) +
+      '</h2><p class="answer-sentence">' + esc(sentence) + "</p>" + v.groups.map(gapGroup).join("") + "</section>";
+  }
+  // The hook for the group's own space (S5): the same panel for one group, read as the signed-in person (the database decides
+  // detail for the group's admins, counts for its other members, nothing for anyone else). Returns the view, or null.
+  async function groupGaps(el, groupId) {
+    let v = null;
+    try { v = M.loadGaps(await read(sb.rpc("group_load_gaps", { group_id: groupId || null }))); } catch { v = null; }
+    if (!el) return v;
+    el.innerHTML = v && !v.groups.length ? "" : gapsPanel(v);
+    return v;
   }
 
   // AI recipes (AI1): every version, newest first under its key; Approve / Retire for a platform advisor only.
@@ -126,18 +158,20 @@
     box.innerHTML = '<p class="ops-wait">Reading the job records…</p>';
     wire(box);
     try {
-      const [jobRows, refRows, v, recipeRows] = await Promise.all([
+      const [jobRows, refRows, v, recipeRows, gapRows] = await Promise.all([
         read(sb.from("ops_job_status").select("*").order("job_key")),
         read(sb.from("ops_reference_status").select("*").order("name")), version(),
-        // The recipes panel fails on its own: the rest of the page still shows.
-        read(sb.from("ai_recipes").select(RECIPE_COLUMNS).order("key")).catch(() => null)]);
+        // The recipes and group-gaps panels fail on their own: the rest of the page still shows.
+        read(sb.from("ai_recipes").select(RECIPE_COLUMNS).order("key")).catch(() => null),
+        Promise.resolve().then(() => read(sb.rpc("group_load_gaps", { group_id: null }))).catch(() => null)]);
       if (current !== token) return;
-      box.innerHTML = jobsPanel(M.jobs(jobRows)) + referencesPanel(M.references(refRows)) + recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + buildPanel(M.build(v));
+      box.innerHTML = jobsPanel(M.jobs(jobRows)) + referencesPanel(M.references(refRows)) + gapsPanel(gapRows ? M.loadGaps(gapRows) : null) +
+        recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + buildPanel(M.build(v));
     } catch (e) {
       if (current === token) box.innerHTML = '<p class="msg" role="alert">Couldn\'t read the job records: ' + esc(e.message || e) + "</p>";
     }
   }
   function close() { token++; }
 
-  FP.ops = { checkStaff, isStaff: () => staff, user: () => me, open, close, decide, render: { jobsPanel, referencesPanel, recipesPanel, buildPanel } };
+  FP.ops = { checkStaff, isStaff: () => staff, user: () => me, open, close, decide, groupGaps, render: { jobsPanel, referencesPanel, gapsPanel, recipesPanel, buildPanel } };
 })();
