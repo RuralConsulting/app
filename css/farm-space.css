@@ -108,6 +108,13 @@ body.farm-space-active:not(.farm-detail) { --peek-height: 82px; }
 .ask-confirm button { min-height: 40px; }
 .ask-confirm-msg:not(:empty) { font-size: var(--text-small); color: var(--ink-2); }
 .ask-note { margin: 10px 0 0; color: var(--ink-3); font-size: var(--text-small); }
+/* Where the farm drains (H1f): the nearest downstream monitoring site and LAWA's published state, from code, with its author. */
+.ask-drains { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule); font-size: var(--text-small); line-height: 1.4; overflow-wrap: anywhere; }
+.ask-drains h3 { margin: 0 0 4px; color: var(--ink-3); font: 600 var(--text-small) var(--f-ui); }
+.ask-drains p { margin: 0 0 4px; }
+.ask-drains ul { margin: 0 0 6px; padding-left: 18px; }
+.ask-drains-label { color: var(--ink-2); }
+.ask-drains-credit, .ask-drains-author { color: var(--ink-3); }
 .output-list { list-style: none; margin: 0; padding: 0; }
 .output-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule); }
 .output-list li span { font-weight: 600; }

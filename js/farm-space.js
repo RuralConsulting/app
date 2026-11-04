@@ -980,6 +980,19 @@
         box.innerHTML = FP.wqAnalysis.html(p, { n, canConfirm: canChange() });
         nodes.push(box);
       });
+      // Where the farm drains (H1f): the nearest downstream monitoring site and what LAWA publishes for it, from the function's
+      // code (not the model's words), with the context module that assembled it.
+      const dr = FP.ask.drainsLines(result.drains_to);
+      if (dr) {
+        const part = (title, items) => (items.length ? [el("p", { class: "ask-drains-label" }, title), el("ul", {}, ...items.map((t) => el("li", {}, t)))] : []);
+        nodes.push(el("section", { class: "ask-drains", "aria-label": dr.title }, el("h3", {}, dr.title),
+          ...(dr.site ? [el("p", { class: "ask-drains-site" }, el("strong", {}, dr.site)), el("p", { class: "ask-drains-where" }, dr.where)] : [el("p", { class: "ask-drains-site" }, dr.message)]),
+          ...(dr.lawa_message ? [el("p", { class: "ask-drains-lawa" }, dr.lawa_message)] : []),
+          ...part("LAWA's latest state (LAWA's own NPS-FM attribute band labels, as published)", dr.state),
+          ...part("LAWA's trend", dr.trend),
+          ...(dr.credit ? [el("p", { class: "ask-drains-credit" }, dr.credit)] : []),
+          el("p", { class: "ask-drains-author" }, dr.author)));
+      }
       for (const note of result.notes) nodes.push(el("p", { class: "ask-note" }, note));
     }
     box.replaceChildren(...nodes);
