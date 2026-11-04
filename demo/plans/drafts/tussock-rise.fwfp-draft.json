@@ -1,0 +1,8236 @@
+{
+ "schema": "plan-draft/1",
+ "status": "draft",
+ "gaps": [
+  {
+   "node": "nz.admin.operator",
+   "title": "Farm operator",
+   "kind": "empty_in_fep",
+   "reason": "partly answered by the FEP",
+   "required": true,
+   "fields": [
+    "contact_phone",
+    "contact_email"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.admin.other_parties",
+   "title": "Other owners, leaseholders and licence holders",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "nz.admin.reliance",
+   "title": "Other rules this plan is used to meet",
+   "kind": "new_in_fwfp",
+   "reason": "the other rules and requirements the FWFP is used to meet: the FEP does not record them",
+   "required": false,
+   "fields": [
+    "requirement",
+    "instrument"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.land_units.vulnerability",
+   "title": "Inherent vulnerabilities",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": true,
+   "fields": [
+    "waterlogging",
+    "p_sediment_runoff",
+    "n_leaching",
+    "structural",
+    "erosion"
+   ],
+   "instances": [
+    "LU1",
+    "LU2",
+    "LU3",
+    "LU4"
+   ],
+   "prior_assessment": [
+    {
+     "instance": "LU1",
+     "value": "Low",
+     "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU1",
+     "value": "High",
+     "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU1",
+     "value": "Very low",
+     "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU1",
+     "value": "Moderate to high",
+     "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU1",
+     "value": "Low",
+     "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU2",
+     "value": "Low",
+     "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU2",
+     "value": "Low to moderate",
+     "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU2",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU2",
+     "value": "High",
+     "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU2",
+     "value": "High",
+     "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU3",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU3",
+     "value": "Very high",
+     "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU3",
+     "value": "Low",
+     "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU3",
+     "value": "Low",
+     "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU3",
+     "value": "Very low",
+     "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU4",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU4",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU4",
+     "value": "High",
+     "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU4",
+     "value": "Not stated",
+     "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "LU4",
+     "value": "Very high",
+     "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    }
+   ]
+  },
+  {
+   "node": "nz.catchment.context",
+   "title": "The catchment and its water",
+   "kind": "new_in_fwfp",
+   "reason": "the catchment and its water, in the FWFP's terms: the FEP's catchment text is a hint",
+   "required": true,
+   "fields": [
+    "council_info_available",
+    "catchment_name",
+    "summary"
+   ],
+   "instances": [],
+   "hint_from": {
+    "catchment_name": [
+     {
+      "value": "Example Plains lowland streams",
+      "from": {
+       "node": "cant.s7.catchment.context",
+       "instance": null,
+       "field": "fmu"
+      }
+     }
+    ],
+    "receiving_environment": [
+     {
+      "value": "The lowland streams and the coastal lagoon they feed.",
+      "from": {
+       "node": "cant.s7.catchment.context",
+       "instance": null,
+       "field": "receptor"
+      }
+     }
+    ],
+    "summary": [
+     {
+      "value": "Nitrate leaching to groundwater and the spring-fed streams; sediment, phosphorus and E. coli from winter grazing near waterways.",
+      "from": {
+       "node": "cant.s7.catchment.context",
+       "instance": null,
+       "field": "contaminants"
+      }
+     },
+     {
+      "value": "Spring-fed lowland streams draining the Example Plains to a coastal lagoon. Most of the catchment is irrigated sheep, beef and dairy support land.",
+      "from": {
+       "node": "cant.s7.catchment.context",
+       "instance": null,
+       "field": "fmu_overview"
+      }
+     }
+    ]
+   },
+   "ai": [
+    "receiving_environment",
+    "summary"
+   ]
+  },
+  {
+   "node": "nz.catchment.tangata_whenua",
+   "title": "Tangata whenua values",
+   "kind": "new_in_fwfp",
+   "reason": "tangata whenua values: the FEP's catchment text and iwi plan extract are hints",
+   "required": true,
+   "fields": [
+    "values"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.catchment.plan_provisions",
+   "title": "Plan objectives and limits that apply",
+   "kind": "new_in_fwfp",
+   "reason": "plan objectives and limits that apply: the FEP's objectives text is a hint",
+   "required": true,
+   "fields": [
+    "provisions"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.catchment.regard",
+   "title": "How this plan responds",
+   "kind": "new_in_fwfp",
+   "reason": "how the plan responds to the catchment context: new in the FWFP",
+   "required": true,
+   "fields": [
+    "response"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.risk.activity",
+   "title": "Activity and its risks",
+   "kind": "new_in_fwfp",
+   "reason": "each activity and its risks: the FEP assesses risks by land unit and area, not by activity",
+   "required": true,
+   "fields": [
+    "management_area",
+    "activities",
+    "description",
+    "risks"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.risk.significance",
+   "title": "Significance of each risk by land unit",
+   "kind": "empty_in_fep",
+   "reason": "partly answered by the FEP",
+   "required": true,
+   "fields": [
+    "significance"
+   ],
+   "instances": [
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+    "r6",
+    "r7",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15",
+    "r16",
+    "r17",
+    "r18",
+    "r19",
+    "r20",
+    "r21",
+    "r22",
+    "r23",
+    "r24",
+    "r25",
+    "r26",
+    "r27",
+    "r28",
+    "r29",
+    "r30",
+    "r31",
+    "r32",
+    "r33",
+    "r34",
+    "r35",
+    "r36",
+    "r37",
+    "r38",
+    "r39",
+    "r40",
+    "r41",
+    "r42",
+    "r43",
+    "r44",
+    "r45",
+    "r46",
+    "r47",
+    "r48"
+   ],
+   "prior_assessment": [
+    {
+     "instance": "r1",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r10",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r11",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r12",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r13",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r14",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r15",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r16",
+     "value": "Major",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r17",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r18",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r19",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r2",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r20",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r21",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r22",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r23",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r24",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r25",
+     "value": "Major",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r26",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r27",
+     "value": "Major",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r28",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r29",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r3",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r30",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r31",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r32",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r33",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r34",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r35",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r36",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r37",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r38",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r39",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r4",
+     "value": "Major",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r40",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r41",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r42",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r43",
+     "value": "Major",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r44",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r45",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r46",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r47",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r48",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r5",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r6",
+     "value": "Moderate",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r7",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r8",
+     "value": "Not applicable",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    },
+    {
+     "instance": "r9",
+     "value": "Minor",
+     "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+     "assessed_by": "Sam Fixture",
+     "assessed_on": "2026-10-30"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.method",
+   "title": "How risks were assessed",
+   "kind": "new_in_fwfp",
+   "reason": "how the risks were assessed: the FEP does not record its method",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "nz.actions.table",
+   "title": "Action table",
+   "kind": "empty_in_fep",
+   "reason": "partly answered by the FEP",
+   "required": true,
+   "fields": [
+    "activity",
+    "risk_addressed"
+   ],
+   "instances": [
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+    "r6",
+    "r7",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14"
+   ]
+  },
+  {
+   "node": "nz.map.vulnerabilities",
+   "title": "Map: farm, land units and inherent vulnerabilities",
+   "kind": "empty_in_fep",
+   "reason": "partly answered by the FEP",
+   "required": true,
+   "fields": [
+    "artificial_water",
+    "soils",
+    "landform_slope",
+    "iwg_areas",
+    "drainage",
+    "irrigation_frost"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.map.farming_features",
+   "title": "Map: farming features",
+   "kind": "new_in_fwfp",
+   "reason": "a map of farming features (fencing, planting, erosion works, effluent): new in the FWFP",
+   "required": true,
+   "fields": [
+    "stock_exclusion_fencing",
+    "riparian_planting",
+    "erosion_works",
+    "effluent",
+    "water_takes",
+    "crossings",
+    "stockholding",
+    "stock_infrastructure",
+    "accessways",
+    "point_sources",
+    "drinking_water"
+   ],
+   "instances": []
+  },
+  {
+   "node": "nz.map.catchment",
+   "title": "Map: catchment information",
+   "kind": "new_in_fwfp",
+   "reason": "a map of catchment information: new in the FWFP",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "nz.map.actions",
+   "title": "Map: new physical works",
+   "kind": "new_in_fwfp",
+   "reason": "a map of new physical works: new in the FWFP",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "nz.records.certification",
+   "title": "Certification",
+   "kind": "new_in_fwfp",
+   "reason": "the FWFP's certification: a new act by a certifier, never carried from the FEP",
+   "required": true,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "nz.records.audit",
+   "title": "Audits",
+   "kind": "new_in_fwfp",
+   "reason": "FWFP audits: none before the FWFP exists",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "nz.records.evidence",
+   "title": "Evidence of actions done",
+   "kind": "new_in_fwfp",
+   "reason": "evidence of FWFP actions done: kept from the FWFP on",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "cant.catchment.zone",
+   "title": "Water zone and regional plans",
+   "kind": "new_in_fwfp",
+   "reason": "the water zone, regional plans and nutrient zone: new in the FWFP",
+   "required": true,
+   "fields": [
+    "zone",
+    "regional_plans"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.catchment.zone_outcomes",
+   "title": "Zone committee outcomes",
+   "kind": "new_in_fwfp",
+   "reason": "zone committee outcomes: the FEP's zone outcomes text is a hint",
+   "required": false,
+   "fields": [
+    "outcomes"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.catchment.ngai_tahu",
+   "title": "Ngāi Tahu values",
+   "kind": "new_in_fwfp",
+   "reason": "Ngāi Tahu rūnanga, iwi plan and values: new in the FWFP",
+   "required": false,
+   "fields": [
+    "values"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.catchment.ecan_cccv",
+   "title": "ECan catchment context information",
+   "kind": "new_in_fwfp",
+   "reason": "ECan's published catchment context: new in the FWFP",
+   "required": true,
+   "fields": [
+    "published"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.map.regional_zones",
+   "title": "Map: regional plan zones",
+   "kind": "new_in_fwfp",
+   "reason": "a map of the regional zones: new in the FWFP",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "cant.records.fep_history",
+   "title": "FEP audit history",
+   "kind": "new_in_fwfp",
+   "reason": "fwfp-cant's table of past FEP audits: the FEP's audit history carries into cant.s7.audit.history instead",
+   "required": false,
+   "fields": [
+    "audited_on",
+    "grade"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.effluent.t1",
+   "title": "5D Animal effluent and solid animal waste: Target 1",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": true,
+   "fields": [
+    "applies"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.effluent.t2",
+   "title": "5D Animal effluent and solid animal waste: Target 2",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": true,
+   "fields": [
+    "applies"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.effluent.t3",
+   "title": "5D Animal effluent and solid animal waste: Target 3",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": true,
+   "fields": [
+    "applies"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.effluent.t4",
+   "title": "5D Animal effluent and solid animal waste: Target 4",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": true,
+   "fields": [
+    "applies"
+   ],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.sub.selwyn",
+   "title": "Selwyn Te Waihora",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.sub.hinds",
+   "title": "Hinds/Hekeao Plains",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.sub.waitaki",
+   "title": "Waitaki",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": false,
+   "fields": [],
+   "instances": []
+  },
+  {
+   "node": "cant.s7.sub.hurunui_waiau",
+   "title": "Hurunui and Waiau catchments",
+   "kind": "empty_in_fep",
+   "reason": "mapped from the FEP, but the FEP has no value here",
+   "required": false,
+   "fields": [],
+   "instances": []
+  }
+ ],
+ "farm": {
+  "id": null,
+  "name": "Tussock Rise Farm"
+ },
+ "made_on": "2026-11-05",
+ "from": {
+  "family": "fep-cant-s7",
+  "version": 3,
+  "template_id": null
+ },
+ "to": {
+  "family": "fwfp-cant-s7",
+  "version": 3,
+  "template_id": null,
+  "title": "Freshwater Farm Plan (Canterbury, with Schedule 7)"
+ },
+ "values": [
+  {
+   "node": "nz.admin.operator",
+   "instance": null,
+   "field": "operator_name",
+   "value": "Tussock Rise Farm Ltd",
+   "from": [
+    {
+     "node": "cant.s7.property.owner",
+     "instance": null,
+     "field": "owner_name"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.preparer",
+   "instance": null,
+   "field": "prepared_on",
+   "value": "2026-10-30",
+   "from": [
+    {
+     "node": "cant.s7.plan.meta",
+     "instance": null,
+     "field": "prepared_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.preparer",
+   "instance": null,
+   "field": "preparer_name",
+   "value": "Sam Fixture",
+   "from": [
+    {
+     "node": "cant.s7.plan.meta",
+     "instance": null,
+     "field": "prepared_by"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.address",
+   "instance": null,
+   "field": "physical_address",
+   "value": "100 Example Road, Nowhere Flat, Canterbury 7777",
+   "from": [
+    {
+     "node": "cant.s7.property.address",
+     "instance": null,
+     "field": "physical_address"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.address",
+   "instance": null,
+   "field": "property_name",
+   "value": "Tussock Rise Farm",
+   "from": [
+    {
+     "node": "cant.s7.property.address",
+     "instance": null,
+     "field": "property_name"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r1",
+   "field": "parcel",
+   "value": "Lot 1 DP 99001",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r1",
+     "field": "parcel"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r1",
+   "field": "tenure",
+   "value": "Owned",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r1",
+     "field": "tenure"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r1",
+   "field": "title_ref",
+   "value": "XX99A/101",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r1",
+     "field": "title_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r2",
+   "field": "parcel",
+   "value": "Lot 2 DP 99001",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r2",
+     "field": "parcel"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r2",
+   "field": "tenure",
+   "value": "Owned",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r2",
+     "field": "tenure"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r2",
+   "field": "title_ref",
+   "value": "XX99A/102",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r2",
+     "field": "title_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r3",
+   "field": "parcel",
+   "value": "Lot 3 DP 99002",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r3",
+     "field": "parcel"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r3",
+   "field": "tenure",
+   "value": "Leased",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r3",
+     "field": "tenure"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.titles",
+   "instance": "r3",
+   "field": "title_ref",
+   "value": "XX99B/310",
+   "from": [
+    {
+     "node": "cant.s7.property.legal",
+     "instance": "r3",
+     "field": "title_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.areas",
+   "instance": null,
+   "field": "effective_area_ha",
+   "value": 231.5,
+   "from": [
+    {
+     "node": "cant.s7.property.areas",
+     "instance": null,
+     "field": "effective_area_ha"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.areas",
+   "instance": null,
+   "field": "leased_area_ha",
+   "value": 40,
+   "from": [
+    {
+     "node": "cant.s7.property.areas",
+     "instance": null,
+     "field": "leased_area_ha"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.areas",
+   "instance": null,
+   "field": "total_area_ha",
+   "value": 248,
+   "from": [
+    {
+     "node": "cant.s7.property.areas",
+     "instance": null,
+     "field": "total_area_ha"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.land_use",
+   "instance": null,
+   "field": "land_use",
+   "value": "Sheep (predominantly Romney), beef and dairy grazing",
+   "from": [
+    {
+     "node": "cant.s7.property.areas",
+     "instance": null,
+     "field": "land_use"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.land_use",
+   "instance": null,
+   "field": "stock_summary",
+   "value": "About 2,700 stock units: 480 dairy heifers, 70 beef cattle and 1,100 ewes",
+   "from": [
+    {
+     "node": "cant.s7.property.areas",
+     "instance": null,
+     "field": "stock_summary"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r1",
+   "field": "consent_number",
+   "value": "CRC990001",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r1",
+     "field": "consent_number"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r1",
+   "field": "consent_type",
+   "value": "Water permit",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r1",
+     "field": "consent_type"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r1",
+   "field": "expires_on",
+   "value": "2041-06-30",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r1",
+     "field": "expires_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r1",
+   "field": "purpose",
+   "value": "Take groundwater from one bore to irrigate 118 ha",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r1",
+     "field": "purpose"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r1",
+   "field": "status",
+   "value": "Issued – Active",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r1",
+     "field": "status"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r2",
+   "field": "consent_number",
+   "value": "CRC990002",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r2",
+     "field": "consent_number"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r2",
+   "field": "consent_type",
+   "value": "Land use consent",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r2",
+     "field": "consent_type"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r2",
+   "field": "expires_on",
+   "value": "2034-05-31",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r2",
+     "field": "expires_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r2",
+   "field": "purpose",
+   "value": "Use land for farming (nutrient discharge)",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r2",
+     "field": "purpose"
+    }
+   ]
+  },
+  {
+   "node": "nz.admin.consents",
+   "instance": "r2",
+   "field": "status",
+   "value": "Issued – Active",
+   "from": [
+    {
+     "node": "cant.s7.consents",
+     "instance": "r2",
+     "field": "status"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU1",
+   "field": "area_ha",
+   "value": 82.5,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU1",
+     "field": "area_ha"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU1",
+   "field": "code",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU1",
+     "field": "code"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU1",
+   "field": "description",
+   "value": "Free-draining stony silt loams under centre pivot and lateral irrigation. These soils carry most of the farm's pasture and winter forage production.",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU1",
+     "field": "description"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU1",
+   "field": "irrigated",
+   "value": true,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU1",
+     "field": "irrigated"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU1",
+   "field": "name",
+   "value": "Irrigated Light Soils",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU1",
+     "field": "name"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU1",
+   "field": "soils",
+   "value": "Lismore stony silt loam",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU1",
+     "field": "soils"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU2",
+   "field": "area_ha",
+   "value": 71.0,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU2",
+     "field": "area_ha"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU2",
+   "field": "code",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU2",
+     "field": "code"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU2",
+   "field": "description",
+   "value": "Deeper, slower-draining silt loams under centre pivot and border-dyke irrigation. They pug easily when wet and are used for most of the winter crop.",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU2",
+     "field": "description"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU2",
+   "field": "irrigated",
+   "value": true,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU2",
+     "field": "irrigated"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU2",
+   "field": "name",
+   "value": "Irrigated Heavy Soils",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU2",
+     "field": "name"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU2",
+   "field": "soils",
+   "value": "Waimakariri deep silt loam",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU2",
+     "field": "soils"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU3",
+   "field": "area_ha",
+   "value": 52.0,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU3",
+     "field": "area_ha"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU3",
+   "field": "code",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU3",
+     "field": "code"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU3",
+   "field": "description",
+   "value": "Very stony terraces with no irrigation. Pasture growth depends on spring and autumn rain and the land is mostly grazed by cattle.",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU3",
+     "field": "description"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU3",
+   "field": "irrigated",
+   "value": false,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU3",
+     "field": "irrigated"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU3",
+   "field": "name",
+   "value": "Dryland River Terraces",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU3",
+     "field": "name"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU3",
+   "field": "soils",
+   "value": "Eyre very stony sandy loam",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU3",
+     "field": "soils"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU4",
+   "field": "area_ha",
+   "value": 26.0,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU4",
+     "field": "area_ha"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU4",
+   "field": "code",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU4",
+     "field": "code"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU4",
+   "field": "description",
+   "value": "Flat leased land along the south-east boundary beside the creek. It is poorly drained and is grazed seasonally under a lease.",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU4",
+     "field": "description"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU4",
+   "field": "irrigated",
+   "value": false,
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU4",
+     "field": "irrigated"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU4",
+   "field": "name",
+   "value": "Leased Creek Flats",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU4",
+     "field": "name"
+    }
+   ]
+  },
+  {
+   "node": "nz.land_units.unit",
+   "instance": "LU4",
+   "field": "soils",
+   "value": "Temuka silt loam",
+   "from": [
+    {
+     "node": "cant.s7.lmu.unit",
+     "instance": "LU4",
+     "field": "soils"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r1",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r1",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r1",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r1",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r1",
+   "field": "risk_label",
+   "value": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r1",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r10",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r10",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r10",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r10",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r10",
+   "field": "risk_label",
+   "value": "Pugging and compaction – reduced infiltration and increased runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r10",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r11",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r11",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r11",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r11",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r11",
+   "field": "risk_label",
+   "value": "Pugging and compaction – reduced infiltration and increased runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r11",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r12",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r12",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r12",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r12",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r12",
+   "field": "risk_label",
+   "value": "Pugging and compaction – reduced infiltration and increased runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r12",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r13",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r13",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r13",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r13",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r13",
+   "field": "not_applicable_reason",
+   "value": "Stock access to waterways does not happen on LU1.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r13",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r13",
+   "field": "risk_label",
+   "value": "Stock access to waterways – direct deposition of dung, urine and sediment",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r13",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r14",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r14",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r14",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r14",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r14",
+   "field": "not_applicable_reason",
+   "value": "Stock access to waterways does not happen on LU2.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r14",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r14",
+   "field": "risk_label",
+   "value": "Stock access to waterways – direct deposition of dung, urine and sediment",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r14",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r15",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r15",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r15",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r15",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r15",
+   "field": "not_applicable_reason",
+   "value": "Stock access to waterways does not happen on LU3.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r15",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r15",
+   "field": "risk_label",
+   "value": "Stock access to waterways – direct deposition of dung, urine and sediment",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r15",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r16",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r16",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r16",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r16",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r16",
+   "field": "risk_label",
+   "value": "Stock access to waterways – direct deposition of dung, urine and sediment",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r16",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r17",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r17",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r17",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r17",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r17",
+   "field": "risk_label",
+   "value": "Stock crossings – sediment and microbes disturbed at crossing points",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r17",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r18",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r18",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r18",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r18",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r18",
+   "field": "risk_label",
+   "value": "Stock crossings – sediment and microbes disturbed at crossing points",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r18",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r19",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r19",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r19",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r19",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r19",
+   "field": "risk_label",
+   "value": "Stock crossings – sediment and microbes disturbed at crossing points",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r19",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r2",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r2",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r2",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r2",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r2",
+   "field": "risk_label",
+   "value": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r2",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r20",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r20",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r20",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r20",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r20",
+   "field": "risk_label",
+   "value": "Stock crossings – sediment and microbes disturbed at crossing points",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r20",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r21",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r21",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r21",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r21",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r21",
+   "field": "risk_label",
+   "value": "Riparian margin condition – loss of shading and of filtering of runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r21",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r22",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r22",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r22",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r22",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r22",
+   "field": "risk_label",
+   "value": "Riparian margin condition – loss of shading and of filtering of runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r22",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r23",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r23",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r23",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r23",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r23",
+   "field": "risk_label",
+   "value": "Riparian margin condition – loss of shading and of filtering of runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r23",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r24",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r24",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r24",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r24",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r24",
+   "field": "risk_label",
+   "value": "Riparian margin condition – loss of shading and of filtering of runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r24",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r25",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r25",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r25",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r25",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r25",
+   "field": "risk_label",
+   "value": "Nitrogen fertiliser – nitrate leaching to groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r25",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r26",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r26",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r26",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r26",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r26",
+   "field": "risk_label",
+   "value": "Nitrogen fertiliser – nitrate leaching to groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r26",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r27",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r27",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r27",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r27",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r27",
+   "field": "risk_label",
+   "value": "Nitrogen fertiliser – nitrate leaching to groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r27",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r28",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r28",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r28",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r28",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r28",
+   "field": "risk_label",
+   "value": "Nitrogen fertiliser – nitrate leaching to groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r28",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r29",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r29",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r29",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r29",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r29",
+   "field": "risk_label",
+   "value": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r29",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r3",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r3",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r3",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r3",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r3",
+   "field": "risk_label",
+   "value": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r3",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r30",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r30",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r30",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r30",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r30",
+   "field": "risk_label",
+   "value": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r30",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r31",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r31",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r31",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r31",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r31",
+   "field": "risk_label",
+   "value": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r31",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r32",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r32",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r32",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r32",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r32",
+   "field": "risk_label",
+   "value": "Phosphorus fertiliser – phosphorus runoff in overland flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r32",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r33",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r33",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r33",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r33",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r33",
+   "field": "risk_label",
+   "value": "Chemical and fuel storage – spills entering water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r33",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r34",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r34",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r34",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r34",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r34",
+   "field": "risk_label",
+   "value": "Chemical and fuel storage – spills entering water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r34",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r35",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r35",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r35",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r35",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r35",
+   "field": "risk_label",
+   "value": "Chemical and fuel storage – spills entering water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r35",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r36",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r36",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r36",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r36",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r36",
+   "field": "not_applicable_reason",
+   "value": "Chemical and fuel storage does not happen on LU4.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r36",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r36",
+   "field": "risk_label",
+   "value": "Chemical and fuel storage – spills entering water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r36",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r37",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r37",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r37",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r37",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r37",
+   "field": "not_applicable_reason",
+   "value": "Offal pit does not happen on LU1.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r37",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r37",
+   "field": "risk_label",
+   "value": "Offal pit – leachate reaching groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r37",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r38",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r38",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r38",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r38",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r38",
+   "field": "not_applicable_reason",
+   "value": "Offal pit does not happen on LU2.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r38",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r38",
+   "field": "risk_label",
+   "value": "Offal pit – leachate reaching groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r38",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r39",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r39",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r39",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r39",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r39",
+   "field": "risk_label",
+   "value": "Offal pit – leachate reaching groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r39",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r4",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r4",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r4",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r4",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r4",
+   "field": "risk_label",
+   "value": "Winter grazing – overland flow of sediment, phosphorus and microbes",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r4",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r40",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r40",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r40",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r40",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r40",
+   "field": "not_applicable_reason",
+   "value": "Offal pit does not happen on LU4.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r40",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r40",
+   "field": "risk_label",
+   "value": "Offal pit – leachate reaching groundwater",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r40",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r41",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r41",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r41",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r41",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r41",
+   "field": "risk_label",
+   "value": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r41",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r42",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r42",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r42",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r42",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r42",
+   "field": "risk_label",
+   "value": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r42",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r43",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r43",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r43",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r43",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r43",
+   "field": "risk_label",
+   "value": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r43",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r44",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r44",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r44",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r44",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r44",
+   "field": "not_applicable_reason",
+   "value": "Centre pivot irrigation does not happen on LU4.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r44",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r44",
+   "field": "risk_label",
+   "value": "Centre pivot irrigation – drainage and nitrate leaching below the root zone",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r44",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r45",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r45",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r45",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r45",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r45",
+   "field": "not_applicable_reason",
+   "value": "Border-dyke irrigation does not happen on LU1.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r45",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r45",
+   "field": "risk_label",
+   "value": "Border-dyke irrigation – nitrate and sediment in return flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r45",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r46",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r46",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r46",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r46",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r46",
+   "field": "risk_label",
+   "value": "Border-dyke irrigation – nitrate and sediment in return flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r46",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r47",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r47",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r47",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r47",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r47",
+   "field": "not_applicable_reason",
+   "value": "Border-dyke irrigation does not happen on LU3.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r47",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r47",
+   "field": "risk_label",
+   "value": "Border-dyke irrigation – nitrate and sediment in return flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r47",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r48",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r48",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r48",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r48",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r48",
+   "field": "not_applicable_reason",
+   "value": "Border-dyke irrigation does not happen on LU4.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r48",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r48",
+   "field": "risk_label",
+   "value": "Border-dyke irrigation – nitrate and sediment in return flow",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r48",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r5",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r5",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r5",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r5",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r5",
+   "field": "risk_label",
+   "value": "Cultivation – sediment and phosphorus loss to surface water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r5",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r6",
+   "field": "land_unit",
+   "value": "LU2",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r6",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r6",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r6",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r6",
+   "field": "risk_label",
+   "value": "Cultivation – sediment and phosphorus loss to surface water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r6",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r7",
+   "field": "land_unit",
+   "value": "LU3",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r7",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r7",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r7",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r7",
+   "field": "risk_label",
+   "value": "Cultivation – sediment and phosphorus loss to surface water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r7",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r8",
+   "field": "land_unit",
+   "value": "LU4",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r8",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r8",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r8",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r8",
+   "field": "not_applicable_reason",
+   "value": "Cultivation does not happen on LU4.",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r8",
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r8",
+   "field": "risk_label",
+   "value": "Cultivation – sediment and phosphorus loss to surface water",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r8",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r9",
+   "field": "land_unit",
+   "value": "LU1",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r9",
+     "field": "land_unit"
+    }
+   ]
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r9",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r9",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.risk.significance",
+   "instance": "r9",
+   "field": "risk_label",
+   "value": "Pugging and compaction – reduced infiltration and increased runoff",
+   "from": [
+    {
+     "node": "cant.s7.risk.assessment",
+     "instance": "r9",
+     "field": "risk_label"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.overview",
+   "instance": null,
+   "field": "overview",
+   "value": "This plan describes how Tussock Rise Farm manages the risks its farming poses to freshwater, and the actions the owner will take to reduce them. It follows Schedule 7 of the Canterbury Land and Water Regional Plan.\n\nThe farm is 248 hectares on the Example Plains, of which 231.5 hectares are grazable. It carries sheep, beef cattle and dairy grazing and grows winter fodder crops on part of the cultivated area.\n\nThe highest risks are nitrate leaching on the light soils and terraces, and sediment, phosphorus and microbial loss from the creek flats during winter grazing.\n\nMuch of the stock exclusion fencing is done and nutrients are managed from an annual nutrient budget. The remaining actions are in the action table.",
+   "from": [
+    {
+     "node": "cant.s7.plan.summary",
+     "instance": null,
+     "field": "summary"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "action",
+   "value": "Leave critical source areas ungrazed and use a back-fence",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "category",
+   "value": "Regulated",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "existing_or_new",
+   "value": "Existing",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "land_units",
+   "value": "2, 4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "records",
+   "value": "Winter grazing plan and photos",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "s7_target",
+   "value": "5C T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r1",
+   "field": "timeframe",
+   "value": "Each winter",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r1",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "action",
+   "value": "Update the chemical inventory and spill kit each season",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "category",
+   "value": "Supplementary",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "existing_or_new",
+   "value": "Existing",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "land_units",
+   "value": "1, 2, 3, 4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "records",
+   "value": "Chemical inventory, pit location on map",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "s7_target",
+   "value": "5F T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r10",
+   "field": "timeframe",
+   "value": "Annually",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r10",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "action",
+   "value": "Relocate the offal pit more than 50 m from the bore and waterways",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "category",
+   "value": "Regulated",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "land_units",
+   "value": "3",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "management_area",
+   "value": "Point sources",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "records",
+   "value": "Chemical inventory, pit location on map",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "s7_target",
+   "value": "5F T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r11",
+   "field": "timeframe",
+   "value": "Prior to using the pit again",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r11",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "action",
+   "value": "Schedule irrigation from soil moisture probes",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "category",
+   "value": "Catchment",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "land_units",
+   "value": "1, 2",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "records",
+   "value": "Probe logs, water meter records",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "s7_target",
+   "value": "5B T3",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r12",
+   "field": "timeframe",
+   "value": "Prior to undertaking first irrigation round",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r12",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "action",
+   "value": "Convert the border-dyke block to lateral irrigation",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "category",
+   "value": "Catchment",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "due_on",
+   "value": "2028-06-30",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "due_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "land_units",
+   "value": "2",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "records",
+   "value": "Probe logs, water meter records",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "s7_target",
+   "value": "5B T3",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r13",
+   "field": "timeframe",
+   "value": "By 30 June 2028",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r13",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "action",
+   "value": "Verify the accuracy of the main water meter",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "category",
+   "value": "Regulated",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "due_on",
+   "value": "2027-02-28",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "due_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "land_units",
+   "value": "1, 2, 3, 4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "management_area",
+   "value": "Irrigation",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "records",
+   "value": "Probe logs, water meter records",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "s7_target",
+   "value": "5B T3",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r14",
+   "field": "timeframe",
+   "value": "By 28 February 2027",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r14",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "action",
+   "value": "Keep a 10 m grass buffer along waterways during cultivation",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "category",
+   "value": "Regulated",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "existing_or_new",
+   "value": "Existing",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "land_units",
+   "value": "2, 4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "records",
+   "value": "Winter grazing plan and photos",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "s7_target",
+   "value": "5C T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r2",
+   "field": "timeframe",
+   "value": "On-going",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r2",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "action",
+   "value": "Re-sow paddocks before 31 March",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "category",
+   "value": "Supplementary",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "existing_or_new",
+   "value": "Existing",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "land_units",
+   "value": "1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "management_area",
+   "value": "Land and soil",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "records",
+   "value": "Winter grazing plan and photos",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "s7_target",
+   "value": "5C T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r3",
+   "field": "timeframe",
+   "value": "Every year by 31 March",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r3",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "action",
+   "value": "Fence the remaining 400 m of the creek margin",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "category",
+   "value": "Regulated",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "due_on",
+   "value": "2027-03-01",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "due_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "land_units",
+   "value": "4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "records",
+   "value": "Fencing invoices, photos, planting receipts",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "s7_target",
+   "value": "5E T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r4",
+   "field": "timeframe",
+   "value": "By 1 March 2027",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r4",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "action",
+   "value": "Install a culvert crossing at the main race",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "category",
+   "value": "Catchment",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "due_on",
+   "value": "2027-06-30",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "due_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "land_units",
+   "value": "4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "records",
+   "value": "Fencing invoices, photos, planting receipts",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "s7_target",
+   "value": "5E T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r5",
+   "field": "timeframe",
+   "value": "By 30 June 2027",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r5",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "action",
+   "value": "Plant 0.8 ha of the creek margin in natives",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "category",
+   "value": "Catchment",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "due_on",
+   "value": "2027-09-01",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "due_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "land_units",
+   "value": "4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "management_area",
+   "value": "Waterways and wetlands",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "records",
+   "value": "Fencing invoices, photos, planting receipts",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "s7_target",
+   "value": "5E T1",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r6",
+   "field": "timeframe",
+   "value": "By 1 September 2027",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r6",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "action",
+   "value": "Apply no nitrogen fertiliser between 1 May and 31 July",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "category",
+   "value": "Regulated",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "existing_or_new",
+   "value": "Existing",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "land_units",
+   "value": "1, 3",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "records",
+   "value": "Nutrient budget, fertiliser records",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "s7_target",
+   "value": "5A T4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r7",
+   "field": "timeframe",
+   "value": "On-going",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r7",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "action",
+   "value": "Mark 10 m fertiliser setbacks along the creek",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "category",
+   "value": "Supplementary",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "due_on",
+   "value": "2026-12-15",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "due_on"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "existing_or_new",
+   "value": "New",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "land_units",
+   "value": "4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "records",
+   "value": "Nutrient budget, fertiliser records",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "s7_target",
+   "value": "5A T4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r8",
+   "field": "timeframe",
+   "value": "By 15 December 2026",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r8",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "action",
+   "value": "Complete and review the nutrient budget every autumn",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "category",
+   "value": "Regulated",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "category"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "existing_or_new",
+   "value": "Existing",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "existing_or_new"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "land_units",
+   "value": "1, 2, 3, 4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "management_area"
+    }
+   ],
+   "transform": "values"
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "records",
+   "value": "Nutrient budget, fertiliser records",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "s7_target",
+   "value": "5A T4",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "target_ref"
+    }
+   ]
+  },
+  {
+   "node": "nz.actions.table",
+   "instance": "r9",
+   "field": "timeframe",
+   "value": "Every year by 31 May",
+   "from": [
+    {
+     "node": "cant.s7.actions",
+     "instance": "r9",
+     "field": "timeframe"
+    }
+   ]
+  },
+  {
+   "node": "nz.map.vulnerabilities",
+   "instance": null,
+   "field": "boundary",
+   "value": "Shown",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "boundary"
+    }
+   ]
+  },
+  {
+   "node": "nz.map.vulnerabilities",
+   "instance": null,
+   "field": "csa",
+   "value": "Shown",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "csa"
+    }
+   ]
+  },
+  {
+   "node": "nz.map.vulnerabilities",
+   "instance": null,
+   "field": "land_units",
+   "value": "Shown",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "land_units"
+    }
+   ]
+  },
+  {
+   "node": "nz.map.vulnerabilities",
+   "instance": null,
+   "field": "natural_water",
+   "value": "Shown",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "water"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.contact",
+   "instance": null,
+   "field": "contact_person",
+   "value": "Pat Example",
+   "from": [
+    {
+     "node": "cant.s7.property.contact",
+     "instance": null,
+     "field": "contact_person"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.contact",
+   "instance": null,
+   "field": "email",
+   "value": "owner@example.invalid",
+   "from": [
+    {
+     "node": "cant.s7.property.contact",
+     "instance": null,
+     "field": "email"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.contact",
+   "instance": null,
+   "field": "phone",
+   "value": "03 555 0100",
+   "from": [
+    {
+     "node": "cant.s7.property.contact",
+     "instance": null,
+     "field": "phone"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.identifier",
+   "instance": null,
+   "field": "identifier",
+   "value": "FP-99001",
+   "from": [
+    {
+     "node": "cant.s7.property.identifier",
+     "instance": null,
+     "field": "identifier"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.identifier",
+   "instance": null,
+   "field": "identifier_kind",
+   "value": "ECan Farm Portal identifier",
+   "from": [
+    {
+     "node": "cant.s7.property.identifier",
+     "instance": null,
+     "field": "identifier_kind"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.responsible",
+   "instance": null,
+   "field": "confirmed_on",
+   "value": "2026-10-30",
+   "from": [
+    {
+     "node": "cant.s7.property.responsible",
+     "instance": null,
+     "field": "confirmed_on"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.responsible",
+   "instance": null,
+   "field": "implementer_name",
+   "value": "Pat Example",
+   "from": [
+    {
+     "node": "cant.s7.property.responsible",
+     "instance": null,
+     "field": "implementer_name"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.responsible",
+   "instance": null,
+   "field": "owner_commitment",
+   "value": true,
+   "from": [
+    {
+     "node": "cant.s7.property.responsible",
+     "instance": null,
+     "field": "owner_commitment"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.property.responsible",
+   "instance": null,
+   "field": "position",
+   "value": "Owner and manager",
+   "from": [
+    {
+     "node": "cant.s7.property.responsible",
+     "instance": null,
+     "field": "position"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.map.extra",
+   "instance": null,
+   "field": "access_routes",
+   "value": "Shown",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "access_routes"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.map.extra",
+   "instance": null,
+   "field": "flood_assets",
+   "value": "None on this farm",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "flood_assets"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.map.extra",
+   "instance": null,
+   "field": "hrrpz",
+   "value": "None on this farm",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "hrrpz"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.map.extra",
+   "instance": null,
+   "field": "riparian_vegetation",
+   "value": "Shown",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "riparian_vegetation"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.map.extra",
+   "instance": null,
+   "field": "sig_biodiversity",
+   "value": "None on this farm",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "sig_biodiversity"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.map.extra",
+   "instance": null,
+   "field": "stock_access",
+   "value": "Shown",
+   "from": [
+    {
+     "node": "cant.s7.map.property",
+     "instance": null,
+     "field": "stock_access"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "baseline_gmp_loss_rate",
+   "value": 26,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "baseline_gmp_loss_rate"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "farm_portal_report_on",
+   "value": "2026-06-30",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "farm_portal_report_on"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "gmp_loss_rate",
+   "value": 22,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "gmp_loss_rate"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "model",
+   "value": "OverseerFM",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "model"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "model_version",
+   "value": "6.5.4",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "model_version"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "n_baseline",
+   "value": 24,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "n_baseline"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "n_loss",
+   "value": 21,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "n_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "p_loss",
+   "value": 0.8,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "p_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "prepared_by",
+   "value": "Alex Example",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "prepared_by"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "qualification",
+   "value": "Certified Nutrient Management Adviser",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "qualification"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.summary",
+   "instance": null,
+   "field": "season",
+   "value": "2025/26",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.summary",
+     "instance": null,
+     "field": "season"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU1",
+   "field": "n_loss",
+   "value": 28,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU1",
+     "field": "n_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU1",
+   "field": "overseer_blocks",
+   "value": "Pivot A, Pivot B",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU1",
+     "field": "overseer_blocks"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU1",
+   "field": "p_loss",
+   "value": 0.5,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU1",
+     "field": "p_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU2",
+   "field": "n_loss",
+   "value": 19,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU2",
+     "field": "n_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU2",
+   "field": "overseer_blocks",
+   "value": "Pivot B, Border-dyke",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU2",
+     "field": "overseer_blocks"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU2",
+   "field": "p_loss",
+   "value": 0.9,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU2",
+     "field": "p_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU3",
+   "field": "n_loss",
+   "value": 17,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU3",
+     "field": "n_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU3",
+   "field": "overseer_blocks",
+   "value": "Terraces",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU3",
+     "field": "overseer_blocks"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU3",
+   "field": "p_loss",
+   "value": 0.4,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU3",
+     "field": "p_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU4",
+   "field": "n_loss",
+   "value": 14,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU4",
+     "field": "n_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU4",
+   "field": "overseer_blocks",
+   "value": "Creek flats",
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU4",
+     "field": "overseer_blocks"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrient_budget.lmu",
+   "instance": "LU4",
+   "field": "p_loss",
+   "value": 1.6,
+   "from": [
+    {
+     "node": "cant.s7.nutrient_budget.lmu",
+     "instance": "LU4",
+     "field": "p_loss"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.obj1",
+   "instance": null,
+   "field": "summary",
+   "value": "Nutrients are matched to crop need from an annual budget, and losses are kept below the GMP Loss Rate.",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.obj1",
+     "instance": null,
+     "field": "summary"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t1",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t1",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t1",
+   "instance": null,
+   "field": "how_met",
+   "value": "Nitrogen loss is 21 kg N/ha/yr in the 2025/26 nutrient budget, below the Baseline GMP Loss Rate of 26 and the GMP Loss Rate of 22.",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t1",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t1",
+   "instance": null,
+   "field": "records",
+   "value": "Nutrient budget 2025/26; Farm Portal report",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t1",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t2",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t2",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t2",
+   "instance": null,
+   "field": "how_met",
+   "value": "Winter crops are grazed from the top of the paddock down, and catch crops are sown after the winter crop on the light soils.",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t2",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t2",
+   "instance": null,
+   "field": "records",
+   "value": "Paddock plan; sowing records",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t2",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t3",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t3",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t3",
+   "instance": null,
+   "field": "how_met",
+   "value": "Critical source areas are left ungrazed in winter and a 10 m grass buffer is kept along the creek and drain.",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t3",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t3",
+   "instance": null,
+   "field": "records",
+   "value": "Winter grazing plan; photos each July",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t3",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t4",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t4",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t4",
+   "instance": null,
+   "field": "how_met",
+   "value": "Fertiliser rates come from soil tests every two years and the nutrient budget; no nitrogen is applied from 1 May to 31 July.",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t4",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t4",
+   "instance": null,
+   "field": "records",
+   "value": "Soil tests; fertiliser recommendations and application records",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t4",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t5",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t5",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t5",
+   "instance": null,
+   "field": "how_met",
+   "value": "Fertiliser is delivered to the bunded loading pad 80 m from the creek; spreading is by a Spreadmark-certified contractor.",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t5",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.nutrients.t5",
+   "instance": null,
+   "field": "records",
+   "value": "Spreadmark certificate; proof of placement",
+   "from": [
+    {
+     "node": "cant.s7.nutrients.t5",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.obj1",
+   "instance": null,
+   "field": "summary",
+   "value": "Irrigation is scheduled to soil moisture and the system is checked every year.",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.obj1",
+     "instance": null,
+     "field": "summary"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t1",
+   "instance": null,
+   "field": "applies",
+   "value": "Not applicable",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t1",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t1",
+   "instance": null,
+   "field": "not_applicable_reason",
+   "value": "No new irrigation system is planned on this farm.",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t1",
+     "instance": null,
+     "field": "not_applicable_reason"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t2",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t2",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t2",
+   "instance": null,
+   "field": "how_met",
+   "value": "The pivots and the lateral are checked before the season and a uniformity test is done every year.",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t2",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t2",
+   "instance": null,
+   "field": "records",
+   "value": "Annual system check; uniformity test reports",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t2",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t3",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t3",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t3",
+   "instance": null,
+   "field": "how_met",
+   "value": "Irrigation is scheduled from soil moisture probes and the weekly water balance; application depth is set for each soil.",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t3",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t3",
+   "instance": null,
+   "field": "records",
+   "value": "Probe logs; water balance",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t3",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t4",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t4",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t4",
+   "instance": null,
+   "field": "how_met",
+   "value": "The owner and the part-time worker are trained by the irrigation supplier each spring.",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t4",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.irrigation.t4",
+   "instance": null,
+   "field": "records",
+   "value": "Training record",
+   "from": [
+    {
+     "node": "cant.s7.irrigation.t4",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.soils.obj1",
+   "instance": null,
+   "field": "summary",
+   "value": "Cultivation and winter grazing are planned to keep soil on the farm.",
+   "from": [
+    {
+     "node": "cant.s7.soils.obj1",
+     "instance": null,
+     "field": "summary"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.soils.t1",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.soils.t1",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.soils.t1",
+   "instance": null,
+   "field": "how_met",
+   "value": "Winter grazing is planned around critical source areas and the creek flats are only grazed in dry conditions.",
+   "from": [
+    {
+     "node": "cant.s7.soils.t1",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.soils.t1",
+   "instance": null,
+   "field": "records",
+   "value": "Winter grazing plan",
+   "from": [
+    {
+     "node": "cant.s7.soils.t1",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.soils.t2",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.soils.t2",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.soils.t2",
+   "instance": null,
+   "field": "how_met",
+   "value": "Cultivation is timed for dry soils, paddocks are re-sown before 31 March and stock come off wet paddocks at an agreed trigger.",
+   "from": [
+    {
+     "node": "cant.s7.soils.t2",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.soils.t2",
+   "instance": null,
+   "field": "records",
+   "value": "Paddock plan; sowing records",
+   "from": [
+    {
+     "node": "cant.s7.soils.t2",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.obj1",
+   "instance": null,
+   "field": "summary",
+   "value": "The creek and spring-fed drain are fenced, planted and kept clear of stock.",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.obj1",
+     "instance": null,
+     "field": "summary"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t1",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t1",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t1",
+   "instance": null,
+   "field": "how_met",
+   "value": "The creek is fenced on one side; the remaining 400 m will be fenced by 1 March 2027.",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t1",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t1",
+   "instance": null,
+   "field": "records",
+   "value": "Fencing invoices; photos",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t1",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t2",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t2",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t2",
+   "instance": null,
+   "field": "how_met",
+   "value": "A 10 m grass margin is kept and 0.8 ha of the creek margin will be planted in natives.",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t2",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t2",
+   "instance": null,
+   "field": "records",
+   "value": "Planting plan; nursery receipts",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t2",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t3",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t3",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t3",
+   "instance": null,
+   "field": "how_met",
+   "value": "A culvert crossing will replace the ford at the main race; troughs are kept 20 m from the creek.",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t3",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t3",
+   "instance": null,
+   "field": "records",
+   "value": "Photos; contractor invoice",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t3",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t4",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t4",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t4",
+   "instance": null,
+   "field": "how_met",
+   "value": "Tuna and kōura habitat in the creek is protected by fencing, shade planting and no fertiliser in the setbacks.",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t4",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.waterbodies.t4",
+   "instance": null,
+   "field": "records",
+   "value": "Mahinga kai notes; photos",
+   "from": [
+    {
+     "node": "cant.s7.waterbodies.t4",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.point_sources.obj1",
+   "instance": null,
+   "field": "summary",
+   "value": "One offal pit, to be moved; farm rubbish leaves the farm.",
+   "from": [
+    {
+     "node": "cant.s7.point_sources.obj1",
+     "instance": null,
+     "field": "summary"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.point_sources.t1",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.point_sources.t1",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.point_sources.t1",
+   "instance": null,
+   "field": "how_met",
+   "value": "Farm rubbish is taken off site; the old offal pit will be moved more than 50 m from the bore and waterways before it is used again.",
+   "from": [
+    {
+     "node": "cant.s7.point_sources.t1",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.point_sources.t1",
+   "instance": null,
+   "field": "records",
+   "value": "Pit location on the farm map",
+   "from": [
+    {
+     "node": "cant.s7.point_sources.t1",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.water_use.obj1",
+   "instance": null,
+   "field": "summary",
+   "value": "Stock water is metered and leaks are fixed quickly.",
+   "from": [
+    {
+     "node": "cant.s7.water_use.obj1",
+     "instance": null,
+     "field": "summary"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.water_use.t1",
+   "instance": null,
+   "field": "applies",
+   "value": "Applies",
+   "from": [
+    {
+     "node": "cant.s7.water_use.t1",
+     "instance": null,
+     "field": "applies"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.water_use.t1",
+   "instance": null,
+   "field": "how_met",
+   "value": "Stock water is float-controlled and leaks are fixed within a week; the main meter is verified every five years.",
+   "from": [
+    {
+     "node": "cant.s7.water_use.t1",
+     "instance": null,
+     "field": "how_met"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.water_use.t1",
+   "instance": null,
+   "field": "records",
+   "value": "Meter verification; maintenance log",
+   "from": [
+    {
+     "node": "cant.s7.water_use.t1",
+     "instance": null,
+     "field": "records"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.history",
+   "instance": null,
+   "field": "audited_on",
+   "value": "2025-04-10",
+   "from": [
+    {
+     "node": "cant.s7.audit.history",
+     "instance": "r1",
+     "field": "audited_on"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.history",
+   "instance": null,
+   "field": "auditor",
+   "value": "Jo Example",
+   "from": [
+    {
+     "node": "cant.s7.audit.history",
+     "instance": "r1",
+     "field": "auditor"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.history",
+   "instance": null,
+   "field": "grade",
+   "value": "B",
+   "from": [
+    {
+     "node": "cant.s7.audit.history",
+     "instance": "r1",
+     "field": "grade"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.history",
+   "instance": null,
+   "field": "independent",
+   "value": true,
+   "from": [
+    {
+     "node": "cant.s7.audit.history",
+     "instance": "r1",
+     "field": "independent"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.history",
+   "instance": null,
+   "field": "issues_raised",
+   "value": "Creek margin fencing incomplete; offal pit within 50 m of the bore.",
+   "from": [
+    {
+     "node": "cant.s7.audit.history",
+     "instance": "r1",
+     "field": "issues_raised"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.history",
+   "instance": null,
+   "field": "next_audit_by",
+   "value": "2027-04-10",
+   "from": [
+    {
+     "node": "cant.s7.audit.history",
+     "instance": "r1",
+     "field": "next_audit_by"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.history",
+   "instance": null,
+   "field": "trigger",
+   "value": "CRC990002, condition 7",
+   "from": [
+    {
+     "node": "cant.s7.audit.history",
+     "instance": "r1",
+     "field": "trigger"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r1",
+   "field": "assessed_by",
+   "value": "Jo Example",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r1",
+     "field": "assessed_by"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r1",
+   "field": "assessed_on",
+   "value": "2025-04-10",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r1",
+     "field": "assessed_on"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r1",
+   "field": "item_ref",
+   "value": "5A T1",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r1",
+     "field": "item_ref"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r1",
+   "field": "loc",
+   "value": "High",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r1",
+     "field": "loc"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r1",
+   "field": "management_area",
+   "value": "Nutrients",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r1",
+     "field": "management_area"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r2",
+   "field": "assessed_by",
+   "value": "Jo Example",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r2",
+     "field": "assessed_by"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r2",
+   "field": "assessed_on",
+   "value": "2025-04-10",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r2",
+     "field": "assessed_on"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r2",
+   "field": "item_ref",
+   "value": "5E T1",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r2",
+     "field": "item_ref"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r2",
+   "field": "loc",
+   "value": "Low",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r2",
+     "field": "loc"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r2",
+   "field": "management_area",
+   "value": "Waterbodies (wetlands, riparian areas, drains, rivers, lakes)",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r2",
+     "field": "management_area"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r3",
+   "field": "assessed_by",
+   "value": "Jo Example",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r3",
+     "field": "assessed_by"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r3",
+   "field": "assessed_on",
+   "value": "2025-04-10",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r3",
+     "field": "assessed_on"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r3",
+   "field": "item_ref",
+   "value": "5F T1",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r3",
+     "field": "item_ref"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r3",
+   "field": "loc",
+   "value": "Medium",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r3",
+     "field": "loc"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.loc",
+   "instance": "r3",
+   "field": "management_area",
+   "value": "Point sources (offal pits, farm rubbish pits, silage pits)",
+   "from": [
+    {
+     "node": "cant.s7.audit.loc",
+     "instance": "r3",
+     "field": "management_area"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.actions",
+   "instance": "r1",
+   "field": "action",
+   "value": "Fence the remaining creek margin",
+   "from": [
+    {
+     "node": "cant.s7.audit.actions",
+     "instance": "r1",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.actions",
+   "instance": "r1",
+   "field": "due",
+   "value": "1 March 2027",
+   "from": [
+    {
+     "node": "cant.s7.audit.actions",
+     "instance": "r1",
+     "field": "due"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.actions",
+   "instance": "r1",
+   "field": "progress",
+   "value": "Posts in; wire to come",
+   "from": [
+    {
+     "node": "cant.s7.audit.actions",
+     "instance": "r1",
+     "field": "progress"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.actions",
+   "instance": "r2",
+   "field": "action",
+   "value": "Relocate the offal pit",
+   "from": [
+    {
+     "node": "cant.s7.audit.actions",
+     "instance": "r2",
+     "field": "action"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.actions",
+   "instance": "r2",
+   "field": "due",
+   "value": "Before next use",
+   "from": [
+    {
+     "node": "cant.s7.audit.actions",
+     "instance": "r2",
+     "field": "due"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.audit.actions",
+   "instance": "r2",
+   "field": "progress",
+   "value": "New site chosen",
+   "from": [
+    {
+     "node": "cant.s7.audit.actions",
+     "instance": "r2",
+     "field": "progress"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.mahinga_kai",
+   "instance": null,
+   "field": "management",
+   "value": "Keep the creek and spring-fed drain fenced and shaded, and keep fertiliser and chemicals out of the setbacks.",
+   "from": [
+    {
+     "node": "cant.s7.extra.mahinga_kai",
+     "instance": null,
+     "field": "management"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.mahinga_kai",
+   "instance": null,
+   "field": "sites",
+   "value": "- Tuna (longfin eel) (Creek and lowland river)\n- Inanga (Lower river reaches)\n- Kōura (Spring-fed headwaters)\n- Watercress (Spring-fed drain)",
+   "from": [
+    {
+     "node": "cant.s7.extra.mahinga_kai",
+     "instance": null,
+     "field": "sites"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.ghg",
+   "instance": null,
+   "field": "calculator",
+   "value": "An approved on-farm emissions calculator",
+   "from": [
+    {
+     "node": "cant.s7.extra.ghg",
+     "instance": null,
+     "field": "calculator"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.ghg",
+   "instance": null,
+   "field": "co2_t",
+   "value": 120,
+   "from": [
+    {
+     "node": "cant.s7.extra.ghg",
+     "instance": null,
+     "field": "co2_t"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.ghg",
+   "instance": null,
+   "field": "methane_t",
+   "value": 1640,
+   "from": [
+    {
+     "node": "cant.s7.extra.ghg",
+     "instance": null,
+     "field": "methane_t"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.ghg",
+   "instance": null,
+   "field": "n2o_t",
+   "value": 390,
+   "from": [
+    {
+     "node": "cant.s7.extra.ghg",
+     "instance": null,
+     "field": "n2o_t"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.ghg",
+   "instance": null,
+   "field": "total_t",
+   "value": 2150,
+   "from": [
+    {
+     "node": "cant.s7.extra.ghg",
+     "instance": null,
+     "field": "total_t"
+    }
+   ]
+  },
+  {
+   "node": "cant.s7.extra.ghg",
+   "instance": null,
+   "field": "year",
+   "value": "2025/26",
+   "from": [
+    {
+     "node": "cant.s7.extra.ghg",
+     "instance": null,
+     "field": "year"
+    }
+   ]
+  },
+  {
+   "node": "nz.catchment.context",
+   "instance": null,
+   "field": "summary",
+   "value": "Tussock Rise drains to the creek on its south-east boundary, which joins the Example River below the farm. [to complete: the council's description of the catchment and its main freshwater issues]",
+   "ai": {
+    "model": "claude-haiku-5-5",
+    "drafted_at": "2026-11-05T00:00:00.000Z",
+    "cost_usd": 0.0004,
+    "by_request_of": null,
+    "from": [],
+    "demo": true
+   }
+  }
+ ],
+ "prior_assessments": [
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "erosion",
+    "instance": "LU1"
+   },
+   "value": "Low",
+   "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU1",
+    "field": "erosion",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "n_leaching",
+    "instance": "LU1"
+   },
+   "value": "High",
+   "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU1",
+    "field": "n_leaching",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "p_sediment_runoff",
+    "instance": "LU1"
+   },
+   "value": "Very low",
+   "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU1",
+    "field": "p_sediment_runoff",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "structural",
+    "instance": "LU1"
+   },
+   "value": "Moderate to high",
+   "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU1",
+    "field": "structural",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "waterlogging",
+    "instance": "LU1"
+   },
+   "value": "Low",
+   "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU1",
+    "field": "waterlogging",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "erosion",
+    "instance": "LU2"
+   },
+   "value": "Low",
+   "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU2",
+    "field": "erosion",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "n_leaching",
+    "instance": "LU2"
+   },
+   "value": "Low to moderate",
+   "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU2",
+    "field": "n_leaching",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "p_sediment_runoff",
+    "instance": "LU2"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU2",
+    "field": "p_sediment_runoff",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "structural",
+    "instance": "LU2"
+   },
+   "value": "High",
+   "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU2",
+    "field": "structural",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "waterlogging",
+    "instance": "LU2"
+   },
+   "value": "High",
+   "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU2",
+    "field": "waterlogging",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "erosion",
+    "instance": "LU3"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU3",
+    "field": "erosion",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "n_leaching",
+    "instance": "LU3"
+   },
+   "value": "Very high",
+   "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU3",
+    "field": "n_leaching",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "p_sediment_runoff",
+    "instance": "LU3"
+   },
+   "value": "Low",
+   "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU3",
+    "field": "p_sediment_runoff",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "structural",
+    "instance": "LU3"
+   },
+   "value": "Low",
+   "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU3",
+    "field": "structural",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "waterlogging",
+    "instance": "LU3"
+   },
+   "value": "Very low",
+   "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU3",
+    "field": "waterlogging",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "erosion",
+    "instance": "LU4"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 erosion: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU4",
+    "field": "erosion",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "n_leaching",
+    "instance": "LU4"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 n_leaching: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU4",
+    "field": "n_leaching",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "p_sediment_runoff",
+    "instance": "LU4"
+   },
+   "value": "High",
+   "scale": "fep-cant-s7 p_sediment_runoff: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU4",
+    "field": "p_sediment_runoff",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "structural",
+    "instance": "LU4"
+   },
+   "value": "Not stated",
+   "scale": "fep-cant-s7 structural: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU4",
+    "field": "structural",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.land_units.vulnerability",
+    "field": "waterlogging",
+    "instance": "LU4"
+   },
+   "value": "Very high",
+   "scale": "fep-cant-s7 waterlogging: Very low/Low/Low to moderate/Moderate/Moderate to high/High/Very high/Not stated",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.lmu.vulnerability",
+    "instance": "LU4",
+    "field": "waterlogging",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r1"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r1",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r10"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r10",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r11"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r11",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r12"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r12",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r13"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r13",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r14"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r14",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r15"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r15",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r16"
+   },
+   "value": "Major",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r16",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r17"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r17",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r18"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r18",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r19"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r19",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r2"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r2",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r20"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r20",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r21"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r21",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r22"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r22",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r23"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r23",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r24"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r24",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r25"
+   },
+   "value": "Major",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r25",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r26"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r26",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r27"
+   },
+   "value": "Major",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r27",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r28"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r28",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r29"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r29",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r3"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r3",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r30"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r30",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r31"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r31",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r32"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r32",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r33"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r33",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r34"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r34",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r35"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r35",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r36"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r36",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r37"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r37",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r38"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r38",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r39"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r39",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r4"
+   },
+   "value": "Major",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r4",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r40"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r40",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r41"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r41",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r42"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r42",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r43"
+   },
+   "value": "Major",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r43",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r44"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r44",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r45"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r45",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r46"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r46",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r47"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r47",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r48"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r48",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r5"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r5",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r6"
+   },
+   "value": "Moderate",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r6",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r7"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r7",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r8"
+   },
+   "value": "Not applicable",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r8",
+    "field": "significance",
+    "source": {}
+   }
+  },
+  {
+   "to": {
+    "node": "nz.risk.significance",
+    "field": "significance",
+    "instance": "r9"
+   },
+   "value": "Minor",
+   "scale": "fep-cant-s7 significance: Minor/Moderate/Major/Not applicable",
+   "assessed_by": "Sam Fixture",
+   "assessed_on": "2026-10-30",
+   "from": {
+    "node": "cant.s7.risk.assessment",
+    "instance": "r9",
+    "field": "significance",
+    "source": {}
+   }
+  }
+ ],
+ "switched_off": [],
+ "no_longer_used": 96,
+ "ai": {
+  "fields": [
+   "nz.catchment.context.receiving_environment",
+   "nz.catchment.context.summary"
+  ],
+  "cap_usd": 0.02,
+  "spent_usd": 0.0004
+ },
+ "accepted": {}
+}

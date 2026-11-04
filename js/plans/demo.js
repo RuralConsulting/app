@@ -9,7 +9,9 @@
   if (node) module.exports = api; else root.FP.farmPlansDemo = api;
 })(typeof window === "undefined" ? globalThis : window, function (R) {
   const root = typeof window === "undefined" ? globalThis : window;
-  const DOCS = [["fep-cant-s7", "Farm Environment Plan"], ["fwfp-cant-s7", "Freshwater Farm Plan"]];
+  // fwfp-draft: FW1's draft Freshwater Farm Plan of the same farm (demo/plans/drafts/, made by tools/draft_fwfp.py --demo
+  // against fwfp-cant-s7 v3, a draft template until Josh publishes it). Gap list first; never printed.
+  const DOCS = [["fep-cant-s7", "Farm Environment Plan"], ["fwfp-cant-s7", "Freshwater Farm Plan"], ["fwfp-draft", "Draft FWFP"]];
   const BRANDS = [["rcl", "Rural Consulting"], ["group", "Example Plains Catchment Group"], ["none", "Unbranded"]];
   const DATA = [["full", "Full"], ["sparse", "Sparse"], ["empty", "Empty"]];
   // The template version each demo definition is: the newest PUBLISHED platform version of its family, copied
@@ -89,7 +91,19 @@
     for (const [k] of [["doc"], ["brand"], ["data"]]) for (const b of screen.querySelectorAll('[data-setting="' + k + '"] button')) b.setAttribute("aria-pressed", String(b.dataset.value === s[k]));
     const host = screen.querySelector(".plans-page");
     host.setAttribute("aria-busy", "true");
+    const isDraft = s.doc === "fwfp-draft";
+    screen.querySelector(".plans-print").hidden = isDraft;           // a draft is never printed
+    screen.querySelector('[data-setting="data"]').hidden = isDraft;
     try {
+      if (isDraft) {
+        const brandRows = await fetchJson("demo/plans/brands.json");
+        if (mine !== opened) return;
+        const draft = await root.FP.farmPlanDraft.openDemo(host, brands(brandRows)[s.brand]);
+        if (mine !== opened) return;
+        document.title = draft.farm.name + " · " + "Freshwater Farm Plan" + " (draft)";
+        host.removeAttribute("aria-busy");
+        return;
+      }
       const [definition, fixture, brandRows] = await Promise.all([fetchJson("demo/plans/" + definitionFile(s.doc)), fetchJson("demo/plans/tussock-rise.json"), fetchJson("demo/plans/brands.json")]);
       if (mine !== opened) return;
       const { values: v, figures } = values(fixture, s.doc, s.data);
