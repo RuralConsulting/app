@@ -9,6 +9,8 @@
 // RD1: a recorded analysis carries its review state (public.analysis_review: whether what it was computed from has changed since);
 // the card shows it as one quiet line, "Review due: <reason>", and changes nothing. reviewLine(row) is the hook any list of
 // recorded analyses uses (the catchment space, S5, renders the same line for the analyses it shows).
+// WQ2: a preview for a monitoring location (its `location`: the members and their dates) is titled with the location's name and
+// its current site's id (label(p)); the members are listed under the method.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.wqAnalysis = api;
@@ -38,13 +40,22 @@
       measurement_sources: list(p.measurement_sources).filter(str), attribution: list(p.attribution).filter(obj),
       result: obj(p.result) ? p.result : null, unavailable: obj(p.unavailable) && str(p.unavailable.detail) ? p.unavailable : null,
       caveats: list(p.caveats).filter(str), statement: str(p.statement) ? p.statement : "", preview_sha256: p.preview_sha256, note_allowed: p.note_allowed === true,
+      location: obj(p.location) && str(p.location.name) ? { ...p.location, members: list(p.location.members).filter((m) => obj(m) && str(m.external_id)) } : null,
       state: null, message: "", overrides: {} };
   }
+  // What the card is about: a site's name; a location's name and its current site's id (the site the preview names).
+  function label(p) {
+    if (p.location) return p.location.name + " (" + (p.site?.external_id || "current site") + ")";
+    return p.site?.name ? p.site.name : "Site " + p.site?.monitoring_site_id;
+  }
+  const ROLE_WORDS = { current: "current", successor: "successor", predecessor: "predecessor", co_located: "co-located" };
+  const membersLine = (loc) => "Combined record of " + loc.name + ": " + loc.members.map((m) => m.external_id + " (" + (ROLE_WORDS[m.role] || m.role) +
+    (m.valid_from ? ", from " + m.valid_from : "") + (m.valid_to ? ", to " + m.valid_to : "") + (num(m.samples) !== null ? ", " + m.samples + " samples" : "") + ")").join(", ") + ".";
 
   // What a preview or confirm sends: the settings as first proposed (the model's, from Ask), the person's changes as
   // overrides, and for confirm the preview they saw. The function recalculates from these; it takes no figures.
   function body(p, mode, owner, overrides) {
-    const proposed = p.ai_proposed_inputs || Object.fromEntries(Object.entries(p.parameters).filter(([k]) => !["from", "to", "site"].includes(k)));
+    const proposed = p.ai_proposed_inputs || Object.fromEntries(Object.entries(p.parameters).filter(([k]) => !["from", "to", "site", "location"].includes(k)));
     return { mode, owner, params: proposed, ...(p.ai_proposed_inputs ? { ai_proposed_inputs: p.ai_proposed_inputs } : {}),
       ...(overrides && Object.keys(overrides).length ? { overrides } : {}), ...(mode === "confirm" ? { preview_sha256: p.preview_sha256 } : {}) };
   }
@@ -134,7 +145,7 @@
   const TITLES = { summary: "Summary", band: "NPS-FM attribute band", trend: "Trend (indicative)", compare: "Comparison with council sites", exceedance: "Exceedance of a framework limit" };
   // The card. o: {n (its index), canConfirm (an editor of the farm), review (its public.analysis_review row, once recorded)}.
   function html(p, o = {}) {
-    const n = esc(o.n ?? 0), site = p.site.name ? esc(p.site.name) : "Site " + esc(p.site.monitoring_site_id);
+    const n = esc(o.n ?? 0), site = esc(label(p));
     const period = str(p.parameters.from) ? esc(p.parameters.from) + " to " + esc(p.parameters.to) : "";
     const table = rows(p), review = reviewLine(o.review ?? p.review);
     const body = p.unavailable
@@ -143,6 +154,7 @@
         "<!-- the chart block plugs in here (the series and band ranges); until then the card is text and a table. -->";
     const method = '<p class="wq-method">Method: ' + esc(p.method.id) + (p.method.table ? ", " + esc(p.method.table) : "") + (p.method.instrument ? " — " + esc(String(p.method.instrument).split(", http")[0]) : "") +
       (p.method.min_record ? ". Minimum record: " + esc(p.method.min_record) : "") + ".</p>";
+    const members = p.location ? '<p class="wq-members">' + esc(membersLine(p.location)) + "</p>" : "";
     const caveats = p.caveats.length ? '<ul class="wq-caveats">' + p.caveats.map((c) => "<li>" + esc(c) + "</li>").join("") + "</ul>" : "";
     const attr = p.attribution.length ? '<p class="wq-attr">' + p.attribution.map((a) => esc(a.statement || a.name)).join(" ") + "</p>" : "";
     let actions = "";
@@ -167,7 +179,7 @@
     }
     return '<div class="wq-card" data-wq-card="' + n + '"><h3 class="wq-title">' + esc(TITLES[p.tool]) + ": " + site + "</h3>" +
       (period ? '<p class="wq-period">' + esc(p.parameters.parameter || p.parameters.attribute || "") + ", " + period + "</p>" : "") +
-      (review ? '<p class="wq-review">' + esc(review) + "</p>" : "") + body + method + caveats + attr +
+      (review ? '<p class="wq-review">' + esc(review) + "</p>" : "") + body + method + members + caveats + attr +
       '<div class="wq-actions">' + actions + '</div><p class="wq-msg" role="status" aria-live="polite">' + esc(p.message || "") + "</p></div>";
   }
   // The settings a person changed in the card's Adjust method, as overrides (with any made before): a setting left as the
@@ -182,5 +194,5 @@
     }
     return out;
   }
-  return { UNAVAILABLE, preview, body, request, html, rows, range, noteText, saveNote, overridesFrom, reviewLine, reviews };
+  return { UNAVAILABLE, preview, body, request, html, rows, range, noteText, saveNote, overridesFrom, reviewLine, reviews, label };
 });

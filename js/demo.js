@@ -450,14 +450,23 @@
       // MC1: the catchment group's own sampling sites (D2, owned by the group): in the group's space only, never the farm's line
       { id: 9201, external_id: "HDLG-G1", name: "Group sampling at the ford (synthetic)", lng: 172.0405, lat: -43.0005, type: "river", params: ["nitrate-nitrite-n"], from: [2023, 6], base: 1.3, group: true },
       { id: 9202, external_id: "HDLG-G2", name: "Group sampling at the culvert (synthetic)", lng: 172.072, lat: -43.022, type: "stream", params: ["nitrate-nitrite-n"], from: [2024, 0], base: 0.9, group: true },
+      // WQ2: the farm bridge site's predecessor (sampled Jul 2016 to Jun 2020, then replaced by DEMO-01): no longer listed near the
+      // farm, read only through the invented monitoring location below
+      { id: 9107, external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", lng: 172.0322, lat: -42.9882, type: "river", params: ["nitrate-nitrite-n", "drp"], from: [2016, 6], to: [2020, 5], base: 1.9, retired: true },
     ];
-    const sites = defs.map((d) => ({ site_id: d.id, external_id: d.external_id, name: d.name, site_type: d.type, distance_m: toBox(d.lng, d.lat), geom: place(d.lng, d.lat),
+    // WQ2: an invented monitoring location (as public.monitoring_location returns it): the farm bridge site and its predecessor.
+    const locations = [{ id: 9301, key: "demo-creek-at-the-farm-bridge", name: "Demo Creek at the farm bridge, synthetic location", note: "Invented for the demo.",
+      members: [
+        { monitoring_site_id: 9101, source_key: "ecan-wq-sites", external_id: "DEMO-01", name: "Demo Creek at the farm bridge (synthetic)", site_type: "river", role: "current", valid_from: "2020-07-01", valid_to: null, note: null },
+        { monitoring_site_id: 9107, source_key: "ecan-wq-sites", external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", site_type: "river", role: "predecessor", valid_from: "2016-07-01", valid_to: "2020-06-30", note: null }] }];
+    const sites = defs.filter((d) => !d.retired).map((d) => ({ site_id: d.id, external_id: d.external_id, name: d.name, site_type: d.type, distance_m: toBox(d.lng, d.lat), geom: place(d.lng, d.lat),
       source_key: d.own ? "demo-farm-wq" : d.group ? "demo-hdlg-wq" : "ecan-wq-sites", owner_farm_id: d.own ? FARM : null, owner_org_id: d.group ? GROUP : null }));
     const series = {};
     const wave = (i, k) => Math.sin(i * 0.52 + k) * 0.5 + Math.sin(i * 1.7 + k * 3) * 0.25;
     for (const d of defs) {
       const months = [];
-      for (let y = d.from[0], m = d.from[1]; y < 2026 || (y === 2026 && m <= 8); m++) { if (m > 11) { y++; m = 0; } if (y > 2026 || (y === 2026 && m > 8)) break; months.push([y, m]); }
+      const [ey, em] = d.to || [2026, 8];
+      for (let y = d.from[0], m = d.from[1]; y < ey || (y === ey && m <= em); m++) { if (m > 11) { y++; m = 0; } if (y > ey || (y === ey && m > em)) break; months.push([y, m]); }
       if (d.count) months.length = d.count;
       d.params.forEach((key, k) => {
         series[d.id + "|" + key] = months.map(([y, m], i) => {
@@ -477,7 +486,7 @@
       const all = Object.entries(series).filter(([k]) => k.startsWith(site.site_id + "|")).flatMap(([, rows]) => rows);
       site.last_sampled = all.length ? all.map((r) => r.sampled_at).sort().pop() : null;
     }
-    return { sites, series, params: WQ_PARAMS, sources: WQ_SOURCES };
+    return { sites, series, params: WQ_PARAMS, sources: WQ_SOURCES, locations };
   }
   function wqOf(d) {
     if (!d.wq) { const w = wqDemo(d.map.extent); d.wq = d.wqEmpty ? { ...w, sites: [], series: {} } : w; }
@@ -627,6 +636,19 @@
             else d.syncOps[args.p_op] = "conflict";
           }
           return result(d.syncOps[args.p_op]);
+        }
+        // WQ2, as public.monitoring_location and public.monitoring_location_series over the invented location: each member's
+        // results within its dates (the demo's members do not overlap), oldest first, each with its site
+        if (name === "monitoring_location") {
+          const ls = wqOf(d).locations || [];
+          return result(ls.find((l) => args.p_location != null ? l.id === args.p_location : l.members.some((m) => m.monitoring_site_id === args.p_site)) || null);
+        }
+        if (name === "monitoring_location_series") {
+          const l = (wqOf(d).locations || []).find((x) => x.id === args.p_location);
+          const nz = (t) => new Intl.DateTimeFormat("en-CA", { timeZone: "Pacific/Auckland" }).format(new Date(t));
+          return result(!l ? [] : l.members.filter((m) => m.monitoring_site_id != null).flatMap((m) => (wqOf(d).series[m.monitoring_site_id + "|" + args.p_parameter] || [])
+            .filter((r) => (!m.valid_from || nz(r.sampled_at) >= m.valid_from) && (!m.valid_to || nz(r.sampled_at) <= m.valid_to)).map((r) => ({ ...r, site_id: m.monitoring_site_id })))
+            .sort((a, b) => a.sampled_at.localeCompare(b.sampled_at)));
         }
         if (name === "measurement_series") {
           const from = args.from_time ? Date.parse(args.from_time) : -Infinity, to = args.to_time ? Date.parse(args.to_time) : Infinity;

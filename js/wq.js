@@ -4,6 +4,9 @@
 // parameter's series (and a second site to compare, if the person chooses one). Reads only, through the M1a functions
 // wq_sites_near, wq_site_latest and measurement_series as the caller (row-level security decides what comes back).
 // No band, grade or trend is shown: those come later from a versioned analysis method (X1), so each value says "not assessed".
+// WQ2: a site that is a member of a monitoring location (public.monitoring_location: a reviewed list of the site ids a place has
+// had over time) offers its chart as the location's whole record (public.monitoring_location_series), labelled with the location's
+// name and its current site's id, the members and their dates listed under it. Not deployed yet, or in no location: no offer.
 (function (root) {
   const FP = root.FP;
   const M = () => FP.wqModel;
@@ -100,7 +103,7 @@
       try {
         const site = sites.find((s) => s.id === id), latest = M().latest(await rpc(sb, "wq_site_latest", { site: id }));
         if (destroyed) return;
-        entry.loaded = true; entry.latest = latest;
+        entry.loaded = true; entry.latest = latest; entry.location = await locationOf(id);
         if (!latest.rows.length) { entry.panel.replaceChildren(el("p", { class: "wq-status" }, "No results recorded for this site yet.")); return; }
         entry.chart = el("div", { class: "wq-chart", "aria-live": "polite" });
         entry.panel.replaceChildren(
@@ -120,11 +123,26 @@
       }
     }
 
+    // WQ2: the monitoring location a site belongs to, as the caller reads it, or null (none, or the read is not deployed yet).
+    async function locationOf(id) {
+      try { const { data, error } = await sb.rpc("monitoring_location", { p_site: id }); return error ? null : M().location(data); } catch { return null; }
+    }
+    // The chart switches between this site's own series and the location's whole record (read once per parameter).
+    async function toggleLocation(site, entry, row) {
+      entry.useLocation = !entry.useLocation;
+      if (entry.useLocation && entry.locationSeries?.parameter !== row.parameter) {
+        try { entry.locationSeries = { parameter: row.parameter, rows: await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: row.parameter }) }; }
+        catch { entry.useLocation = false; entry.locationSeries = null; }
+      }
+      drawChart(site, entry, row);
+      entry.chart.querySelector(".wq-location-toggle")?.focus({ preventScroll: true });   // drawn again: keep the keyboard on it
+    }
+
     // ---- a parameter: the chart --------------------------------------------------------------------------------
     async function showChart(id, entry, row) {
       const site = sites.find((s) => s.id === id);
       for (const b of entry.panel.querySelectorAll(".wq-value")) b.setAttribute("aria-expanded", String(b.dataset.parameter === row.parameter));
-      entry.parameter = row.parameter; entry.compare = null;
+      entry.parameter = row.parameter; entry.compare = null; entry.useLocation = false;
       entry.chart.replaceChildren(el("p", { class: "wq-status", role: "status" }, "Loading the chart…"));
       let series;
       try { series = await rpc(sb, "measurement_series", { site: id, parameter_key: row.parameter }); } catch { entry.chart.replaceChildren(el("p", { class: "wq-status" }, "Couldn't read this series.")); return; }
@@ -145,11 +163,14 @@
         drawChart(site, entry, row);
         entry.chart.querySelector(".wq-compare-select")?.focus({ preventScroll: true });   // the picker is drawn again: keep the keyboard on it
       });
-      const bar = el("div", { class: "wq-chart-bar" }, others.length ? el("label", {}, el("span", {}, "Compare with "), select_) : null,
+      const whole = !!(entry.location && entry.useLocation && entry.locationSeries?.parameter === row.parameter);
+      const toggle = entry.location ? el("button", { type: "button", class: "link wq-location-toggle", "aria-pressed": String(whole), onclick: () => toggleLocation(site, entry, row) },
+        whole ? "Show this site only" : "Show the whole record at " + entry.location.name) : null;
+      const bar = el("div", { class: "wq-chart-bar" }, others.length ? el("label", {}, el("span", {}, "Compare with "), select_) : null, toggle,
         el("button", { type: "button", class: "link wq-chart-close", onclick: () => { entry.handle?.destroy(); entry.handle = null; entry.chart.replaceChildren(); for (const b of entry.panel.querySelectorAll(".wq-value")) b.setAttribute("aria-expanded", "false"); } }, "Close chart"));
       entry.chart.replaceChildren(bar, host);
-      const data = M().chartData({ site, parameter: row.parameter, name: row.name, unit: row.unit, series: entry.series, attribution: entry.latest.attribution || (entry.latest.source ? "Source: " + entry.latest.source + "." : ""),
-        provisional: row.provisional, compare: entry.compare, provenance: lineOf(entry.latest) });
+      const data = M().chartData({ site, parameter: row.parameter, name: row.name, unit: row.unit, series: whole ? entry.locationSeries.rows : entry.series, attribution: entry.latest.attribution || (entry.latest.source ? "Source: " + entry.latest.source + "." : ""),
+        provisional: row.provisional, compare: entry.compare, provenance: lineOf(entry.latest), ...(whole ? { location: entry.location } : {}) });
       entry.handle = FP.blocks.render(host, { block: "chart", owner: { farm: farm.id } }, { read: () => data, level: 4, href: FP.href });
     }
 

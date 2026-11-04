@@ -100,19 +100,41 @@
     const first = list(rows).find((r) => r && (text(r.source_name) || text(r.attribution)));
     return { rows: out, source: text(first?.source_name), attribution: text(first?.attribution), provisional: out.some((r) => r.provisional) };
   }
+  // ---- WQ2: a monitoring location (public.monitoring_location) ----------------------------------------------------------
+  // A place whose record has passed between site ids (a site replaced by another, a recorder beside it), joined by a reviewed
+  // list, never by name or distance. Its label is its name and its CURRENT site's id; its members are listed with their roles
+  // and dates. null when the read gave nothing usable (no location, or none of its sites readable).
+  const ROLE_WORDS = { current: "current", successor: "successor", predecessor: "predecessor", co_located: "co-located" };
+  const dayFormat = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const day = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(text(d)) ? dayFormat.format(new Date(d + "T00:00:00Z")) : "");
+  function location(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || !Number.isFinite(Number(raw.id)) || !text(raw.name)) return null;
+    const members = list(raw.members).filter((m) => m && text(m.external_id) && ROLE_WORDS[m.role]);
+    const current = members.find((m) => m.role === "current" && m.monitoring_site_id != null) || members.find((m) => m.monitoring_site_id != null);
+    return current ? { id: Number(raw.id), key: text(raw.key), name: text(raw.name), current, members } : null;
+  }
+  const locationLabel = (loc) => loc.name + " (" + loc.current.external_id + ")";
+  const memberText = (m) => m.external_id + " (" + ROLE_WORDS[m.role] +
+    (day(m.valid_from) && day(m.valid_to) ? ", " + day(m.valid_from) + " to " + day(m.valid_to) : day(m.valid_from) ? ", from " + day(m.valid_from) : day(m.valid_to) ? ", to " + day(m.valid_to) : "") + ")";
+  const locationLine = (loc) => "Combined record of " + loc.name + ": " + loc.members.map(memberText).join(", ") +
+    ". Each site's results count only within its dates; where dates overlap, the current site's are used.";
+
   // The Chart block's data for a site and parameter: the series read, the unit, the source's attribution and the provisional
   // flag from the latest row. No bands (none are passed), so the chart says "not assessed". A comparison site is a second series.
-  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance }) {
+  // WQ2: with a location, the series is the location's combined record, labelled with its name and current site's id, and the
+  // first provenance line lists its members and their dates.
+  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance, location: loc }) {
     const points = (rows) => list(rows).filter((r) => r && r.value !== null && r.value !== undefined).map((r) => ({
       t: r.sampled_at, value: Number(r.value), qualifier: CENSORED.includes(r.qualifier) ? r.qualifier : null, text: text(r.value_text) || null }));
+    const lines = loc ? [locationLine(loc), ...list(typeof provenance === "string" ? [provenance] : provenance)] : provenance;
     return {
-      title: (name || parameter) + " at " + (site?.name || "this site"),
+      title: (name || parameter) + " at " + (loc ? locationLabel(loc) : site?.name || "this site"),
       parameter: { key: parameter, name: name || parameter, unit: unit || text(list(series)[0]?.unit) },
-      attribution: attribution || "", provisional: !!provisional, ...(bands ? { bands } : {}), ...(provenance ? { provenance } : {}),
-      series: [{ id: "site-" + site?.id, label: site?.name || "This site", owner: site?.owner || "", points: points(series) },
+      attribution: attribution || "", provisional: !!provisional, ...(bands ? { bands } : {}), ...(lines ? { provenance: lines } : {}),
+      series: [{ id: loc ? "location-" + loc.id : "site-" + site?.id, label: loc ? locationLabel(loc) : site?.name || "This site", owner: site?.owner || "", points: points(series) },
         ...(compare?.site ? [{ id: "site-" + compare.site.id, label: compare.site.name, owner: compare.site.owner || "", points: points(compare.series) }] : [])],
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData };
+  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData, location, locationLabel, locationLine };
 });
