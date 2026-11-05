@@ -267,7 +267,9 @@
     const r = G().readiness(result);
     const box = el("section", { class: "group-card group-readiness", "data-card": "readiness" }, el("h2", {}, "Onboarding readiness"),
       el("p", { class: "group-fine" }, "The onboarding report's checks, run on each member farm in group totals. Counts of farms; a farm is listed only where both the group and its owner allow it. Figures from fewer than " + G().K + " farms are never shown, and no farm's private documents are read."),
-      el("p", {}, r.summary));
+      el("p", {}, r.summary),
+      // ON3d: a farm's "to confirm" decisions are rows written when a farm editor opens its Onboarding view (FU3: said plainly here)
+      el("p", { class: "group-fine", "data-readiness-note": "unopened" }, "A farm whose Onboarding view nobody has opened has no proposal rows yet, so its \"To confirm\" findings count as open until a farm editor opens it."));
     // WQ4: the group's area, with what to do when it has none
     if (area) box.append(el("h3", {}, "Group area"), el("ul", { class: "group-lines" }, el("li", { "data-area": area.state },
       el("span", {}, area.text), el("small", {}, area.detail), ...(area.action ? [el("small", {}, "What to do: " + area.action)] : []))));

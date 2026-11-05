@@ -18,6 +18,7 @@
   const ASSOC_COLUMNS = "id,farm_id,group_member_id,status,group_approved_at,farm_approved_at,ended_at,ended_side,created_at";
   const cache = new Map();   // group id -> { pending, data }, kept while the person moves between the tabs
   const decidedHere = new Set(), refusals = new Map();   // this visit's decisions and refusals, by proposal id
+  const unreadAfterRefusal = new Set();   // refusals whose re-read also failed: the row may still be open, so it keeps its buttons
 
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   // the one write path for people's decisions (ON3a): public.proposals_decide, for every tab
@@ -172,9 +173,10 @@
     for (const c of shown) li.append(el("div", { class: "manage-candidate" }, el("span", {}, c.label + (c.confidence != null ? " · confidence " + c.confidence : "") + (c.signals.length ? " (" + c.signals.join(", ") + ")" : "")), evidenceList(c)));
     if (l.decided && !l.open) li.append(el("small", {}, l.decided));
     // a decision the database refused (another decider got there first, a re-run superseded it, the role was lost): the refusal,
-    // and the row as it is now, with no buttons
+    // and the row as it is now, with no buttons; but when the row could not be read again either, its buttons stay (FU3), with the
+    // error line, since nothing says it is no longer open
     if (refusals.has(l.id)) li.append(el("p", { class: "manage-msg manage-refused", role: "alert" }, refusals.get(l.id)));
-    else if (l.open && M().canDecide(group.role)) li.append(controls(l, group, d, redraw, wrap));
+    if ((!refusals.has(l.id) || unreadAfterRefusal.has(l.id)) && l.open && M().canDecide(group.role)) li.append(controls(l, group, d, redraw, wrap));
     return li;
   }
   function controls(l, group, d, redraw, wrap) {
@@ -192,8 +194,18 @@
       const { data: saved, error } = await decideRpc(args);
       if (error || !saved) {
         // refused: read the row again and show it as it is now (or drop it when it can no longer be read), with the refusal
-        refusals.set(l.id, "Couldn't save the decision: " + (error?.message || "no reply") + ". It is shown as it is now.");
+        const why = "Couldn't save the decision: " + (error?.message || "no reply") + ".";
         const now = await optional(FP.sb.from("proposals").select(PROPOSAL_COLUMNS).eq("id", l.id));
+        if (now == null) {
+          // the re-read failed as well: the row is as it was, still open as far as anyone knows, so it keeps its buttons
+          refusals.set(l.id, why + " And it could not be read again, so it may have changed. Try again, or reopen Manage.");
+          unreadAfterRefusal.add(l.id);
+          redraw();
+          refreshCount(wrap, group, d);
+          return;
+        }
+        refusals.set(l.id, why + " It is shown as it is now.");
+        unreadAfterRefusal.delete(l.id);
         const row = list(now)[0];
         d.proposals = row ? M().replace(d.proposals, row) : d.proposals.filter((p) => p.id !== l.id);
         decidedHere.add(l.id);
@@ -204,6 +216,7 @@
       }
       d.proposals = M().replace(d.proposals, saved);
       decidedHere.add(saved.id);
+      refusals.delete(saved.id); unreadAfterRefusal.delete(saved.id);   // a retry that saves leaves no old refusal behind
       redraw();
       wrap.querySelector('[data-proposal="' + saved.id + '"] .manage-state')?.focus?.();
       refreshCount(wrap, group, d);
@@ -374,6 +387,6 @@
 
   // forget: the cache lasts only across tab switches (group-space.js drops it on entering Manage from another view, on a change of
   // group and on leaving the group space), so a later visit reads the queue again
-  function forget(id) { if (id) cache.delete(id); else cache.clear(); decidedHere.clear(); refusals.clear(); }
+  function forget(id) { if (id) cache.delete(id); else cache.clear(); decidedHere.clear(); refusals.clear(); unreadAfterRefusal.clear(); }
   FP.groupManage = { view, load, readAll, forget };
 })(typeof window === "undefined" ? globalThis : window);
