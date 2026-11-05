@@ -128,14 +128,15 @@
     async function locationOf(id) {
       try { const { data, error } = await sb.rpc("monitoring_location", { p_site: id }); return error ? null : M().location(data); } catch { return null; }
     }
-    // The newest result of the parameter across the location's readable member sites (wq_site_latest of each, in parallel); this site's
-    // own is the fallback when a member can't be read.
-    async function locationLatest(site, entry, row) {
+    // The latest rows of each readable member site (wq_site_latest of each, in parallel; this site's own are already read), by site id.
+    // A member that can't be read has none: the chart then simply has less to say about it.
+    async function membersLatest(site, entry) {
       const ids = [...new Set(list_(entry.location.members).map((m) => m.monitoring_site_id).filter((x) => x != null && x !== site.id))];
-      const others = await Promise.all(ids.map(async (id) => {
-        try { return M().latest(await rpc(sb, "wq_site_latest", { site: id })).rows.find((r) => r.parameter === row.parameter)?.sampled_at || null; } catch { return null; }
+      const out = { [site.id]: entry.latest.rows };
+      await Promise.all(ids.map(async (id) => {
+        try { out[id] = M().latest(await rpc(sb, "wq_site_latest", { site: id })).rows; } catch { out[id] = []; }
       }));
-      return M().latestInstant([row.sampled_at, ...others]) || row.sampled_at;
+      return out;
     }
     // The chart switches between this site's own series and the location's whole record (read once per parameter).
     async function toggleLocation(site, entry, row) {
@@ -143,14 +144,28 @@
       if (entry.useLocation && entry.locationSeries?.parameter !== row.parameter) {
         // FU2: the window the chart draws (the last years of the record, ending at the LOCATION's latest result of this parameter: a
         // predecessor site's own latest is years older), narrowed while a read fills the cap
+        // WQ6 (Q18): the line is the current site's key; another member's different key of the family is read as its own line
         try {
-          const latestAt = await locationLatest(site, entry, row);
+          const latest = await membersLatest(site, entry);
+          const held = Object.fromEntries(Object.entries(latest).map(([id, rows]) => [id, rows.map((r) => r.parameter)]));
+          const plan = M().locationPlan(entry.location, row.parameter, held);
+          const rowOf = (id, key) => list_(latest[id]).find((r) => r.parameter === key);
+          const mainRow = plan.main === row.parameter ? row : rowOf(entry.location.current.monitoring_site_id, plan.main) || row;
+          const latestAt = M().latestInstant([plan.main === row.parameter ? row.sampled_at : null, ...Object.values(latest).map((rows) => list_(rows).find((r) => r.parameter === plan.main)?.sampled_at)]) || row.sampled_at;
           let read = null;
           for (const years of M().LOCATION_WINDOW_YEARS) {
             const from = M().locationWindowStart(latestAt, years), last = years === M().LOCATION_WINDOW_YEARS.at(-1);
-            const rows = await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: row.parameter, ...(from ? { p_from: from } : {}) });
-            read = { parameter: row.parameter, rows, from, years, capped: rows.length >= M().READ_CAP };
+            const rows = await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: plan.main, ...(from ? { p_from: from } : {}) });
+            read = { parameter: row.parameter, rows, from, years, capped: rows.length >= M().READ_CAP, mainRow: plan.main === row.parameter ? null : mainRow, others: [] };
             if (!read.capped || last || !from) break;
+          }
+          for (const o of plan.others) {
+            try {
+              const rows = (await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: o.parameter, ...(read.from ? { p_from: read.from } : {}) }))
+                .filter((r) => r.site_id === o.member.monitoring_site_id);
+              const r0 = rowOf(o.member.monitoring_site_id, o.parameter);
+              if (rows.length) read.others.push({ ...o, name: r0?.name || o.parameter, source: r0?.source_key ? M().sourceName(r0.source_key) || "" : "", rows });
+            } catch { /* that line is left out; the main line stands */ }
           }
           entry.locationSeries = read;
         }
@@ -175,7 +190,9 @@
       entry.handle?.destroy();
       const host = el("div", { class: "block-host wq-chart-host" });
       const others = sites.filter((s) => s.id !== site.id);
-      const select_ = el("select", { class: "wq-compare-select", "aria-label": "Compare with another site" }, el("option", { value: "" }, "No comparison"),
+      const whole = !!(entry.location && entry.useLocation && entry.locationSeries?.parameter === row.parameter);
+      const lines = whole ? entry.locationSeries : null, drawsOther = !!lines?.others?.length;   // WQ6: another member's key takes the second line
+      const select_ = el("select", { class: "wq-compare-select", "aria-label": "Compare with another site", ...(drawsOther ? { disabled: true, title: "The second line shows another site's different key at this location" } : {}) }, el("option", { value: "" }, "No comparison"),
         ...others.map((s) => el("option", { value: String(s.id), ...(entry.compare?.site.id === s.id ? { selected: true } : {}) }, M().compareLabel(s))));
       select_.addEventListener("change", async () => {
         const other = others.find((s) => String(s.id) === select_.value);
@@ -185,14 +202,14 @@
         drawChart(site, entry, row);
         entry.chart.querySelector(".wq-compare-select")?.focus({ preventScroll: true });   // the picker is drawn again: keep the keyboard on it
       });
-      const whole = !!(entry.location && entry.useLocation && entry.locationSeries?.parameter === row.parameter);
       const toggle = entry.location ? el("button", { type: "button", class: "link wq-location-toggle", "aria-pressed": String(whole), onclick: () => toggleLocation(site, entry, row) },
         whole ? "Show this site only" : "Show the whole record at " + entry.location.name) : null;
       const bar = el("div", { class: "wq-chart-bar" }, others.length ? el("label", {}, el("span", {}, "Compare with "), select_) : null, toggle,
         el("button", { type: "button", class: "link wq-chart-close", onclick: () => { entry.handle?.destroy(); entry.handle = null; entry.chart.replaceChildren(); for (const b of entry.panel.querySelectorAll(".wq-value")) b.setAttribute("aria-expanded", "false"); } }, "Close chart"));
       entry.chart.replaceChildren(bar, host);
-      const data = M().chartData({ site, parameter: row.parameter, name: row.name, unit: row.unit, series: whole ? entry.locationSeries.rows : entry.series, attribution: entry.latest.attribution || (entry.latest.source ? "Source: " + entry.latest.source + "." : ""),
-        provisional: row.provisional, compare: entry.compare, provenance: lineOf(entry.latest), ...(whole ? { location: entry.location, window: entry.locationSeries } : {}) });
+      const shownRow = lines?.mainRow || row;   // WQ6: the current site's own key, when the one opened is another member's
+      const data = M().chartData({ site, parameter: shownRow.parameter, name: shownRow.name, unit: shownRow.unit, series: whole ? entry.locationSeries.rows : entry.series, attribution: entry.latest.attribution || (entry.latest.source ? "Source: " + entry.latest.source + "." : ""),
+        provisional: shownRow.provisional, compare: entry.compare, provenance: lineOf(entry.latest), ...(whole ? { location: entry.location, window: entry.locationSeries, others: lines.others } : {}) });
       entry.handle = FP.blocks.render(host, { block: "chart", owner: { farm: farm.id } }, { read: () => data, level: 4, href: FP.href });
     }
 

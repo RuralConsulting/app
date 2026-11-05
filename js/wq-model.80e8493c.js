@@ -119,6 +119,30 @@
   const locationLine = (loc) => "Combined record of " + loc.name + ": " + loc.members.map(memberText).join(", ") +
     ". Each site's results count only within its dates; where dates overlap, the current site's are used.";
 
+  // WQ6 (Q18 default): a location's line is drawn on its CURRENT member's key; another member's different key of the same family
+  // (the recorder's nitrate-N beside the current site's nitrate-nitrite-N) is its own labelled line, never pooled with it.
+  // FAMILIES mirrors supabase/functions/_shared/wq/families.data.ts (tests/app/wq.test.cjs fails when they differ); a key with no
+  // declared family is its own family.
+  const FAMILIES = Object.freeze({ "nitrate-n": "nitrate", "nitrate-nitrite-n": "nitrate" });
+  const familyOf = (k) => (Object.prototype.hasOwnProperty.call(FAMILIES, k) ? FAMILIES[k] : k);
+  const sameFamily = (a, b) => a !== b && familyOf(a) === familyOf(b);
+  // The plan for a location's whole-record chart of `parameter`. `held` is {site id: [parameter keys the site has]}. The line is
+  // drawn on `parameter` when the current site has it; else on the current site's own key of the family (so the line is the
+  // current site's, as its label says); `others` are the other members' results on a different key of that family, one entry per
+  // member and key. Nothing in `others` is ever part of the main line.
+  function locationPlan(loc, parameter, held) {
+    const has = (id, k) => list(held?.[id]).includes(k), cur = loc.current.monitoring_site_id;
+    let main = parameter;
+    if (!has(cur, parameter)) main = Object.keys(FAMILIES).find((k) => sameFamily(k, parameter) && has(cur, k)) || parameter;
+    const others = [];
+    for (const m of loc.members) {
+      if (m.monitoring_site_id == null || m.monitoring_site_id === cur) continue;
+      for (const k of list(held?.[m.monitoring_site_id])) if (sameFamily(k, main)) others.push({ parameter: k, member: m });
+    }
+    return { main, others };
+  }
+  const otherLabel = (o) => o.member.external_id + " (" + ROLE_WORDS[o.member.role] + ")";
+
   // FU2: the location's combined record is read as a window, never whole (public.monitoring_location_series takes p_from / p_to,
   // NZ dates, and answers oldest first; a read that PostgREST caps would drop the NEWEST results). The window is the years the
   // chart draws, ending at the parameter's latest result; it is narrowed (10 years, then 3, then 1) while a read fills the cap.
@@ -148,18 +172,35 @@
   // flag from the latest row. No bands (none are passed), so the chart says "not assessed". A comparison site is a second series.
   // WQ2: with a location, the series is the location's combined record, labelled with its name and current site's id, and the
   // first provenance line lists its members and their dates.
-  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance, location: loc, window: win }) {
+  // WQ6: `others` are other members' results on a different key of the family ({ parameter, name, member, rows }): the first with
+  // results is drawn as its own labelled line in the second place (it takes the comparison's), named in the provenance, never pooled.
+  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance, location: loc, window: win, others }) {
     const points = (rows) => list(rows).filter((r) => r && r.value !== null && r.value !== undefined).map((r) => ({
       t: r.sampled_at, value: Number(r.value), qualifier: CENSORED.includes(r.qualifier) ? r.qualifier : null, text: text(r.value_text) || null }));
-    const lines = loc ? [locationLine(loc), ...(win ? [windowLine(win)] : []), ...list(typeof provenance === "string" ? [provenance] : provenance)].filter(Boolean) : provenance;
+    // The location's label (its name and current site's id) goes on a line only when the current site gave it results; when the
+    // results are all another member's, the line is labelled with that member, never with the current site's id.
+    const ids = loc ? [...new Set(list(series).map((r) => r?.site_id).filter((x) => x != null))] : [];
+    const foreign = !!loc && ids.length > 0 && !ids.includes(loc.current.monitoring_site_id);
+    const lineLabel = !loc ? site?.name || "This site" : foreign ? loc.name + " (" + ids.map((id) => loc.members.find((m) => m.monitoring_site_id === id)?.external_id || id).join(", ") + ")" : locationLabel(loc);
+    const extra = loc ? list(others).filter((o) => o && list(o.rows).some((r) => r && r.value !== null && r.value !== undefined)) : [];
+    const drawn = extra[0] || null;
+    const noteLines = [];
+    if (foreign) noteLines.push(loc.current.external_id + ", the current site that labels this location, has no " + (name || parameter) + " results in this window; these are " + ids.map((id) => loc.members.find((m) => m.monitoring_site_id === id)?.external_id || id).join(", ") + "'s.");
+    for (const o of extra) {
+      noteLines.push(otherLabel(o) + " has " + (o.name || o.parameter) + " results on a different key (" + o.parameter + ")" + (o === drawn ? ": drawn as its own line" : ": not drawn here") +
+        ", never pooled with " + (name || parameter) + " and not used for a band" + (o.source ? " (" + o.source + ")" : "") + ".");
+    }
+    const lines = loc ? [locationLine(loc), ...(win ? [windowLine(win)] : []), ...noteLines, ...list(typeof provenance === "string" ? [provenance] : provenance)].filter(Boolean) : provenance;
+    const second = drawn ? [{ id: "member-" + drawn.member.monitoring_site_id + "-" + drawn.parameter, label: otherLabel(drawn) + ": " + (drawn.name || drawn.parameter), owner: "", note: "another member's key",
+      points: points(list(drawn.rows).filter((r) => r?.site_id == null || r.site_id === drawn.member.monitoring_site_id)) }]
+      : compare?.site ? [{ id: "site-" + compare.site.id, label: compare.site.name, owner: compare.site.owner || "", points: points(compare.series) }] : [];
     return {
-      title: (name || parameter) + " at " + (loc ? locationLabel(loc) : site?.name || "this site"),
+      title: (name || parameter) + " at " + (loc ? (foreign ? lineLabel : locationLabel(loc)) : site?.name || "this site"),
       parameter: { key: parameter, name: name || parameter, unit: unit || text(list(series)[0]?.unit) },
       attribution: attribution || "", provisional: !!provisional, ...(bands ? { bands } : {}), ...(lines ? { provenance: lines } : {}),
-      series: [{ id: loc ? "location-" + loc.id : "site-" + site?.id, label: loc ? locationLabel(loc) : site?.name || "This site", owner: site?.owner || "", points: points(series) },
-        ...(compare?.site ? [{ id: "site-" + compare.site.id, label: compare.site.name, owner: compare.site.owner || "", points: points(compare.series) }] : [])],
+      series: [{ id: loc ? "location-" + loc.id : "site-" + site?.id, label: lineLabel, owner: site?.owner || "", points: points(series) }, ...second],
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData, location, locationLabel, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP };
+  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP };
 });

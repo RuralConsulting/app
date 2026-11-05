@@ -6,7 +6,8 @@
 // results as a table, so nothing depends on seeing the drawing. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
 //
 // Data: { title?, parameter: { name, unit }, attribution?, provenance? (a line or lines naming a reference source, its as-at date and licence), provisional?,
-//         series: [{ id?, label, owner?, points: [{ t, value, qualifier?, text? }] }],     // first = the site, second = comparison
+//         series: [{ id?, label, owner?, note?, points: [{ t, value, qualifier?, text? }] }],     // first = the site, second = comparison
+//         (a second series may carry a `note`, which the key shows in place of "comparison": WQ6, another member's different key)
 //         bands?: { label, demo?, ranges: [{ label, from, to }] } }                         // from/to numbers, null = open ended
 // t is an ISO time or epoch ms; value is the number (the limit, for a censored result); qualifier is "<", ">", "≤" or "≥";
 // text is the value as reported ("<0.002"), shown where given.
@@ -40,7 +41,7 @@
   // Only results with a real time and a real number are drawn; the rest are left out (never turned into zeros).
   function clean(series) {
     return list(series).map((s, i) => ({
-      id: text(s?.id) || "series-" + i, label: text(s?.label) || (i ? "Comparison site" : "This site"), owner: text(s?.owner),
+      id: text(s?.id) || "series-" + i, label: text(s?.label) || (i ? "Comparison site" : "This site"), owner: text(s?.owner), note: text(s?.note),
       points: list(s?.points).map((p) => ({ ...p, ms: ms(p?.t), value: p?.value === null || p?.value === "" ? NaN : Number(p?.value) }))
         .filter((p) => Number.isFinite(p.ms) && Number.isFinite(p.value)).sort((a, b) => a.ms - b.ms),
     }));
@@ -205,7 +206,7 @@
   function legend(series, any, o, data) {
     const items = series.map((s, c) => '<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><line class="chart-line chart-s' + c + '" x1="1" x2="27" y1="6" y2="6"/>' +
       (MARK[c] === "square" ? '<rect class="chart-mark chart-s' + c + '" x="10.5" y="2.5" width="7" height="7"/>' : '<circle class="chart-mark chart-s' + c + '" cx="14" cy="6" r="3.8"/>') + "</svg>" +
-      "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c ? " (comparison)" : "") + "</span></li>");
+      "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c ? " (" + (s.note || "comparison") + ")" : "") + "</span></li>");
     if (any) items.push('<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><path class="chart-mark chart-s0 chart-censored" d="M14 9.5 l-5.5 -9.4 h11 z"/></svg><span>Open triangle: below (&lt;) or above (&gt;) a detection limit, so not an exact value</span></li>');
     return '<ul class="chart-legend" aria-label="Key">' + items.join("") + "</ul>";
   }

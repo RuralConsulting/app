@@ -703,7 +703,7 @@
   // sample): shared sites "run by ECan" (provisional) and one the farm samples itself. Values are a fixed function of the
   // month, so the demo and its screenshots read the same on every day. Shaped as wq_sites_near / wq_site_latest /
   // measurement_series return them (the geometry in NZTM, as the database stores it).
-  const WQ_PARAMS = { "nitrate-nitrite-n": ["Nitrate-nitrite nitrogen (NNN)", "mg/L"], drp: ["Dissolved reactive phosphorus", "mg/L"], "e-coli": ["E. coli", "/100 mL"], turbidity: ["Turbidity", "NTU"] };
+  const WQ_PARAMS = { "nitrate-nitrite-n": ["Nitrate-nitrite nitrogen (NNN)", "mg/L"], "nitrate-n": ["Nitrate nitrogen", "mg/L"], drp: ["Dissolved reactive phosphorus", "mg/L"], "e-coli": ["E. coli", "/100 mL"], turbidity: ["Turbidity", "NTU"] };
   const WQ_SOURCES = {
     "ecan-wq": { name: "Environment Canterbury", attribution: "Source: Environment Canterbury (invented demo values). Results are provisional until reviewed by ECan.", provisional: true },
     "demo-farm-wq": { name: "Example farm's own sampling (synthetic)", attribution: "Source: the farm's own sampling (invented demo values).", provisional: false },
@@ -727,12 +727,15 @@
       // WQ2: the farm bridge site's predecessor (sampled Jul 2016 to Jun 2020, then replaced by DEMO-01): no longer listed near the
       // farm, read only through the invented monitoring location below
       { id: 9107, external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", lng: 172.0322, lat: -42.9882, type: "river", params: ["nitrate-nitrite-n", "drp"], from: [2016, 6], to: [2020, 5], base: 1.9, retired: true },
+      // WQ6 (Q18): a recorder beside the farm bridge site (co-located), the only one with nitrate-N; its different key is its own line
+      { id: 9108, external_id: "DEMO-01R", name: "Demo Creek recorder at the farm bridge (synthetic)", lng: 172.0318, lat: -42.9888, type: "river", params: ["nitrate-n"], from: [2023, 0], base: 1.2, retired: true },
     ];
     // WQ2: an invented monitoring location (as public.monitoring_location returns it): the farm bridge site and its predecessor.
     const locations = [{ id: 9301, key: "demo-creek-at-the-farm-bridge", name: "Demo Creek at the farm bridge, synthetic location", note: "Invented for the demo.",
       members: [
         { monitoring_site_id: 9101, source_key: "ecan-wq-sites", external_id: "DEMO-01", name: "Demo Creek at the farm bridge (synthetic)", site_type: "river", role: "current", valid_from: "2020-07-01", valid_to: null, note: null },
-        { monitoring_site_id: 9107, source_key: "ecan-wq-sites", external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", site_type: "river", role: "predecessor", valid_from: "2016-07-01", valid_to: "2020-06-30", note: null }] }];
+        { monitoring_site_id: 9107, source_key: "ecan-wq-sites", external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", site_type: "river", role: "predecessor", valid_from: "2016-07-01", valid_to: "2020-06-30", note: null },
+        { monitoring_site_id: 9108, source_key: "ecan-wq-sites", external_id: "DEMO-01R", name: "Demo Creek recorder at the farm bridge (synthetic)", site_type: "river", role: "co_located", valid_from: "2023-01-01", valid_to: null, note: null }] }];
     const sites = defs.filter((d) => !d.retired).map((d) => ({ site_id: d.id, external_id: d.external_id, name: d.name, site_type: d.type, distance_m: toBox(d.lng, d.lat), geom: place(d.lng, d.lat),
       source_key: d.own ? "demo-farm-wq" : d.group ? "demo-hdlg-wq" : "ecan-wq-sites", owner_farm_id: d.own ? FARM : null, owner_org_id: d.group ? GROUP : null }));
     const series = {};
@@ -746,7 +749,7 @@
         series[d.id + "|" + key] = months.map(([y, m], i) => {
           const sampled_at = new Date(Date.UTC(y, m, 8 + ((i * 5 + k) % 12), 21, 0, 0)).toISOString();
           let value, qualifier = null;
-          if (key === "nitrate-nitrite-n") value = Math.max(0.01, d.base * (1 + 0.45 * wave(i, k) + (m >= 5 && m <= 8 ? 0.25 : 0)));
+          if (key === "nitrate-nitrite-n" || key === "nitrate-n") value = Math.max(0.01, d.base * (1 + 0.45 * wave(i, k) + (m >= 5 && m <= 8 ? 0.25 : 0)));
           else if (key === "drp") { value = Math.max(0.002, 0.008 * (d.base + 0.4) * (1 + 0.6 * wave(i, k + 2))); if (value < 0.01) { value = 0.01; qualifier = "<"; } }   // below the lab's limit: kept as "<0.01"
           else if (key === "e-coli") { value = Math.round(Math.max(1, 110 * d.base * (1 + 1.4 * wave(i, k + 1)) * (1 + (m >= 10 || m <= 1 ? 0.5 : 0)))); if (value > 2419) { value = 2419; qualifier = ">"; } }
           else value = Math.max(0.3, 2.6 * d.base * (1 + 0.8 * wave(i, k + 4)));
