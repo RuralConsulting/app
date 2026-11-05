@@ -11,8 +11,11 @@
 // answer's parameter family (at least 40 sampling times in the last 5 years), LAWA-matched first, then the longer record. A site
 // that belongs to a monitoring location (WQ2) is one line, named for the location and labelled with its current site's id, and
 // its combined record is what is analysed. A farm's own site is never in the group's answer, even when the person can read it as
-// a member of that farm: S5's member levels and k = 3 are not touched. Pure, apart from build(), which makes the reads through
-// the client it is given.
+// a member of that farm: S5's member levels and k = 3 are not touched. WQ7 (Q20 default): where the group's hydrological rank is
+// on, the pick lists ECan's sites on a river reach downstream of member land first and says which rule placed each site
+// (placed_by: "downstream of member land" / "in the group's area", with the reach distance); each line says it. A pick without
+// placed_by (the database before WQ7) is worded as before. Pure, apart from build(), which makes the reads through the client it
+// is given.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./wq-analysis.js") : root.FP.wqAnalysis);
@@ -51,6 +54,14 @@
   // group_wq_pick (WQ3), already in the pick's order (LAWA-matched, then the longer record, then the id: never distance), of a
   // known shared list only; a row for a monitoring location carries the location and is labelled with its current site. A farm's
   // site, or another organisation's, is never included; ECan rows of group_wq_sites are not read here.
+  // WQ7: the rule that placed a pick row, when the pick says (placed_by); null for the pick's older shape or a value it does not know.
+  const PLACED = { "downstream of member land": "downstream", "in the group's area": "area" };
+  const placedOf = (r) => {
+    const rule = PLACED[r.placed_by];
+    if (!rule) return null;
+    const km = r.downstream_km !== null && r.downstream_km !== undefined && Number.isFinite(Number(r.downstream_km)) ? Number(r.downstream_km) : null;
+    return { rule, words: r.placed_by, km: rule === "downstream" ? km : null };
+  };
   function pickSites(rows, groupId, picks = []) {
     const own = [], reference = [];
     const named = (r) => ({ id: Number(r.site_id), name: str(r.name) ? r.name : "Site " + r.external_id, external_id: String(r.external_id ?? ""), source_key: String(r.source_key ?? "") });
@@ -64,7 +75,7 @@
       const site = named(r), ref = REFERENCE[site.source_key];
       const location = Number.isInteger(Number(r.location_id)) && str(r.location_name) ? { id: Number(r.location_id), key: str(r.location_key) ? r.location_key : null, name: r.location_name } : null;
       reference.push({ ...site, role: "reference", dataset: ref.dataset, who: ref.who, location,
-        record: { n: count(r.n), years: count(r.years), n_last_5y: count(r.n_last_5y), lawa_matched: r.lawa_matched === true } });
+        record: { n: count(r.n), years: count(r.years), n_last_5y: count(r.n_last_5y), lawa_matched: r.lawa_matched === true }, placed: placedOf(r) });
     }
     return { own: own.slice(0, MAX_OWN), reference: reference.slice(0, MAX_REFERENCE), more: Math.max(own.length - MAX_OWN, 0) + Math.max(reference.length - MAX_REFERENCE, 0) };
   }
@@ -118,7 +129,7 @@
     const parameter = s?.parameters?.parameter || b?.parameters?.parameter || null;
     const out = { id: "site-" + site.id, site: { id: site.id, name: site.name, external_id: site.external_id, source_key: site.source_key }, role: site.role, parameter,
       window: s?.parameters?.from ? { from: s.parameters.from, to: s.parameters.to } : b?.parameters?.from ? { from: b.parameters.from, to: b.parameters.to } : null,
-      location: null, record: site.record || null, dataset: null, summary: null, summary_note: null, band: null, not_assessed: null, lawa: null, lawa_note: null, caveats: [], sources: [], error: null };
+      location: null, record: site.record || null, placed: site.placed || null, dataset: null, summary: null, summary_note: null, band: null, not_assessed: null, lawa: null, lawa_note: null, caveats: [], sources: [], error: null };
     // WQ3/WQ2: a monitoring location is named for the location and labelled with its current site's id (the site on this line); its
     // members and their dates are as the function recorded them in the preview
     if (site.location) out.location = { id: site.location.id, key: site.location.key, name: site.location.name, current: site.external_id,
@@ -170,12 +181,17 @@
     (l.lawa.attribution ? ". " + l.lawa.attribution.replace(/\.$/, "") : "") + ".";
   const figures = (l) => (l.summary ? plural(l.summary.n, "sample", "samples") + (l.summary.below || l.summary.above ? " (" + [l.summary.below ? l.summary.below + " below" : "", l.summary.above ? l.summary.above + " above" : ""].filter(Boolean).join(", ") + " a detection limit)" : "") + ", median " + l.summary.median
     : l.error ? "couldn't be calculated: " + l.error : "no results: " + (l.summary_note || "none in the window").replace(/\.$/, ""));
-  // A line as the Answer block's item: the site; a short reason (figures, band, source); the whole line behind All.
+  // WQ7: which rule placed an ECan site in the answer, as a short tag and as a sentence (null: the pick did not say).
+  const placedTag = (l) => (l.placed ? l.placed.words : null);
+  const placedText = (l) => !l.placed ? null : l.placed.rule === "downstream"
+    ? "Placed by the rule \"downstream of member land\": on a river reach (REC2) below the group's member blocks" + (l.placed.km !== null ? ", " + l.placed.km.toFixed(1) + " km down the river from member land" : "") + "."
+    : "Placed by the rule \"in the group's area\": inside the group's area.";
+  // A line as the Answer block's item: the site; a short reason (figures, band, source, the rule that placed it); the whole line behind All.
   function item(l) {
     const who = l.role === "own" ? "the group's own site" : "ECan site";
     const text = l.location ? l.location.name + " (" + who + " " + l.location.current + ")" : l.site.name + " (" + who + ")";
-    const because = figures(l) + "; " + (l.band ? "band " + l.band.band : "not banded") + " · source " + l.dataset.key;
-    const detail = [l.site.source_key + " " + l.site.external_id + ", " + l.dataset.name + " (" + l.dataset.key + "), " + l.dataset.owner + ".",
+    const because = figures(l) + "; " + (l.band ? "band " + l.band.band : "not banded") + " · source " + l.dataset.key + (placedTag(l) ? " · " + placedTag(l) : "");
+    const detail = [l.site.source_key + " " + l.site.external_id + ", " + l.dataset.name + " (" + l.dataset.key + "), " + l.dataset.owner + ".", placedText(l),
       l.location ? "Monitoring location " + l.location.name + ", labelled with its current site " + l.location.current +
         (l.location.members.length ? ": the combined record of " + l.location.members.map(memberText).join(", ") + ". Each site's results count only within its dates." : ".") : null,
       (l.parameter ? (PARAMETER[l.parameter] || l.parameter) + (l.window ? ", " + day(l.window.from) + " to " + day(l.window.to) : "") + ": " : "") + figures(l) + ".",
@@ -202,7 +218,8 @@
       (lawa.length ? "; LAWA's state and trend at " + plural(lawa.length, "ECan site", "ECan sites") : "");
     return { ...base, answer: { text, because }, items, total: items.length,
       currency: "Written by code from the platform's tested water-quality library (" + dedupe(lines.flatMap((l) => l.sources.map((x) => x.method))).join(", ") + ") as you can read it now; nothing is stored and no AI is used. " +
-        "Datasets are never pooled. " + "ECan's sites are the active ones in the group's area with a long record of this parameter (at least 40 samples in the last 5 years), LAWA-matched first, then the longest record; not the nearest. " +
+        "Datasets are never pooled. " + "ECan's sites are the active ones in the group's area with a long record of this parameter (at least 40 samples in the last 5 years), " +
+        (ref.some((l) => l.placed?.rule === "downstream") ? "those on a river reach downstream of member land first; among them and among the rest, " : "") + "LAWA-matched first, then the longest record; not the nearest. " +
         (r.more ? plural(r.more, "more site", "more sites") + " with such a record are not shown here. " : "") + "The chart below shows the results themselves." };
   }
 

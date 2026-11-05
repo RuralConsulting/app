@@ -852,6 +852,8 @@
   const DEMO_LOCATION = { id: 9301, key: "demo-creek-at-the-farm-bridge", name: "Demo Creek at the farm bridge, synthetic location", current_site_id: 9101,
     members: [{ monitoring_site_id: 9101, source_key: "ecan-wq-sites", external_id: "DEMO-01", name: "Demo Creek at the farm bridge (synthetic)", role: "current", valid_from: "2020-07-01", valid_to: null, samples: 60 },
       { monitoring_site_id: 9107, source_key: "ecan-wq-sites", external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", role: "predecessor", valid_from: "2016-07-01", valid_to: "2020-06-30", samples: 0 }] };
+  // WQ7: the demo group's downstream set (public.group_downstream_sites): site -> km along the river from member land (invented)
+  const DEMO_DOWNSTREAM_KM = { 9101: 1.4, 9103: 6.2 };
   function demoPick(wq, args) {
     const since = Date.UTC(2021, 8, 1), recent = Date.UTC(2025, 8, 1);
     const rows = wq.sites.filter((s) => s.source_key === "ecan-wq-sites" && !s.owner_org_id && !s.owner_farm_id).map((s) => {
@@ -861,11 +863,16 @@
     }).filter((x) => x.active && x.n5 >= 40);
     const lawa = (x) => demoLawa(x.s.site_id).length > 0;
     rows.sort((a, b) => lawa(b) - lawa(a) || b.years - a.years || b.n - a.n || a.s.external_id.localeCompare(b.s.external_id));
+    // WQ7 (Q20 default, on for the demo's HDLG example): the sites on a river reach downstream of member land first, each tier in
+    // WQ3's order; every row says which rule placed it (invented reach distances).
+    const down = (x) => (DEMO_DOWNSTREAM_KM[x.s.site_id] !== undefined ? 1 : 0);
+    rows.sort((a, b) => down(b) - down(a));          // stable: WQ3's order is kept within each tier
     return rows.map((x, i) => {
       const loc = x.s.site_id === DEMO_LOCATION.current_site_id ? DEMO_LOCATION : null;
       return { pick_rank: i + 1, site_id: x.s.site_id, external_id: x.s.external_id, name: x.s.name, site_type: x.s.site_type, source_key: x.s.source_key, family: "nitrate",
         parameter_keys: ["nitrate-nitrite-n"], n: x.n, years: x.years, n_last_5y: x.n5, first_sampled: null, last_sampled: x.s.last_sampled, lawa_matched: lawa(x),
-        location_id: loc ? loc.id : null, location_key: loc ? loc.key : null, location_name: loc ? loc.name : null, member_site_ids: [x.s.site_id], total: rows.length };
+        location_id: loc ? loc.id : null, location_key: loc ? loc.key : null, location_name: loc ? loc.name : null, member_site_ids: [x.s.site_id], total: rows.length,
+        placed_by: down(x) ? "downstream of member land" : "in the group's area", downstream_km: down(x) ? DEMO_DOWNSTREAM_KM[x.s.site_id] : null };
     });
   }
   function demoAnalysis(d, body) {
