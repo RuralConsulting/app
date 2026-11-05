@@ -34,7 +34,7 @@
   const SECTIONS = [["farm", "The farm"], ["context", "Public context"], ["documents", "Documents"], ["proposals", "What can be proposed"],
     ["checks", "Gaps, duplicates and mismatches"], ["sharing", "Sharing"], ["effort", "Effort"]];
   const RULES = ["holding.none", "holding.parcels", "parcel.not_current", "area.mismatch", "area.agrees", "consent.not_in_ecan",
-    "consent.not_recorded", "consent.status_differs", "consent.no_conditions", "consent.no_decision", "consent.ecan_not_loaded",
+    "consent.not_recorded", "consent.status_differs", "consent.no_conditions", "consent.no_decision", "consent.ecan_not_loaded", "consent.candidates_more",
     "document.duplicate", "document.tier_unconfirmed", "document.held", "fep.missing", "fep.not_read", "fep.read_in", "fep.confirm_report",
     "context.not_loaded", "context.found", "context.none", "context.unreadable", "sharing"];
   // The public context the report looks for: [key, label, source keys, what it is called when counted (one, many)].
@@ -242,6 +242,12 @@
       out.push(item("proposals", "consent.not_recorded", "propose", crcOf(k.consent_no), "ECan consent " + crcOf(k.consent_no) + " is on the farm but not in its register",
         { detail: [k.consent_type || k.permit_type, k.status, k.valid_to ? "expires " + date(k.valid_to) : null].filter(Boolean).join(" · ") + ". An advisor adds it to the register or records that it isn't the farm's.",
           source: { kind: "reference", key: "ecan-consents", name: "Resource consents (ECan)", as_at: day(c.ecan_as_at) }, action: { kind: "advisor", label: "For an advisor" }, evidence: k }));
+    // CAP3: the database reads at most 300 of a farm's on-farm ECan consents (consent_candidates_for); when it cut the list, one line
+    // says so whatever the 300 read were, so the list is never cut silently
+    if (c.candidates_truncated === true)
+      out.push(item("proposals", "consent.candidates_more", "unavailable", "ecan", "ECan lists more than 300 consents on this farm: only 300 of them are checked here",
+        { detail: "The rest are not listed or checked against the register in this report. An advisor checks the farm's consents in ECan's own records.",
+          source: { kind: "reference", key: "ecan-consents", name: "Resource consents (ECan)", as_at: day(c.ecan_as_at) }, evidence: [300, true] }));
     for (const a of list(c.register).filter((x) => !x.has_conditions && x.consent_no))
       out.push(item("proposals", "consent.no_conditions", "propose", crcOf(a.consent_no), "Conditions of " + crcOf(a.consent_no) + " aren't recorded: fetch them from ECan",
         { detail: "An advisor fetches the conditions from ECan's Open Data Portal and accepts them; nothing is recorded until then.", action: { kind: "whats_due", label: "Open What's due" },
