@@ -266,10 +266,13 @@
   function readinessCard(result, area) {
     const r = G().readiness(result);
     const box = el("section", { class: "group-card group-readiness", "data-card": "readiness" }, el("h2", {}, "Onboarding readiness"),
-      el("p", { class: "group-fine" }, "The onboarding report's checks, run on each member farm in group totals. Counts of farms; a farm is listed only where both the group and its owner allow it. Figures from fewer than " + G().K + " farms are never shown, and no farm's private documents are read."),
+      el("p", { class: "group-fine" }, "The onboarding report's checks, as last worked out for each member farm in group totals. Counts of farms; a farm is listed only where both the group and its owner allow it. Figures from fewer than " + G().K + " farms are never shown, and no farm's private documents are read."),
       el("p", {}, r.summary),
       // ON3d: a farm's "to confirm" decisions are rows written when a farm editor opens its Onboarding view (FU3: said plainly here)
       el("p", { class: "group-fine", "data-readiness-note": "unopened" }, "A farm whose Onboarding view nobody has opened has no proposal rows yet, so its \"To confirm\" findings count as open until a farm editor opens it."));
+    // RDY1: the figures are each farm's stored outcome; when one counts, and how many farms have none yet
+    if (r.dateRule) box.append(el("p", { class: "group-fine", "data-readiness-note": "date-rule" }, r.dateRule));
+    if (r.pending) box.append(el("p", { "data-readiness": "not-assessed" }, r.pending.text));
     // WQ4: the group's area, with what to do when it has none
     if (area) box.append(el("h3", {}, "Group area"), el("ul", { class: "group-lines" }, el("li", { "data-area": area.state },
       el("span", {}, area.text), el("small", {}, area.detail), ...(area.action ? [el("small", {}, "What to do: " + area.action)] : []))));
@@ -281,7 +284,8 @@
       ? el("ul", { class: "group-lines" }, ...r.findings.map((f) => el("li", { "data-rule": f.rule }, f.text)))
       : el("p", {}, "Nothing open on any farm in group totals."));
     if (r.rows.length) box.append(el("h3", {}, "Farms shown in detail"), el("ul", { class: "group-lines readiness-farms" }, ...r.rows.map((f) =>
-      el("li", {}, el("span", {}, f.label + " · " + f.readiness), el("small", {}, f.findings.join("; ") || "Nothing open")))));
+      el("li", {}, el("span", {}, f.label + " · " + f.readiness),
+        el("small", {}, f.notAssessed ? "No checks worked out yet" : (f.findings.join("; ") || "Nothing open") + (f.assessedOn ? " · as at " + f.assessedOn : ""))))));
     return box;
   }
   function layersCard() {

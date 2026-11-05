@@ -154,10 +154,18 @@
     "fep.confirm_report": "A plan's confirm report waiting",
   };
   const farmsText = (n) => n == null ? SUPPRESSED : plural(Number(n), "farm", "farms");
+  // RDY1: the database counts each farm's stored outcome (public.farm_onboarding_summary), worked out when a farm editor opens the
+  // farm's Onboarding view or at the group's load; a farm with none current is "not yet assessed". Read tolerantly: an answer
+  // without these keys (a database before RDY1) shows as it did.
+  const NOT_ASSESSED = "Not yet assessed";
+  const dateRule = (days) => "A farm is counted once its checks have been worked out in the last " + days + " days under the rules now in force: "
+    + "when a farm editor opens its Onboarding view, or at the group's load. Until then it is not yet assessed.";
   function readiness(r) {
     if (!r || typeof r !== "object") return null;
     // CAP2: over the database's cap on farms in group totals (truncated, 500) no farm is checked and no figure is given
     const assessed = r.farms_assessed, linked = Number(r.linked_farms) || 0, truncated = r.truncated === true;
+    const days = Number(r.assessed_within_days) || null, hasPending = Object.prototype.hasOwnProperty.call(r, "not_assessed");
+    const pending = hasPending && !truncated && linked ? { farms: r.not_assessed ?? null, text: NOT_ASSESSED + ": " + farmsText(r.not_assessed) } : null;
     const byState = new Map((Array.isArray(r.by_state) ? r.by_state : []).map((s) => [s.state, s.farms]));
     const summary = !linked ? "No member farms are linked in the tool yet."
       : truncated ? "Too many member farms to check here: " + plural(linked, "linked farm", "linked farms") + ". The checks run for groups of up to "
@@ -168,10 +176,11 @@
       .map((f) => ({ rule: f.rule, state: f.state, held: f.farms == null, text: (FINDINGS[f.rule] || f.rule) + ": " + farmsText(f.farms) }));
     const rows = (Array.isArray(r.farms) ? r.farms : []).map((f) => ({
       ref: f.ref, level: f.level, label: f.level === "named" && f.name ? f.name : f.label || "A member farm (not named)",
-      readiness: (READINESS.find(([k]) => k === f.readiness) || [null, f.readiness])[1],
-      findings: Object.entries(f.findings || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => (FINDINGS[k] || k) + (Number(n) > 1 ? " (" + n + ")" : "")) }));
+      readiness: f.readiness === "not_assessed" ? NOT_ASSESSED : (READINESS.find(([k]) => k === f.readiness) || [null, f.readiness])[1],
+      findings: Object.entries(f.findings || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => (FINDINGS[k] || k) + (Number(n) > 1 ? " (" + n + ")" : "")),
+      ...(f.readiness === "not_assessed" ? { notAssessed: true } : {}), ...(f.assessed_on ? { assessedOn: shortDate(f.assessed_on) } : {}) }));
     return { summary, states, statesHeld: states.every((s) => s.farms == null), findings, rows, truncated,
-      empty: assessed === 0 || !linked || truncated };
+      empty: assessed === 0 || !linked || truncated, pending, dateRule: days && !truncated ? dateRule(days) : null };
   }
 
   // ---- the group's area (WQ4) --------------------------------------------------------------------------------------------
@@ -196,5 +205,5 @@
   }
 
   return { match, href, views, viewLabel, LEVELS, LEVEL_TEXT, K, level, canManage, canWrite, memberLines, contributing, attribution,
-    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED, READINESS, FINDINGS, readiness, groupArea };
+    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED, READINESS, NOT_ASSESSED, FINDINGS, readiness, groupArea };
 });

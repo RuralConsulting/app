@@ -201,6 +201,7 @@
         const rest = { ...keep };
         for (const m of migrate) if (left.has(m.key) && m.from === "browser") rest[m.key] = draft[m.key];
         draft = rest; writeDraft(user, farm, draft);
+        if (moved) storeOutcome();
         if (moved) { message = moved === 1 ? "One check you had ticked in this browser or a saved report is now a decision on the farm's record." : moved + " checks you had ticked in this browser or a saved report are now decisions on the farm's record."; rebuild(); }
       } catch {}
     }
@@ -211,6 +212,9 @@
       const dec = e.target.closest("[data-onboarding-decide]");
       if (dec) await decide(dec);
     };
+    // RDY1: ON2's group readiness counts the farm's stored outcome, which the writer stores; after a decision it is run once more,
+    // in the background (nothing waits for it, and a failure changes nothing here: the next visit or the group's load stores it)
+    function storeOutcome() { if (env.canEdit) { try { Promise.resolve(env.sb.rpc("farm_onboarding_sync", { f: farm })).catch(() => {}); } catch {} } }
     async function decide(button) {
       const id = button.dataset.proposalId, item = report.items.find((i) => i.proposal && String(i.proposal.id) === String(id));
       if (!item || !env.canEdit) return;
@@ -225,6 +229,7 @@
       try { const r = await env.sb.rpc("proposals_decide", args); row = r?.data || null; failure = r?.error ? (r.error.message || String(r.error)) : row ? null : "no reply"; } catch (err) { failure = err?.message || String(err); }
       if (!row) { for (const b of box.querySelectorAll("button")) b.disabled = false; say("Couldn't save the decision: " + failure); return; }
       proposals = (proposals || []).map((p) => (p.id === row.id ? row : p));
+      storeOutcome();
       message = null; rebuild({ open: item.key });
       host.querySelector('[data-item-key="' + CSS.escape(item.key) + '"] summary')?.focus();
     }

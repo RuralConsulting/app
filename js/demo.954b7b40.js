@@ -409,7 +409,8 @@
     if (name === "group_wq_presets") return [[DEMO_PRESET]];
     if (name === "group_readiness") {
       // as the database (public.group_readiness): a group admin only; ON1's findings per farm in totals (invented here),
-      // counted with the same k = 3 rule, the readiness states held back together, rows only at anonymous or named
+      // counted with the same k = 3 rule, the readiness states held back together, rows only at anonymous or named.
+      // RDY1: every demo farm's stored outcome is current (none "not yet assessed"), worked out on an invented date.
       if (d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role !== "admin") return [null];
       const inTotals = MEMBERS.filter((m) => level(m) !== "none"), small = (n) => n > 0 && n < 3, suppressed = [];
       const fig = (key, ms) => { if (small(ms.length) || small(ms.filter((m) => m.share === "aggregated").length)) { suppressed.push(key); return null; } return ms.length; };
@@ -420,10 +421,12 @@
       for (const k of suppressed.filter((x) => x.startsWith("state:"))) suppressed.splice(suppressed.indexOf(k), 1);
       if (heldStates) suppressed.push("by_state");
       const byFinding = Object.entries(READINESS_RULES).map(([rule, state]) => ({ rule, state, farms: fig("finding:" + rule, inTotals.filter((m) => m.findings[rule])) }));
-      return [{ schema: "group-readiness/1", k: 3, member_detail: g.setting, linked_farms: MEMBERS.length, farms_assessed: assessed,
+      return [{ schema: "group-readiness/1", k: 3, member_detail: g.setting, linked_farms: MEMBERS.length, truncated: false,
+        assessed_within_days: 90, farms_assessed: assessed, not_assessed: fig("not_assessed", []),
         by_state: states.map((x) => ({ state: x.state, farms: heldStates ? null : x.farms })), by_finding: byFinding,
         farms: inTotals.filter(detail).map((m) => ({ ref: m.id, label: level(m) === "named" ? m.name : "Member farm " + demoRefLabel(m.id),
-          name: level(m) === "named" ? m.name : null, level: level(m), readiness: readiness(m.findings), findings: m.findings })), suppressed: suppressed.sort() }];
+          name: level(m) === "named" ? m.name : null, level: level(m), readiness: readiness(m.findings), findings: m.findings, assessed_on: "2026-11-04" })),
+        suppressed: suppressed.sort() }];
     }
     if (name === "group_member_summary") {
       const inTotals = MEMBERS.filter((m) => level(m) !== "none"), from = args.p_from ? Date.parse(args.p_from) : -Infinity, to = args.p_to ? Date.parse(args.p_to) : Infinity;
