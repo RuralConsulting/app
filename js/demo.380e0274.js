@@ -691,8 +691,9 @@
     for (const it of items) {
       if (rows.some((p) => p.farm_id === f && p.subject_key === it.key && ["proposed", "ambiguous", "accepted", "rejected"].includes(p.status))) continue;
       const tail = it.key.slice(it.key.indexOf(":") + 1);
+      // FU3b: a "to check" or "missing" line is acknowledged (seen, correct or not the farm's)
       const candidate = it.rule === "consent.not_recorded" ? { action: "add_to_register", consent_no: tail } : it.rule === "consent.no_conditions" ? { action: "fetch_conditions", consent_no: tail }
-        : it.rule === "fep.confirm_report" ? { action: "confirm_report", document_id: tail } : { action: "read_plan_in", document_id: tail };
+        : it.rule === "fep.confirm_report" ? { action: "confirm_report", document_id: tail } : it.rule === "fep.not_read" ? { action: "read_plan_in", document_id: tail } : { action: "acknowledge" };
       rows.push({ id: ++farmProposalId, farm_id: f, org_id: null, kind: OM.FARM_CHECK_KIND, subject: { rule: it.rule, evidence: tail }, subject_key: it.key, document_id: null,
         evidence: { rule: it.rule }, candidates: [candidate], status: "proposed", decision: null, decided_by: null, decided_at: null, applied_at: null, created_at: now });
       made++;

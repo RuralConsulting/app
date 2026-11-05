@@ -16,6 +16,10 @@
 // written by public.farm_onboarding_sync) that a farm editor accepts or sets aside through public.proposals_decide; build() takes
 // those rows (opts.proposals) and a decided one sits on the item as its `checked` (accepted: "correct", set aside: "not_ours"),
 // so counts, effort and the stored document read it as they read a tick. ON2 reads the same rows in the database.
+// FU3b: the "verify" ("To check") and "gap" ("Missing") findings too (CHECK_RULES), so no rule's outcome is kept in the browser. Their
+// one candidate is {"action": "acknowledge"}: accepting it is "Seen, correct", setting it aside "Not the farm's"; "To follow up" decides
+// nothing (the line stays open). app.farm_onboarding_checks lists at most CHECK_CAP subjects of each rule; a line past them, or one
+// that rests on a private document, has no row (`unlisted`).
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -49,7 +53,11 @@
   const PLAN_TYPES = ["fep", "fwfp"];
   // ON3d: the findings a farm editor decides as proposals (the "propose" state's rules), and the proposals kind that holds them.
   const FARM_CHECK_KIND = "farm_onboarding_check";
-  const DECISION_RULES = ["fep.not_read", "fep.confirm_report", "consent.not_recorded", "consent.no_conditions"];
+  const PROPOSE_RULES = ["fep.not_read", "fep.confirm_report", "consent.not_recorded", "consent.no_conditions"];
+  const CHECK_RULES = ["holding.none", "parcel.not_current", "area.mismatch", "consent.not_in_ecan", "consent.status_differs", "consent.no_decision",
+    "document.duplicate", "document.tier_unconfirmed", "document.held", "fep.missing"];
+  const DECISION_RULES = [...PROPOSE_RULES, ...CHECK_RULES];
+  const CHECK_CAP = 50;   // app.farm_onboarding_checks: the subjects of one rule listed for a decision at a time
   const OPEN_STATUSES = ["proposed", "ambiguous"], LIVE_STATUSES = ["proposed", "ambiguous", "accepted"];
   const OWN_TYPES = ["onboarding_report", "plan_import", "plan_import_report"];   // the report's and the readers' own files
 
@@ -348,13 +356,14 @@
     return mine.filter((r) => LIVE_STATUSES.includes(r.status)).sort(newest)[0] || mine.filter((r) => r.status === "rejected").sort(newest)[0] || null;
   }
   // Sets each decision-rule item from the table: its proposal (for the buttons) and, once decided, its `checked`. Whatever a saved
-  // report or a browser draft carried onto these items is dropped: the table is the one record of the outcome.
+  // report or a browser draft carried onto these items is dropped: the table is the one record of the outcome. A finding line
+  // (propose, verify, gap) with no row is `unlisted`: it rests on a private document, or is past the first CHECK_CAP of its rule.
   function applyDecisions(items, rows) {
     for (const it of items) {
       if (!DECISION_RULES.includes(it.rule)) continue;
-      delete it.checked; delete it.stale_tick; delete it.proposal;
+      delete it.checked; delete it.stale_tick; delete it.proposal; delete it.unlisted;
       const p = proposalFor(rows, it.key);
-      if (!p) continue;
+      if (!p) { if (["propose", "verify", "gap"].includes(it.state)) it.unlisted = true; continue; }
       it.proposal = { id: p.id, status: p.status, candidates: list(p.candidates), decision: p.decision || null, decided_by: p.decided_by || null, decided_at: p.decided_at || null };
       if (p.status === "accepted" || p.status === "rejected")
         it.checked = { verdict: p.status === "accepted" ? "correct" : "not_ours", note: p.decision?.note ? String(p.decision.note).slice(0, 500) : null, by: p.decided_by || null, at: p.decided_at || null, decided: true };
@@ -369,6 +378,7 @@
       case "fetch_conditions": return "Fetch the conditions of " + (no || "this consent") + " from ECan";
       case "read_plan_in": return "An advisor reads this plan in";
       case "confirm_report": return "An advisor confirms the import from this report";
+      case "acknowledge": return "Seen, correct";
       default: return "Do what is proposed";
     }
   }
@@ -381,21 +391,32 @@
     const chosen = pick != null && pick !== "" ? cands[Number(pick)] : proposal.status === "proposed" ? cands[0] : null;
     return chosen ? { id: proposal.id, status: "accepted", candidate: chosen, note: text } : null;
   }
-  // Ticks the browser kept before ON3d on the decision-rule items: those still valid, as decisions to make (correct -> accepted,
-  // not the farm's -> set aside; "to follow up" decided nothing), and the draft without any decision-rule key, so nothing about
-  // these findings is written back to the browser, except a tick whose line has no proposal yet. `report` was built with the table's rows.
-  function localTicksToMigrate(report, draft) {
+  // Ticks kept before ON3d (the "to confirm" lines) and FU3b (every other finding line) on the decision-rule items: those still valid,
+  // as decisions to make (correct -> accepted, not the farm's -> set aside; "to follow up" decided nothing), and the draft without any
+  // decision-rule key, so nothing about these findings is written back to the browser, except a tick whose line has no proposal yet.
+  // `report` was built with the table's rows. FU3b: `opts.saved` (the last saved report's ticks, as build() would carry them) adds the
+  // ticks `opts.user` saved there: a saved report kept a person's ticks after Save, so they are that person's to move (never another's,
+  // whose name the decision would not carry). The draft's tick wins for a line it also has.
+  function localTicksToMigrate(report, draft, opts = {}) {
     const items = new Map(list(report?.items).map((i) => [i.key, i]));
     const migrate = [], keep = {};
-    for (const [key, t] of Object.entries(draft && typeof draft === "object" ? draft : {})) {
+    const move = (key, t, from) => {
+      const it = items.get(key);
+      if (!it || !it.proposal || !OPEN_STATUSES.includes(it.proposal.status) || !t || !["correct", "not_ours"].includes(t.verdict)) return;
+      if (t.evidence !== undefined && t.evidence !== it.evidence) return;   // what it rested on has changed since
+      if (t.verdict === "correct" && it.proposal.status !== "proposed") return;   // an ambiguous row needs a candidate chosen by a person
+      migrate.push({ key, proposal: it.proposal, action: t.verdict === "correct" ? "accept" : "reject", note: t.note ? String(t.note).slice(0, 500) : "", from });
+    };
+    const mine = draft && typeof draft === "object" ? draft : {};
+    for (const [key, t] of Object.entries(mine)) {
       if (!isDecisionKey(key)) { keep[key] = t; continue; }
       const it = items.get(key);
       if (it && !it.proposal) { keep[key] = t; continue; }   // its line has no proposal (yet): the tick stays until it has one
-      if (!it || !OPEN_STATUSES.includes(it.proposal.status) || !t || !["correct", "not_ours"].includes(t.verdict)) continue;
-      if (t.evidence !== undefined && t.evidence !== it.evidence) continue;   // what it rested on has changed since
-      if (t.verdict === "correct" && it.proposal.status !== "proposed") continue;   // an ambiguous row needs a candidate chosen by a person
-      migrate.push({ key, proposal: it.proposal, action: t.verdict === "correct" ? "accept" : "reject", note: t.note ? String(t.note).slice(0, 500) : "" });
+      move(key, t, "browser");
     }
+    const saved = opts.saved && typeof opts.saved === "object" ? opts.saved : {};
+    for (const [key, t] of Object.entries(saved))
+      if (isDecisionKey(key) && !(key in mine) && t && !t.decided && opts.user && t.by === opts.user) move(key, t, "saved");
     return { migrate, keep };
   }
 
@@ -469,7 +490,7 @@
     const doc = { schema: SCHEMA, rules: RULES_VERSION, thresholds: { area_mismatch_pct: AREA_PCT * 100, area_mismatch_ha: AREA_HA },
       farm: report.farm, generated_at: now || null, generated_by: person ? { id: person.id || null, name: person.name || null } : null,
       inputs_as_at: report.inputs_as_at, inputs_hash: inputs_hash || null, audience: report.audience, counts: report.counts,
-      sections: report.sections.map((s) => ({ key: s.key, title: s.title, items: s.items.map(({ section, proposal, ...i }) => i) })),
+      sections: report.sections.map((s) => ({ key: s.key, title: s.title, items: s.items.map(({ section, proposal, unlisted, ...i }) => i) })),
       ticks: ticksOf(report.items), effort: e };
     return stable(doc);
   }
@@ -502,7 +523,7 @@
     (/json/i.test(d.mime_type || "") || /\.json$/i.test(d.storage_path)) && (num(d.size_bytes) == null || num(d.size_bytes) <= 2 * 1024 * 1024));
   const isIntent = (text) => /\bonboard(ing)?\b|\bget(ting)? started\b|\breadiness\b|\bset ?up (the|this) farm\b/i.test(String(text || ""));
 
-  return { SCHEMA, RULES_VERSION, AREA_PCT, AREA_HA, STATES, VERDICTS, SECTIONS, RULES, THEMES, FARM_CHECK_KIND, DECISION_RULES, build, applyTicks,
+  return { SCHEMA, RULES_VERSION, AREA_PCT, AREA_HA, STATES, VERDICTS, SECTIONS, RULES, THEMES, FARM_CHECK_KIND, DECISION_RULES, PROPOSE_RULES, CHECK_RULES, CHECK_CAP, build, applyTicks,
     applyDecisions, candidateText, decisionArgs, localTicksToMigrate, isDecisionKey, ticksOf, planProposals, heldArea,
     audience, effort, effortLines, effortRecord, documentJson, readDocument, fromDocument, fileName, title, planFiles, isIntent, sourceLine, normTitle };
 });
