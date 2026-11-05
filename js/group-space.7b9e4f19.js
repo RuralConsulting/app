@@ -22,11 +22,15 @@
   const find = (id) => groups.find((g) => g.id === id) || null;
 
   // ---- reads -------------------------------------------------------------------------------------------------------------
+  // HOT1: three reads, each kept once per group, so a slow one never fails a view. The base (the standing answers, Documents and
+  // Create) has no map in it; the extras are the admin's readiness card, the group's area and the reference sources; `group_map`
+  // (every feature of every layer the group owns: the one heavy read) is drawn beside the Map, Documents and Create views, but no
+  // panel waits for it, and a failure or a wait there only fails the map area. The manage space reads none of the three.
+  const MAP_TIMEOUT_MS = 25000;
   async function load(group) {
     const sb = FP.sb, today = typeof sb.today === "function" ? await sb.today() : G().isoDay(Date.now());
     const since = new Date(Date.parse(String(today).slice(0, 10) + "T00:00:00Z") - 30 * 86400000).toISOString();
-    const [map, summary, members, own, documents, shared, sharedDocs, obligations, types, sources, readiness, areas] = await Promise.all([
-      read(sb.rpc("group_map", { g: group.id })),
+    const [summary, members, own, documents, shared, sharedDocs, obligations, types] = await Promise.all([
       optional(sb.rpc("group_member_summary", { g: group.id })),
       optional(sb.rpc("group_member_farms", { g: group.id })),
       optional(sb.from("entries").select("id,type_id,body,captured_at,visibility").eq("org_id", group.id).order("captured_at", { ascending: false })),
@@ -35,6 +39,17 @@
       optional(sb.rpc("group_shared_documents", { group_id: group.id })),
       optional(sb.from("obligations").select("id,code,summary,kind,due_date,recurrence").eq("org_id", group.id)),
       optional(sb.from("record_types").select("id,key,label")),
+    ]);
+    const typeKey = new Map(list(types).map((t) => [t.id, t.key])), label = new Map(list(types).map((t) => [t.key, t.label]));
+    return { group, today: String(today).slice(0, 10), since, map: null, sources: [], summary: summary || {}, members: list(members), types: list(types),
+      typeLabel: (k) => label.get(k) || String(k || "record").replace(/_/g, " "),
+      ownEntries: list(own).map((e) => ({ ...e, record_type: typeKey.get(e.type_id) || "note" })), documents: list(documents),
+      sharedEntries: list(shared), sharedDocuments: list(sharedDocs), obligations: list(obligations), readiness: null, area: null };
+  }
+  // The Map view's own extras (every read optional).
+  async function loadHome(group) {
+    const sb = FP.sb;
+    const [sources, readiness, areas] = await Promise.all([
       // PROV1: where the reference layers came from (the popups' provenance line and the Layers card's Sources entry)
       optional(sb.from("reference_sources").select(FP.provenance.COLUMNS).eq("serve_to_customers", true)),
       // ON2: onboarding readiness of member farms, for group admins only (the database returns null to anyone else)
@@ -42,12 +57,22 @@
       // WQ4: the group's area (a place of kind area the group owns), so a group with none shows as not ready
       G().canManage(group.role) ? optional(sb.from("places").select("code,name,description,method,valid_to").eq("org_id", group.id).eq("kind", "area")) : null,
     ]);
-    if (map) map.sources = list(sources);
-    const typeKey = new Map(list(types).map((t) => [t.id, t.key])), label = new Map(list(types).map((t) => [t.key, t.label]));
-    return { group, today: String(today).slice(0, 10), since, map, summary: summary || {}, members: list(members), types: list(types),
-      typeLabel: (k) => label.get(k) || String(k || "record").replace(/_/g, " "),
-      ownEntries: list(own).map((e) => ({ ...e, record_type: typeKey.get(e.type_id) || "note" })), documents: list(documents),
-      sharedEntries: list(shared), sharedDocuments: list(sharedDocs), obligations: list(obligations), readiness: readiness || null, area: G().groupArea(areas) };
+    return { sources: list(sources), readiness: readiness || null, area: G().groupArea(areas) };
+  }
+  const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("the map took too long")), ms);
+    Promise.resolve(promise).then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+  // Each is started once per group's context and kept (the base and the extras forget a failure; the heavy map read does not).
+  function ensureBase(c) {
+    return c.pending || (c.pending = load(c.group).then((d) => (c.data = d), (e) => { c.pending = null; throw e; }));
+  }
+  function ensureHome(c) {
+    return c.home || (c.home = ensureBase(c).then(async (d) => Object.assign(d, await loadHome(d.group)), (e) => { c.home = null; throw e; }));
+  }
+  function ensureMap(c) {
+    // (a failed or slow answer is kept too: the heavy read is not repeated on every view; leaving the group space asks again)
+    return c.mapPending || (c.mapPending = withTimeout(read(FP.sb.rpc("group_map", { g: c.group.id })), FP.groupSpace.mapTimeoutMs || MAP_TIMEOUT_MS));
   }
 
   // ---- the screen ----------------------------------------------------------------------------------------------------------
@@ -82,29 +107,36 @@
     if (route.view === "manage") { wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); }
     if (ctx?.group.id !== group.id) {
       wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
-      ctx = { group, pending: load(group) };
+      ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
     }
     const panel = $("#group-panel");
     panel.replaceChildren(el("p", { class: "group-status", role: "status" }, "Loading the group…"));
+    const home = !["documents", "create", "manage"].includes(route.view), thisCtx = ctx;
     try {
-      const data = ctx.data || (ctx.data = await ctx.pending);
-      if (current !== token) return;
       document.title = group.name + (route.view === "map" ? "" : " · " + G().viewLabel(route.view)) + " | " + (FP.brand?.product || "");
+      // HOT1: the manage space opens from the group record alone (its group and role): it asks for no map and waits for no group load
       if (route.view === "manage") {
-        const node = await FP.groupManage.view(group, route, { settings: G().canManage(group.role) ? () => settingsView(data) : null });
+        const node = await FP.groupManage.view(group, route, { settings: G().canManage(group.role) ? () => settingsView(group) : null });
         if (current === token) { panel.replaceChildren(node); panel.scrollTop = 0; }
         return;
       }
-      // The panel does not wait for the map: the standing answers show at once, the map's own cards when it is drawn.
-      const mapped = drawMap(data, current).catch(() => null);
+      // The heavy map read starts at once, beside the light reads, and no view waits for it to show its panel: the map area is drawn when
+      // the map arrives (or says it could not). Documents and Create need only the base reads; the Map view's cards need the extras too.
+      const mapAsked = ensureMap(thisCtx), homeAsked = ensureHome(thisCtx);
+      mapAsked.catch(() => {}); homeAsked.catch(() => {});
+      const data = await (home ? homeAsked : ensureBase(thisCtx));
+      if (current !== token) return;
       panel.replaceChildren();
-      const home = !["documents", "create"].includes(route.view);
       if (route.view === "documents") panel.append(documentsView(data));
       else if (route.view === "create") panel.append(createView(data));
       else panel.append(...mapView(data));
       panel.scrollTop = 0;
+      const mapped = drawMap(data, current, mapAsked, homeAsked).catch(() => null);
+      if (!home) return;   // Documents and Create: the map is drawn beside them when it arrives; nothing more of theirs depends on it
       await mapped;
-      if (current !== token || !home) return;
+      if (current !== token) return;
+      const slot = panel.querySelector('[data-card="members"]');   // the group's own layers are known once the map is
+      if (slot && data.map) slot.replaceWith(membersCard(data));
       // the group's written answer first, then B8's line of sites and its chart
       if (wq) { const box = card("Water quality"); box.append(...(wqAnswer ? [wqAnswer.node] : []), wq.node); panel.append(box); }
       if (entries.length) panel.append(layersCard());
@@ -114,8 +146,21 @@
   }
 
   // The map: its own surface in the space (the group is never drawn on a farm's map).
-  async function drawMap(data, current) {
+  async function drawMap(data, current, asked, extras) {
     const host = $("#group-map");
+    if (!mapHandle) host.replaceChildren(el("p", { class: "group-status", role: "status" }, "Loading the map…"));
+    try { data.map = await asked; }
+    catch {
+      // HOT1: a map that failed or took too long is the map area's failure alone; the standing answers are already on the page
+      if (current !== token) return;
+      mapHandle?.destroy(); mapHandle = null; mapReady = null;
+      host.replaceChildren(el("div", { class: "group-map-empty", "data-state": "failed", role: "alert" }, el("p", {}, "The group's map couldn't load just now. Reload the page to try again.")));
+      return;
+    }
+    if (current !== token) return;
+    await extras.catch(() => null);   // the reference sources (the map's popups); the map is drawn without them if they could not be read
+    if (current !== token) return;
+    if (data.map) data.map.sources = data.sources;
     if (!data.map?.extent) {
       mapHandle?.destroy(); mapHandle = null;
       host.replaceChildren(el("div", { class: "group-map-empty" }, el("p", {}, "Nothing is mapped for this group yet. Its own layers and the member farms it may show appear here once they are added.")));
@@ -160,10 +205,15 @@
     handle.ready?.catch?.(() => {});
     return { node: host, destroy: () => handle.destroy() };
   }
-  function mapView(data) {
+  function membersCard(data) {
     const ownLayers = list(data.map?.layers).filter((l) => l.group_own);
-    const members = card("Member farms", el("ul", { class: "group-lines" }, ...G().memberLines(data.summary, { hasOwnLayers: ownLayers.length > 0 }).map((t) => el("li", {}, t))),
+    const box = card("Member farms", el("ul", { class: "group-lines" }, ...G().memberLines(data.summary, { hasOwnLayers: ownLayers.length > 0 }).map((t) => el("li", {}, t))),
       data.members.length ? el("p", { class: "group-fine" }, "Shown in detail: " + data.members.map((m) => m.name || "a member farm (not named)").join(", ") + ".") : null);
+    box.dataset.card = "members";
+    return box;
+  }
+  function mapView(data) {
+    const members = membersCard(data);
     const due = G().due(data.obligations, data.today);
     const dueCard = card("What's due", due.length
       ? el("ul", { class: "group-lines" }, ...due.map((d) => el("li", { class: d.overdue ? "overdue" : "" }, el("span", {}, d.text), el("small", {}, d.when))))
@@ -333,8 +383,16 @@
   }
 
   // ---- Settings (group admins): how member farms are shown; drawn in the manage space's Settings tab (ON3b) ------------------------
-  function settingsView(data) {
-    const current = data.summary.member_detail || "aggregated";
+  // HOT1: it reads the setting itself when the tab opens (the group's member summary), with its own error line, and needs nothing of the
+  // group's load or map.
+  function settingsView(group) {
+    const wrap = el("div", { class: "group-settings-wrap" }, el("p", { class: "group-status", role: "status" }, "Reading the current setting…"));
+    Promise.resolve().then(() => FP.sb.rpc("group_member_summary", { g: group.id })).then((r) => { if (r.error) throw r.error; return r.data || {}; }).then(
+      (summary) => wrap.replaceChildren(settingsForm(group, summary.member_detail || "aggregated")),
+      (e) => wrap.replaceChildren(el("p", { class: "group-status", role: "alert", "data-state": "settings-failed" }, "Couldn't read how member farms are shown: " + (e?.message || e))));
+    return wrap;
+  }
+  function settingsForm(group, current) {
     const form = el("form", { class: "group-settings" },
       el("fieldset", {}, el("legend", {}, "How member farms are shown to the group"),
         ...G().LEVELS.map((lv) => el("label", { class: "group-choice" }, el("input", { type: "radio", name: "member-detail", value: lv, ...(lv === current ? { checked: true } : {}) }),
@@ -347,16 +405,15 @@
       ev.preventDefault();
       const level = form.querySelector("input[name=member-detail]:checked")?.value, status = form.querySelector(".group-status");
       if (!level) return;
-      const { error } = await FP.sb.rpc("set_group_member_detail", { g: data.group.id, level });
+      const { error } = await FP.sb.rpc("set_group_member_detail", { g: group.id, level });
       if (error) { status.textContent = "Couldn't save: " + error.message; return; }
       status.textContent = "Saved. Member farms are now shown " + level + " where each farm allows it.";
-      // the map and figures are read again at the new level (the map is drawn at it when the person goes back to the map)
-      ctx = { group: data.group, pending: load(data.group) };
+      // the map and figures are read again at the new level, when the person goes to a view that draws them
+      if (ctx?.group.id === group.id) ctx = { group: ctx.group };
       mapHandle?.destroy(); mapHandle = null; mapReady = null; wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
-      try { ctx.data = await ctx.pending; } catch { /* the next view reads again */ }
     });
     return form;
   }
 
-  FP.groupSpace = { setGroups, find, open, close, load, groups: () => groups, hasPortfolio: null };
+  FP.groupSpace = { setGroups, find, open, close, load, groups: () => groups, hasPortfolio: null, mapTimeoutMs: MAP_TIMEOUT_MS };
 })(typeof window === "undefined" ? globalThis : window);
