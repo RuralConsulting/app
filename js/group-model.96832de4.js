@@ -156,9 +156,12 @@
   const farmsText = (n) => n == null ? SUPPRESSED : plural(Number(n), "farm", "farms");
   function readiness(r) {
     if (!r || typeof r !== "object") return null;
-    const assessed = r.farms_assessed, linked = Number(r.linked_farms) || 0;
+    // CAP2: over the database's cap on farms in group totals (truncated, 500) no farm is checked and no figure is given
+    const assessed = r.farms_assessed, linked = Number(r.linked_farms) || 0, truncated = r.truncated === true;
     const byState = new Map((Array.isArray(r.by_state) ? r.by_state : []).map((s) => [s.state, s.farms]));
     const summary = !linked ? "No member farms are linked in the tool yet."
+      : truncated ? "Too many member farms to check here: " + plural(linked, "linked farm", "linked farms") + ". The checks run for groups of up to "
+        + (Number(r.max_farms) || 500) + " farms in group totals."
       : "Farms in group totals checked: " + (assessed == null ? SUPPRESSED : String(assessed)) + " of " + plural(linked, "linked farm", "linked farms") + ".";
     const states = READINESS.map(([key, label]) => ({ key, label, farms: byState.get(key) ?? null, text: label + ": " + farmsText(byState.get(key)) }));
     const findings = (Array.isArray(r.by_finding) ? r.by_finding : []).filter((f) => f.farms == null || Number(f.farms) > 0)
@@ -167,8 +170,8 @@
       ref: f.ref, level: f.level, label: f.level === "named" && f.name ? f.name : f.label || "A member farm (not named)",
       readiness: (READINESS.find(([k]) => k === f.readiness) || [null, f.readiness])[1],
       findings: Object.entries(f.findings || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => (FINDINGS[k] || k) + (Number(n) > 1 ? " (" + n + ")" : "")) }));
-    return { summary, states, statesHeld: states.every((s) => s.farms == null), findings, rows,
-      empty: assessed === 0 || !linked };
+    return { summary, states, statesHeld: states.every((s) => s.farms == null), findings, rows, truncated,
+      empty: assessed === 0 || !linked || truncated };
   }
 
   // ---- the group's area (WQ4) --------------------------------------------------------------------------------------------

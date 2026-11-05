@@ -13,8 +13,8 @@
 // host's (farm-space.js).
 // CAP1b: a source whose entry farm_reference_context could not bound comes `truncated: true` with its feature_count and no
 // features (CAP1a). It is never drawn in part: its row says "Too many to show here (n), zoom in" (PROV1's wording,
-// provenance-model.js TOO_MANY_ZOOM) and, switched on, it is read for the map in view (inView: public.reference_in_view
-// for the box, at most VIEW_MAX features, through group-layers.js like a deferred layer); still too many in the box and the
+// provenance-model.js TOO_MANY_ZOOM) and, switched on, it is read for the map in view (inView: public.reference_view_features
+// for the box, CAP2; reference_in_view on a database before it; at most VIEW_MAX features, through group-layers.js like a deferred layer); still too many in the box and the
 // row keeps the line.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
@@ -137,8 +137,8 @@
 
   // ---- CAP1b: a truncated source read by viewport ------------------------------------------------------------------------
   const truncated = (entry) => !!entry && entry.truncated === true;
-  // At most this many of one source's features in a box: more and the person zooms in. reference_in_view returns whole
-  // features (never simplified), so this is lower than a farm layer's 4,000; the database caps any call at 5,000.
+  // At most this many of one source's features in a box: more and the person zooms in (lower than a farm layer's 4,000:
+  // reference_in_view, the read before CAP2, returned whole features; reference_view_features caps its vertices too).
   const VIEW_MAX = 1000;
   // The NZTM box (reference_in_view's) holding a box in degrees ({x0, y0, x1, y1}, as group-layers.js boxFor makes it):
   // its corners and edge midpoints projected, the smallest box round them.
@@ -149,16 +149,35 @@
     return { bbox_xmin: r(Math.min(...xs)) - 1, bbox_ymin: r(Math.min(...ys)) - 1, bbox_xmax: r(Math.max(...xs)) + 1, bbox_ymax: r(Math.max(...ys)) + 1 };
   }
   // One source's features in a box (w: group-layers.js's {box}), as group-layers.js wants a read: {features, total,
-  // truncated}. Asks for max + 1 rows: max + 1 back is too many for the box (never drawn in part). Never without a box.
+  // truncated}. Never without a box. CAP2: public.reference_view_features (the box in degrees, bounded by construction: at most
+  // max features and 300,000 vertices, simplified by the box) answers {features, total_in_box, truncated}; a database before CAP2
+  // (the function missing, asked once per client) is read with reference_in_view as before, asking for max + 1 rows (max + 1
+  // back is too many for the box, never drawn in part), and its refusal over its vertex cap (SQLSTATE 54000, "Too much to draw
+  // in this view") is too many too, not a failure.
+  const EMPTY = () => ({ type: "FeatureCollection", features: [] });
+  const viewMissing = new WeakSet();
+  const tooMuch = (e) => !!e && (e.code === "54000" || /too much to draw/i.test(String(e.message || "")));
   async function inView(sb, key, w, max = VIEW_MAX) {
     if (!w?.box) throw new Error("no box: a truncated source is never read whole");
+    if (!viewMissing.has(sb)) {
+      let v;
+      try { v = await sb.rpc("reference_view_features", { source: key, x0: w.box.x0, y0: w.box.y0, x1: w.box.x1, y1: w.box.y1, max_features: max }); } catch (e) { v = { error: e }; }
+      if (v?.error && missing(v.error)) viewMissing.add(sb);
+      else if (v?.error) throw v.error;
+      else {
+        const d = v?.data;
+        if (!d || typeof d !== "object") return { features: EMPTY(), total: 0, truncated: false };   // not a served source
+        return { features: d.features && Array.isArray(d.features.features) ? d.features : EMPTY(), total: Number(d.total_in_box) || 0, truncated: d.truncated === true };
+      }
+    }
     const q = sb.rpc("reference_in_view", { ...nztmBox(w.box), sources: [key], max_rows: max + 1 });
     // only what the map needs (not the NZTM geometry) where the client can say so
     let r;
     try { r = await (typeof q?.select === "function" ? q.select("id,source_key,external_id,web_geom,props") : q); } catch (e) { r = { error: e }; }
+    if (r?.error && tooMuch(r.error)) return { features: EMPTY(), total: null, truncated: true };
     if (r?.error) throw r.error;
     const rows = list(r?.data).filter((x) => x && x.source_key === key && x.web_geom);
-    if (rows.length > max) return { features: { type: "FeatureCollection", features: [] }, total: rows.length, truncated: true };
+    if (rows.length > max) return { features: EMPTY(), total: rows.length, truncated: true };
     return { features: { type: "FeatureCollection", features: rows.map((x) => ({ type: "Feature", id: x.id, geometry: typeof x.web_geom === "string" ? JSON.parse(x.web_geom) : x.web_geom,
       properties: { ...(x.props || {}), external_id: x.external_id ?? x.props?.external_id ?? null } })) }, total: rows.length, truncated: false };
   }

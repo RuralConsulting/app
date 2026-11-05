@@ -552,6 +552,17 @@
       if (inBox.length > max) return [{ features: collection([]), total_in_box: inBox.length, truncated: true }];
       return [{ features: collection(copy(inBox)), total_in_box: inBox.length, truncated: false }];
     }
+    // CAP2's reference_view_features: one source, the box in degrees (required), at most max_features (4,000 at most), as
+    // {features, total_in_box, truncated}; null for a source that is not the demo's dense one
+    if (name === "reference_view_features") {
+      if (![args.x0, args.y0, args.x1, args.y1].every(Number.isFinite)) return [null, { code: "P0001", message: "A box is needed" }];
+      if (args.source !== DENSE) return [null];
+      const max = Math.min(args.max_features ?? 1000, 4000);
+      const inBox = p.bores.filter((b) => b.lng >= Math.min(args.x0, args.x1) && b.lng <= Math.max(args.x0, args.x1) && b.lat >= Math.min(args.y0, args.y1) && b.lat <= Math.max(args.y0, args.y1));
+      if (inBox.length > max) return [{ features: collection([]), total_in_box: max + 1, truncated: true }];
+      return [{ features: collection(inBox.map((b) => ({ type: "Feature", id: b.id, geometry: { type: "Point", coordinates: [b.lng, b.lat] },
+        properties: { name: "Bore " + b.external_id + " (synthetic)", external_id: b.external_id } }))), total_in_box: inBox.length, truncated: false }];
+    }
     // reference_in_view: the box in NZTM metres, as the database takes it; at most max_rows rows (5,000 at most)
     const W = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel;
     const [x0, y0] = W.nztmToLngLat(args.bbox_xmin, args.bbox_ymin), [x1, y1] = W.nztmToLngLat(args.bbox_xmax, args.bbox_ymax);
@@ -950,7 +961,7 @@
         const d = await ready;
         // CAP1b: with d.farmParts the demo farm is a large farm as CAP1a gives it (farmParts); without, a database before CAP1a
         if (d.farmParts && args.f === FARM && ["farm_map", "farm_reference_counts", "farm_reference_context", "farm_layer_features"].includes(name)) return result(...farmParts(d, name, args));
-        if (name === "farm_layer_features" || name === "reference_in_view") {
+        if (name === "farm_layer_features" || name === "reference_in_view" || name === "reference_view_features") {
           if (!d.farmParts) return result(null, { code: "PGRST202", message: "Could not find the function in the schema cache" });
           return result(...farmParts(d, name, args));
         }
