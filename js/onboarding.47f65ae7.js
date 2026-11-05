@@ -1,9 +1,13 @@
 // ON1 — the Onboarding view: the guided checklist of the onboarding readiness report (docs/ONBOARDING-REPORT.md). It reads
 // public.onboarding_report_inputs as the person (row-level security decides), applies the rules in FP.onboardingModel, and
-// draws the report. A person ticks what they have looked at (kept in this browser until saved), records the minutes they
-// spent, and saves the report to the farm's Documents (doc_type onboarding_report, private when it lists a private
-// document). A saved report opens here as it was saved. Nothing else is written: each proposal is confirmed in the flow
-// that owns it (Add a block, What's due's Fetch conditions, an advisor's plan read-in and consent register). No AI.
+// draws the report. A person ticks what they have looked at in the "to check" and "missing" lines (kept in this browser until
+// saved), records the minutes they spent, and saves the report to the farm's Documents (doc_type onboarding_report, private when
+// it lists a private document). A saved report opens here as it was saved.
+// ON3d: the "to confirm" lines are proposals a farm editor decides here, with Accept / Not this / Pick (and a note), through
+// public.proposals_decide; a farm editor's visit first has public.farm_onboarding_sync bring the farm's rows into line with
+// its findings. Viewers read them. Ticks on those lines used to be kept in this browser: any still there are made decisions
+// once, best-effort, then no longer written. Nothing else is written: each proposal is carried out in the flow that owns it
+// (Add a block, What's due's Fetch conditions, an advisor's plan read-in and consent register). No AI.
 // html() is pure (report in, HTML out) and tested in node; mount() is the browser's.
 (function (root, factory) {
   const api = factory(root);
@@ -17,7 +21,8 @@
   const VERDICT_WORDS = { correct: "seen, correct", not_ours: "not the farm's", seen: "seen, to follow up" };
   const dates = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "Pacific/Auckland" });
   const when = (d) => (d && Number.isFinite(Date.parse(d)) ? dates.format(new Date(d)) : null);
-  const TICKABLE = ["propose", "verify", "gap"];
+  const OPEN_FOR_DECISION = ["proposed", "ambiguous"];
+  const TICKABLE = ["verify", "gap"];   // "to confirm" lines are decided as proposals (ON3d), not ticked
 
   function sourceText(s) {
     if (!s) return null;
@@ -25,6 +30,33 @@
     if (s.kind === "reference") return [s.name, s.licence, s.as_at ? "as at " + s.as_at : null].filter(Boolean).join(" · ");
     if (s.kind === "function") return "Worked out by the platform (" + s.name + ")";
     return null;
+  }
+  // ON3d: a "to confirm" line's proposal: what accepting it would mean, the three buttons for a farm editor (read-only for anyone else),
+  // and, once decided, who decided what and when.
+  function decisionHtml(i, o) {
+    const p = i.proposal;
+    if (!p) return "";
+    const cands = list(p.candidates), id = esc(p.id);
+    const first = cands[0] ? '<p class="onboarding-candidate">' + esc(model().candidateText(cands[0])) + "</p>" : "";
+    if (p.status === "accepted" || p.status === "rejected") {
+      const c = i.checked || {}, by = c.by && o.userId && c.by === o.userId ? "you" : "a farm editor";
+      const picked = p.status === "accepted" && p.decision?.candidate ? model().candidateText(p.decision.candidate) : null;
+      return '<div class="onboarding-decision" data-proposal="' + id + '" data-status="' + esc(p.status) + '"><p class="onboarding-checked">' +
+        (p.status === "accepted" ? "Accepted" + (picked ? ": " + esc(picked) : "") : "Not this: set aside") + (c.note ? " · " + esc(c.note) : "") +
+        " · by " + by + (when(p.decided_at) ? ", " + esc(when(p.decided_at)) : "") + "</p>" +
+        (p.status === "accepted" ? '<p class="onboarding-who">It is carried out where it belongs; this line closes by itself once it is done.</p>' : "") + "</div>";
+    }
+    if (!o.canDecide) return '<div class="onboarding-decision" data-proposal="' + id + '" data-status="' + esc(p.status) + '">' + first +
+      '<p class="onboarding-who">Waiting for a farm editor to decide.</p></div>';
+    const several = cands.length > 1;
+    const pick = several ? '<label class="visually-hidden" for="ob-pick-' + id + '">Pick one</label><select id="ob-pick-' + id + '" data-onboarding-pick="' + id + '"><option value="">Pick one…</option>' +
+      cands.map((c, n) => '<option value="' + n + '">' + esc(model().candidateText(c)) + "</option>").join("") + "</select>" : "";
+    return '<div class="onboarding-decision" data-proposal="' + id + '" data-status="' + esc(p.status) + '">' + (several ? "" : first) + pick +
+      '<label class="visually-hidden" for="ob-dnote-' + id + '">Note</label><input type="text" maxlength="500" id="ob-dnote-' + id + '" data-onboarding-dnote="' + id + '" placeholder="Note (optional)">' +
+      '<div class="onboarding-buttons">' + (p.status === "proposed" ? '<button type="button" class="primary" data-onboarding-decide="accept" data-proposal-id="' + id + '">Accept</button>' : "") +
+      '<button type="button" data-onboarding-decide="reject" data-proposal-id="' + id + '">Not this</button>' +
+      (several ? '<button type="button" data-onboarding-decide="pick" data-proposal-id="' + id + '">Accept the one picked</button>' : "") + "</div>" +
+      '<p class="onboarding-decide-msg" role="status" data-decide-msg="' + id + '"></p></div>';
   }
   function itemHtml(i, o) {
     const sources = [i.source, ...list(i.sources)].filter(Boolean).map(sourceText).filter(Boolean);
@@ -34,23 +66,23 @@
     const action = i.action && !o.saved ? (i.action.kind === "advisor" ? '<p class="onboarding-who">For an advisor to do.</p>' :
       '<p><button type="button" class="onboarding-go" data-onboarding-action="' + esc(i.action.kind) + '"' + (i.action.item ? ' data-onboarding-item="' + esc(i.action.item) + '"' : "") + ">" + esc(i.action.label) + "</button></p>") : "";
     const c = i.checked;
-    const checked = c ? '<p class="onboarding-checked">Checked: ' + esc(VERDICT_WORDS[c.verdict] || c.verdict) + (c.note ? " · " + esc(c.note) : "") + (when(c.at) ? " · " + esc(when(c.at)) : "") + "</p>" : "";
+    const checked = c && i.proposal ? "" : c ? '<p class="onboarding-checked">Checked: ' + esc(VERDICT_WORDS[c.verdict] || c.verdict) + (c.note ? " · " + esc(c.note) : "") + (when(c.at) ? " · " + esc(when(c.at)) : "") + "</p>" : "";
     const stale = i.stale_tick ? '<p class="onboarding-stale">Ticked before (' + esc(VERDICT_WORDS[i.stale_tick.verdict] || "") + "), but what it rests on has changed since: look again.</p>" : "";
     const tick = o.canTick && !o.saved && TICKABLE.includes(i.state) ? (c ? '<p><button type="button" data-onboarding-untick="' + esc(i.key) + '">Undo the tick</button></p>' :
       '<div class="onboarding-tick"><label class="visually-hidden" for="ob-note-' + esc(i.key) + '">Note</label><input type="text" maxlength="500" id="ob-note-' + esc(i.key) + '" data-onboarding-note="' + esc(i.key) + '" placeholder="Note (optional)">' +
       '<button type="button" data-onboarding-tick="' + esc(i.key) + '" data-verdict="correct">Seen, correct</button><button type="button" data-onboarding-tick="' + esc(i.key) + '" data-verdict="not_ours">Not the farm\'s</button>' +
       '<button type="button" data-onboarding-tick="' + esc(i.key) + '" data-verdict="seen">To follow up</button></div>') : "";
-    const body = (i.detail ? '<p class="onboarding-detail">' + esc(i.detail) + "</p>" : "") + props + sources.map((s) => '<p class="onboarding-source">' + esc(s) + "</p>").join("") + stale + checked + action + tick;
-    const line = '<span class="onboarding-state" data-state="' + esc(i.state) + '">' + esc(LABELS[i.state] || i.state) + '</span> <span class="onboarding-text">' + esc(i.text) + "</span>" + (c ? ' <span class="onboarding-tickmark">· checked</span>' : "");
+    const body = (i.detail ? '<p class="onboarding-detail">' + esc(i.detail) + "</p>" : "") + props + sources.map((s) => '<p class="onboarding-source">' + esc(s) + "</p>").join("") + stale + checked + decisionHtml(i, o) + action + tick;
+    const line = '<span class="onboarding-state" data-state="' + esc(i.state) + '">' + esc(LABELS[i.state] || i.state) + '</span> <span class="onboarding-text">' + esc(i.text) + "</span>" + (c ? ' <span class="onboarding-tickmark">· ' + (c.decided ? (c.verdict === "correct" ? "accepted" : "set aside") : "checked") + "</span>" : i.proposal && OPEN_FOR_DECISION.includes(i.proposal.status) && o.canDecide ? ' <span class="onboarding-tickmark">· to decide</span>' : "");
     return '<li class="onboarding-item" data-item-key="' + esc(i.key) + '" data-state="' + esc(i.state) + '"' + (c ? " data-checked" : "") + ">" +
-      (body ? '<details class="onboarding-fold"><summary class="onboarding-line">' + line + '</summary><div class="onboarding-body">' + body + "</div></details>" : '<p class="onboarding-line">' + line + "</p>") + "</li>";
+      (body ? '<details class="onboarding-fold"' + (o.open === i.key ? " open" : "") + '><summary class="onboarding-line">' + line + '</summary><div class="onboarding-body">' + body + "</div></details>" : '<p class="onboarding-line">' + line + "</p>") + "</li>";
   }
-  // report: FP.onboardingModel.build() or fromDocument(); o: { farmName, canTick, canSave, saved, message, minutes }
+  // report: FP.onboardingModel.build() or fromDocument(); o: { farmName, canTick, canDecide, userId, open (an item key to leave open), canSave, saved, message, minutes }
   function html(report, o = {}) {
     if (!report) return '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2><p>' + esc(o.message || "This farm's onboarding checklist isn't available to you.") + "</p></section>";
     const n = report.counts || {}, parts = [[n.propose, "to confirm"], [n.verify, "to check"], [n.gap, "missing"], [n.found, "found"], [n.done, "done"]].filter(([x]) => x > 0).map(([x, w]) => x + " " + w);
     const status = o.saved ? "Saved " + (when(report.saved?.at) || "") + (report.saved?.by?.name ? " by " + report.saved.by.name : "") + ", as it was then."
-      : (parts.join(" · ") || "Nothing found yet") + (n.checked ? " · " + n.checked + " checked" : "");
+      : (parts.join(" · ") || "Nothing found yet") + (n.checked ? " · " + n.checked + " checked or decided" : "");
     const sections = list(report.sections).filter((s) => list(s.items).length).map((s) => '<section class="onboarding-section" data-section="' + esc(s.key) + '"><h3>' + esc(s.title) +
       '</h3><ul class="onboarding-list">' + list(s.items).map((i) => itemHtml(i, o)).join("") + "</ul></section>").join("");
     const effort = model().effortLines(report.effort);
@@ -66,6 +98,7 @@
 
   // ---- the browser's part --------------------------------------------------------------------------------------------
   const draftKey = (user, farm) => "fp-onboarding-ticks-" + (user || "anon") + "-" + farm;
+  const PROPOSAL_COLUMNS = "id,kind,subject,subject_key,candidates,status,decision,decided_by,decided_at,created_at";
   function readDraft(user, farm) { try { const v = JSON.parse(localStorage.getItem(draftKey(user, farm)) || "{}"); return v && typeof v === "object" ? v : {}; } catch { return {}; } }
   function writeDraft(user, farm, ticks) { try { if (Object.keys(ticks).length) localStorage.setItem(draftKey(user, farm), JSON.stringify(ticks)); else localStorage.removeItem(draftKey(user, farm)); } catch {} }
   async function fetchJson(sb, path) {
@@ -73,13 +106,28 @@
     if (error || !data?.signedUrl) return null;
     try { const r = await fetch(data.signedUrl); return r.ok ? await r.json() : null; } catch { return null; }
   }
+  // ON3d: the farm's rows after a farm editor's visit has brought them into line with the findings (public.farm_onboarding_sync, the
+  // database's own evaluation: nothing is sent but the farm). The live rows and the newest rejection of each finding are read as the
+  // person (a farm member reads them all). { rows, problem }: rows is null when they could not be read.
+  async function readProposals(env, farm) {
+    let problem = null;
+    if (env.canEdit) {
+      try { const r = await env.sb.rpc("farm_onboarding_sync", { f: farm }); if (r?.error) problem = r.error.message || String(r.error); } catch (e) { problem = e?.message || String(e); }
+    }
+    try {
+      const { data, error } = await env.sb.from("proposals").select(PROPOSAL_COLUMNS).eq("farm_id", farm).eq("kind", model().FARM_CHECK_KIND)
+        .in("status", ["proposed", "ambiguous", "accepted", "rejected"]).order("id", { ascending: true });
+      if (error) throw error;
+      return { rows: list(data), problem };
+    } catch (e) { return { rows: null, problem: problem || e?.message || String(e) }; }
+  }
   // host: the element; env: { sb, farm: {id, name}, user: {id, name}, canEdit, item (a saved report's id), docs (the farm's
   // documents), store (the Documents store: add, move), onAction(kind, item), onSaved(), liveHref }
   async function mount(host, env) {
     const M = model(), farm = env.farm.id, user = env.user?.id || null;
-    let inputs = null, report = null, plans = {}, saved = null, draft = readDraft(user, farm), message = null, minutes = null, started = 0;
-    const draw = (o = {}) => { host.innerHTML = html(report, { canTick: !!env.canEdit || !!user, canSave: !!env.canEdit, liveHref: env.liveHref, message, minutes, ...o }); };
-    const rebuild = () => { report = M.build(inputs, { now: new Date().toISOString(), plans, saved, draft, client_ms: (globalThis.performance?.now() || 0) - started }); draw(); };
+    let inputs = null, report = null, plans = {}, saved = null, draft = readDraft(user, farm), message = null, minutes = null, started = 0, proposals = null;
+    const draw = (o = {}) => { host.innerHTML = html(report, { canTick: !!env.canEdit || !!user, canDecide: !!env.canEdit, userId: user, canSave: !!env.canEdit, liveHref: env.liveHref, message, minutes, ...o }); };
+    const rebuild = (o) => { report = M.build(inputs, { now: new Date().toISOString(), plans, saved, draft, proposals, client_ms: (globalThis.performance?.now() || 0) - started }); draw(o); };
     host.innerHTML = '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2><p class="onboarding-status" role="status">Reading what the platform holds for this farm…</p></section>';
     // A saved report: drawn as it was saved.
     if (env.item) {
@@ -99,11 +147,46 @@
     for (const d of M.planFiles(inputs)) { const s = M.planProposals(await fetchJson(env.sb, d.storage_path)); if (s) plans[d.id] = s; }
     const last = list(inputs.documents).filter((d) => d.doc_type === "onboarding_report" && d.tier !== "archive" && d.storage_path).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
     if (last) saved = M.readDocument(await fetchJson(env.sb, last.storage_path));
+    const read = await readProposals(env, farm);
+    proposals = read.rows;
+    if (read.problem) message = "Couldn't bring up what is waiting for your decision: " + read.problem;
     rebuild();
+    await migrateLocalTicks();
+
+    // ON3d: ticks kept in this browser on "to confirm" lines before decisions lived in the table become those decisions, once and
+    // best-effort (an editor only; a refusal or a network drop leaves that tick for a later visit), and these lines' ticks are no
+    // longer written. The browser's other ticks (to check, missing) stay as they were until saved.
+    async function migrateLocalTicks() {
+      try {
+        // the rows are not known (the writer or the read failed: a timeout, a second tab, a dropped network): decide nothing and keep
+        // every tick, so a later normal visit moves them
+        if (!proposals || read.problem) return;
+        const { migrate, keep } = M.localTicksToMigrate(report, draft);
+        if (Object.keys(keep).length === Object.keys(draft).length) return;   // nothing of these lines is stored here
+        let moved = 0;
+        const left = new Set(migrate.map((m) => m.key));
+        if (env.canEdit && proposals) {
+          for (const m of migrate) {
+            try {
+              const { data: row, error } = await env.sb.rpc("proposals_decide", { id: m.proposal.id, status: m.action === "accept" ? "accepted" : "rejected", candidate: m.action === "accept" ? list(m.proposal.candidates)[0] || null : null, note: m.note || null });
+              if (error || !row) continue;
+              proposals = proposals.map((p) => (p.id === row.id ? row : p)); left.delete(m.key); moved++;
+            } catch {}
+          }
+        } else for (const m of migrate) left.delete(m.key);   // a viewer cannot decide: nothing to move
+        // what could not be moved yet stays stored (one more visit may); the rest of these lines' ticks are dropped
+        const rest = { ...keep };
+        for (const m of migrate) if (left.has(m.key)) rest[m.key] = draft[m.key];
+        draft = rest; writeDraft(user, farm, draft);
+        if (moved) { message = moved === 1 ? "One check you had ticked in this browser is now a decision on the farm's record." : moved + " checks you had ticked in this browser are now decisions on the farm's record."; rebuild(); }
+      } catch {}
+    }
 
     host.onclick = async (e) => {
       const go = e.target.closest("[data-onboarding-action]");
       if (go) { env.onAction?.(go.dataset.onboardingAction, go.dataset.onboardingItem || null); return; }
+      const dec = e.target.closest("[data-onboarding-decide]");
+      if (dec) { await decide(dec); return; }
       const t = e.target.closest("[data-onboarding-tick]");
       if (t) {
         const key = t.dataset.onboardingTick, it = report.items.find((i) => i.key === key);
@@ -117,6 +200,23 @@
       const u = e.target.closest("[data-onboarding-untick]");
       if (u) { draft[u.dataset.onboardingUntick] = { verdict: "cleared" }; writeDraft(user, farm, draft); rebuild(); }
     };
+    async function decide(button) {
+      const id = button.dataset.proposalId, item = report.items.find((i) => i.proposal && String(i.proposal.id) === String(id));
+      if (!item || !env.canEdit) return;
+      const box = button.closest("[data-proposal]"), msg = box?.querySelector("[data-decide-msg]");
+      const say = (t) => { if (msg) msg.textContent = t; };
+      const args = M.decisionArgs(item.proposal, button.dataset.onboardingDecide, { pick: box?.querySelector("[data-onboarding-pick]")?.value ?? null,
+        note: box?.querySelector("[data-onboarding-dnote]")?.value });
+      if (!args) { say("Pick one first."); box?.querySelector("[data-onboarding-pick]")?.focus(); return; }
+      for (const b of box.querySelectorAll("button")) b.disabled = true;
+      say("Saving…");
+      let row = null, failure = null;
+      try { const r = await env.sb.rpc("proposals_decide", args); row = r?.data || null; failure = r?.error ? (r.error.message || String(r.error)) : row ? null : "no reply"; } catch (err) { failure = err?.message || String(err); }
+      if (!row) { for (const b of box.querySelectorAll("button")) b.disabled = false; say("Couldn't save the decision: " + failure); return; }
+      proposals = (proposals || []).map((p) => (p.id === row.id ? row : p));
+      message = null; rebuild({ open: item.key });
+      host.querySelector('[data-item-key="' + CSS.escape(item.key) + '"] summary')?.focus();
+    }
     host.onsubmit = async (e) => {
       if (!e.target.matches("[data-onboarding-save]")) return;
       e.preventDefault();

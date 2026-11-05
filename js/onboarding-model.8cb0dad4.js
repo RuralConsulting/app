@@ -12,6 +12,10 @@
 // A person's tick (`checked`: { verdict: "correct" | "not_ours" | "seen", note, by, at }) sits on the item; it is carried to
 // the next report only while the item's evidence is unchanged. Findings say what differs and whose source it is, never a
 // compliance verdict.
+// ON3d: the four "propose" findings (DECISION_RULES) are not ticked. Each is a row of public.proposals (kind farm_onboarding_check,
+// written by public.farm_onboarding_sync) that a farm editor accepts or sets aside through public.proposals_decide; build() takes
+// those rows (opts.proposals) and a decided one sits on the item as its `checked` (accepted: "correct", set aside: "not_ours"),
+// so counts, effort and the stored document read it as they read a tick. ON2 reads the same rows in the database.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -43,6 +47,10 @@
     ["zones", "Nutrient allocation zones", ["ecan-nutrient-zones", "ecan-nutrient-subareas"], ["zone", "zones"]],
   ];
   const PLAN_TYPES = ["fep", "fwfp"];
+  // ON3d: the findings a farm editor decides as proposals (the "propose" state's rules), and the proposals kind that holds them.
+  const FARM_CHECK_KIND = "farm_onboarding_check";
+  const DECISION_RULES = ["fep.not_read", "fep.confirm_report", "consent.not_recorded", "consent.no_conditions"];
+  const OPEN_STATUSES = ["proposed", "ambiguous"], LIVE_STATUSES = ["proposed", "ambiguous", "accepted"];
   const OWN_TYPES = ["onboarding_report", "plan_import", "plan_import_report"];   // the report's and the readers' own files
 
   const list = (v) => Array.isArray(v) ? v : [];
@@ -321,6 +329,67 @@
     }
     return items;
   }
+  // ---- decisions (ON3d) -----------------------------------------------------------------------------------------------
+  const isDecisionKey = (key) => DECISION_RULES.some((r) => String(key).startsWith(r + ":"));
+  // The row that speaks for a finding: its live proposal (proposed, ambiguous or accepted), else the newest rejection; a superseded
+  // or applied row is history and says nothing about a finding that is still there.
+  function proposalFor(rows, key) {
+    const mine = list(rows).filter((r) => r && r.subject_key === key);
+    const newest = (a, b) => Number(b.id) - Number(a.id);
+    return mine.filter((r) => LIVE_STATUSES.includes(r.status)).sort(newest)[0] || mine.filter((r) => r.status === "rejected").sort(newest)[0] || null;
+  }
+  // Sets each decision-rule item from the table: its proposal (for the buttons) and, once decided, its `checked`. Whatever a saved
+  // report or a browser draft carried onto these items is dropped: the table is the one record of the outcome.
+  function applyDecisions(items, rows) {
+    for (const it of items) {
+      if (!DECISION_RULES.includes(it.rule)) continue;
+      delete it.checked; delete it.stale_tick; delete it.proposal;
+      const p = proposalFor(rows, it.key);
+      if (!p) continue;
+      it.proposal = { id: p.id, status: p.status, candidates: list(p.candidates), decision: p.decision || null, decided_by: p.decided_by || null, decided_at: p.decided_at || null };
+      if (p.status === "accepted" || p.status === "rejected")
+        it.checked = { verdict: p.status === "accepted" ? "correct" : "not_ours", note: p.decision?.note ? String(p.decision.note).slice(0, 500) : null, by: p.decided_by || null, at: p.decided_at || null, decided: true };
+    }
+    return items;
+  }
+  // What accepting a candidate means, in words (the candidate's `action` is what app.farm_onboarding_checks writes).
+  function candidateText(c) {
+    const no = c?.consent_no ? String(c.consent_no) : null;
+    switch (c?.action) {
+      case "add_to_register": return "Add " + (no || "this consent") + " to the farm's consent register";
+      case "fetch_conditions": return "Fetch the conditions of " + (no || "this consent") + " from ECan";
+      case "read_plan_in": return "An advisor reads this plan in";
+      case "confirm_report": return "An advisor confirms the import from this report";
+      default: return "Do what is proposed";
+    }
+  }
+  // The arguments of public.proposals_decide for a button: "accept" (the proposed candidate, or `pick`, an index, among several) or
+  // "reject". null when an ambiguous row has no candidate picked.
+  function decisionArgs(proposal, action, { pick = null, note = "" } = {}) {
+    if (!proposal || !Number.isFinite(Number(proposal.id))) return null;
+    const text = String(note || "").trim() || null, cands = list(proposal.candidates);
+    if (action === "reject") return { id: proposal.id, status: "rejected", candidate: null, note: text };
+    const chosen = pick != null && pick !== "" ? cands[Number(pick)] : proposal.status === "proposed" ? cands[0] : null;
+    return chosen ? { id: proposal.id, status: "accepted", candidate: chosen, note: text } : null;
+  }
+  // Ticks the browser kept before ON3d on the decision-rule items: those still valid, as decisions to make (correct -> accepted,
+  // not the farm's -> set aside; "to follow up" decided nothing), and the draft without any decision-rule key, so nothing about
+  // these findings is written back to the browser, except a tick whose line has no proposal yet. `report` was built with the table's rows.
+  function localTicksToMigrate(report, draft) {
+    const items = new Map(list(report?.items).map((i) => [i.key, i]));
+    const migrate = [], keep = {};
+    for (const [key, t] of Object.entries(draft && typeof draft === "object" ? draft : {})) {
+      if (!isDecisionKey(key)) { keep[key] = t; continue; }
+      const it = items.get(key);
+      if (it && !it.proposal) { keep[key] = t; continue; }   // its line has no proposal (yet): the tick stays until it has one
+      if (!it || !OPEN_STATUSES.includes(it.proposal.status) || !t || !["correct", "not_ours"].includes(t.verdict)) continue;
+      if (t.evidence !== undefined && t.evidence !== it.evidence) continue;   // what it rested on has changed since
+      if (t.verdict === "correct" && it.proposal.status !== "proposed") continue;   // an ambiguous row needs a candidate chosen by a person
+      migrate.push({ key, proposal: it.proposal, action: t.verdict === "correct" ? "accept" : "reject", note: t.note ? String(t.note).slice(0, 500) : "" });
+    }
+    return { migrate, keep };
+  }
+
   const ticksOf = (items) => Object.fromEntries(items.filter((i) => i.checked).map((i) => [i.key, { ...i.checked, evidence: i.evidence }]));
 
   // ---- the report -----------------------------------------------------------------------------------------------------
@@ -333,6 +402,7 @@
     // A private earlier report's ticks and notes (perhaps another member's, read by the owner) never pass into a report
     // the whole farm can read.
     applyTicks(items, opts.saved?.audience === "private" && aud !== "private" ? null : opts.saved?.ticks, opts.draft);
+    if (Array.isArray(opts.proposals)) applyDecisions(items, opts.proposals);   // ON3d: the table, not a tick, speaks for these findings
     const counts = Object.fromEntries(STATES.map((s) => [s, items.filter((i) => i.state === s).length]));
     counts.checked = items.filter((i) => i.checked).length;
     counts.open = items.filter((i) => ["propose", "verify", "gap"].includes(i.state) && !i.checked).length;
@@ -390,7 +460,7 @@
     const doc = { schema: SCHEMA, rules: RULES_VERSION, thresholds: { area_mismatch_pct: AREA_PCT * 100, area_mismatch_ha: AREA_HA },
       farm: report.farm, generated_at: now || null, generated_by: person ? { id: person.id || null, name: person.name || null } : null,
       inputs_as_at: report.inputs_as_at, inputs_hash: inputs_hash || null, audience: report.audience, counts: report.counts,
-      sections: report.sections.map((s) => ({ key: s.key, title: s.title, items: s.items.map(({ section, ...i }) => i) })),
+      sections: report.sections.map((s) => ({ key: s.key, title: s.title, items: s.items.map(({ section, proposal, ...i }) => i) })),
       ticks: ticksOf(report.items), effort: e };
     return stable(doc);
   }
@@ -423,6 +493,7 @@
     (/json/i.test(d.mime_type || "") || /\.json$/i.test(d.storage_path)) && (num(d.size_bytes) == null || num(d.size_bytes) <= 2 * 1024 * 1024));
   const isIntent = (text) => /\bonboard(ing)?\b|\bget(ting)? started\b|\breadiness\b|\bset ?up (the|this) farm\b/i.test(String(text || ""));
 
-  return { SCHEMA, RULES_VERSION, AREA_PCT, AREA_HA, STATES, VERDICTS, SECTIONS, RULES, THEMES, build, applyTicks, ticksOf, planProposals, heldArea,
+  return { SCHEMA, RULES_VERSION, AREA_PCT, AREA_HA, STATES, VERDICTS, SECTIONS, RULES, THEMES, FARM_CHECK_KIND, DECISION_RULES, build, applyTicks,
+    applyDecisions, candidateText, decisionArgs, localTicksToMigrate, isDecisionKey, ticksOf, planProposals, heldArea,
     audience, effort, effortLines, effortRecord, documentJson, readDocument, fromDocument, fileName, title, planFiles, isIntent, sourceLine, normTitle };
 });

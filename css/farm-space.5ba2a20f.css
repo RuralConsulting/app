@@ -392,5 +392,16 @@ summary.onboarding-line::before { content: ""; position: absolute; left: 2px; to
 .onboarding-tick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .onboarding-tick input { flex: 1 1 100%; min-height: 36px; font: inherit; }
 .onboarding-tick button, .onboarding-go, [data-onboarding-untick], .onboarding-save button { min-height: 36px; font: inherit; }
+/* ON3d: a "to confirm" line's proposal: what accepting means, a note, Accept / Not this / Pick (44px targets), and the outcome. */
+.onboarding-decision { display: grid; gap: 6px; margin-top: 6px; max-width: 32rem; }
+.onboarding-candidate { margin: 0; padding-left: 10px; border-left: 3px solid var(--rule); font-weight: 600; }
+.onboarding-decision input, .onboarding-decision select { font: inherit; min-height: 44px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-sizing: border-box; max-width: 100%; }
+.onboarding-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.onboarding-buttons button { font: inherit; min-height: 44px; padding: 8px 16px; border: 1px solid var(--ink-2); border-radius: var(--radius); background: var(--panel); color: var(--ink); cursor: pointer; }
+.onboarding-buttons button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.onboarding-buttons button:disabled { opacity: .6; cursor: default; }
+.onboarding-decide-msg { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.onboarding-decide-msg:empty { display: none; }
+.onboarding-checked { color: var(--ink); }
 .onboarding-save { display: grid; gap: 6px; margin-top: 12px; max-width: 28rem; }
 .onboarding-save input { min-height: 36px; font: inherit; max-width: 10rem; }

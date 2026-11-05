@@ -129,6 +129,7 @@
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)", kind: "consultancy" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
       farm_parcels: [], farm_boundaries: [],
+      proposals: [],   // ON3d: the farm's "to confirm" lines as proposals (farmChecksSync), made when the Onboarding view is opened
     }, reference: { [FARM]: f.reference || [] }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, onboardingEffort: f.ops.onboarding_effort || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
     if (sparse) {
       farm.name = "Example farm — almost empty";
@@ -618,6 +619,43 @@
       timings_ms: { holding: 1, context: 1, consents: 1, documents: 1, sharing: 1 }, errors: {},
     };
   }
+  // ON3d, as public.farm_onboarding_sync and public.proposals_decide over the demo farm: the checklist's "to confirm" lines (the model's
+  // own, over onboardingInputs) as farm_onboarding_check proposals kept in d.tables.proposals for the session, and a farm editor's
+  // decision on one. Ids start at 9001 so they never meet the group demo's.
+  let farmProposalId = 9000;
+  const farmEditor = (d, f) => ["owner", "admin", "edit"].includes(d.tables.farm_members.find((m) => m.farm_id === f)?.role);
+  function farmChecksSync(d, f) {
+    if (!f || !farmEditor(d, f)) return [null, { message: "only an editor of the farm can list what it has to decide" }];
+    const OM = typeof module === "object" && module.exports ? require("./onboarding-model.js") : globalThis.FP.onboardingModel;
+    const inputs = onboardingInputs(d, f);
+    if (!inputs) return [{ proposed: 0, changed: 0, resolved: 0 }];
+    const items = OM.build(inputs, { now: d.asAt + "T09:00:00Z" }).items.filter((i) => OM.DECISION_RULES.includes(i.rule));
+    const rows = d.tables.proposals, now = new Date().toISOString();
+    let made = 0, resolved = 0;
+    for (const it of items) {
+      if (rows.some((p) => p.farm_id === f && p.subject_key === it.key && ["proposed", "ambiguous", "accepted", "rejected"].includes(p.status))) continue;
+      const tail = it.key.slice(it.key.indexOf(":") + 1);
+      const candidate = it.rule === "consent.not_recorded" ? { action: "add_to_register", consent_no: tail } : it.rule === "consent.no_conditions" ? { action: "fetch_conditions", consent_no: tail }
+        : it.rule === "fep.confirm_report" ? { action: "confirm_report", document_id: tail } : { action: "read_plan_in", document_id: tail };
+      rows.push({ id: ++farmProposalId, farm_id: f, org_id: null, kind: OM.FARM_CHECK_KIND, subject: { rule: it.rule, evidence: tail }, subject_key: it.key, document_id: null,
+        evidence: { rule: it.rule }, candidates: [candidate], status: "proposed", decision: null, decided_by: null, decided_at: null, applied_at: null, created_at: now });
+      made++;
+    }
+    for (const p of rows) if (p.farm_id === f && p.kind === OM.FARM_CHECK_KIND && ["proposed", "ambiguous"].includes(p.status) && !items.some((i) => i.key === p.subject_key)) { p.status = "superseded"; resolved++; }
+    return [{ proposed: made, changed: 0, resolved }];
+  }
+  function farmDecide(d, args) {
+    const row = d.tables.proposals.find((p) => p.id === args.id && p.farm_id);
+    if (!row || !farmEditor(d, row.farm_id)) return [null, { message: "proposal " + args.id + " is not open for you to decide" }];
+    if (!["proposed", "ambiguous"].includes(row.status)) return [null, { message: "proposal " + args.id + " is already " + row.status }];
+    let chosen = null;
+    if (args.status === "accepted") {
+      chosen = args.candidate ? row.candidates.find((c) => Object.entries(args.candidate).every(([k, v]) => c[k] === v)) : row.status === "ambiguous" ? null : row.candidates[0];
+      if (!chosen) return [null, { message: row.status === "ambiguous" && !args.candidate ? "an ambiguous proposal needs one of its candidates chosen" : "the chosen candidate must be exactly one of this proposal's candidates (0 match)" }];
+    } else if (args.status !== "rejected") return [null, { message: "a decision is accepted or rejected" }];
+    Object.assign(row, { status: args.status, decision: { candidate: chosen, note: String(args.note || "").trim() || null }, decided_by: d.user.id, decided_at: new Date().toISOString() });
+    return [row];
+  }
   function holding(d, name, args) {
     const B = typeof module === "object" && module.exports ? require("./block-model.js") : globalThis.FP.blockModel;
     const mine = args.f === FARM, held = (p) => p.on_farm || d.tables.farm_parcels.some((h) => h.farm_id === args.f && h.external_id === p.external_id);
@@ -905,6 +943,9 @@
         if (name === "request_farm_group_association") return error("The demo does not save changes");
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
+        // ON3d, as public.farm_onboarding_sync, and public.proposals_decide for one of the farm's rows (the group demo's are ON3b's below).
+        if (name === "farm_onboarding_sync") return result(...farmChecksSync(d, args?.f));
+        if (name === "proposals_decide" && d.tables.proposals.some((p) => p.id === args?.id && p.farm_id)) return result(...farmDecide(d, args));
         // B4b, as public.sync_entry_edit: applied on the version it was made on, else kept as a conflict; once per edit id.
         if (name === "sync_entry_edit") {
           const e = d.tables.entries.find((x) => x.id === args.p_entry);
