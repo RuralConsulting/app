@@ -1,8 +1,8 @@
 // Farm-space routes and the models the answer component renders. No DOM, network or clock: "today" is passed in.
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === "object" && module.exports ? require("./consent-no.js") : root.FP.consentNo);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmModel = api;
-})(typeof window === "undefined" ? globalThis : window, function () {
+})(typeof window === "undefined" ? globalThis : window, function (CN) {
   const list = (v) => Array.isArray(v) ? v : [];
   // A farm space is a map with three things you can do (docs/PRODUCT-BRIEF.md "AI is the interface").
   const views = [["ask", "Ask"], ["create", "Create"], ["documents", "Documents"]];
@@ -160,7 +160,7 @@
   }
   // A consent decision among the farm's documents: the consent exists even before its conditions are read in.
   const isDecision = (d) => String(d.doc_type || "").toLowerCase() === "consent_decision" ||
-    (!d.doc_type && /\bdecision\b/i.test(d.title || "") && /\bconsent\b|\b[A-Z]{3}\d{6}\b/i.test(d.title || ""));
+    (!d.doc_type && /\bdecision\b/i.test(d.title || "") && (/\bconsent\b|\b[A-Z]{3}\d{6}\b/i.test(d.title || "") || CN.find(d.title).length > 0));
 
   // "What's due": the farm's conditions as a checklist (what needs a record before anything can be said, dates
   // coming up, ongoing practice), with authorisation expiry dates and consents whose conditions aren't recorded.

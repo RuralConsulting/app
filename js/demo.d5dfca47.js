@@ -644,7 +644,8 @@
     const farm = d.tables.farms.find((x) => x.id === f);
     if (!farm) return null;
     const rel = new Map(d.tables.document_relations.map((r) => [r.id, r.relates_to]));
-    const crcs = (x) => [...new Set((String(x.title || "") + " " + String(x.original_name || "")).toUpperCase().match(/CRC\s?\d{6}(\.\d{1,2})?/g) || [])].map((s) => s.replace(/\s/g, ""));
+    const CN = typeof module === "object" && module.exports ? require("./consent-no.js") : globalThis.FP.consentNo;
+    const crcs = (x) => CN.find(String(x.title || "") + " " + String(x.original_name || ""));
     const docs = d.tables.documents.filter((x) => x.farm_id === f).map((x) => ({ id: x.id, title: x.title, doc_type: x.doc_type, original_name: x.original_name || null,
       date_prepared: x.date_prepared || null, created_at: x.created_at, tier: x.tier || "primary", tiered_at: x.tiered_at || null, relates_to: rel.get(x.id) ?? x.relates_to ?? null,
       visibility: x.visibility || "farm", by_person: true, storage_path: x.storage_path || null, mime_type: x.mime_type || null, size_bytes: x.size_bytes || null, crcs: crcs(x) }));

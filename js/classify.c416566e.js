@@ -11,10 +11,10 @@
 // classify.ai is the hook for the AI gateway (G1, docs/AI-GUARDRAILS.md). Until G1 exists it is null and the
 // rules are the whole classifier: no provider call, and no key, ever lives in app/.
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === "object" && module.exports ? require("./consent-no.js") : root.FP.consentNo);
   if (typeof module === "object" && module.exports) module.exports = api;
   else { root.FP = root.FP || {}; root.FP.classify = api; }
-})(typeof window === "undefined" ? globalThis : window, function () {
+})(typeof window === "undefined" ? globalThis : window, function (CN) {
   // The kinds a person can choose from, in the order the chooser lists them: [doc_type, plain name].
   const KINDS = [
     ["fep", "Farm Environment Plan"], ["fep_audit", "FEP audit"], ["fwfp", "Freshwater Farm Plan"], ["nzfap_checklist", "NZFAP+ checklist"],
@@ -127,7 +127,8 @@
   const extension = (name) => (String(name || "").match(/(\.[A-Za-z0-9]{1,10})$/)?.[1] || "").toLowerCase();
   // Two names are one document in two formats when they are the same apart from the extension and "final"/case.
   const family = (name) => stem(name).toLowerCase().replace(/[\s_-]+/g, " ").replace(/\b(final|issued|signed)\b/g, "").replace(/\s+/g, " ").trim();
-  const consentNo = (s) => (String(s || "").match(/\bCRC\s?\d{5,}[A-Z]?/i)?.[0] || "").replace(/\s/g, "").toUpperCase() || null;
+  // The first consent number a name carries (ECAN1: consent-no.js, which also reads CRC000369A.1 and the legacy NCY, SCY, WTK and MLB numbers), else null
+  const consentNo = (s) => CN.find(s)[0] || null;
   const newest = (a, b) => String(b.date_prepared || b.created_at || "").localeCompare(String(a.date_prepared || a.created_at || ""));
 
   // file: { name, type, size }; primaries: the farm's main documents ({ id, title, doc_type, original_name, date_prepared }).
