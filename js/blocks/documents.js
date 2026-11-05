@@ -5,7 +5,11 @@
 // a title opens the original through a signed URL (the host's [data-open-document] handler).
 // Editors also get the upload drop-zone (tap to choose on a phone), a one-step confirm of the classifier's guess
 // (classify.js), and a one-tap change of where a document sits. Row-level security decides what is allowed.
-// Data: { documents: [documents rows + relates_to], canEdit?, canAdd?, notice?, title? }. render is pure; mounted
+// B3DZ: a Farm Environment Plan dropped here (by name, or by the sheets of an FEP workbook the plan reader knows) is
+// guessed as the farm's main plan through the same confirm step and the same insert; once added, a plain line offers
+// "Read this plan in", which is a link to the Onboarding checklist where the plan already stands as a proposal for an
+// advisor (ON1, "An advisor reads this plan in"; PL11 confirms). Nothing is imported from here.
+// Data: { documents: [documents rows + relates_to], canEdit?, canAdd?, notice?, offer?: [{ id, title }], readInHref?, title? }. render is pure; mounted
 // wires search, upload and moves to ctx.store ({ add(item) -> id, move(id, change), changed() }) when the host has one.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
@@ -133,6 +137,12 @@
       (found.length > MAX_RESULTS ? '<p class="doc-none">' + found.length + " match; the first " + MAX_RESULTS + " are shown.</p>" : "");
   }
 
+  // B3DZ: after a plan is filed, one plain line per plan. "Read this plan in" only goes to the Onboarding checklist, where the
+  // plan stands as "An advisor reads this plan in" until an advisor confirms the PL11 import there; it writes nothing.
+  function offerHtml(offer, href) {
+    return list(offer).filter((o) => o && text(o.title)).map((o) => '<p class="doc-offer" role="status"><a class="doc-read-in" href="' + esc(href) + '" data-doc-read-in="' + esc(o.id) + '">Read this plan in</a> ' +
+      esc(o.title) + ": an advisor checks what it holds and confirms before anything is loaded.</p>").join("");
+  }
   function state(data) {
     const n = list(data?.documents).length;
     return n === 0 ? "empty" : n < 3 ? "sparse" : "full";
@@ -152,9 +162,10 @@
     const picked = !o.show_archive && o.selected != null ? a.archive.find((p) => String(p.doc.id) === String(o.selected)) : null;
     const searchable = docs.length > 6 || a.archive.length > 0;
     const notice = text(d.notice) ? '<p class="doc-notice" role="status">' + esc(d.notice) + "</p>" : "";
+    const offered = text(d.readInHref) ? offerHtml(d.offer, d.readInHref) : "";
     const none = !docs.length ? (ctx.nested ? "" : '<p class="doc-none">No documents yet.</p>') : !a.primaries.length && !a.loose.length && !archived ? '<p class="doc-none">' +
       (o.kinds.length ? "None of these kinds is recorded." : "Every document here is archived; search to find one.") + "</p>" : "";
-    return '<section class="documents-block" data-documents="' + docs.length + '">' + heading + notice + none + main + more + loose + archived +
+    return '<section class="documents-block" data-documents="' + docs.length + '">' + heading + notice + offered + none + main + more + loose + archived +
       (searchable ? searchHtml(picked ? M.docTitle(picked.doc) : "", picked ? resultsHtml(d, o, M.docTitle(picked.doc)) : "") : "") +
       (d.canAdd ? addHtml() : "") + "</section>";
   }
@@ -163,16 +174,27 @@
   const size = (n) => (n >= 1048576 ? (n / 1048576).toFixed(n >= 10485760 ? 0 : 1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
   // One guess per file, in order: a file can sit under a main document chosen earlier in the same batch (key "new:<n>"),
   // so a plan's PDF and its workbook dropped together are one main document and its other format.
-  function guessBatch(files, primaries) {
+  // found[i]: what C.sniff made of file i (an FEP generation the plan reader knows) or null. A workbook the name does not
+  // call a plan is filed as a plan when its sheets say so; a working copy (archive) stays where its name put it.
+  function guessBatch(files, primaries, found = []) {
     const mains = list(primaries).map((p) => ({ id: p.id, title: M.docTitle(p), doc_type: p.doc_type, original_name: p.original_name, date_prepared: p.date_prepared }));
     return list(files).map((file, i) => {
-      const guess = C.rules(file, mains), key = "new:" + i;
+      let guess = C.rules(file, mains);
+      const gen = found?.[i] || null, key = "new:" + i;
+      if (gen && guess.tier !== "archive") {
+        guess = guess.doc_type === "fep" ? { ...guess, generation: gen.id, because: "its sheets are " + gen.label }
+          : { ...guess, doc_type: "fep", tier: "primary", relates_to: null, generation: gen.id, because: "its sheets are " + gen.label };
+      }
       if (guess.tier === "primary") mains.push({ id: key, title: guess.title, doc_type: guess.doc_type, original_name: file.name });
       return { key, file, name: file.name, bytes: file.size, guess, tooBig: file.size > MAX_BYTES };
     });
   }
+  // The plan the farm already has among its main documents (the one shown first), or null. A second plan is never filed
+  // over it: the Documents list keeps every main document, newest first (arrange), so this one sits beside the other.
+  const heldPlan = (primaries) => list(primaries).filter((p) => p && M.isPlan(p)).sort(newest)[0] || null;
+  const planKind = (kind) => ["fep", "fwfp"].includes(kind);
   function confirmHtml(items, primaries) {
-    const mains = list(primaries).map((p) => [String(p.id), M.docTitle(p)]);
+    const mains = list(primaries).map((p) => [String(p.id), M.docTitle(p)]), held = heldPlan(primaries);
     const fields = items.map((it, i) => {
       const g = it.guess, here = [...mains, ...items.slice(0, i).filter((x) => x.guess.tier === "primary").map((x) => [x.key, x.guess.title])];
       const radio = (t, label) => '<label><input type="radio" name="tier-' + i + '" value="' + t + '"' + (g.tier === t ? " checked" : "") + "> " + label + "</label>";
@@ -180,13 +202,35 @@
         (it.tooBig ? '<p class="doc-none">Too large to add here (over 100 MB).</p>' :
         '<label class="doc-field"><span>Title</span><input name="title-' + i + '" value="' + esc(g.title) + '" required></label>' +
         '<label class="doc-field"><span>Kind</span><select name="kind-' + i + '">' + C.KINDS.map(([k, label]) => '<option value="' + k + '"' + (k === g.doc_type ? " selected" : "") + ">" + esc(label) + "</option>").join("") + "</select></label>" +
+        (g.generation ? '<p class="doc-detected">It reads as ' + esc(C.GENERATIONS.find((x) => x[0] === g.generation)?.[1] || "a Farm Environment Plan") + ", so it is offered as the farm's main plan.</p>" : "") +
         '<div class="doc-tiers" role="radiogroup" aria-label="Where it sits">' + radio("primary", "Main") + radio("supporting", "Supporting") + radio("archive", "Archive") + "</div>" +
+        (held ? '<p class="doc-plan-note"' + (g.tier === "primary" && planKind(g.doc_type) ? "" : " hidden") + ">This farm already has a main plan: " + esc(M.docTitle(held)) +
+          ". This one is added beside it as another main document; nothing is replaced. If it is an older copy, choose Archive.</p>" : "") +
         '<label class="doc-field doc-under"' + (g.tier === "supporting" ? "" : " hidden") + '><span>With</span><select name="under-' + i + '"><option value="">No main document</option>' +
           here.map(([id, t]) => '<option value="' + esc(id) + '"' + (id === g.relates_to ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>") + "</fieldset>";
     }).join("");
     const n = items.filter((it) => !it.tooBig).length;
     return '<form class="doc-confirm-form" novalidate>' + fields + '<p class="doc-msg" role="status" aria-live="polite"></p><div class="doc-actions">' +
       (n ? '<button type="submit">' + (n === 1 ? "Add document" : "Add " + n + " documents") + "</button>" : "") + '<button type="button" class="link" data-doc-cancel>Cancel</button></div></form>';
+  }
+  // A drop, read: each file's sheets looked at on the device (C.sniff), then one guess per file. files: File[] (copied first,
+  // so the input can be cleared); primaries: the farm's main documents.
+  async function readDrop(files, primaries) {
+    const picked = [...files], found = await Promise.all(picked.map((file) => C.sniff(file)));
+    return guessBatch(picked, primaries, found);
+  }
+  // The confirmed choices saved one by one through the store's add (the existing upload: storage, then one documents insert
+  // with the chosen tier, which the database stamps tiered_at for). Returns { ids, failed, offer }: offer lists the plans
+  // just filed as main documents (kind fep), for the "Read this plan in" line. Nothing else is called on the store.
+  async function saveChoices(choices, store, stale = () => false) {
+    const ids = new Map(), failed = [];
+    for (const c of choices) {
+      if (stale()) return null;
+      try { ids.set(c.key, await store.add({ ...c, relates_to: c.relates_to && c.relates_to.startsWith("new:") ? ids.get(c.relates_to) || null : c.relates_to })); }
+      catch (err) { failed.push(c.title + ": " + (err?.message || err)); }
+    }
+    const offer = choices.filter((c) => c.doc_type === "fep" && c.tier === "primary" && ids.get(c.key) != null).map((c) => ({ id: ids.get(c.key), title: c.title }));
+    return { ids, failed, offer };
   }
   // Read the confirmed choices back out of the form: one { key, file, title, doc_type, tier, relates_to } per file.
   function confirmed(items, value) {
@@ -225,9 +269,12 @@
     input?.addEventListener("input", () => { results.innerHTML = resultsHtml(d, o, input.value); });
     let items = [];
     const box = rootEl.querySelector(".doc-confirm"), drop = rootEl.querySelector(".doc-drop");
-    function choose(files) {
-      if (!box || !files.length) return;
-      items = guessBatch([...files], primaries());
+    async function choose(files) {
+      const picked = [...files];
+      if (!box || !picked.length) return;
+      const made = await readDrop(picked, primaries());
+      if (ctx.stale()) return;
+      items = made;
       box.innerHTML = confirmHtml(items, primaries()); box.hidden = false; drop.hidden = true;
       box.querySelector("input[name^=title-]")?.focus();
     }
@@ -239,8 +286,10 @@
       rootEl.addEventListener("drop", (e) => { if (!e.dataTransfer?.files?.length) return; e.preventDefault(); drop.classList.remove("doc-drop-over"); choose(e.dataTransfer.files); });
     }
     rootEl.addEventListener("change", (e) => {
-      const radio = e.target.closest?.('.doc-tiers input[type="radio"]');
-      if (radio) radio.closest("fieldset").querySelector(".doc-under").hidden = radio.value !== "supporting";
+      const radio = e.target.closest?.('.doc-tiers input[type="radio"]'), fieldset = e.target.closest?.("fieldset.doc-item");
+      if (radio) fieldset.querySelector(".doc-under").hidden = radio.value !== "supporting";
+      const note = fieldset?.querySelector(".doc-plan-note");
+      if (note) note.hidden = !(fieldset.querySelector('.doc-tiers input:checked')?.value === "primary" && planKind(fieldset.querySelector("select[name^=kind-]")?.value));
     });
     rootEl.addEventListener("submit", async (e) => {
       if (!e.target.matches(".doc-confirm-form")) return;
@@ -250,18 +299,13 @@
       const choices = saveOrder(confirmed(items, value));
       if (!store) { msg.textContent = "Not added: nothing here saves documents."; return; }
       button.disabled = true; msg.textContent = choices.length === 1 ? "Adding…" : "Adding " + choices.length + " documents…";
-      const ids = new Map(), failed = [];
-      for (const c of choices) {
-        if (ctx.stale()) return;
-        try { ids.set(c.key, await store.add({ ...c, relates_to: c.relates_to && c.relates_to.startsWith("new:") ? ids.get(c.relates_to) || null : c.relates_to })); }
-        catch (err) { failed.push(c.title + ": " + (err?.message || err)); }
-      }
-      if (ctx.stale()) return;
-      const added = choices.length - failed.length;
-      if (!failed.length) { await store.changed(added === 1 ? "Added " + choices[0].title + "." : "Added " + added + " documents."); return; }
+      const saved = await saveChoices(choices, store, ctx.stale);
+      if (!saved || ctx.stale()) return;
+      const { failed, offer } = saved, added = choices.length - failed.length;
+      if (!failed.length) { await store.changed(added === 1 ? "Added " + choices[0].title + "." : "Added " + added + " documents.", { offer }); return; }
       button.disabled = false;
       msg.textContent = (added ? "Added " + added + ". " : "") + "Not added: " + failed.join("; ");
-      if (added) await store.changed(msg.textContent);
+      if (added) await store.changed(msg.textContent, { offer });
     });
     rootEl.addEventListener("click", async (e) => {
       if (e.target.closest("[data-doc-cancel]")) { closeConfirm(); return; }
@@ -300,5 +344,5 @@
     },
     state, render, mounted,
   });
-  return { block, arrange, sourceLine, search, resultsHtml, guessBatch, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES };
+  return { block, arrange, sourceLine, search, resultsHtml, guessBatch, readDrop, saveChoices, offerHtml, heldPlan, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES };
 });

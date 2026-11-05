@@ -141,7 +141,10 @@
 .doc-search input { width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--wash); color: var(--ink); font: inherit; }
 .doc-search input::placeholder { color: var(--ink-3); }
 .doc-results .doc:first-child { border-top: 0; }
-.doc-none, .doc-msg, .doc-notice { margin: 8px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.doc-none, .doc-msg, .doc-notice, .doc-offer, .doc-detected, .doc-plan-note { margin: 8px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.doc-plan-note[hidden] { display: none; }
+.doc-read-in { display: block; width: fit-content; min-height: 44px; line-height: 44px; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.doc-read-in:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
 .doc-add { margin-top: 12px; }
 .doc-drop { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px; border: 1px dashed var(--rule); border-radius: 8px; color: var(--ink-2); cursor: pointer; }
 .doc-drop:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }

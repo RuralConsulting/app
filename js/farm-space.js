@@ -1011,7 +1011,7 @@
   }
   // ---- Documents (B3): the sentence, then the Documents block; editors add documents and move them between tiers --
   const editor = () => ["owner", "admin", "edit"].includes(context?.role) && context.documentTiers === "chosen";
-  let documentsNotice = null;
+  let documentsNotice = null, documentsOffer = [];   // B3DZ: the main documents just filed, for the line that offers to read them in (shown once)
   // ---- Onboarding (ON1): the guided checklist of what the platform holds for the farm, what it can propose and what needs
   // a person (onboarding.js). A saved report (?item=) opens as it was saved. ------------------------------------------------
   function onboardingView(host, item) {
@@ -1037,11 +1037,11 @@
     const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, onboarding, list);
     host.append(wrap);
     const farm = context.farm.id, handles = [];
-    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), notice: documentsNotice });
+    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.href(M.href(farm, "onboarding")) });
     handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => M.documents(context, FP.documentsBlock.arrange(context.documents)), level: 2, href: FP.href }));
     if (context.documents.length || editor())
       handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null } },
-        { read: () => { const d = data(); documentsNotice = null; return d; }, level: 3, nested: true, href: FP.href, store: documentStore(farm, () => handles) }));
+        { read: () => { const d = data(); documentsNotice = null; documentsOffer = []; return d; }, level: 3, nested: true, href: FP.href, store: documentStore(farm, () => handles) }));
     return { destroy: () => unmount(handles) };
   }
   // Upload, register and move, as the signed-in person: storage and documents policies decide (F1e, B3).
@@ -1068,10 +1068,11 @@
         if (!data?.length) throw Error("That change wasn't allowed.");
       },
       // Read the farm's documents again and redraw, with one line saying what happened.
-      async changed(notice) {
+      async changed(notice, extra) {
         if (context?.farm.id !== farm) return;
         context.documents = await readDocuments(FP.sb, context.farm);
         documentsNotice = notice || null;
+        documentsOffer = Array.isArray(extra?.offer) ? extra.offer : [];
         for (const h of handles()) h.refresh();
       },
     };
