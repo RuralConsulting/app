@@ -154,8 +154,11 @@
       } else {
         const n = keys.reduce((a, k) => a + (num(counts.get(k)?.count) || 0), 0), on = keys.reduce((a, k) => a + (num(counts.get(k)?.on_farm) || 0), 0);
         const [one, many] = words || ["feature", "features"];
+        // CAP1a: a source with more than 5,000 in the context is not counted exactly ({count: 5000, more_than: 5000})
+        const more = keys.some((k) => counts.get(k)?.more_than != null);
         if (!n) none(label + ": none in the farm's context");
-        else found(plural(n, one, many) + " in the farm's context" + (on ? ", " + on + " on the farm" : ""), null, [n, on]);
+        else found((more ? "More than " + n.toLocaleString("en-NZ") + " " + many : plural(n, one, many)) + " in the farm's context" +
+          (on && !more ? ", " + on + " on the farm" : ""), null, [n, on]);
       }
     }
     return out;
