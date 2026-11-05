@@ -71,7 +71,7 @@
   let scheme = null, observer = null, syncPalette = null;
   function init() {
     if (map) return map;
-    maplibregl.setWorkerUrl("vendor/maplibre-gl-csp-worker.js");
+    maplibregl.setWorkerUrl("vendor/maplibre-gl-csp-worker.f950e7b1.js");
     map = new maplibregl.Map({
       container, style: FP.basemaps.style("aerial"),
       bounds: [[166.3, -47.4], [178.6, -34.3]], maxZoom: 21,
