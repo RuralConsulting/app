@@ -135,9 +135,11 @@
   const NOT_LOADED = "Not loaded yet: nothing from this source is on the map or in answers.";
   // A source the map reads when it is switched on (PERF1b) that couldn't be read this time: said plainly, never an error.
   const COULD_NOT_LOAD = "Couldn't load just now: it is read again when the layer is next switched on.";
+  // FU2: the farm's reference sources could not be counted just now (farm_reference_counts failed), so none can be listed or drawn.
+  const COUNTS_FAILED = "Reference layers couldn't load just now.";
 
   // The reference_sources columns the app reads for provenance (the farm space and the group space both ask for these).
   const COLUMNS = "key,name,theme,provider,licence,attribution,summary,refreshed_at,effective_from,feature_count,coverage,serve_to_customers";
 
-  return { heldBy, COLUMNS, dateText, licenceName, normalise, index, parts, line, lineFor, linesFor, reaches, sourcesFor, NOT_LOADED, COULD_NOT_LOAD };
+  return { heldBy, COLUMNS, dateText, licenceName, normalise, index, parts, line, lineFor, linesFor, reaches, sourcesFor, NOT_LOADED, COULD_NOT_LOAD, COUNTS_FAILED };
 });

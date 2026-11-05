@@ -676,7 +676,8 @@
           return result(d.syncOps[args.p_op]);
         }
         // WQ2, as public.monitoring_location and public.monitoring_location_series over the invented location: each member's
-        // results within its dates (the demo's members do not overlap), oldest first, each with its site
+        // results within its dates (the demo's members do not overlap) and the window asked for (p_from / p_to, NZ dates, inclusive),
+        // oldest first, each with its site
         if (name === "monitoring_location") {
           const ls = wqOf(d).locations || [];
           return result(ls.find((l) => args.p_location != null ? l.id === args.p_location : l.members.some((m) => m.monitoring_site_id === args.p_site)) || null);
@@ -685,7 +686,8 @@
           const l = (wqOf(d).locations || []).find((x) => x.id === args.p_location);
           const nz = (t) => new Intl.DateTimeFormat("en-CA", { timeZone: "Pacific/Auckland" }).format(new Date(t));
           return result(!l ? [] : l.members.filter((m) => m.monitoring_site_id != null).flatMap((m) => (wqOf(d).series[m.monitoring_site_id + "|" + args.p_parameter] || [])
-            .filter((r) => (!m.valid_from || nz(r.sampled_at) >= m.valid_from) && (!m.valid_to || nz(r.sampled_at) <= m.valid_to)).map((r) => ({ ...r, site_id: m.monitoring_site_id })))
+            .filter((r) => (!m.valid_from || nz(r.sampled_at) >= m.valid_from) && (!m.valid_to || nz(r.sampled_at) <= m.valid_to)
+              && (!args.p_from || nz(r.sampled_at) >= args.p_from) && (!args.p_to || nz(r.sampled_at) <= args.p_to)).map((r) => ({ ...r, site_id: m.monitoring_site_id })))
             .sort((a, b) => a.sampled_at.localeCompare(b.sampled_at)));
         }
         if (name === "measurement_series") {

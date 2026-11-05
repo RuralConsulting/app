@@ -19,13 +19,18 @@
 
   // rows: reference_sources rows. Returns the drawer entry, or null when no source is relevant (the entry is not drawn).
   function section(rows, options) {
-    const { loaded, notLoaded } = P.sourcesFor(rows, options);
-    if (!loaded.length && !notLoaded.length) return null;
+    const found = P.sourcesFor(rows, options), loaded = found.loaded;
+    // FU2: the farm's reference sources could not be counted (options.countsFailed): which are loaded or not is not known, so
+    // none is listed as "not loaded"; the entry says the list couldn't load, and the sources the space does hold are as before.
+    const countsFailed = !!options?.countsFailed, notLoaded = countsFailed ? [] : found.notLoaded;
+    if (!loaded.length && !notLoaded.length && !countsFailed) return null;
     const failed = loaded.filter((s) => s.failed).length, read = loaded.length - failed;
-    const count = [read ? read + " loaded" : null, failed ? failed + " couldn't load just now" : null, notLoaded.length ? notLoaded.length + " not loaded" : null].filter(Boolean).join(", ");
+    const count = [read ? read + " loaded" : null, failed ? failed + " couldn't load just now" : null, notLoaded.length ? notLoaded.length + " not loaded" : null,
+      countsFailed ? "reference sources couldn't load just now" : null].filter(Boolean).join(", ");
     return FP.el("details", { class: "drawer-sources", id: "drawer-sources" },
       FP.el("summary", {}, FP.el("span", {}, "Sources"), FP.el("small", {}, count)),
       FP.el("p", { class: "sources-note" }, "Where the reference layers on this map come from, and how recent they are."),
+      countsFailed ? FP.el("p", { class: "sources-error", role: "status" }, P.COUNTS_FAILED + " Try again in the Layers list.") : null,
       FP.el("ul", { class: "sources-list" }, ...loaded.map(item), ...notLoaded.map(item)));
   }
 

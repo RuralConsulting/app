@@ -73,6 +73,10 @@ button, input { font: inherit; color: inherit; }
 .layer-list input[role="switch"][aria-busy="true"] { opacity: .6; cursor: progress; }
 .layer-list input[role="switch"][aria-busy="true"]::after { box-shadow: 0 0 0 2px var(--accent-ink) inset; }
 .layer-list .layer-state { font-style: italic; }
+/* FU2: the reference sources could not be counted just now: one line in the Reference list, and a way to read again. */
+.layer-list .layer-error { padding: 8px 0; }
+.layer-list .layer-error small { font-style: italic; }
+.layer-list .layer-error .link { padding: 6px 0; min-height: 32px; }
 @media (prefers-reduced-motion: reduce) { .layer-list input[role="switch"], .layer-list input[role="switch"]::after, .terrain-toggle input[role="switch"], .terrain-toggle input[role="switch"]::after { transition: none; } }
 .panel-foot { margin-top: 10px; }
 .map-msg { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: 12px 16px;

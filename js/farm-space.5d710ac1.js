@@ -1,9 +1,10 @@
 // The farm space: header, map with its standing answers, and Ask, Create, Documents. Reads only, except People
 // (owners and admins add, change and remove people; the farm_members policies decide what is allowed).
 (function (root, factory) {
-  const api = factory(typeof module === "object" && module.exports ? require("./farm-model.js") : root.FP.farmModel);
+  const node = typeof module === "object" && module.exports;
+  const api = factory(node ? require("./farm-model.js") : root.FP.farmModel, node ? require("./farm-reference.js") : root.FP.farmReference);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
-})(typeof window === "undefined" ? globalThis : window, function (M) {
+})(typeof window === "undefined" ? globalThis : window, function (M, R) {
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   // Tiers (F1e) and who chose one (B3's tiered_at) are read when the database has them. relates_to is read through
   // document_relations, which withholds a relationship whose other end the reader can't see. context.documentTiers
@@ -61,10 +62,12 @@
     return maps;
   }
   // How many features each served source has in the farm's context (PERF1a's farm_reference_counts, no geometry): the
-  // Layers drawer's reference rows and the Sources list. Null when it can't be read (a database before PERF1a: farm_map's
-  // own reference entries say instead).
+  // Layers drawer's reference rows and the Sources list. {counts, failed}: counts is null when the function isn't there (a
+  // database before PERF1a: farm_map's own reference entries say instead), and then nothing failed. Any other error (a
+  // timeout, a refused read, a thrown request) is `failed`: the drawer and the Sources list say so (FU2), never an empty list.
   const readCounts = (sb, farm) => Promise.resolve(sb.rpc("farm_reference_counts", { f: farm.id }))
-    .then((r) => (r.error || !r.data || typeof r.data !== "object" ? null : r.data), () => null);
+    .then((r) => (r.error ? { counts: null, failed: !R.missing(r.error) } : { counts: !r.data || typeof r.data !== "object" ? null : r.data, failed: false }),
+      (e) => ({ counts: null, failed: !R.missing(e) }));
   function loadRest(sb, farm, user) {
     return Promise.all([
       read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
@@ -81,7 +84,7 @@
     const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
     return { farm, user, role: member.role, orgRole: org?.role || null, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
-      obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error, checks, records, referenceCounts: counts };
+      obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error, checks, records, referenceCounts: counts.counts, referenceCountsFailed: counts.failed };
   }
   // Both halves, as one context (what the tests and a re-read use).
   async function load(sb, farm, user) {
@@ -639,14 +642,30 @@
     const children = [];
     for (const [section, heading] of [["farm", "Farm"], ["reference", "Reference"]]) {
       const own = entries.filter((e) => e.section === section);
-      if (!own.length) continue;
-      children.push(el("li", { class: "group", "data-layer-section": section }, heading), ...own.filter((e) => !e.job).map(row));
+      // FU2: the counts couldn't be read (not: this farm has none), so the Reference list says so and offers to read again
+      const failed = section === "reference" && context?.referenceCountsFailed;
+      if (!own.length && !failed) continue;
+      children.push(el("li", { class: "group", "data-layer-section": section }, heading), ...(failed ? [countsError()] : []), ...own.filter((e) => !e.job).map(row));
       const jobs = new Map();
       for (const e of own.filter((e) => e.job)) { if (!jobs.has(e.job.id)) jobs.set(e.job.id, { job: e.job, entries: [] }); jobs.get(e.job.id).entries.push(e); }
       for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group job" }, M.jobHeading(job)), ...es.map(row));
     }
     $("#layer-list").replaceChildren(...children);
     for (const e of entries) rowState(e);
+  }
+  // FU2: the reference sources could not be counted just now. One line in the Reference list, with a way to read again.
+  function countsError() {
+    const retry = el("button", { type: "button", class: "link", onclick: () => retryCounts(retry) }, "Try again");
+    return el("li", { class: "layer-error", "data-layer-error": "reference-counts" }, el("small", { role: "status" }, FP.provenance?.COUNTS_FAILED || "Reference layers couldn't load just now."), retry);
+  }
+  async function retryCounts(button) {
+    const farm = context?.farm;
+    if (!farm || button.disabled) return;
+    button.disabled = true; button.textContent = "Trying again…";
+    const r = await readCounts(FP.sb, farm);
+    if (context?.farm !== farm) return;
+    context.referenceCounts = r.counts; context.referenceCountsFailed = r.failed;
+    startReference(); renderLayers(layerRows(sceneEntries)); renderSources(); if (!r.failed) prefetchWhenIdle();
   }
   // The Layers drawer's Sources entry (PROV1): the served sources this farm's map draws (and its water-quality sources), with
   // when each was refreshed, its licence and what it is; sources registered but empty say "Not loaded yet". Folded by default.
@@ -661,7 +680,7 @@
     // when farm_map carried every source; one that couldn't be read just now says so
     const keys = [...(refs ? refs.keys() : []), ...(context.maps?.reference || []).map((r) => r.key), ...held.keys];
     const node = FP.provenance.section(context.maps?.sources, { keys, loadedKeys: held.loadedKeys, asAt: held.asAt, region: context.farm?.region || context.maps?.farm?.region,
-      failedKeys: refs ? refs.failedKeys() : [] });
+      failedKeys: refs ? refs.failedKeys() : [], countsFailed: !!context.referenceCountsFailed });
     if (node && open) node.open = true;
     slot.replaceChildren(...(node ? [node] : []));
   }

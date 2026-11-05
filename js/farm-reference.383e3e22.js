@@ -24,8 +24,9 @@
   // a config list names one; they are read when switched on.
   const ZONES = /(?:^|-)(?:zones?|subregions|catchments)(?:-|$)/;
   const isZone = (s) => ZONES.test(String(s?.key || "")) || /zone|catchment/i.test(String(s?.theme || ""));
-  // A function the database doesn't have yet (PostgREST: 404 / PGRST202; Postgres: 42883).
-  const missing = (e) => !!e && (e.code === "PGRST202" || e.code === "42883" || e.status === 404 || /could not find the function|does not exist/i.test(String(e.message || "")));
+  // A function the database doesn't have yet (PostgREST: 404 / PGRST202, or its "could not find the function" message; Postgres: 42883). Not "does not exist": that also
+  // says a relation inside a function is missing, which is a failure to report, not a database to fall back for.
+  const missing = (e) => !!e && (e.code === "PGRST202" || e.code === "42883" || e.status === 404 || /could not find the function/i.test(String(e.message || "")));
 
   // The served sources with features in this farm's context, by name (as farm_map listed them): {key, name, theme,
   // attribution, count}. counts: farm_reference_counts' object, or null when it could not be read (a database without

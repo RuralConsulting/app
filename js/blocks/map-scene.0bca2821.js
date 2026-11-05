@@ -218,7 +218,7 @@
   // PERF1b: one reference source's entry (farm_reference_context's shape, as farm_map gave it) joins the scene on the map
   // now, without drawing it again: under the reference sources after it by name, Rivers and the focus mark, so the order
   // is the one farm_map gave. Drawn hidden: the host turns it on (setVisible) as its row says. Returns the row's layer ids
-  // ({key, name, ids, past?}), or null when no farm is drawn. A source already on the map returns its row as it is.
+  // ({key, name, ids, past?}), or null when no farm is drawn or the source is already on the map (nothing is added; the host keeps the row it has).
   function addReference(r) {
     if (!map || !drawn || !r?.key) return null;
     const had = refDrawn.find((x) => x.key === r.key);

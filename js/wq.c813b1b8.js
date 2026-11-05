@@ -12,6 +12,7 @@
   const M = () => FP.wqModel;
   const el = (...a) => FP.el(...a);
 
+  const list_ = (v) => (Array.isArray(v) ? v : []);
   async function rpc(sb, name, args) {
     const { data, error } = await sb.rpc(name, args);
     if (error) throw error;
@@ -127,11 +128,32 @@
     async function locationOf(id) {
       try { const { data, error } = await sb.rpc("monitoring_location", { p_site: id }); return error ? null : M().location(data); } catch { return null; }
     }
+    // The newest result of the parameter across the location's readable member sites (wq_site_latest of each, in parallel); this site's
+    // own is the fallback when a member can't be read.
+    async function locationLatest(site, entry, row) {
+      const ids = [...new Set(list_(entry.location.members).map((m) => m.monitoring_site_id).filter((x) => x != null && x !== site.id))];
+      const others = await Promise.all(ids.map(async (id) => {
+        try { return M().latest(await rpc(sb, "wq_site_latest", { site: id })).rows.find((r) => r.parameter === row.parameter)?.sampled_at || null; } catch { return null; }
+      }));
+      return M().latestInstant([row.sampled_at, ...others]) || row.sampled_at;
+    }
     // The chart switches between this site's own series and the location's whole record (read once per parameter).
     async function toggleLocation(site, entry, row) {
       entry.useLocation = !entry.useLocation;
       if (entry.useLocation && entry.locationSeries?.parameter !== row.parameter) {
-        try { entry.locationSeries = { parameter: row.parameter, rows: await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: row.parameter }) }; }
+        // FU2: the window the chart draws (the last years of the record, ending at the LOCATION's latest result of this parameter: a
+        // predecessor site's own latest is years older), narrowed while a read fills the cap
+        try {
+          const latestAt = await locationLatest(site, entry, row);
+          let read = null;
+          for (const years of M().LOCATION_WINDOW_YEARS) {
+            const from = M().locationWindowStart(latestAt, years), last = years === M().LOCATION_WINDOW_YEARS.at(-1);
+            const rows = await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: row.parameter, ...(from ? { p_from: from } : {}) });
+            read = { parameter: row.parameter, rows, from, years, capped: rows.length >= M().READ_CAP };
+            if (!read.capped || last || !from) break;
+          }
+          entry.locationSeries = read;
+        }
         catch { entry.useLocation = false; entry.locationSeries = null; }
       }
       drawChart(site, entry, row);
@@ -170,7 +192,7 @@
         el("button", { type: "button", class: "link wq-chart-close", onclick: () => { entry.handle?.destroy(); entry.handle = null; entry.chart.replaceChildren(); for (const b of entry.panel.querySelectorAll(".wq-value")) b.setAttribute("aria-expanded", "false"); } }, "Close chart"));
       entry.chart.replaceChildren(bar, host);
       const data = M().chartData({ site, parameter: row.parameter, name: row.name, unit: row.unit, series: whole ? entry.locationSeries.rows : entry.series, attribution: entry.latest.attribution || (entry.latest.source ? "Source: " + entry.latest.source + "." : ""),
-        provisional: row.provisional, compare: entry.compare, provenance: lineOf(entry.latest), ...(whole ? { location: entry.location } : {}) });
+        provisional: row.provisional, compare: entry.compare, provenance: lineOf(entry.latest), ...(whole ? { location: entry.location, window: entry.locationSeries } : {}) });
       entry.handle = FP.blocks.render(host, { block: "chart", owner: { farm: farm.id } }, { read: () => data, level: 4, href: FP.href });
     }
 

@@ -119,14 +119,39 @@
   const locationLine = (loc) => "Combined record of " + loc.name + ": " + loc.members.map(memberText).join(", ") +
     ". Each site's results count only within its dates; where dates overlap, the current site's are used.";
 
+  // FU2: the location's combined record is read as a window, never whole (public.monitoring_location_series takes p_from / p_to,
+  // NZ dates, and answers oldest first; a read that PostgREST caps would drop the NEWEST results). The window is the years the
+  // chart draws, ending at the parameter's latest result; it is narrowed (10 years, then 3, then 1) while a read fills the cap.
+  const LOCATION_WINDOW_YEARS = [10, 3, 1], READ_CAP = 1000;
+  const nzDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Pacific/Auckland" });
+  // The NZ date `years` before the latest result's NZ date ("YYYY-MM-DD"), or null when the latest result's time is not understood.
+  function locationWindowStart(latestAt, years) {
+    const t = new Date(latestAt);
+    if (!Number.isFinite(t.getTime()) || !(years > 0)) return null;
+    const [y, m, d] = nzDay.format(t).split("-").map(Number);
+    const from = new Date(Date.UTC(y - years, m - 1, d));
+    if (from.getUTCMonth() !== m - 1) from.setUTCDate(0);   // 29 Feb a non-leap year earlier: the last day of February
+    return from.toISOString().slice(0, 10);
+  }
+  // The newest of some result times (ISO strings; unusable ones ignored), as given, or null when none is usable.
+  function latestInstant(times) {
+    let best = null, at = -Infinity;
+    for (const t of list(times)) { const ms = new Date(t).getTime(); if (Number.isFinite(ms) && ms > at) { at = ms; best = t; } }
+    return best;
+  }
+  // The line under the chart saying which window is drawn, and when a read still filled the cap, that it may be cut short.
+  const windowLine = ({ from, years, capped }) => from
+    ? "Showing the last " + (years === 1 ? "year" : years + " years") + " of the combined record, from " + day(from) + "." + (capped ? " This window is large and may be cut short." : "")
+    : "";
+
   // The Chart block's data for a site and parameter: the series read, the unit, the source's attribution and the provisional
   // flag from the latest row. No bands (none are passed), so the chart says "not assessed". A comparison site is a second series.
   // WQ2: with a location, the series is the location's combined record, labelled with its name and current site's id, and the
   // first provenance line lists its members and their dates.
-  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance, location: loc }) {
+  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance, location: loc, window: win }) {
     const points = (rows) => list(rows).filter((r) => r && r.value !== null && r.value !== undefined).map((r) => ({
       t: r.sampled_at, value: Number(r.value), qualifier: CENSORED.includes(r.qualifier) ? r.qualifier : null, text: text(r.value_text) || null }));
-    const lines = loc ? [locationLine(loc), ...list(typeof provenance === "string" ? [provenance] : provenance)] : provenance;
+    const lines = loc ? [locationLine(loc), ...(win ? [windowLine(win)] : []), ...list(typeof provenance === "string" ? [provenance] : provenance)].filter(Boolean) : provenance;
     return {
       title: (name || parameter) + " at " + (loc ? locationLabel(loc) : site?.name || "this site"),
       parameter: { key: parameter, name: name || parameter, unit: unit || text(list(series)[0]?.unit) },
@@ -136,5 +161,5 @@
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData, location, locationLabel, locationLine };
+  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData, location, locationLabel, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP };
 });
