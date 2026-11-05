@@ -143,8 +143,11 @@
 .doc-results .doc:first-child { border-top: 0; }
 .doc-none, .doc-msg, .doc-notice, .doc-offer, .doc-detected, .doc-plan-note { margin: 8px 0 0; color: var(--ink-2); font-size: var(--text-small); }
 .doc-plan-note[hidden] { display: none; }
-.doc-read-in { display: block; width: fit-content; min-height: 44px; line-height: 44px; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.doc-read-in:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+.doc-read-in { display: block; width: fit-content; min-height: 44px; padding: 0; border: 0; background: none; font: inherit; line-height: 44px; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.doc-read-in:disabled { color: var(--ink-3); cursor: default; }
+.doc-read-in:focus-visible, .doc-queue:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+.doc-queue { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.doc-requested { margin: 2px 0 0; color: var(--ink-2); font-size: var(--text-small); }
 .doc-add { margin-top: 12px; }
 .doc-drop { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px; border: 1px dashed var(--rule); border-radius: 8px; color: var(--ink-2); cursor: pointer; }
 .doc-drop:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }

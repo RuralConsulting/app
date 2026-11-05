@@ -28,6 +28,11 @@
     const parent = new Map((error ? [] : relations || []).map((r) => [r.id, r.relates_to]));
     return rows.map((d) => ({ ...d, relates_to: parent.get(d.id) ?? null }));
   }
+  // FU4: the farm's open read-it-in requests (public.plan_import_requests), for the Documents lines. Optional: a database without the
+  // table, or a refused read, reads as no requests.
+  const PLAN_REQUEST_COLUMNS = "id,document_id,requested_by,requested_by_name,requested_at,status";
+  const readPlanRequests = (sb, farm) => Promise.resolve(sb.from("plan_import_requests").select(PLAN_REQUEST_COLUMNS).eq("farm_id", farm.id).eq("status", "requested"))
+    .then((r) => (r.error ? [] : r.data || []), () => []);
   const nzToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Pacific/Auckland" });
   const optional = (query) => Promise.resolve(query).then((r) => (r.error ? [] : r.data || []), () => []);
   // What's due's own record-keeping (E5): conditions marked done (a met check nothing has superseded) and records (an
@@ -1126,11 +1131,19 @@
     const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, onboarding, list);
     host.append(wrap);
     const farm = context.farm.id, handles = [];
-    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.href(M.href(farm, "onboarding")) });
+    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.href(M.href(farm, "onboarding")),
+      requests: context.planRequests || [], userId: user?.id || null });
     handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => M.documents(context, FP.documentsBlock.arrange(context.documents)), level: 2, href: FP.href }));
     if (context.documents.length || editor())
       handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null } },
         { read: () => { const d = data(); documentsNotice = null; documentsOffer = []; return d; }, level: 3, nested: true, href: FP.href, store: documentStore(farm, () => handles) }));
+    // FU4: the open requests are read once the view is up, and drawn when they arrive (unless a notice or a fresh offer is waiting to be shown).
+    const mine = context;
+    if (!context.planRequests) readPlanRequests(FP.sb, context.farm).then((rows) => {
+      if (context !== mine) return;
+      context.planRequests = rows;
+      if (!documentsNotice && !documentsOffer.length) for (const h of handles) h.refresh();
+    });
     return { destroy: () => unmount(handles) };
   }
   // Upload, register and move, as the signed-in person: storage and documents policies decide (F1e, B3).
@@ -1155,6 +1168,15 @@
         const { data, error } = await FP.sb.from("documents").update({ ...change, tiered_at: new Date().toISOString() }).eq("id", id).select("id");
         if (error) throw error;
         if (!data?.length) throw Error("That change wasn't allowed.");
+      },
+      // FU4: The read-it-in button asks for the plan to be read in: one row in plan_import_requests (public.request_plan_import), the same row
+      // again if the plan already has an open request. Nothing is imported: an advisor confirms PL11's import, which marks the request.
+      async requestReadIn(id) {
+        const { data, error } = await FP.sb.rpc("request_plan_import", { p_document: id });
+        if (error) throw error;
+        if (!data) throw Error("The request wasn't recorded.");
+        if (context?.farm.id === farm) context.planRequests = [...(context.planRequests || []).filter((r) => String(r.document_id) !== String(data.document_id)), data];
+        return data;
       },
       // Read the farm's documents again and redraw, with one line saying what happened.
       async changed(notice, extra) {

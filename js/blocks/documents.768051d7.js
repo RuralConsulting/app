@@ -7,10 +7,13 @@
 // (classify.js), and a one-tap change of where a document sits. Row-level security decides what is allowed.
 // B3DZ: a Farm Environment Plan dropped here (by name, or by the sheets of an FEP workbook the plan reader knows) is
 // guessed as the farm's main plan through the same confirm step and the same insert; once added, a plain line offers
-// "Read this plan in", which is a link to the Onboarding checklist where the plan already stands as a proposal for an
-// advisor (ON1, "An advisor reads this plan in"; PL11 confirms). Nothing is imported from here.
-// Data: { documents: [documents rows + relates_to], canEdit?, canAdd?, notice?, offer?: [{ id, title }], readInHref?, title? }. render is pure; mounted
-// wires search, upload and moves to ctx.store ({ add(item) -> id, move(id, change), changed() }) when the host has one.
+// "Read this plan in".
+// FU4: that line is a button. It asks the store for requestReadIn (one row in public.plan_import_requests, once per plan), and the
+// line then says "requested by you, <date>" and links to the Onboarding checklist, where the plan stands as "An advisor reads this
+// plan in" with who asked and when (ON1; PL11's confirm reads it in and marks the request). Nothing is imported from here.
+// Data: { documents: [documents rows + relates_to], canEdit?, canAdd?, notice?, offer?: [{ id, title }], readInHref?, requests?: [open
+// plan_import_requests rows], userId?, title? }. render is pure; mounted wires search, upload and moves to ctx.store
+// ({ add(item) -> id, move(id, change), changed(), requestReadIn(id) }) when the host has one.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./registry.js") : root.FP.blocks, node ? require("../farm-model.js") : root.FP.farmModel,
@@ -94,7 +97,12 @@
     const move = data.canEdit ? '<button type="button" class="doc-move" data-doc-move="' + esc(d.id) + '" aria-expanded="false" aria-label="Change where ' + esc(title) + ' sits"><span aria-hidden="true">•••</span></button>' : "";
     return '<li class="doc' + (mine ? " selected-record" : "") + '" data-item-id="' + esc(d.id) + '" data-doc-tier="' + esc(p.tier.tier) + '" tabindex="-1">' +
       '<div class="doc-head"><p class="doc-title">' + name + "</p>" + move + "</div>" +
-      '<p class="doc-source">' + esc((note ? note + " · " : "") + sourceLine(d)) + "</p>";
+      '<p class="doc-source">' + esc((note ? note + " · " : "") + sourceLine(d)) + "</p>" + requestedHtml(data, d);
+  }
+  // FU4: a plan with an open "Read this plan in" request says so wherever it is listed, not only on the line after it was filed.
+  function requestedHtml(data, d) {
+    const ask = openRequest(data.requests, d.id);
+    return ask ? '<p class="doc-requested" data-doc-requested="' + esc(d.id) + '">Read-in ' + esc(askedLine(ask, data.userId)) + "</p>" : "";
   }
   const holds = (items, o) => o.selected != null && items.some((p) => String(p.doc.id) === String(o.selected));
   function foldHtml(items, o, data, label, cls) {
@@ -137,11 +145,20 @@
       (found.length > MAX_RESULTS ? '<p class="doc-none">' + found.length + " match; the first " + MAX_RESULTS + " are shown.</p>" : "");
   }
 
-  // B3DZ: after a plan is filed, one plain line per plan. "Read this plan in" only goes to the Onboarding checklist, where the
-  // plan stands as "An advisor reads this plan in" until an advisor confirms the PL11 import there; it writes nothing.
-  function offerHtml(offer, href) {
-    return list(offer).filter((o) => o && text(o.title)).map((o) => '<p class="doc-offer" role="status"><a class="doc-read-in" href="' + esc(href) + '" data-doc-read-in="' + esc(o.id) + '">Read this plan in</a> ' +
-      esc(o.title) + ": an advisor checks what it holds and confirms before anything is loaded.</p>").join("");
+  // B3DZ/FU4: after a plan is filed, one plain line per plan. "Read this plan in" records a request (never an import); once the plan has
+  // an open request the line says who asked and when (you, or the name they had) and leads to the checklist, where an advisor confirms.
+  const nzDates = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "Pacific/Auckland" });
+  const openRequest = (requests, id) => list(requests).find((r) => r && r.status === "requested" && String(r.document_id) === String(id)) || null;
+  const askedLine = (r, userId) => "requested by " + (userId && String(r.requested_by) === String(userId) ? "you" : text(r.requested_by_name) || "a farm editor") + ", " +
+    (Number.isFinite(Date.parse(r.requested_at)) ? nzDates.format(new Date(r.requested_at)) : "date not recorded");
+  function offerHtml(offer, href, requests, userId) {
+    return list(offer).filter((o) => o && text(o.title)).map((o) => {
+      const ask = openRequest(requests, o.id);
+      if (ask) return '<p class="doc-offer" role="status" data-doc-requested="' + esc(o.id) + '">Read this plan in: ' + esc(askedLine(ask, userId)) + ". " + esc(o.title) +
+        ' waits for an advisor to check it and confirm; nothing is loaded before that. <a class="doc-queue" href="' + esc(href) + '">See it on the checklist</a></p>';
+      return '<p class="doc-offer" role="status"><button type="button" class="doc-read-in" data-doc-read-in="' + esc(o.id) + '">Read this plan in</button> ' +
+        esc(o.title) + ": an advisor checks what it holds and confirms before anything is loaded.</p>";
+    }).join("");
   }
   function state(data) {
     const n = list(data?.documents).length;
@@ -162,7 +179,7 @@
     const picked = !o.show_archive && o.selected != null ? a.archive.find((p) => String(p.doc.id) === String(o.selected)) : null;
     const searchable = docs.length > 6 || a.archive.length > 0;
     const notice = text(d.notice) ? '<p class="doc-notice" role="status">' + esc(d.notice) + "</p>" : "";
-    const offered = text(d.readInHref) ? offerHtml(d.offer, d.readInHref) : "";
+    const offered = text(d.readInHref) ? offerHtml(d.offer, d.readInHref, d.requests, d.userId) : "";
     const none = !docs.length ? (ctx.nested ? "" : '<p class="doc-none">No documents yet.</p>') : !a.primaries.length && !a.loose.length && !archived ? '<p class="doc-none">' +
       (o.kinds.length ? "None of these kinds is recorded." : "Every document here is archived; search to find one.") + "</p>" : "";
     return '<section class="documents-block" data-documents="' + docs.length + '">' + heading + notice + offered + none + main + more + loose + archived +
@@ -309,6 +326,21 @@
     });
     rootEl.addEventListener("click", async (e) => {
       if (e.target.closest("[data-doc-cancel]")) { closeConfirm(); return; }
+      // FU4: "Read this plan in" asks once (the button is gone when the line is drawn again with the request on it).
+      const readIn = e.target.closest("[data-doc-read-in]");
+      if (readIn) {
+        if (readIn.disabled) return;
+        readIn.parentElement.querySelector(".doc-msg")?.remove();
+        if (!store?.requestReadIn) { readIn.insertAdjacentHTML("afterend", ' <span class="doc-msg" role="status">Not asked: nothing here records the request.</span>'); return; }
+        readIn.disabled = true;
+        try { await store.requestReadIn(readIn.dataset.docReadIn); if (!ctx.stale()) await store.changed(null, { offer: list(d.offer) }); }
+        catch (err) {
+          if (ctx.stale()) return;
+          readIn.disabled = false;
+          readIn.insertAdjacentHTML("afterend", ' <span class="doc-msg" role="status">' + esc("Not asked: " + (err?.message || "the request wasn't recorded.")) + "</span>");
+        }
+        return;
+      }
       const toggle = e.target.closest("[data-doc-move]");
       if (toggle) {
         const open = rootEl.querySelector('[data-doc-menu="' + CSS.escape(toggle.dataset.docMove) + '"]');
@@ -344,5 +376,5 @@
     },
     state, render, mounted,
   });
-  return { block, arrange, sourceLine, search, resultsHtml, guessBatch, readDrop, saveChoices, offerHtml, heldPlan, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES };
+  return { block, arrange, sourceLine, search, resultsHtml, guessBatch, readDrop, saveChoices, offerHtml, openRequest, askedLine, heldPlan, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES };
 });

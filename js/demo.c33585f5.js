@@ -129,6 +129,7 @@
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)", kind: "consultancy" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
       farm_parcels: [], farm_boundaries: [],
+      plan_import_requests: [],   // FU4: "Read this plan in" requests made in this session (public.request_plan_import)
       proposals: [],   // ON3d: the farm's "to confirm" lines as proposals (farmChecksSync), made when the Onboarding view is opened
     }, reference: { [FARM]: f.reference || [] }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, onboardingEffort: f.ops.onboarding_effort || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
     if (sparse) {
@@ -1012,6 +1013,21 @@
         // ON3a/ON3b: the group's proposal counts and decisions (in memory); an association request is not saved in the demo
         if (/^proposals_(open_counts|decide|since_seen|mark_seen|propose)$/.test(name) && d.group) return result(...proposalsRpc(d, name, args || {}));
         if (name === "request_farm_group_association") return error("The demo does not save changes");
+        // FU4, as public.request_plan_import: a farm editor's ask for one of the farm's plans, once per plan (the open request again on a second ask),
+        // in memory for the session, stamped with the fixture's date so the screenshots read the same on every day.
+        if (name === "request_plan_import") {
+          const doc = d.tables.documents.find((x) => x.id === args?.p_document);
+          if (!doc || !farmEditor(d, doc.farm_id)) return error("that plan is not one you can ask to have read in");
+          if (!["fep", "fwfp"].includes(doc.doc_type) || doc.tier === "archive" || doc.visibility === "private") return error("only a plan (not archived, not private) is read in");
+          let row = d.tables.plan_import_requests.find((r) => r.document_id === doc.id && r.status === "requested");
+          if (!row) {
+            const me = d.tables.profiles?.[0];
+            row = { id: d.tables.plan_import_requests.length + 1, farm_id: doc.farm_id, document_id: doc.id, requested_by: d.user.id, requested_by_name: me?.display_name || "Demo advisor",
+              requested_at: d.asAt + "T09:30:00+13:00", status: "requested", note: null, closed_at: null, closed_by: null };
+            d.tables.plan_import_requests.push(row);
+          }
+          return result(row);
+        }
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
         // ON3d, as public.farm_onboarding_sync, and public.proposals_decide for one of the farm's rows (the group demo's are ON3b's below).

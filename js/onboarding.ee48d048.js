@@ -121,13 +121,21 @@
       return { rows: list(data), problem };
     } catch (e) { return { rows: null, problem: problem || e?.message || String(e) }; }
   }
+  // FU4: the farm's open "Read this plan in" requests (public.plan_import_requests), the advisor's queue: who asked and when. Optional: a database
+  // without the table, or a refused read, leaves the lines as they were.
+  async function readRequests(env, farm) {
+    try {
+      const { data, error } = await env.sb.from("plan_import_requests").select("id,document_id,requested_by,requested_by_name,requested_at,status").eq("farm_id", farm).eq("status", "requested");
+      return error ? [] : list(data);
+    } catch { return []; }
+  }
   // host: the element; env: { sb, farm: {id, name}, user: {id, name}, canEdit, item (a saved report's id), docs (the farm's
   // documents), store (the Documents store: add, move), onAction(kind, item), onSaved(), liveHref }
   async function mount(host, env) {
     const M = model(), farm = env.farm.id, user = env.user?.id || null;
-    let inputs = null, report = null, plans = {}, saved = null, draft = readDraft(user, farm), message = null, minutes = null, started = 0, proposals = null;
+    let inputs = null, report = null, plans = {}, saved = null, draft = readDraft(user, farm), message = null, minutes = null, started = 0, proposals = null, requests = [];
     const draw = (o = {}) => { host.innerHTML = html(report, { canTick: !!env.canEdit || !!user, canDecide: !!env.canEdit, userId: user, canSave: !!env.canEdit, liveHref: env.liveHref, message, minutes, ...o }); };
-    const rebuild = (o) => { report = M.build(inputs, { now: new Date().toISOString(), plans, saved, draft, proposals, client_ms: (globalThis.performance?.now() || 0) - started }); draw(o); };
+    const rebuild = (o) => { report = M.build(inputs, { now: new Date().toISOString(), plans, saved, draft, proposals, requests, client_ms: (globalThis.performance?.now() || 0) - started }); draw(o); };
     host.innerHTML = '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2><p class="onboarding-status" role="status">Reading what the platform holds for this farm…</p></section>';
     // A saved report: drawn as it was saved.
     if (env.item) {
@@ -149,6 +157,7 @@
     if (last) saved = M.readDocument(await fetchJson(env.sb, last.storage_path));
     const read = await readProposals(env, farm);
     proposals = read.rows;
+    requests = await readRequests(env, farm);
     if (read.problem) message = "Couldn't bring up what is waiting for your decision: " + read.problem;
     rebuild();
     await migrateLocalTicks();

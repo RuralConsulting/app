@@ -202,6 +202,10 @@
     }
     return null;
   }
+  // FU4: who asked for a plan to be read in and when (the person's display name when they had one; the day in New Zealand).
+  const nzDates = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: "Pacific/Auckland" });
+  const requestedBy = (r) => String(r.requested_by_name || "").trim() || "a farm editor";
+  const requestedOn = (r) => (Number.isFinite(Date.parse(r.requested_at)) ? nzDates.format(new Date(r.requested_at)) : "a date not recorded");
   function proposalItems(inputs, opts) {
     const docs = list(inputs.documents), c = inputs.consents || {}, out = [], plans = opts.plans || {};
     const plansHeld = docs.filter((d) => PLAN_TYPES.includes(docType(d)) && d.tier !== "archive");
@@ -219,8 +223,10 @@
         out.push(item("proposals", "fep.read_in", "done", p.id, docTitle(p) + " has been read in (" + date(imports[0].created_at) + ")",
           { detail: s ? s.total + " values read from it" : null, source: docRef(imports[0]), proposals: s || null, evidence: imports.map((d) => d.id) }));
       } else if (!reports.length) {
-        out.push(item("proposals", "fep.not_read", "propose", p.id, "An advisor reads this plan in: " + docTitle(p),
-          { detail: "Not read in yet. The plan reader proposes its land units, areas, actions and ratings for the advisor to confirm in one pass (PL11); nothing is loaded without that confirm.",
+        // FU4: the farm editor's "Read this plan in" (public.plan_import_requests, opts.requests) is what makes this the advisor's queue: who asked and when.
+        const ask = list(opts.requests).find((r) => r && r.status === "requested" && String(r.document_id) === String(p.id));
+        out.push(item("proposals", "fep.not_read", "propose", p.id, "An advisor reads this plan in: " + docTitle(p) + (ask ? " (requested by " + requestedBy(ask) + ", " + requestedOn(ask) + ")" : ""),
+          { detail: (ask ? "Asked for by " + requestedBy(ask) + " on " + requestedOn(ask) + ". " : "") + "Not read in yet. The plan reader proposes its land units, areas, actions and ratings for the advisor to confirm in one pass (PL11); nothing is loaded without that confirm.",
             source: docRef(p), action: { kind: "advisor", label: "For an advisor" }, evidence: p.id }));
       }
     }
