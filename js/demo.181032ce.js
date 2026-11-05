@@ -516,6 +516,50 @@
     if (inBox.length > max) return [{ features: collection([]), total_in_box: inBox.length, truncated: true }];
     return [{ features: collection(copy(inBox)), total_in_box: inBox.length, truncated: false }];
   }
+  // CAP1b: the demo farm as CAP1a's farm_map gives a large farm, for the screenshots and tests (d.farmParts): an invented
+  // paddock grid deferred (no features, its count and box; more than farm_layer_features' max in the whole farm's box), and
+  // its titles over farm_map's cap (640: a list-only line), and
+  // an invented dense bore source whose farm_reference_context entry comes truncated (its count, no features), read by
+  // viewport with reference_in_view. By default the demo farm is a database before CAP1a (both functions missing). Nothing
+  // here is real.
+  const FARM_PADDOCKS = "demo-f-paddocks", DENSE = "ecan-wells";
+  function farmPartsData(d) {
+    if (d.farmPartsData) return d.farmPartsData;
+    const [[w, s0], , [e, n]] = d.map.extent.coordinates[0], cols = 70, rows = 70, dx = (e - w) / cols, dy = (n - s0) / rows;
+    const paddocks = [];
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) paddocks.push({ type: "Feature", id: 80000 + i * rows + j,
+      geometry: polygon(w + i * dx + dx * .06, s0 + j * dy + dy * .06, w + (i + 1) * dx - dx * .06, s0 + (j + 1) * dy - dy * .06), properties: { name: "Paddock " + (i * rows + j + 1) + " (synthetic)", area_ha: 0.9 } });
+    const bores = [], bw = w - .005, bs = s0 - .005, side = 80, bx = (e - w + .01) / side, by = (n - s0 + .01) / side;
+    for (let i = 0; i < side; i++) for (let j = 0; j < side; j++) bores.push({ id: 90000 + i * side + j, lng: bw + (i + .5) * bx, lat: bs + (j + .5) * by, external_id: "SYN/D" + (i * side + j + 1) });
+    d.farmPartsData = { paddocks, bores, layer: { id: FARM_PADDOCKS, name: "Paddocks (synthetic)", theme: "paddocks", geometry_type: "polygon", epistemic_class: "observation", source: "the farm's own map",
+      feature_count: paddocks.length, bbox: [w, s0, e, n], deferred: true, features: collection([]) } };
+    return d.farmPartsData;
+  }
+  function farmParts(d, name, args) {
+    const p = farmPartsData(d);
+    // (its titles over farm_map's cap too: an empty collection, truncated, with the count; the outline still draws)
+    if (name === "farm_map") return [{ ...copy(d.map), titles: { ...collection([]), truncated: true, feature_count: 640 }, layers: [...copy(d.map.layers), copy(p.layer)] }];
+    if (name === "farm_reference_counts") return [{ [DENSE]: p.bores.length }];
+    if (name === "farm_reference_context") {
+      if (args.source !== DENSE) return [null];
+      return [{ key: DENSE, name: "Wells (ECan)", theme: "wells", attribution: "Invented for the demo.", replaces_in_extent: [], truncated: true, feature_count: p.bores.length, features: collection([]) }];
+    }
+    if (name === "farm_layer_features") {
+      if (args.f !== FARM || args.layer !== FARM_PADDOCKS) return [null];
+      if (![args.x0, args.y0, args.x1, args.y1].every(Number.isFinite)) return [null, { code: "22023", message: "A box is required" }];
+      const hit = (x) => { const c = x.geometry.coordinates[0]; return c[2][0] >= args.x0 && c[0][0] <= args.x1 && c[2][1] >= args.y0 && c[0][1] <= args.y1; };
+      const inBox = p.paddocks.filter(hit), max = args.max_features ?? 4000;
+      if (inBox.length > max) return [{ features: collection([]), total_in_box: inBox.length, truncated: true }];
+      return [{ features: collection(copy(inBox)), total_in_box: inBox.length, truncated: false }];
+    }
+    // reference_in_view: the box in NZTM metres, as the database takes it; at most max_rows rows (5,000 at most)
+    const W = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel;
+    const [x0, y0] = W.nztmToLngLat(args.bbox_xmin, args.bbox_ymin), [x1, y1] = W.nztmToLngLat(args.bbox_xmax, args.bbox_ymax);
+    const want = Array.isArray(args.sources) ? args.sources : null, n = Math.min(args.max_rows ?? 5000, 5000);
+    const rows = (want && !want.includes(DENSE) ? [] : p.bores).filter((b) => b.lng >= x0 && b.lng <= x1 && b.lat >= y0 && b.lat <= y1).slice(0, n);
+    return [rows.map((b) => ({ id: b.id, source_key: DENSE, external_id: b.external_id, web_geom: { type: "Point", coordinates: [b.lng, b.lat] },
+      props: { name: "Bore " + b.external_id + " (synthetic)", external_id: b.external_id } }))];
+  }
   // FB1: invented LINZ-style primary parcels around the illustrative extent (not a survey, not real appellations): the two
   // the farm's rectangle is made of, and its neighbours east, south, north and west. Ids as reference_features ids.
   function parcels(extent) {
@@ -904,6 +948,12 @@
       today: async () => (await ready).asAt,
       async rpc(name, args) {
         const d = await ready;
+        // CAP1b: with d.farmParts the demo farm is a large farm as CAP1a gives it (farmParts); without, a database before CAP1a
+        if (d.farmParts && args.f === FARM && ["farm_map", "farm_reference_counts", "farm_reference_context", "farm_layer_features"].includes(name)) return result(...farmParts(d, name, args));
+        if (name === "farm_layer_features" || name === "reference_in_view") {
+          if (!d.farmParts) return result(null, { code: "PGRST202", message: "Could not find the function in the schema cache" });
+          return result(...farmParts(d, name, args));
+        }
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         // PERF1b, as public.farm_reference_counts and public.farm_reference_context (PERF1a): the farm's reference entries
         // (d.reference by farm; the fixture's `reference`, none in the demo) counted, and one served source's entry read on

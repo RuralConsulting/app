@@ -16,6 +16,14 @@
 // everything on and nothing read; with group_layer_features missing (PostgREST 404 / PGRST202, Postgres 42883) a deferred
 // layer says it couldn't load and the function is not asked again this session. No DOM, no clock of its own (the timer is
 // the host's): the browser parts are group-space.js's and the Map scene's.
+// CAP1b: the one module for both spaces. A farm's map (farm_map after CAP1a) defers a large farm-own layer the same way;
+// create({ farm }) reads it with public.farm_layer_features(f, layer, x0, y0, x1, y1, tolerance_m, max_features), the
+// same call with the farm as its owner, and the farm space (farm-space.js) hosts it as the group space does. add(id, item)
+// takes another thing read by viewport with the item's own read (a farm's reference source whose entry came `truncated`:
+// farm-reference.js's inView). Per layer: a read already on its way whose box holds the view, at a tolerance at least as
+// fine, is waited for rather than asked again; and while the person pans, at most two reads are on their way (the one
+// already asked and the one for the latest view): a view that comes while both are out waits, and only the latest such
+// view is read when one of them lands.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.groupLayers = api;
@@ -28,6 +36,7 @@
   const MAX_FEATURES = 4000;      // as group_layer_features' default: more in the box than this and the person zooms in
   const DEBOUNCE_MS = 300;        // after the map has rested, before the layers on are read for the new view
   const KEPT = 16;                // reads kept per layer (the oldest goes first)
+  const IN_FLIGHT = 2;            // reads on their way per layer: the one already asked, and the one for the latest view
   // Simplification by zoom: about one screen pixel, to the step below it, from 20 m (the whole group) to 0.5 m (a paddock).
   const STEPS = [20, 10, 5, 2, 1, 0.5];
   const WHOLE = STEPS[0];
@@ -82,72 +91,123 @@
   // A read serves a view when its box holds the view at least as finely as the view wants.
   const holds = (read, view) => !!view?.bounds && !!read.box && read.box.x0 <= view.bounds[0][0] && read.box.y0 <= view.bounds[0][1] && read.box.x1 >= view.bounds[1][0] && read.box.y1 >= view.bounds[1][1];
   const serves = (read, view, w) => !read.truncated && read.tol <= w.tol && holds(read, view);
+  // A deferred row's count, as its row lists it ("4,900 features")
+  const featureCount = (n) => Number(n).toLocaleString("en-NZ") + (Number(n) === 1 ? " feature" : " features");
   const zoomLine = (name, n) => "Zoom in to see " + name + " (" + Number(n).toLocaleString("en-NZ") + ")";
 
-  // One group's deferred layers for its session. layers: group_map's layer entries; onData(layerId, featureCollection):
-  // draw these features for the layer (an empty collection clears it); onChange(layerId, state). setTimer/clearTimer: the
+  // One owner's deferred layers for its session: a group's (group: its id, read with group_layer_features) or, CAP1b, a
+  // farm's (farm: its id, read with farm_layer_features). layers: the map's layer entries; onData(id, featureCollection):
+  // draw these features for the layer (an empty collection clears it); onChange(id, state). setTimer/clearTimer: the
   // host's (tests pass their own). States: "idle" (off, or not read), "loading", "loaded", "truncated" (too many in the
   // box: the person zooms in), "failed".
-  function create({ sb, group, layers = [], max = MAX_FEATURES, debounce = DEBOUNCE_MS, onData = () => {}, onChange = () => {},
+  function create({ sb, group = null, farm = null, layers = [], max = MAX_FEATURES, debounce = DEBOUNCE_MS, onData = () => {}, onChange = () => {},
     setTimer = (fn, ms) => setTimeout(fn, ms), clearTimer = (t) => clearTimeout(t) } = {}) {
-    const known = new Map(list(layers).filter(readable).map((l) => [String(l.id), { layer: l, on: false, cache: new Map(), inflight: new Map(), wanted: null,
-      drawn: null, state: "idle", error: null, total: null }]));
-    let gone = false, functionMissing = false, timer = null, lastView = null, reads = 0;
+    const owned = farm != null ? "farm_layer_features" : "group_layer_features";
+    // Per layer: its reads kept (cache) and on their way (inflight: key -> {key, box, tol, p}); wanted: the key of the view
+    // it was last asked for (view); waiting: the read that view waits on (its own, or one on its way whose box holds it);
+    // queued: a view that came while IN_FLIGHT reads were out ({view, waiters}), read when one of them lands.
+    const entry = (l) => ({ layer: l, on: false, cache: new Map(), inflight: new Map(), wanted: null, view: null, waiting: null, queued: null,
+      drawn: null, state: "idle", error: null, total: null });
+    const known = new Map(list(layers).filter(readable).map((l) => [String(l.id), entry(l)]));
+    let gone = false, timer = null, lastView = null, reads = 0;
+    const missingFns = new Set();   // functions the database doesn't have yet: not asked again this session
+    const fnOf = (s) => s.layer.fn || owned;
     const set = (id, s, st) => { if (s.state === st) return; s.state = st; onChange(id, st); };
-    async function fetchOne(id, w) {
+    // What a view wants of this layer; an item never simplified (add with simplify: false) keys its reads by box alone.
+    const wantFor = (s, view) => { const w = want(view); return w && s.layer.simplify === false ? { ...w, tol: 0, key: "0" + w.key.slice(w.key.indexOf("|")) } : w; };
+    async function fetchOne(id, w, s) {
       reads++;
       if (!w?.box) throw new Error("no box: a deferred layer is never read whole");   // #375 (want() never gives one)
+      if (s.layer.read) return s.layer.read(w);   // an item's own read (add): {features, total, truncated}
       const args = { g: group, layer: id, x0: w.box.x0, y0: w.box.y0, x1: w.box.x1, y1: w.box.y1, tolerance_m: w.tol, max_features: max };
+      // a farm's layer: the same call with the farm as its owner (farm_layer_features mirrors group_layer_features)
+      const { g, ...box } = args;
       let r;
-      try { r = await sb.rpc("group_layer_features", args); } catch (e) { r = { error: e }; }
+      try { r = await sb.rpc(owned, farm != null ? { f: farm, ...box } : args); } catch (e) { r = { error: e }; }
       if (r?.error) throw r.error;
       const d = r?.data;
-      // null: a layer the caller can no longer read, or not the group's: nothing to draw
+      // null: a layer the caller can no longer read, or not the owner's: nothing to draw
       if (!d) return { features: NONE, total: 0, truncated: false };
       return { features: d.features && Array.isArray(d.features.features) ? d.features : NONE, total: Number(d.total_in_box) || 0, truncated: d.truncated === true };
     }
-    // Draw what serves this view, or read it (one read per layer and box at a time).
+    // Draw what serves this view, or wait for a read on its way that will, or read it (one read per layer and box at a
+    // time, at most IN_FLIGHT per layer).
     function ensure(id, view) {
       const s = known.get(id);
       if (!s || gone || !s.on) return Promise.resolve(null);
-      const w = want(view);
+      const w = wantFor(s, view);
       if (!w) return Promise.resolve(null);   // no view yet: nothing is read (the next rest of the map reads it)
-      s.wanted = w.key;
+      // a view waiting for room is overtaken by this one: whoever waited for it gets this view's answer
+      const waiters = s.queued?.waiters || [];
+      s.queued = null;
+      const pass = (p) => { if (waiters.length) p.then((r) => { for (const fn of waiters) fn(r); }); return p; };
+      s.wanted = w.key; s.view = view; s.waiting = null;
       const hit = [...s.cache.values()].filter((r) => serves(r, view, w)).sort((a, b) => b.tol - a.tol)[0];
       if (hit) {
         if (s.drawn !== hit.key) { s.drawn = hit.key; onData(id, hit.features); }
         s.total = hit.total; s.error = null; set(id, s, "loaded");
-        return Promise.resolve(hit);
+        return pass(Promise.resolve(hit));
       }
       const same = s.cache.get(w.key);
-      if (same?.truncated) { s.total = same.total; if (s.drawn) { s.drawn = null; onData(id, NONE); } set(id, s, "truncated"); return Promise.resolve(same); }
-      if (s.inflight.has(w.key)) { set(id, s, "loading"); return s.inflight.get(w.key); }
-      if (functionMissing) { s.error = "group_layer_features is not available"; set(id, s, "failed"); return Promise.resolve(null); }
-      const p = fetchOne(id, w).then((got) => {
+      if (same?.truncated) { s.total = same.total; if (s.drawn) { s.drawn = null; onData(id, NONE); } set(id, s, "truncated"); return pass(Promise.resolve(same)); }
+      if (s.inflight.has(w.key)) { s.waiting = w.key; set(id, s, "loading"); return pass(s.inflight.get(w.key).p); }
+      // PERF3b's follow-up: a read already on its way whose box holds this view, at least as finely, serves it: wait for it
+      const covering = [...s.inflight.values()].filter((f) => f.tol <= w.tol && holds(f, view)).sort((a, b) => b.tol - a.tol)[0];
+      if (covering) { s.waiting = covering.key; set(id, s, "loading"); return pass(covering.p); }
+      if (missingFns.has(fnOf(s))) { s.error = fnOf(s) + " is not available"; set(id, s, "failed"); return pass(Promise.resolve(null)); }
+      // PERF3b's follow-up: while the person pans, the read on its way and the one for the latest view; a view that comes
+      // while both are out waits, and only the latest such view is read when one of them lands
+      if (s.inflight.size >= IN_FLIGHT) {
+        s.queued = { view, waiters };
+        set(id, s, "loading");
+        return new Promise((res) => waiters.push(res));
+      }
+      return pass(read(id, s, w));
+    }
+    function read(id, s, w) {
+      const p = fetchOne(id, w, s).then((got) => {
         s.inflight.delete(w.key);
         if (gone) return null;
-        const read = { key: w.key, box: w.box, tol: w.tol, ...got };
-        s.cache.set(w.key, read);
+        const r = { key: w.key, box: w.box, tol: w.tol, ...got };
+        s.cache.set(w.key, r);
         if (s.cache.size > KEPT) s.cache.delete(s.cache.keys().next().value);
-        if (!s.on) return read;
-        // a newer view has been asked for meanwhile: kept, and drawn for now only if nothing of the layer is on the map yet
-        if (s.wanted !== w.key) { if (!s.drawn && !read.truncated) { s.drawn = read.key; onData(id, read.features); } return read; }
-        s.total = read.total; s.error = null;
-        if (read.truncated) { if (s.drawn) { s.drawn = null; onData(id, NONE); } set(id, s, "truncated"); }
-        else { s.drawn = read.key; onData(id, read.features); set(id, s, "loaded"); }
-        return read;
+        if (!s.on) return r;
+        if (s.waiting !== w.key) {
+          // a newer view has been asked for meanwhile: kept, and drawn for now only if nothing of the layer is on the map yet
+          if (!s.drawn && !r.truncated) { s.drawn = r.key; onData(id, r.features); }
+          next(id, s);
+          return r;
+        }
+        // a read that held the view, on its way for a bigger box, came back too full for that box: the view's own box is read
+        if (r.truncated && w.key !== s.wanted) { ensure(id, s.view); return r; }
+        s.total = r.total; s.error = null;
+        if (r.truncated) { if (s.drawn) { s.drawn = null; onData(id, NONE); } set(id, s, "truncated"); }
+        else { s.drawn = r.key; onData(id, r.features); set(id, s, "loaded"); }
+        next(id, s);
+        return r;
       }, (err) => {
         s.inflight.delete(w.key);
         if (gone) return null;
-        if (missing(err)) functionMissing = true;
-        if (s.wanted !== w.key) return null;
+        if (missing(err)) missingFns.add(fnOf(s));
+        if (s.waiting !== w.key) { next(id, s); return null; }
         s.error = err?.message || String(err); set(id, s, "failed");
         return null;
       });
-      s.inflight.set(w.key, p);
+      s.inflight.set(w.key, { key: w.key, box: w.box, tol: w.tol, p });
+      s.waiting = w.key;
       set(id, s, "loading");
       return p;
     }
+    // A read has landed: the view that waited for room (the latest) is read now, if the layer is still on.
+    function next(id, s) {
+      const q = s.queued;
+      if (!q) return;
+      s.queued = null;
+      const done = (r) => { for (const fn of q.waiters) fn(r); };
+      if (gone || !s.on) { done(null); return; }
+      ensure(id, q.view).then(done);
+    }
+    const drop = (s) => { const q = s.queued; s.queued = null; if (q) for (const fn of q.waiters) fn(null); };
     return {
       has: (id) => known.has(String(id)), ids: () => [...known.keys()], state: (id) => known.get(String(id))?.state || "none",
       total: (id) => known.get(String(id))?.total ?? null, error: (id) => known.get(String(id))?.error || null,
@@ -159,10 +219,13 @@
         if (!s || !s.on) return "";
         return s.state === "loading" ? "Loading…" : s.state === "failed" ? "Couldn't load just now" : s.state === "truncated" ? zoomLine(name || s.layer.name || "this layer", s.total ?? s.layer.feature_count ?? 0) : "";
       },
+      // CAP1b: another thing read by viewport with its own read. item: {name, feature_count, read(w) -> {features, total,
+      // truncated} (w: {box, tol, key}), fn (the function it calls, for "not deployed yet"), simplify: false (keyed by box)}.
+      add(id, item) { const k = String(id); if (!known.has(k)) known.set(k, entry({ ...item, id: k })); return k; },
       // Switched on: read for this view (its box; none without a view). A layer that failed is read again.
       show(id, view = null) { const s = known.get(String(id)); if (!s) return Promise.resolve(null); s.on = true; if (s.state === "failed") s.state = "idle"; return ensure(String(id), view); },
       // Switched off: nothing is read; its reads are kept for when it comes back on.
-      hide(id) { const s = known.get(String(id)); if (!s) return; s.on = false; s.wanted = null; s.error = null; set(String(id), s, "idle"); },
+      hide(id) { const s = known.get(String(id)); if (!s) return; s.on = false; s.wanted = null; s.waiting = null; s.error = null; drop(s); set(String(id), s, "idle"); },
       // The map has rested at a new view: once it stays there `debounce` ms, every layer that is on (and not failed) is drawn for it.
       moved(view) {
         if (gone) return;
@@ -173,9 +236,11 @@
       // The layers to read at open: the deferred layers the opening shows, each once, for the frame (frameOf the group's area).
       opening(show) { const on = new Set(list(show)); return [...known].filter(([, s]) => on.has(s.layer.theme)).map(([id]) => id); },
       reads: () => reads,
-      destroy() { gone = true; if (timer != null) clearTimer(timer); timer = null; },
+      // reads on their way for a layer (at most IN_FLIGHT)
+      inFlight: (id) => known.get(String(id))?.inflight.size ?? 0,
+      destroy() { gone = true; if (timer != null) clearTimer(timer); timer = null; for (const s of known.values()) drop(s); },
     };
   }
 
-  return { DEFAULT_ON, MAX_FEATURES, DEBOUNCE_MS, STEPS, NONE, isDeferred, hasDeferred, tooMany, tooManyLine, readable, defaultShow, tolerance, boxFor, want, frameOf, holds, missing, zoomLine, create };
+  return { DEFAULT_ON, MAX_FEATURES, DEBOUNCE_MS, IN_FLIGHT, STEPS, NONE, isDeferred, hasDeferred, tooMany, tooManyLine, readable, defaultShow, tolerance, boxFor, want, frameOf, holds, missing, zoomLine, featureCount, create };
 });

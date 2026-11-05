@@ -137,9 +137,13 @@
   const COULD_NOT_LOAD = "Couldn't load just now: it is read again when the layer is next switched on.";
   // FU2: the farm's reference sources could not be counted just now (farm_reference_counts failed), so none can be listed or drawn.
   const COUNTS_FAILED = "Reference layers couldn't load just now.";
+  // CAP1b: a source with too many features in the farm's context to send at once (its entry `truncated`): its row says so,
+  // with its count, and that zooming in shows them (it is then read for the map in view).
+  const TOO_MANY_ZOOM = "Too many to show here, zoom in";
+  const tooManyZoom = (n) => (Number.isFinite(Number(n)) && n != null ? "Too many to show here (" + Number(n).toLocaleString("en-NZ") + "), zoom in" : TOO_MANY_ZOOM);
 
   // The reference_sources columns the app reads for provenance (the farm space and the group space both ask for these).
   const COLUMNS = "key,name,theme,provider,licence,attribution,summary,refreshed_at,effective_from,feature_count,coverage,serve_to_customers";
 
-  return { heldBy, COLUMNS, dateText, licenceName, normalise, index, parts, line, lineFor, linesFor, reaches, sourcesFor, NOT_LOADED, COULD_NOT_LOAD, COUNTS_FAILED };
+  return { heldBy, COLUMNS, dateText, licenceName, normalise, index, parts, line, lineFor, linesFor, reaches, sourcesFor, NOT_LOADED, COULD_NOT_LOAD, COUNTS_FAILED, TOO_MANY_ZOOM, tooManyZoom };
 });

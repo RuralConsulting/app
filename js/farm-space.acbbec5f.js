@@ -54,6 +54,9 @@
       optional(sb.from("reference_sources").select(SOURCE_COLUMNS).eq("serve_to_customers", true)),
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
+    // CAP1b: a layer farm_map defers (CAP1a: too large to come inline) may come with no features at all: an empty
+    // collection, so the Map scene draws its row and the features read for the map in view fill it
+    for (const l of maps.layers || []) if (l && !Array.isArray(l.features?.features)) l.features = { type: "FeatureCollection", features: [] };
     const farmed = M.farmedAreaLayer(holding);
     if (farmed) maps.layers = [...(maps.layers || []), farmed];
     maps.reference = maps.reference || [];   // [] since PERF1a; a database before it still fills it in (read as the cache)
@@ -111,9 +114,13 @@
   // PERF1b: the farm being read (its map's half, and the id it is for), and its reference sources (farm-reference.js),
   // read one at a time when something switches one on; the drawn scene's own rows until the Layers rows are made.
   let mapsPending = null, pendingFor = null, refs = null, sceneEntries = [];
+  // CAP1b: what is read for the map in view (group-layers.js, the module the group map uses): the farm's deferred layers and
+  // the reference sources whose entry came truncated; made only when the farm has one, with the map's moveend hook.
+  let parts = null, offMove = null;
   const unmount = (...handles) => { for (const h of handles.flat()) h?.destroy(); };
   // A farm left: what was being read for it is dropped (a read still on its way is ignored when it lands).
-  function forget() { pending = null; mapsPending = null; pendingFor = null; refs?.destroy(); refs = null; sceneEntries = []; }
+  function forget() { pending = null; mapsPending = null; pendingFor = null; refs?.destroy(); refs = null; sceneEntries = []; dropParts(); }
+  function dropParts() { parts?.destroy(); parts = null; offMove?.(); offMove = null; }
   // Each answer is an Answer block in its own host, so the space never writes answer HTML itself.
   function answer(host, model, options) {
     const node = el("div", { class: "block-host" });
@@ -486,7 +493,7 @@
   // Every row the farm's map has: its own layers, the reference sources counted in its context (PERF1b: listed before
   // they are read) and those farm_map carried itself, and Rivers.
   const mapKeys = (m, counts) => ["extent", "titles", ...(m?.layers || []).map((l) => l.theme), ...(m?.reference || []).map((r, i) => r.key || "reference-" + i),
-    ...Object.entries(counts || {}).filter(([, n]) => Number(n) > 0).map(([k]) => k), "rivers"];
+    ...Object.entries(counts || {}).filter(([, n]) => Number(n) > 0 || n?.by_viewport === true).map(([k]) => k), "rivers"];   // (CAP1a: a dense source, {by_viewport: true})
   function sceneFor(view, focus, context) {
     const on = new Set(globalThis.FP_CONFIG?.farmView?.defaultOn || QUIET), f = focus || {}, v = view || {};
     if (v.view === "documents" && v.item) {
@@ -505,9 +512,12 @@
   }
   // A row turned on or off (PERF1b): a reference source not read yet is read now, its switch busy (on, not off) until it
   // has come; the map draws it then (arrive). Turning a row off never reads anything.
+  // CAP1b: a deferred layer, or a source whose entry came truncated, is read for the map in view when it is on.
   function show(e, on) {
     FP.farmMap.setVisible(e, on);
     if (on && e.pending && refs) refs.want([e.key]);
+    const id = partId(e);
+    if (id && parts?.has(id)) { if (on) parts.show(id, viewNow()); else parts.hide(id); }
     rowState(e);
   }
   // Every row as the scene says, unless the person set it by hand; the drawer's switches follow.
@@ -550,6 +560,13 @@
       FP.farmMap.setVisible(e, e.on);
       if (e.past) FP.farmMap.setPast(e, e.past.on);
     }
+    // CAP1b: too many in the farm's context to come at once (truncated, no features): never drawn in part; its row says
+    // so, and it is read for the map in view while it is on
+    if (R.truncated(entry)) {
+      const p = ensureParts(context.farm.id), id = p.add(refPart(entry.key), { name: M.layerName(entry), feature_count: entry.feature_count ?? null,
+        fn: "reference_in_view", simplify: false, read: (w) => R.inView(FP.sb, entry.key, w) });
+      for (const e of rows) { if (e.on) p.show(id, viewNow()); rowState(e); }
+    }
     // a chosen line (or an answer's frame) waiting on this source is framed again, now that its features are on the map
     if (focusPlace && FP.farmReference.placeKeys(focusPlace, [refs.index.find((s) => s.key === entry.key)].filter(Boolean), GOVERNS).length) FP.farmMap.focus(focusPlace);
   }
@@ -567,16 +584,67 @@
     renderSources();
   }
   // The row's switch: busy while its source is on its way (still on), a line under the name once it couldn't be read.
+  // CAP1b: a deferred layer's line is the shared module's ("Loading…", "Couldn't load just now", "Zoom in to see <name>
+  // (<count>)"); a source whose entry came truncated says PROV1's "Too many to show here (n), zoom in" while it is on and
+  // nothing of it is drawn; a layer farm_map could not bound at all, "Too many to show here (n)".
   function rowState(e) {
-    if (!e.input || !refs?.has(e.key)) return;
-    const st = refs.state(e.key), li = e.input.closest("li");
+    if (!e.input) return;
+    const id = partId(e), viewed = !!id && !!parts?.has(id), many = e.truncated && !viewed ? e.count ?? null : undefined;
+    // CAP1a: titles or land units over farm_map's cap (an empty collection, truncated, its count): a line only, no read
+    const listOnly = e.section === "farm" && !viewed ? M.tooManyToDraw(e.key === "titles" ? context?.maps?.titles : e.key === "land_units" ? context?.maps?.land_units : null, e.key === "titles" ? "titles" : "land units") : null;
+    if (!viewed && many === undefined && !listOnly && !refs?.has(e.key)) return;
+    const li = e.input.closest("li");
+    let st, text;
+    if (listOnly) { st = "too-many"; text = listOnly; }
+    else if (many !== undefined) { st = "too-many"; text = FP.groupLayers.tooManyLine(many); }
+    else if (viewed && e.section !== "reference") { st = parts.state(id); text = parts.line(id, e.name); }
+    else if (viewed) {
+      st = parts.state(id);
+      const n = refs?.entry(e.key)?.feature_count ?? refs?.index.find((s) => s.key === e.key)?.count ?? null;
+      text = !e.on || st === "loaded" ? "" : st === "loading" ? "Loading…" : st === "failed" ? "Couldn't load just now" : FP.provenance.tooManyZoom(n);
+    } else {
+      st = refs.state(e.key);
+      text = st === "loading" ? "Loading…" : st === "failed" ? "Couldn't load just now" : "";
+    }
     e.input.setAttribute("aria-busy", String(st === "loading"));
     li?.classList.toggle("layer-loading", st === "loading");
     let note = li?.querySelector(".layer-state");
-    const text = st === "loading" ? "Loading…" : st === "failed" ? "Couldn't load just now" : "";
     if (!text) { note?.remove(); return; }
     if (!note && li) { note = el("small", { class: "layer-state", role: "status" }); e.input.closest("label").querySelector("span")?.append(note); }
-    if (note) note.textContent = text;
+    if (note) { note.textContent = text; note.dataset.state = st; }
+  }
+  // ---- Read for the map in view (CAP1b, group-layers.js) ---------------------------------------------------------------------
+  // A row's id in the shared module: a deferred layer's own id, or "ref:<key>" for a source whose entry came truncated.
+  const refPart = (key) => "ref:" + key;
+  const partId = (e) => (e.deferred && e.layerId != null ? String(e.layerId) : e.section === "reference" && !e.rivers && parts?.has(refPart(e.key)) ? refPart(e.key) : null);
+  // The map in view for a read; none while the map is still moving (the fly-in to the farm): it is read when it comes to rest.
+  const viewNow = () => (FP.farmMap.camera?.()?.moving ? null : FP.farmMap.view?.() || null);
+  // The module for this farm, made the first time something needs it, with the map's moveend hook (read again at each rest).
+  function ensureParts(farmId, layers = context?.maps?.layers || []) {
+    if (parts) return parts;
+    const L = FP.groupLayers, cfg = globalThis.FP_CONFIG?.farmView || {};
+    const rowsOf = (id) => (layerEntries.length ? layerEntries : sceneEntries).filter((e) => partId(e) === id);
+    const mine = parts = L.create({ sb: FP.sb, farm: farmId, layers, max: cfg.maxFeatures || L.MAX_FEATURES,
+      onData: (id, features) => { if (parts === mine) for (const e of rowsOf(id)) FP.farmMap.layerData?.(e, features); },
+      onChange: (id) => {
+        if (parts !== mine) return;
+        for (const e of rowsOf(id)) {
+          // one failed read never fails the farm: nothing of it on the map, its switch reads off and its row says so;
+          // the next switch reads it again
+          if (mine.state(id) === "failed" && !mine.drawn(id) && e.on) { handSet.delete(e.key); FP.farmMap.setVisible(e, false); if (e.input) e.input.checked = false; }
+          rowState(e);
+        }
+      } });
+    offMove = FP.farmMap.onMoveEnd?.(() => { if (parts === mine) mine.moved(FP.farmMap.view()); }) || null;
+    return mine;
+  }
+  // Once the farm is drawn: a farm with a deferred layer reads those the map opens with for the view (none with nothing
+  // deferred: the farm is drawn whole from farm_map, as before).
+  function startParts(farmId, maps) {
+    dropParts();
+    if (!FP.groupLayers?.hasDeferred(maps)) return;
+    const p = ensureParts(farmId, maps.layers);
+    for (const e of sceneEntries) if (e.on && partId(e) && p.has(partId(e))) p.show(partId(e), viewNow());
   }
   // The sources a place needs before it can be framed (its themes, the rows that govern them, the layers it names), not
   // tried yet; read, then `then` runs (once: a source that still can't be read doesn't loop).
@@ -637,7 +705,9 @@
       e.input = el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => setLayer(e.key, ev.target.checked) });
       e.pastInput = e.past ? el("input", { type: "checkbox", role: "switch", checked: e.past.on, onchange: (ev) => FP.farmMap.setPast(e, ev.target.checked) }) : null;
       const past = e.past ? el("label", { class: "layer-past", ...(e.on ? {} : { hidden: true }) }, e.pastInput, el("span", {}, "Past consents")) : null;
-      return el("li", {}, el("label", {}, e.input, el("span", {}, el("b", {}, e.name), e.sub ? el("small", {}, e.sub) : null)), past);
+      // CAP1b: a deferred layer (read for the map in view) says how many features it holds, as the group's rows do
+      const sub = e.sub || (e.deferred && e.count != null ? FP.groupLayers.featureCount(e.count) : null);
+      return el("li", e.deferred ? { "data-layer": "deferred" } : {}, el("label", {}, e.input, el("span", {}, el("b", {}, e.name), sub ? el("small", {}, sub) : null)), past);
     };
     const children = [];
     for (const [section, heading] of [["farm", "Farm"], ["reference", "Reference"]]) {
@@ -1321,6 +1391,7 @@
         if (current !== token) return;
         if (!drawn) throw Error("Map unavailable for this farm.");
         sceneEntries = drawn.entries; openedMap = farm.id;
+        startParts(farm.id, maps);   // CAP1b: a deferred layer the map opens with is read for the view (nothing, with none)
         // the farm is on the map: the message goes now, not when the standing answers have been read (PERF1b)
         $("#map-msg").hidden = true; farmDrawn(farm.id);
         addLayersControl(); commandBar();

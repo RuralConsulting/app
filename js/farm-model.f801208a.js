@@ -526,6 +526,14 @@
   const KEY_NAMES = { "ecan-wells": "Bores", "ecan-consents": "Consents", "linz-topo50-river-centrelines": "River lines (Topo50)", "niwa-rec2-rivers": "River network (REC2)", "ecan-rivers": "River network (ECan)" };
   const NAME_RULES = [[/river centrelines?|\bwaterways?\b/i, "Rivers"], [/river environment classification|\bREC\d?\b/i, "River classes"], [/resource consents?/i, "Consents"],
     [/\b(?:wells?|bores?)\b/i, "Bores"], [/\bwetlands?\b/i, "Wetlands"], [/\bs-?map\b|^soils?\b/i, "Soils"], [/land use capability|\bLUC\b/i, "Land use capability"]];
+  // CAP1a/CAP1b: farm_map's titles or land units over its cap come as an empty collection with `truncated: true` and their
+  // feature_count (the farm's outline still draws). There is no by-viewport read for them: their Layers row says so.
+  // what: "titles" | "land units"; null when the collection came whole.
+  function tooManyToDraw(collection, what) {
+    if (collection?.truncated !== true) return null;
+    const n = collection.feature_count;
+    return "Too many " + what + " to draw here" + (Number.isFinite(Number(n)) && n != null ? " (" + Number(n).toLocaleString("en-NZ") + ")" : "");
+  }
   function layerName(layer) {
     const l = layer || {}, raw = String(l.name || "").trim();
     if (KEY_NAMES[l.key]) return KEY_NAMES[l.key];
@@ -770,5 +778,5 @@
       source: "the farm's own record", as_at: String(b.valid_from || "").slice(0, 10) || null, shown_as: null,
       features: { type: "FeatureCollection", features: [{ type: "Feature", geometry: b.geometry, properties: { name: "Farmed area", area_ha: b.area_ha ?? null } }] } };
   }
-  return { farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, canEdit, people };
+  return { farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, tooManyToDraw, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, canEdit, people };
 });

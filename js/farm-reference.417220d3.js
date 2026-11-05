@@ -11,10 +11,16 @@
 // `reference` filled in) the list and the features come from farm_map, as before; with farm_reference_context missing
 // (PostgREST 404 / PGRST202) a source falls back to farm_map's entry for it. No DOM, no clock: the browser parts are the
 // host's (farm-space.js).
+// CAP1b: a source whose entry farm_reference_context could not bound comes `truncated: true` with its feature_count and no
+// features (CAP1a). It is never drawn in part: its row says "Too many to show here (n), zoom in" (PROV1's wording,
+// provenance-model.js TOO_MANY_ZOOM) and, switched on, it is read for the map in view (inView: public.reference_in_view
+// for the box, at most VIEW_MAX features, through group-layers.js like a deferred layer); still too many in the box and the
+// row keeps the line.
 (function (root, factory) {
-  const api = factory();
-  if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmReference = api;
-})(typeof window === "undefined" ? globalThis : window, function () {
+  const node = typeof module === "object" && module.exports;
+  const api = factory(node ? require("./wq-model.js") : root.FP.wqModel);
+  if (node) module.exports = api; else root.FP.farmReference = api;
+})(typeof window === "undefined" ? globalThis : window, function (W) {
   const list = (v) => (Array.isArray(v) ? v : []);
   const count = (fc) => (Array.isArray(fc?.features) ? fc.features.length : 0);
   // What the standing answers most often bring up: Rivers (the shared waterways row, read for the map in view), bores,
@@ -129,5 +135,33 @@
     };
   }
 
-  return { PREFETCH, index, keysFor, placeKeys, isZone, missing, create };
+  // ---- CAP1b: a truncated source read by viewport ------------------------------------------------------------------------
+  const truncated = (entry) => !!entry && entry.truncated === true;
+  // At most this many of one source's features in a box: more and the person zooms in. reference_in_view returns whole
+  // features (never simplified), so this is lower than a farm layer's 4,000; the database caps any call at 5,000.
+  const VIEW_MAX = 1000;
+  // The NZTM box (reference_in_view's) holding a box in degrees ({x0, y0, x1, y1}, as group-layers.js boxFor makes it):
+  // its corners and edge midpoints projected, the smallest box round them.
+  function nztmBox(b) {
+    const pts = [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1], [(b.x0 + b.x1) / 2, b.y0], [(b.x0 + b.x1) / 2, b.y1], [b.x0, (b.y0 + b.y1) / 2], [b.x1, (b.y0 + b.y1) / 2]]
+      .map(([x, y]) => W.lngLatToNztm(x, y));
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), r = (v) => Math.round(v);
+    return { bbox_xmin: r(Math.min(...xs)) - 1, bbox_ymin: r(Math.min(...ys)) - 1, bbox_xmax: r(Math.max(...xs)) + 1, bbox_ymax: r(Math.max(...ys)) + 1 };
+  }
+  // One source's features in a box (w: group-layers.js's {box}), as group-layers.js wants a read: {features, total,
+  // truncated}. Asks for max + 1 rows: max + 1 back is too many for the box (never drawn in part). Never without a box.
+  async function inView(sb, key, w, max = VIEW_MAX) {
+    if (!w?.box) throw new Error("no box: a truncated source is never read whole");
+    const q = sb.rpc("reference_in_view", { ...nztmBox(w.box), sources: [key], max_rows: max + 1 });
+    // only what the map needs (not the NZTM geometry) where the client can say so
+    let r;
+    try { r = await (typeof q?.select === "function" ? q.select("id,source_key,external_id,web_geom,props") : q); } catch (e) { r = { error: e }; }
+    if (r?.error) throw r.error;
+    const rows = list(r?.data).filter((x) => x && x.source_key === key && x.web_geom);
+    if (rows.length > max) return { features: { type: "FeatureCollection", features: [] }, total: rows.length, truncated: true };
+    return { features: { type: "FeatureCollection", features: rows.map((x) => ({ type: "Feature", id: x.id, geometry: typeof x.web_geom === "string" ? JSON.parse(x.web_geom) : x.web_geom,
+      properties: { ...(x.props || {}), external_id: x.external_id ?? x.props?.external_id ?? null } })) }, total: rows.length, truncated: false };
+  }
+
+  return { PREFETCH, VIEW_MAX, index, keysFor, placeKeys, isZone, missing, truncated, nztmBox, inView, create };
 });

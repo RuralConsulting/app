@@ -11,6 +11,8 @@
 // PERF3b: a group's map (group_map, PERF3a) may list a large layer of its own with no features (`deferred`): its row is
 // drawn empty, and the group space reads its features for the map in view and hands them to layerData(entry, features);
 // view() and onMoveEnd(fn) tell it what is in view.
+// CAP1b: a farm's map (farm_map after CAP1a) does the same for a large farm-own layer, and layerData also fills a farm's
+// reference source read for the map in view (its entry came truncated: drawn empty by addReference, then filled).
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -647,11 +649,14 @@
       }
       // DM2: a farm's own waterways layer the shared network has set aside has nothing left to draw: not listed (it is
       // kept, and named under the network's `replaces`); Rivers below is the waterways layer
+      // CAP1b: a deferred layer has no features here yet (it is read for the map in view): listed as it is, with no pins or
+      // labels of its own made from features it doesn't have
+      if (l.deferred === true) { entries.push(e); return; }
       if (l.theme === "waterways" && !count(l.features)) return;
       if (l.theme === "photos") { e.markers = photoPins(l, i); e.photoLayer = i; photoEntries.push(e); }
       if (l.theme === "actions") {
         e.markers = [];
-        for (const f of l.features.features) if (f.geometry?.type === "Point" && f.properties.map_code) {
+        for (const f of l.features?.features || []) if (f.geometry?.type === "Point" && f.properties.map_code) {
           const label = FP.el("div", { class: "action-label" }, f.properties.map_code);
           const marker = new maplibregl.Marker({ element: label }).setLngLat(f.geometry.coordinates).addTo(map);
           markers.push(marker); e.markers.push(marker);
@@ -767,10 +772,15 @@
     if (entry.markers?.length && declutter) declutter();
   }
   // PERF3b: a deferred layer's features, read for the map in view (an empty collection clears it). Its row keeps its switch.
+  // CAP1b: also a farm's reference source read for the map in view (its entry came truncated): the source its row's layers
+  // draw from, with consents marked current or past as referenceLayers marks them.
   function layerData(entry, features) {
     const src = entry?.layerIndex != null && map?.getSource("fl-" + entry.layerIndex);
-    if (!src) return false;
-    src.setData(features?.features ? features : NONE);
+    const target = src || (entry?.section === "reference" && !entry.rivers && entry.ids?.length ? map?.getSource(map.getLayer(entry.ids[0])?.source || "") : null);
+    if (!target) return false;
+    let data = features?.features ? features : NONE;
+    if (!src && entry.past) data = { ...data, features: data.features.map((f) => ({ ...f, properties: { ...f.properties, fp_past: FP.farmModel.pastConsent(f.properties) } })) };
+    target.setData(data);
     return true;
   }
   // What is in view: its bounds ([[w, s], [e, n]]) and zoom; null before there is a map.
