@@ -7,7 +7,7 @@
 // page, the demo's two files) and are fetched afresh by every version.
 // APP names this app's caches: only caches that start with it are cleared on activate. The capture queue (capture-queue.js)
 // is the page's IndexedDB, not a cache: a new version activating never touches it, so what waits to upload survives it.
-const VERSION = "202611050612-2c87c0b";
+const VERSION = "202611050635-c5dd21b";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
 const FLOATING = ["./", "index.html", "demo/demo-farm.json", "demo/source.html"];
