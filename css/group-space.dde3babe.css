@@ -53,6 +53,48 @@
 .group-settings fieldset { border: 1px solid var(--rule); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 12px; }
 .group-settings legend { font-weight: 700; padding: 0 4px; }
 .group-choice { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; padding: 8px 0; min-height: 44px; }
+/* DQ1's gaps panel on the group's map view (an Answer panel): its heading below its sentence, as on the Operations page */
+.group-gaps .answer-compact > :is(h1, h2, h3) { font-family: var(--f-ui); font-size: var(--text-body); }
+/* ON3b: the manage space: a queue, not a map; the panel takes the width */
+#screen-group[data-view="manage"] .group-map { display: none; }
+#screen-group[data-view="manage"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="manage"] .group-panel { border-left: 0; border-top: 0; }
+.group-manage { max-width: 920px; margin: 0 auto; }
+.manage-count { margin: 0 0 8px; font-size: var(--text-body); color: var(--ink); }
+.manage-count small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+.manage-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--rule); }
+.manage-tab { padding: 8px 12px; min-height: 44px; display: inline-flex; align-items: center; color: var(--ink); text-decoration: none; border-bottom: 3px solid var(--clear); }
+.manage-tab[aria-current="page"] { border-bottom-color: var(--accent); font-weight: 700; }
+.manage-empty { font-weight: 700; }
+.manage-group { padding: 4px 0 12px; border-bottom: 1px solid var(--rule); }
+.manage-group:last-child { border-bottom: 0; }
+.manage-group h3 small { font-weight: 400; color: var(--ink-2); font-size: var(--text-small); }
+.manage-lines, .manage-members, .manage-locations, .manage-evidence { list-style: none; margin: 0; padding: 0; }
+.manage-lines { display: grid; gap: 12px; }
+.manage-line { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); overflow-wrap: anywhere; }
+.manage-line[data-state="accepted"], .manage-line[data-state="rejected"] { background: var(--wash); }
+.manage-item { display: grid; gap: 2px; }
+.manage-item small, .manage-line > small, .manage-members small, .manage-locations small, .manage-candidate small { color: var(--ink-2); font-size: var(--text-small); }
+.manage-state { margin: 0; font-weight: 700; }
+.manage-candidate { display: grid; gap: 2px; padding-left: 10px; border-left: 3px solid var(--rule); }
+.manage-evidence li { color: var(--ink-2); font-size: var(--text-small); }
+.manage-evidence li::before { content: "· "; }
+.manage-controls { display: grid; gap: 6px; margin-top: 4px; }
+.manage-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.manage-controls input, .manage-controls select, .manage-invite input, .manage-invite select, .manage-request input, .manage-request select { font: inherit; min-height: 44px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-sizing: border-box; max-width: 100%; }
+.group-panel button.secondary { font: inherit; min-height: 44px; padding: 8px 16px; border: 1px solid var(--ink-2); border-radius: var(--radius); background: var(--panel); color: var(--ink); cursor: pointer; }
+.group-panel button:disabled { opacity: .6; cursor: default; }
+.manage-msg { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.manage-msg:empty { display: none; }
+.manage-members { display: grid; gap: 8px; }
+.manage-members > li { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.manage-members > li[data-retired] b { color: var(--ink-2); }
+.manage-no-extent { font-weight: 700; }
+.manage-invite-box summary { cursor: pointer; color: var(--ink-2); font-size: var(--text-small); min-height: 32px; display: flex; align-items: center; }
+.manage-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.manage-request { display: grid; gap: 6px; margin-top: 16px; max-width: 520px; }
+.manage-locations { display: grid; gap: 10px; }
+.manage-locations > li { display: grid; gap: 4px; }
 @media (max-width: 760px) {
   .group-screen { position: static; min-height: 100dvh; padding-top: var(--demo-banner-height, 0px); }
   .group-head { align-items: flex-start; }

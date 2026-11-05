@@ -7,13 +7,17 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else { root.FP = root.FP || {}; root.FP.groupModel = api; }
 })(typeof window === "undefined" ? globalThis : window, function () {
-  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(documents|create|settings))?$/;
-  const views = [["map", "Map"], ["documents", "Documents"], ["create", "Create"], ["settings", "Settings"]];
+  // ON3b: `/manage[/members|gaps|sites|settings]` is the group's manage space (group-manage.js); the member-detail form moved
+  // there, so the old `/settings` address opens the manage space's Settings tab.
+  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(documents|create|settings|manage)(?:\/(members|gaps|sites|settings))?)?$/;
+  const views = [["map", "Map"], ["documents", "Documents"], ["create", "Create"], ["manage", "Manage"]];
   function match(hash) {
     const m = String(hash || "").match(ROUTE);
-    return m ? { group: m[1], view: m[2] || "map" } : null;
+    if (!m || (m[3] && m[2] !== "manage")) return null;
+    if (m[2] === "settings") return { group: m[1], view: "manage", tab: "settings" };
+    return m[2] === "manage" ? { group: m[1], view: "manage", tab: m[3] || null } : { group: m[1], view: m[2] || "map" };
   }
-  const href = (id, view = "map") => "#/group/" + id + (view && view !== "map" ? "/" + view : "");
+  const href = (id, view = "map", tab = null) => "#/group/" + id + (view && view !== "map" ? "/" + view : "") + (view === "manage" && tab ? "/" + tab : "");
   const viewLabel = (key) => views.find(([k]) => k === key)?.[1] || null;
 
   // ---- levels -------------------------------------------------------------------------------------------------------------

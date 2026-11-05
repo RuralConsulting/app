@@ -159,6 +159,7 @@
   for (const b of $$(".b-password")) b.addEventListener("click", () => { msg("#pw-msg", ""); show("screen-password"); $("#pw0").focus(); });
   for (const b of $$(".b-signout")) b.addEventListener("click", async () => {
     if (FP.demo?.active) { location.href = location.pathname + location.search; return; }
+    FP.groupManage?.forget();   // ON3b: no group's queue outlives the sign-in
     await FP.auth.signOut(); location.hash = ""; location.reload();
   });
   if (FP.basemaps.names.length < 2) $("#drawer-background").hidden = true;

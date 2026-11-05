@@ -12,7 +12,7 @@
   const G = () => FP.groupModel, U = () => FP.groupUpdate;
   const el = (...a) => FP.el(...a), $ = (s) => FP.$(s);
   const DOC_COLUMNS = "id,title,doc_type,author,author_org,date_prepared,period_start,period_end,storage_path,original_name,sha256,status,created_at,tier,tiered_at,visibility";
-  let groups = [], person = null, ctx = null, token = 0, mapHandle = null, mapReady = null, surface = null, entries = [], wq = null, wqAnswer = null, draft = null, notice = null;
+  let groups = [], person = null, ctx = null, token = 0, mapHandle = null, mapReady = null, surface = null, entries = [], wq = null, wqAnswer = null, draft = null, notice = null, lastView = null;
 
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   const optional = (query) => Promise.resolve(query).then((r) => (r.error ? null : r.data), () => null);
@@ -56,13 +56,15 @@
     wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
     mapHandle?.destroy(); mapHandle = null; surface = null; entries = [];
     ctx = null; draft = null;
+    FP.groupManage?.forget(); lastView = null;   // ON3b: leaving the group space drops the manage space's reads
     document.body.classList.remove("group-space-active");
   }
   function header(group, route) {
     $("#group-name").textContent = group.name;
     $("#group-kind").textContent = "Catchment group" + (group.role ? " · you are " + (/^[aeiou]/.test(group.role) ? "an " : "a ") + group.role : "");
     const nav = $("#group-nav");
-    nav.replaceChildren(...G().views.filter(([k]) => k !== "settings" || G().canManage(group.role)).map(([key, label]) =>
+    // ON3b: the manage space is linked for the group's admins, advisors and facilitators only (a plain member never sees the link)
+    nav.replaceChildren(...G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role)).map(([key, label]) =>
       el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#group-back").hidden = !(FP.groupSpace.hasPortfolio?.());
     $("#group-back").setAttribute("href", FP.href("") || "#/");
@@ -72,6 +74,12 @@
     document.body.classList.add("group-space-active");
     FP.show("screen-group");
     header(group, route);
+    $("#screen-group").dataset.view = route.view;
+    // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
+    if (route.view === "manage" && (lastView !== "manage" || ctx?.group.id !== group.id)) FP.groupManage?.forget(group.id);
+    lastView = route.view;
+    // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
+    if (route.view === "manage") { wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); }
     if (ctx?.group.id !== group.id) {
       wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group, pending: load(group) };
@@ -82,13 +90,17 @@
       const data = ctx.data || (ctx.data = await ctx.pending);
       if (current !== token) return;
       document.title = group.name + (route.view === "map" ? "" : " · " + G().viewLabel(route.view)) + " | " + (FP.brand?.product || "");
+      if (route.view === "manage") {
+        const node = await FP.groupManage.view(group, route, { settings: G().canManage(group.role) ? () => settingsView(data) : null });
+        if (current === token) { panel.replaceChildren(node); panel.scrollTop = 0; }
+        return;
+      }
       // The panel does not wait for the map: the standing answers show at once, the map's own cards when it is drawn.
       const mapped = drawMap(data, current).catch(() => null);
       panel.replaceChildren();
-      const home = !["documents", "create"].includes(route.view) && !(route.view === "settings" && G().canManage(group.role));
+      const home = !["documents", "create"].includes(route.view);
       if (route.view === "documents") panel.append(documentsView(data));
       else if (route.view === "create") panel.append(createView(data));
-      else if (!home) panel.append(settingsView(data));
       else panel.append(...mapView(data));
       panel.scrollTop = 0;
       await mapped;
@@ -320,7 +332,7 @@
     } finally { button.disabled = false; }
   }
 
-  // ---- Settings (group admins): how member farms are shown ---------------------------------------------------------------------
+  // ---- Settings (group admins): how member farms are shown; drawn in the manage space's Settings tab (ON3b) ------------------------
   function settingsView(data) {
     const current = data.summary.member_detail || "aggregated";
     const form = el("form", { class: "group-settings" },
@@ -338,11 +350,10 @@
       const { error } = await FP.sb.rpc("set_group_member_detail", { g: data.group.id, level });
       if (error) { status.textContent = "Couldn't save: " + error.message; return; }
       status.textContent = "Saved. Member farms are now shown " + level + " where each farm allows it.";
-      // the map and figures are read again at the new level, and the map is drawn again in place
-      const current = token;
+      // the map and figures are read again at the new level (the map is drawn at it when the person goes back to the map)
       ctx = { group: data.group, pending: load(data.group) };
       mapHandle?.destroy(); mapHandle = null; mapReady = null; wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
-      try { ctx.data = await ctx.pending; if (current === token) await drawMap(ctx.data, current); } catch { /* the next view reads again */ }
+      try { ctx.data = await ctx.pending; } catch { /* the next view reads again */ }
     });
     return form;
   }

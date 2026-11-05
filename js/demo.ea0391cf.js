@@ -9,16 +9,16 @@
   else {
     root.FP = root.FP || {};
     const hash = root.location.hash;
-    const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash), group = api.isGroup(hash);
+    const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash), group = api.isGroup(hash), queue = api.queueOf(hash);
     const ready = active ? fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }).then((fixture) => api.dataset(fixture, { sparse, farmer, multi, group })) : null;
-    root.FP.demo = { ...api, active, sparse, farmer, group, href: (h) => api.href(h, sparse, farmer, multi, group), ready, client: active ? api.client(ready) : null };
+    }).then((fixture) => api.dataset(fixture, { sparse, farmer, multi, group, queue })) : null;
+    root.FP.demo = { ...api, active, sparse, farmer, group, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
       const h = root.location.hash;
-      if (api.isRoute(h) !== active || api.isSparse(h) !== sparse || api.isFarmer(h) !== farmer || api.isMulti(h) !== multi || api.isGroup(h) !== group) { event.stopImmediatePropagation(); root.location.reload(); }
+      if (api.isRoute(h) !== active || api.isSparse(h) !== sparse || api.isFarmer(h) !== farmer || api.isMulti(h) !== multi || api.isGroup(h) !== group || api.queueOf(h) !== queue) { event.stopImmediatePropagation(); root.location.reload(); }
     });
   }
 })(typeof window === "undefined" ? globalThis : window, function () {
@@ -36,6 +36,9 @@
   const isMulti = (hash) => /^#\/demo\/multi(?:\/|\?|$)/.test(hash);
   // The catchment group demo (S5): the advisor is also an admin of "HDLG (example)", a group with invented members.
   const isGroup = (hash) => /^#\/demo\/group(?:\/|\?|$)/.test(hash);
+  // ON3b: the group demo's queue as the live one can be: "?queue=sparse" (a handful of rows, mostly ambiguous, and many items
+  // with no member evidence) or "?queue=empty" (nothing open); null is the full invented queue.
+  const queueOf = (hash) => (isGroup(hash) && /[?&]queue=(sparse|empty)(?:&|$)/.exec(hash)?.[1]) || null;
   // "#/demo..." -> the app's own "#/farm/<id>..." route ("" is the portfolio, null is not a demo route).
   function routeHash(hash) {
     const multi = isMulti(hash);
@@ -43,7 +46,8 @@
     if (isGroup(hash)) {
       const suffix = hash.split("?")[0].slice("#/demo/group".length);
       if (suffix === "/farms") return "";
-      return /^(?:\/(?:documents|create|settings))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      // ON3b: ".../manage" and its tabs are the group's manage space
+      return /^(?:\/(?:documents|create|settings|manage(?:\/(?:members|gaps|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -64,14 +68,14 @@
     if (!VIEWS.test(suffix)) return null;
     return "#/farm/" + farm + suffix + (query ? "?" + query : "");
   }
-  function href(hash, sparse = false, farmer = false, multi = false, group = false) {
-    if (group && hash === "") return "#/demo/group/farms";
+  function href(hash, sparse = false, farmer = false, multi = false, group = false, queue = null) {
+    if (group && hash === "") return "#/demo/group/farms" + (queue ? "?queue=" + queue : "");
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
     if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
-    if (hash.startsWith("#/group/" + GROUP)) return "#/demo/group" + hash.slice(("#/group/" + GROUP).length);
+    if (hash.startsWith("#/group/" + GROUP)) return "#/demo/group" + hash.slice(("#/group/" + GROUP).length) + (queue ? "?queue=" + queue : "");
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
     if (!farm) return hash;
     return "#/demo" + (multi ? "/multi/farm-" + (farm === FARM2 ? 2 : 1) : sparse ? "/empty" : farmer ? "/farmer" : "") + hash.slice(("#/farm/" + farm).length);
@@ -80,7 +84,7 @@
   const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
   const collection = (features) => ({ type: "FeatureCollection", features });
   const owned = (rows, farm) => rows.map((r) => ({ ...r, farm_id: farm }));
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -134,7 +138,7 @@
       data.ask = [];
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
-    if (group) groupDemo(data);
+    if (group) groupDemo(data, queue);
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
       data.user.email = "farmer@example.test";
@@ -187,7 +191,7 @@
     "consent.no_conditions": "propose", "consent.not_recorded": "propose", "fep.confirm_report": "propose", "fep.not_read": "propose" };
   const LEVELS = ["aggregated", "anonymous", "named"];
   const levelOf = (setting, share) => (share ? LEVELS[Math.min(LEVELS.indexOf(setting), LEVELS.indexOf(share))] : "none");
-  function groupDemo(data) {
+  function groupDemo(data, queue = null) {
     // The group's rows sit beside the farm's (merged into reads), so the farm's and the gallery's counts are unchanged.
     const t = data.groupTables = { organisations: [], org_members: [], record_types: [], entries: [], documents: [], obligations: [], places: [] }, at = (d) => d + "T09:30:00+12:00";
     // WQ4: the group's area, as the loader makes it (the preset's applies_to.area is this code)
@@ -217,6 +221,120 @@
         { id: "demo-g-s6", farm: MEMBERS[5].id, record_type: "planting", body: "Shelter belt gaps replanted (synthetic).", captured_at: at("2026-09-17"), location: null },
         { id: "demo-g-s5", farm: MEMBERS[1].id, record_type: "note", body: "Spring stock count done; no change to the wintering paddocks (synthetic).", captured_at: at("2026-10-15"), location: null }],
       sharedDocs: [{ id: "demo-g-sd1", farm: MEMBERS[0].id, title: "Riparian planting plan (synthetic)", doc_type: "memo", created_at: "2026-09-20T03:00:00Z", tier: "primary", storage_path: "demo/riparian.pdf" }] };
+    manageDemo(data, queue);
+  }
+  // ON3b: the group's manage space. An invented business register (group_members) with farm associations, DQ1's gaps for the
+  // group (group_load_gaps), ON3a's proposals about them as tools/reconcile_group.py writes them (subject, evidence, candidates),
+  // and WQ2's location members. Invented member numbers and names only.
+  const GROUP_MEMBERS = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India"].map((w, i) => ({
+    id: "de000000-0000-4000-8000-0000000003" + String(i + 1).padStart(2, "0"), org_id: GROUP, member_number: String(i + 1), business_name: w + " Invented Ltd",
+    ended_at: w === "India" ? "2025-06-30T00:00:00Z" : null, created_at: "2026-06-01T00:00:00Z" }));
+  const PADDOCKS = "Paddock master (synthetic).gpkg";
+  function manageProposals() {
+    const run = "de000000-0000-4000-8000-000000000a01", mv = "reconcile_group/A14a-2026-11-06";
+    const cand = (n, confidence, signals, evidence) => ({ member: String(n), business_name: GROUP_MEMBERS[n - 1].business_name, confidence, signals, evidence });
+    const file = (path, kind = "fep_unmatched", external_id = null) => ({ gap_kind: kind, item_key: path, gap_id: null, source_file: path.split("/").pop(), external_id, item_sha256: "0".repeat(63) + "1" });
+    const paddock = (fid, external_id = null) => ({ gap_kind: "paddock_held", item_key: PADDOCKS + "#" + fid, gap_id: null, source_file: PADDOCKS, external_id, item_sha256: null });
+    const ev = (because) => ({ set_aside_because: because, lines: ["  (the reconcile summary's lines for this item, invented)"], replaces_stale_match: null });
+    const row = (id, kind, subject, status, candidates, extra = {}) => ({ id, org_id: GROUP, farm_id: null, kind, subject, subject_key: subject.gap_kind ? subject.gap_kind + ":" + subject.item_key : String(subject.location_key),
+      evidence: ev(extra.because || "no member number in the file name"), candidates, status, decision: null, decided_by: null, decided_at: null, applied_at: null, outcome: null,
+      method_version: mv, run_id: run, created_at: "2026-11-04T09:00:00Z", ...extra.row });
+    const decided = (c, note, at) => ({ decision: { candidate: c, note }, decided_by: USER, decided_at: at });
+    const c4 = cand(4, 0.9, ["member_number"], [{ signal: "member_number", from: "member folder in the path", folder: "HDLG 4 Delta (synthetic)", number: "4", confidence: 0.9 }]);
+    const c1 = cand(1, 0.8, ["member_number"], [{ signal: "member_number", from: "field AltId", value: "HDLG-1", number: "1", confidence: 0.8 }]);
+    const c2 = cand(2, 0.85, ["fep_title"], [{ signal: "fep_title", found: "member number", number: "2", text: "HDLG member 2 farm plan (synthetic)", confidence: 0.85 }]);
+    return [
+      row(101, "member_match_file", file("FarmData/HDLG 3 Charlie (synthetic)/Charlie Downs FEP 2021 (synthetic).xlsm"), "proposed", [
+        cand(3, 0.97, ["member_number", "business_name"], [{ signal: "member_number", from: "member folder in the path", folder: "HDLG 3 Charlie (synthetic)", number: "3", confidence: 0.9 },
+          { signal: "business_name", file_words: "charlie downs", name: "Charlie Invented Ltd", name_from: "the register", similarity: 0.82, confidence: 0.697 }])]),
+      row(102, "member_match_file", file("FarmData/Charlie plan final (synthetic).pdf"), "proposed", [
+        cand(3, 0.75, ["fep_title"], [{ signal: "fep_title", found: "business name", name: "Charlie Invented Ltd", name_from: "the register", text: "Farm Environment Plan for Charlie Invented Ltd (synthetic)", confidence: 0.75 }])]),
+      row(103, "member_match_paddock", paddock(118, "999"), "proposed", [
+        cand(5, 0.86, ["member_number", "business_name"], [{ signal: "member_number", from: "text in field Notes", value: "HDLG 5 winter block", number: "5", confidence: 0.6 },
+          { signal: "business_name", field: "Owner", value: "Echo Invented", name: "Echo Invented Ltd", name_from: "the register", similarity: 0.9, confidence: 0.765 }])],
+        { because: "placeholder member id" }),
+      row(104, "member_match_file", file("FarmData/Bravo Foxtrot plan (synthetic).xlsm"), "ambiguous", [
+        cand(2, 0.72, ["business_name"], [{ signal: "business_name", file_words: "bravo foxtrot", name: "Bravo Invented Ltd", name_from: "the register", similarity: 0.85, confidence: 0.722 }]),
+        cand(6, 0.68, ["business_name"], [{ signal: "business_name", file_words: "bravo foxtrot", name: "Foxtrot Invented Ltd", name_from: "the register", similarity: 0.8, confidence: 0.68 }])]),
+      row(105, "member_match_file", file("FarmData/HDLG 4 Delta (synthetic)/FEP 2020 (synthetic).pdf"), "accepted", [c4], { row: decided(c4, "Checked with the facilitator (synthetic)", "2026-11-04T21:10:00Z") }),
+      row(106, "member_match_paddock", paddock(7), "applied", [c1], { because: "no member id", row: { ...decided(c1, null, "2026-11-04T21:20:00Z"), applied_at: "2026-11-05T02:00:00Z", outcome: { recorded: true } } }),
+      row(107, "member_match_file", file("FarmData/HDLG member 2 plan (synthetic).pdf"), "applied", [c2], { row: { ...decided(c2, null, "2026-10-18T21:00:00Z"), applied_at: "2026-10-20T02:00:00Z", outcome: { recorded: true } } }),
+      // a site question (site_succession): an invented row of the kind ON3c will feed (no run writes these yet): is DEMO-02 a co-located
+      // record of the farm bridge location?
+      { id: 108, org_id: GROUP, farm_id: null, kind: "site_succession", subject: { location_key: "demo-creek-at-the-farm-bridge", name: "Demo Creek at the farm bridge, synthetic location", site_ids: [9101, 9102] },
+        subject_key: "demo-creek-at-the-farm-bridge:9102", evidence: { set_aside_because: "two sites 600 m apart on the same creek (invented)", lines: [] },
+        candidates: [{ name: "DEMO-02 co-located with the farm bridge location", role: "co_located", site_id: 9102 }], status: "proposed", decision: null, decided_by: null, decided_at: null,
+        applied_at: null, outcome: null, method_version: "seed/WQ2-demo", run_id: run, created_at: "2026-11-04T09:00:00Z" },
+    ];
+  }
+  function manageDemo(data, queue = null) {
+    const t = data.groupTables, at = (d) => d + "T09:30:00+12:00";
+    for (const k of ["group_members", "farm_group_associations", "proposals", "group_load_gaps", "monitoring_location_sites"]) { data.tables[k] = data.tables[k] || []; t[k] = []; }
+    t.group_members.push(...copy(GROUP_MEMBERS));
+    MEMBERS.forEach((m, i) => t.farm_group_associations.push({ id: "demo-g-a" + (i + 1), org_id: GROUP, farm_id: m.id, group_member_id: GROUP_MEMBERS[i].id, status: "active",
+      group_approved_at: at("2026-06-02"), farm_approved_at: at("2026-06-" + String(10 + i)), ended_at: null, ended_side: null, created_at: at("2026-06-02") }));
+    t.farm_group_associations.push(
+      { id: "demo-g-a7", org_id: GROUP, farm_id: "de000000-0000-4000-8000-0000000002b7", group_member_id: GROUP_MEMBERS[6].id, status: "pending", group_approved_at: at("2026-10-28"), farm_approved_at: null, ended_at: null, ended_side: null, created_at: at("2026-10-28") },
+      { id: "demo-g-a9", org_id: GROUP, farm_id: "de000000-0000-4000-8000-0000000002b9", group_member_id: GROUP_MEMBERS[8].id, status: "ended", group_approved_at: at("2025-01-10"), farm_approved_at: at("2025-01-20"), ended_at: at("2025-06-30"), ended_side: "farm", created_at: at("2025-01-10") });
+    t.proposals.push(...manageProposals());
+    // the gap rows the group admin reads: the applied paddock (106) is still open, so it is still to be placed; 107's is resolved
+    t.group_load_gaps.push({ org_id: GROUP, kind: "paddock_held", item_key: PADDOCKS + "#7", resolved_at: null },
+      { org_id: GROUP, kind: "fep_unmatched", item_key: "FarmData/HDLG member 2 plan (synthetic).pdf", resolved_at: "2026-10-21T02:00:00Z" });
+    t.monitoring_location_sites.push({ location_id: 9301, site_id: 9101 }, { location_id: 9301, site_id: 9107 });
+    data.loadGaps = [...(data.loadGaps || []), { group_id: GROUP, group_name: "HDLG (example)", detail: true, checked_at: "2026-11-04T08:00:00Z",
+      counts: { fep_unmatched: 5, fep_not_in_register: 1, paddock_held: 38, member_no_extent: 2 }, open_proposals: { fep_unmatched: 3, paddock_held: 1 },
+      items: [
+        { kind: "fep_not_in_register", member_number: null, business_name: null, external_id: "42", reason: "member number is not in the register", items: 1, files: ["HDLG_42 Final (synthetic).xlsm"] },
+        { kind: "fep_unmatched", member_number: null, business_name: null, external_id: null, reason: "no member number in the file name", items: 5, files: ["Bravo Foxtrot plan (synthetic).xlsm", "Charlie Downs FEP 2021 (synthetic).xlsm", "Charlie plan final (synthetic).pdf", "Hill block notes (synthetic).pdf", "Untitled plan (synthetic).xlsm"] },
+        { kind: "member_no_extent", member_number: "7", business_name: "Golf Invented Ltd", external_id: "7", reason: "FarmData folder only, not in the members layer", items: 1, files: ["HDLG Members (synthetic).gpkg"] },
+        { kind: "member_no_extent", member_number: "8", business_name: "Hotel Invented Ltd", external_id: "8", reason: "FarmData folder only, not in the members layer", items: 1, files: ["HDLG Members (synthetic).gpkg"] },
+        { kind: "paddock_held", member_number: null, business_name: null, external_id: null, reason: "no member id", items: 30, files: [PADDOCKS] },
+        { kind: "paddock_held", member_number: null, business_name: null, external_id: "999", reason: "placeholder member id", items: 8, files: [PADDOCKS] }] }];
+    const mine = data.loadGaps[data.loadGaps.length - 1];
+    if (queue === "sparse") {
+      // as a real first reconciliation run can leave it: 1 file proposed, 3 ambiguous, 1 paddock proposed; most items with no member evidence
+      const rows = t.proposals.filter((p) => [102, 103, 104].includes(p.id));
+      const amb = (id, path, a, b) => ({ ...copy(rows.find((p) => p.id === 104)), id, subject_key: "fep_unmatched:" + path,
+        subject: { gap_kind: "fep_unmatched", item_key: path, gap_id: null, source_file: path.split("/").pop(), external_id: null, item_sha256: "0".repeat(63) + "2" },
+        candidates: [a, b].map(([n, c]) => ({ member: String(n), business_name: GROUP_MEMBERS[n - 1].business_name, confidence: c, signals: ["business_name"],
+          evidence: [{ signal: "business_name", file_words: "invented downs", name: GROUP_MEMBERS[n - 1].business_name, name_from: "the register", similarity: 0.8, confidence: c }] })) });
+      t.proposals = [...rows, amb(109, "FarmData/Downs plan 2019 (synthetic).pdf", [1, 0.7], [5, 0.66]), amb(110, "FarmData/Invented Downs FEP (synthetic).xlsm", [2, 0.71], [8, 0.69])];
+      t.group_load_gaps = [];
+      Object.assign(mine, { counts: { fep_unmatched: 9, paddock_held: 1117, member_no_extent: 2 }, open_proposals: { fep_unmatched: 4, paddock_held: 1 },
+        items: mine.items.filter((i) => i.kind !== "fep_not_in_register").map((i) => (i.kind === "paddock_held" ? { ...i, items: i.external_id ? 17 : 1100 } : i.kind === "fep_unmatched" ? { ...i, items: 9 } : i)) });
+    }
+    if (queue === "empty") {
+      t.proposals = t.proposals.filter((p) => p.status === "applied" && p.id === 107);   // only what was placed long ago
+      t.group_load_gaps = []; Object.assign(mine, { counts: {}, open_proposals: {}, items: [] });
+    }
+  }
+  // As public.proposals_open_counts and public.proposals_decide (ON3a): counts for any member of the group; a decision by an
+  // admin, advisor or facilitator only, from proposed or ambiguous, naming one of the row's own candidates (kept in memory).
+  const contains = (e, c) => !!e && typeof e === "object" && Object.entries(c).every(([k, v]) => JSON.stringify(e[k]) === JSON.stringify(v));
+  function proposalsRpc(d, name, args) {
+    const role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role || null, rows = d.groupTables?.proposals || [];
+    if (name === "proposals_open_counts") {
+      if (args.org_id !== GROUP || !role) return [null];
+      const out = {};
+      for (const p of rows) if (["proposed", "ambiguous"].includes(p.status)) out[p.kind] = (out[p.kind] || 0) + 1;
+      return [out];
+    }
+    const p = rows.find((r) => r.id === args.id);
+    if (!p || !["admin", "advisor", "facilitator"].includes(role)) return [null, { message: "proposal " + args.id + " is not open for you to decide" }];
+    if (!["proposed", "ambiguous"].includes(p.status)) return [null, { message: "proposal " + args.id + " is already " + p.status }];
+    if (!["accepted", "rejected"].includes(args.status)) return [null, { message: "a decision is accepted or rejected" }];
+    let chosen = null;
+    if (args.status === "accepted") {
+      if (args.candidate == null) { if (p.status === "ambiguous") return [null, { message: "an ambiguous proposal needs one of its candidates chosen" }]; chosen = p.candidates[0]; }
+      else {
+        const hits = p.candidates.filter((e) => contains(e, args.candidate));
+        if (hits.length !== 1) return [null, { message: "the chosen candidate must be exactly one of this proposal's candidates (" + hits.length + " match)" }];
+        chosen = hits[0];
+      }
+    } else if (args.candidate != null) return [null, { message: "a rejection names no candidate" }];
+    const note = String(args.note || "").trim() || null;
+    Object.assign(p, { status: args.status, decision: { candidate: copy(chosen), note }, decided_by: USER, decided_at: new Date().toISOString() });
+    return [p];
   }
   function groupRpc(d, name, args) {
     const g = d.group, level = (m) => levelOf(g.setting, m.share), detail = (m) => ["anonymous", "named"].includes(level(m));
@@ -576,10 +694,12 @@
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
     function query(table) {
-      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false;
+      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false, span = null;
       const q = {
         select() { return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
         order(key, options) { orders.push([key, options?.ascending !== false]); return q; }, limit() { return q; },
+        // ON3b: `is(key, null)` and `range(from, to)` (inclusive), as PostgREST pages a long read
+        is(key, val) { filters.push([key, { is: val }]); return q; }, range(from, to) { span = [from, to]; return q; },
         insert(rows) { write = true; adding = rows; return q; }, update(values) { write = true; changes = values || null; return q; }, delete() { write = true; removing = true; return q; },
         single() { singular = true; return execute(); }, maybeSingle() { singular = true; maybe = true; return execute(); },
         then(resolve, reject) { return execute().then(resolve, reject); },
@@ -599,15 +719,16 @@
         }
         // A change or removal of a Layers page note: applied in memory to the rows the filters pick.
         if (write && (changes || removing) && EDITED.includes(table) && filters.length) {
-          const hit = rows.filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : row[key] === val)));
+          const hit = rows.filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : val && typeof val === "object" && "is" in val ? (row[key] ?? null) === val.is : row[key] === val)));
           if (removing) { for (const r of hit) rows.splice(rows.indexOf(r), 1); return result(null); }
           for (const r of hit) Object.assign(r, copy(changes), { updated_at: new Date().toISOString() });
           return singular ? (hit.length === 1 ? result(hit[0]) : error("Demo row not found")) : result(hit);
         }
         if (write) return error("The demo does not save changes");
         if (!rows) return error("This demo does not provide " + table);
-        let selected = [...rows, ...(d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : row[key] === val)));
+        let selected = [...rows, ...(d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : val && typeof val === "object" && "is" in val ? (row[key] ?? null) === val.is : row[key] === val)));
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
+        if (span) selected = selected.slice(span[0], span[1] + 1);
         if (singular && selected.length !== 1) return maybe && !selected.length ? result(null) : error("Demo row not found");
         return result(singular ? selected[0] : selected);
       }
@@ -662,6 +783,9 @@
         if (name === "wq_state_trend_for_site") return result(demoLawa(args.site));
         // S5's group functions by name (group_load_gaps is DQ1's, below)
         if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_pick|wq_presets|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
+        // ON3a/ON3b: the group's proposal counts and decisions (in memory); an association request is not saved in the demo
+        if ((name === "proposals_open_counts" || name === "proposals_decide") && d.group) return result(...proposalsRpc(d, name, args || {}));
+        if (name === "request_farm_group_association") return error("The demo does not save changes");
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
         // B4b, as public.sync_entry_edit: applied on the version it was made on, else kept as a conflict; once per edit id.
@@ -695,7 +819,13 @@
           return result((wqOf(d).series[args.site + "|" + args.parameter_key] || []).filter((r) => Date.parse(r.sampled_at) >= from && Date.parse(r.sampled_at) < to));
         }
         // DQ1, as public.group_load_gaps: the invented group's gaps for staff (the demo's advisor); a farmer is in no group.
-        if (name === "group_load_gaps") return result(d.tables.profiles[0]?.is_staff ? (d.loadGaps || []).filter((g) => !args?.group_id || g.group_id === args.group_id) : []);
+        // The demo group's open_proposals is counted from its proposals now (ON3a: open gaps with an open proposal), so a decision shows.
+        if (name === "group_load_gaps") return result(d.tables.profiles[0]?.is_staff ? (d.loadGaps || []).filter((g) => !args?.group_id || g.group_id === args.group_id).map((g) => {
+          if (g.group_id !== GROUP || !d.groupTables?.proposals) return g;
+          const open = {};
+          for (const p of d.groupTables.proposals) if (["proposed", "ambiguous"].includes(p.status) && p.subject?.gap_kind) open[p.subject.gap_kind] = (open[p.subject.gap_kind] || 0) + 1;
+          return { ...g, open_proposals: open };
+        }) : []);
         // EV1, as public.ai_ratchet_evaluation: invented counts for the demo's advisor (staff only), the same for any period.
         if (name === "ai_ratchet_evaluation") return d.tables.profiles[0]?.is_staff && d.ratchet ? result(d.ratchet) : error("The AI evaluation is for RCL staff");
         // MC3, as public.onboarding_effort_rollup: invented numbers for the demo's advisor (staff only), the same for any period.
@@ -715,5 +845,5 @@
         upload: async (path) => result({ path }) }) },
     };
   }
-  return { FARM, FARM2, USER, ORG, GROUP, MEMBERS, levelOf, groupRpc, wqOf, wqLatest, askReply, isRoute, isSparse, isFarmer, isMulti, isGroup, routeHash, href, dataset, client };
+  return { FARM, FARM2, USER, ORG, GROUP, MEMBERS, levelOf, groupRpc, proposalsRpc, GROUP_MEMBERS, queueOf, wqOf, wqLatest, askReply, isRoute, isSparse, isFarmer, isMulti, isGroup, routeHash, href, dataset, client };
 });
