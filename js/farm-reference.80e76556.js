@@ -36,8 +36,9 @@
     const out = new Map();
     if (counts && typeof counts === "object") {
       for (const [key, n] of Object.entries(counts)) {
-        const k = Number(n);
-        if (!(k > 0)) continue;
+        // PERF3c: a dense source in a group's area comes as {by_viewport: true} (not counted): listed, with no count
+        const k = n && typeof n === "object" && n.by_viewport === true ? null : Number(n);
+        if (k !== null && !(k > 0)) continue;
         const s = rows.get(key) || list(preloaded).find((r) => r?.key === key) || { key };
         out.set(key, { key, name: s.name || key, theme: s.theme || null, attribution: s.attribution || null, count: k });
       }

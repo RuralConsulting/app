@@ -350,10 +350,11 @@
   function rowState(e) {
     if (!e.input) return;
     const deferred = !!e.deferred && !!parts?.has(e.layerId), source = !deferred && e.section === "reference" && !!refs?.has(e.key);
-    const many = tooManyOf(e);
-    if (!deferred && !source && many == null) return;
-    const st = many != null ? "too-many" : deferred ? parts.state(e.layerId) : refs.state(e.key);
-    const text = many != null ? FP.groupLayers.tooManyLine(many) : deferred ? parts.line(e.layerId, e.name) : st === "loading" ? "Loading…" : st === "failed" ? "Couldn't load just now" : "";
+    // too many: any count, null included (PERF3c: a dense source's entry is truncated and not counted); undefined: not too many
+    const many = tooManyOf(e), tooMany = many !== undefined;
+    if (!deferred && !source && !tooMany) return;
+    const st = tooMany ? "too-many" : deferred ? parts.state(e.layerId) : refs.state(e.key);
+    const text = tooMany ? FP.groupLayers.tooManyLine(many) : deferred ? parts.line(e.layerId, e.name) : st === "loading" ? "Loading…" : st === "failed" ? "Couldn't load just now" : "";
     e.input.setAttribute("aria-busy", String(st === "loading"));
     const label = e.input.closest("label");
     let note = label?.querySelector(".layer-state");
