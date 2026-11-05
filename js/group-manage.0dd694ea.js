@@ -1,10 +1,14 @@
-// The group's manage space (ON3b, docs/CATCHMENT-SPACE.md "Manage"): `#/group/<id>/manage[/members|gaps|sites|settings]`. One
+// The group's manage space (ON3b, docs/CATCHMENT-SPACE.md "Manage"): `#/group/<id>/manage[/members|gaps|updates|sites|settings]`. One
 // screen for a group's admins, advisors and facilitators, shaped as a queue a named person decides: a count line, then Members
 // (the business register and its farm associations; invite by email through the `invite` function; request an association),
 // Gaps (ON3a's proposals about the files and paddocks the group load set aside, grouped by proposed member, with Accept / Not
 // this / Pick a member and a note, through public.proposals_decide only), Sites (WQ2's monitoring locations near the group, read
 // only) and Settings (the admin's member-detail form). A plain member gets the count line and Members only. Every read is as the
 // signed-in person (row-level security decides); no AI, no geometry editing, no email beyond the invite function's own.
+// ON3c adds the ongoing feed: an Updates tab (analyses due for review, new gaps after a group load, reference changes near
+// members; each marked seen or follow up through public.proposals_decide), a "since you last looked" line under the count
+// (public.proposals_since_seen, read before public.proposals_mark_seen stamps this look), and on Sites a decider's form to
+// propose a succession or co-location (public.proposals_propose).
 (function (root) {
   const FP = root.FP;
   const M = () => FP.groupManageModel;
@@ -16,6 +20,8 @@
   const decidedHere = new Set(), refusals = new Map();   // this visit's decisions and refusals, by proposal id
 
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
+  // the one write path for people's decisions (ON3a): public.proposals_decide, for every tab
+  const decideRpc = (args) => FP.sb.rpc("proposals_decide", args);
   const optional = (query) => Promise.resolve(query).then((r) => (r.error ? null : r.data), () => null);
   // Every row of a read, a page at a time (the API returns at most 1,000 rows per request; HDLG alone has more than 1,000 open gap
   // rows): `make()` builds the query afresh, ordered by a unique column, and each page is asked for with range() until a short page.
@@ -46,7 +52,12 @@
   }
   async function load(group) {
     const sb = FP.sb, decide = M().canDecide(group.role), admin = M().canManage(group.role);
-    const [head, register, associations, open, applied, gapRows, sites, locationSites] = await Promise.all([
+    // ON3c: what came since this person's last look, read beside the other reads (HOT1: the space waits on nothing extra);
+    // this look is stamped only once that read has answered
+    const sinceRead = optional(sb.rpc("proposals_since_seen", { org_id: group.id }));
+    sinceRead.then(() => sb.rpc("proposals_mark_seen", { org_id: group.id })).catch(() => null);
+    const [since, head, register, associations, open, applied, gapRows, sites, locationSites] = await Promise.all([
+      sinceRead,
       counts(group),
       optional(sb.from("group_members").select("id,member_number,business_name,ended_at,created_at").eq("org_id", group.id)),
       optional(sb.from("farm_group_associations").select(ASSOC_COLUMNS).eq("org_id", group.id)),
@@ -68,7 +79,7 @@
     return { ...head, register: register == null ? null : list(register), associations: list(associations),
       proposals: decide ? [...list(open), ...list(applied)] : [], proposalsRead: !decide || (open != null && applied != null),
       open: gapRows ? new Set(list(gapRows).map((g) => g.kind + ":" + g.item_key)) : null,
-      sites: sites == null ? null : list(sites), locations };
+      sites: sites == null ? null : list(sites), locations, since };
   }
   function data(group) {
     let c = cache.get(group.id);
@@ -80,7 +91,7 @@
   // `settings` draws the existing member-detail form (group-space.js), for a group admin.
   async function view(group, route, { settings } = {}) {
     const wrap = el("section", { class: "group-manage", "data-view": "manage" }, el("h2", {}, "Manage the group"),
-      el("p", { class: "manage-count group-status", role: "status" }, "Reading what is open…"));
+      el("p", { class: "manage-count group-status", role: "status" }, "Reading what is open…"), el("p", { class: "manage-since group-fine", hidden: "" }));
     const tab = M().tabFor(group.role, route.tab);
     const nav = el("nav", { class: "manage-tabs", "aria-label": "Manage" }, ...M().tabs(group.role).map(([key, label]) =>
       el("a", { href: FP.href(FP.groupModel.href(group.id, "manage", key)), class: "manage-tab", "data-tab": key, ...(key === tab ? { "aria-current": "page" } : {}) }, label)));
@@ -88,9 +99,11 @@
     wrap.append(nav, body);
     const d = await data(group);
     drawCount(wrap, group, d);
+    drawSince(wrap, d);
     if (tab === "settings") body.append(settings ? settings() : el("p", {}, "Only a group admin chooses how member farms are shown."));
     else if (tab === "gaps") drawGaps(body, group, d, wrap);
     else if (tab === "sites") drawSites(body, group, d, wrap);
+    else if (tab === "updates") drawUpdates(body, group, d, wrap);
     else drawMembers(body, group, d);
     return wrap;
   }
@@ -100,6 +113,15 @@
     node.replaceChildren(el("b", {}, c.text));
     node.dataset.state = c.noAccess ? "no-access" : c.unknown ? "unknown" : c.empty ? "empty" : "open";
     if (!M().canDecide(group.role) && !c.empty && !c.noAccess) node.append(el("small", {}, " The group's admins, advisors and facilitators decide these."));
+  }
+  // "Since you last looked (4 Nov 2026): 2 analyses due for review · 1 reference change near members", read once per visit
+  function drawSince(wrap, d) {
+    const node = wrap.querySelector(".manage-since"), c = M().sinceLine(d.since);
+    if (!node) return;
+    if (!c) { node.hidden = true; return; }
+    node.hidden = false;
+    node.textContent = c.text;
+    node.dataset.state = c.first ? "first" : c.parts.length ? "new" : "nothing";
   }
   async function refreshCount(wrap, group, d) {
     Object.assign(d, await counts(group).catch(() => ({ counts: d.counts, access: d.access, gapsAccess: d.gapsAccess, gaps: d.gaps })));
@@ -154,7 +176,7 @@
       if (!args) { msg.textContent = "Pick one of the members first."; pick?.focus(); return; }
       for (const b of buttons) b.disabled = true;
       msg.textContent = "Saving…";
-      const { data: saved, error } = await FP.sb.rpc("proposals_decide", args);
+      const { data: saved, error } = await decideRpc(args);
       if (error || !saved) {
         // refused: read the row again and show it as it is now (or drop it when it can no longer be read), with the refusal
         refusals.set(l.id, "Couldn't save the decision: " + (error?.message || "no reply") + ". It is shown as it is now.");
@@ -261,7 +283,73 @@
     if (v.noLocations) body.append(el("p", {}, v.noLocations));
     if (v.own.length) body.append(el("h3", {}, "The group's own sites"), el("ul", { class: "group-lines" }, ...v.own.map((s) => el("li", {}, el("span", {}, s.id + " · " + s.name), el("small", {}, s.last)))));
     if (v.othersText) body.append(el("p", { class: "group-fine" }, v.othersText));
-    body.append(el("p", { class: "group-fine manage-propose" }, v.propose));
+    body.append(M().canDecide(group.role) ? proposeForm(group, d, body, wrap, v) : el("p", { class: "group-fine manage-propose" }, v.propose));
+  }
+  // ON3c: a decider proposes a succession or co-location (public.proposals_propose, site_succession only): a site question for the
+  // group to decide; RCL applies an accepted one through the reviewed manifest, so nothing else changes here.
+  function proposeForm(group, d, body, wrap, v) {
+    const field = (id, label, input) => [el("label", { for: id }, label), input];
+    const sites = el("input", { type: "text", id: "manage-propose-sites", autocomplete: "off", spellcheck: "false", placeholder: "e.g. SQ35/0001, SQ35/0002" });
+    const relation = el("select", { id: "manage-propose-relation" }, el("option", { value: "succession" }, "A succession (one site replaced by another)"),
+      el("option", { value: "co_located" }, "A co-location (two records of one place)"));
+    const current = el("input", { type: "text", id: "manage-propose-current", autocomplete: "off", spellcheck: "false", placeholder: "The site id that carries the record now (optional)" });
+    const from = el("input", { type: "date", id: "manage-propose-from" });
+    const name = el("input", { type: "text", id: "manage-propose-name", maxlength: "200", placeholder: "A short name (optional)" });
+    const note = el("input", { type: "text", id: "manage-propose-note", maxlength: "2000", placeholder: "Why (optional)" });
+    const msg = el("p", { class: "manage-msg", role: "status" });
+    const button = el("button", { type: "submit", class: "secondary" }, "Propose");
+    const form = el("form", { class: "manage-propose-form" }, el("h3", {}, "Propose a succession or co-location"), el("p", { class: "group-fine manage-propose" }, v.propose),
+      ...field("manage-propose-sites", "Site ids", sites), ...field("manage-propose-relation", "What it is", relation), ...field("manage-propose-current", "Carries the record now", current),
+      ...field("manage-propose-from", "Counts from", from), ...field("manage-propose-name", "Name", name), ...field("manage-propose-note", "Note", note), button, msg);
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const args = M().proposeArgs(group.id, { sites: sites.value, relation: relation.value, current: current.value, validFrom: from.value, name: name.value, note: note.value });
+      if (args.error) { msg.textContent = args.error; sites.focus(); return; }
+      button.disabled = true; msg.textContent = "Proposing…";
+      const { data: saved, error } = await FP.sb.rpc("proposals_propose", args);
+      button.disabled = false;
+      if (error || !saved) { msg.textContent = "Couldn't propose it: " + (error?.message || "no reply"); return; }
+      d.proposals = [...d.proposals, saved];
+      drawSites(body, group, d, wrap);
+      body.querySelector(".manage-propose-form .manage-msg").textContent = "Proposed: it is a site question for the group to decide.";
+      refreshCount(wrap, group, d);
+    });
+    return form;
+  }
+
+  // ---- Updates: the ongoing feed (ON3c) -----------------------------------------------------------------------------------------
+  function drawUpdates(body, group, d, wrap) {
+    const v = M().feedTab(d.proposals);
+    body.replaceChildren(el("p", { class: "group-fine" }, "What changed since the group's records were made: analyses whose sources changed, items a group load newly set aside, " +
+      "and reference layers refreshed near members. Mark each seen, or follow up; nothing else changes."));
+    if (!d.proposalsRead) body.append(el("p", { role: "alert" }, "Couldn't read the updates."));
+    if (v.summary) body.append(el("p", { class: "manage-summary" }, v.summary));
+    if (v.empty && d.proposalsRead) { body.append(el("p", { class: "manage-empty" }, v.emptyText)); return; }
+    body.append(el("ul", { class: "manage-lines manage-feed" }, ...v.lines.map((l) => feedItem(l, group, d, body, wrap))));
+  }
+  function feedItem(l, group, d, body, wrap) {
+    const li = el("li", { class: "manage-line", "data-proposal": l.id, "data-kind": l.kind, "data-state": l.state },
+      el("div", { class: "manage-item" }, el("b", {}, l.title), el("small", {}, l.what)),
+      el("p", { class: "manage-state" }, l.text + (l.note ? " · " + l.note : "")));
+    if (l.lines.length) li.append(el("ul", { class: "manage-evidence" }, ...l.lines.map((t) => el("li", {}, t))));
+    if (!l.open || !M().canDecide(group.role)) return li;
+    const row = d.proposals.find((p) => p.id === l.id);
+    const note = el("input", { type: "text", maxlength: "2000", class: "manage-note", "aria-label": "Note on this update", placeholder: "Note (optional)" });
+    const msg = el("p", { class: "manage-msg", role: "status" });
+    const buttons = [];
+    const go = async (action) => {
+      for (const b of buttons) b.disabled = true;
+      msg.textContent = "Saving…";
+      const { data: saved, error } = await decideRpc(M().feedDecision(row, action, note.value));
+      if (error || !saved) { for (const b of buttons) b.disabled = false; msg.textContent = "Couldn't save it: " + (error?.message || "no reply"); return; }
+      d.proposals = M().replace(d.proposals, saved);
+      drawUpdates(body, group, d, wrap);
+      refreshCount(wrap, group, d);
+    };
+    buttons.push(el("button", { type: "button", class: "primary", "data-act": "seen", onclick: () => go("seen") }, "Seen"),
+      el("button", { type: "button", class: "secondary", "data-act": "follow_up", onclick: () => go("follow_up") }, "Follow up"));
+    li.append(el("div", { class: "manage-controls" }, note, el("div", { class: "manage-buttons" }, ...buttons), msg));
+    return li;
   }
 
   // forget: the cache lasts only across tab switches (group-space.js drops it on entering Manage from another view, on a change of

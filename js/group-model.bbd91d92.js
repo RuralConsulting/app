@@ -7,9 +7,9 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else { root.FP = root.FP || {}; root.FP.groupModel = api; }
 })(typeof window === "undefined" ? globalThis : window, function () {
-  // ON3b: `/manage[/members|gaps|sites|settings]` is the group's manage space (group-manage.js); the member-detail form moved
+  // ON3b: `/manage[/members|gaps|updates|sites|settings]` is the group's manage space (group-manage.js); the member-detail form moved
   // there, so the old `/settings` address opens the manage space's Settings tab.
-  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(documents|create|settings|manage)(?:\/(members|gaps|sites|settings))?)?$/;
+  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(documents|create|settings|manage)(?:\/(members|gaps|updates|sites|settings))?)?$/;
   const views = [["map", "Map"], ["documents", "Documents"], ["create", "Create"], ["manage", "Manage"]];
   function match(hash) {
     const m = String(hash || "").match(ROUTE);

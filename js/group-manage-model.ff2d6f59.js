@@ -15,7 +15,8 @@
   const DECIDERS = ["admin", "advisor", "facilitator"];
   const canDecide = (role) => DECIDERS.includes(role);
   const canManage = (role) => role === "admin";
-  const TABS = [["members", "Members"], ["gaps", "Gaps"], ["sites", "Sites"], ["settings", "Settings"]];
+  // ON3c: Updates is the ongoing feed (analyses due for review, new gaps after a group load, reference changes near members)
+  const TABS = [["members", "Members"], ["gaps", "Gaps"], ["updates", "Updates"], ["sites", "Sites"], ["settings", "Settings"]];
   function tabs(role) {
     return TABS.filter(([k]) => k === "members" || (k === "settings" ? canManage(role) : canDecide(role)));
   }
@@ -39,6 +40,8 @@
   };
   const MEMBER_KINDS = ["member_match_file", "member_match_paddock", "member_extent"];
   const DECIDE_KINDS = [...MEMBER_KINDS, "document_tier"];
+  // ON3c: the feed's kinds. A person marks each seen or follow up (its two candidates, through proposals_decide); never "to decide".
+  const FEED_KINDS = ["review_due", "load_gap", "reference_change"];
   const OPEN = ["proposed", "ambiguous"];
   const GAP_WORDS = {
     fep_unmatched: { what: "FEP file with no member number in its name", one: "FEP file not linked to a member", many: "FEP files not linked to a member" },
@@ -77,8 +80,9 @@
     if (access === "none") return { parts: [], empty: false, unknown: true, noAccess: true,
       text: "No access: only the group's members and RCL staff see what is open for it." };
     const c = access === "ok" && counts && typeof counts === "object" ? counts : null, g = gaps && typeof gaps === "object" ? gaps : null;
-    const decide = c ? Object.entries(c).filter(([k]) => k !== "site_succession").reduce((n, [, v]) => n + (Number(v) || 0), 0) : null;
+    const decide = c ? Object.entries(c).filter(([k]) => k !== "site_succession" && !FEED_KINDS.includes(k)).reduce((n, [, v]) => n + (Number(v) || 0), 0) : null;
     const site = c ? Number(c.site_succession) || 0 : null;
+    const updates = c ? FEED_KINDS.reduce((n, k) => n + (Number(c[k]) || 0), 0) : null;
     const noExtent = g ? Number(g.counts?.member_no_extent) || 0 : null;
     const held = g ? noEvidence(g, waiting) : { paddock_held: 0, fep: 0 };
     const parts = [];
@@ -91,6 +95,7 @@
     }
     if (noExtent) parts.push({ key: "no_extent", n: noExtent, text: plural(noExtent, "member without an extent", "members without an extent") });
     if (site) parts.push({ key: "site", n: site, text: plural(site, "site question", "site questions") });
+    if (updates) parts.push({ key: "updates", n: updates, text: plural(updates, "update", "updates") });
     const unread = [...(!c ? ["the open proposals could not be read"] : []), ...(gapsAccess === "error" ? ["the group load's gaps could not be read"] : [])];
     if (unread.length) return { parts, empty: false, unknown: true, noAccess: false, text: [...parts.map((p) => p.text), ...unread].join(" · ") };
     return { parts, empty: !parts.length, unknown: false, noAccess: false, text: parts.length ? parts.map((p) => p.text).join(" · ") : "Nothing open" };
@@ -119,7 +124,12 @@
         id: s.external_id ? "id given: " + s.external_id : "no member id" };
     }
     if (p.kind === "member_extent") return { title: s.member_number ? "Member " + s.member_number : s.item_key || p.subject_key, what: gap?.what || "Member extent", path: null, id: null };
-    if (p.kind === "site_succession") return { title: s.name || s.location_name || s.location_key || p.subject_key, what: "Site succession or co-location", path: null, id: null };
+    if (p.kind === "site_succession") {
+      // ON3c: one a person proposed (public.proposals_propose) names its sites, the relation and the one that carries the record now
+      const sites = Array.isArray(s.sites) ? (s.relation === "co_located" ? "co-located: " : "succession: ") + s.sites.join(", ") + (s.current ? " (now " + s.current + ")" : "")
+        + (s.valid_from ? " from " + day(s.valid_from) : "") : null;
+      return { title: s.name || s.location_name || s.location_key || p.subject_key, what: "Site succession or co-location", path: null, id: sites };
+    }
     return { title: s.title || s.name || p.subject_key, what: "Document's kind", path: null, id: null };
   }
   const q = (v) => "“" + String(v) + "”";
@@ -174,7 +184,8 @@
     const evidence = p.evidence && typeof p.evidence === "object" ? p.evidence : {};
     return { id: p.id, kind: p.kind, status: p.status, state, text, item, candidates: cands, proposed: p.status === "proposed" ? cands[0] || null : null, chosen, note,
       decided: by ? "Decided " + by + (note ? " · " + note : "") : null,
-      because: evidence.set_aside_because ? (p.kind === "site_succession" ? "Why: " : "Set aside because: ") + evidence.set_aside_because : null,
+      because: evidence.set_aside_because ? (p.kind === "site_succession" ? "Why: " : "Set aside because: ") + evidence.set_aside_because
+        : p.kind === "site_succession" && typeof evidence.note === "string" && evidence.note ? "Why: " + evidence.note : null,
       replaces: evidence.replaces_stale_match?.member ? "Replaces a match to member " + evidence.replaces_stale_match.member + " the load no longer uses" : null,
       lines: (Array.isArray(evidence.lines) ? evidence.lines : []).filter((l) => typeof l === "string"),
       open: OPEN.includes(p.status), canPick: OPEN.includes(p.status) && cands.length > 1 };
@@ -297,13 +308,102 @@
       emptyText: "No monitoring sites are recorded within 5 km of the group's area yet.",
       noLocations: list.length && !locs.length ? "None of the sites near the group is in a monitoring location yet." : null,
       othersText: others ? plural(others, "other site", "other sites") + " within 5 km " + (others === 1 ? "is" : "are") + " in no monitoring location (they are on the map's water-quality line)." : null,
-      // ON3a gives people no way to write a proposal (only the tools insert them), so a new question goes to RCL as a note.
-      // PM ruling (5 Nov 2026): succession questions go to RCL's seed run; no one can propose one here yet (ON3a lets only the tools
-      // insert proposals; ON3c adds a proposals_propose RPC for this)
-      propose: "To propose a succession or co-location, tell RCL the site ids, which one carries the record now and the dates each counts for. " +
-        "It goes to RCL's reviewed seed run of the monitoring-locations manifest; once loaded, it shows under Monitoring locations." };
+      // ON3c: a decider proposes one here (public.proposals_propose, site_succession only); RCL applies an accepted one through the
+      // reviewed monitoring-locations manifest, so accepting it changes nothing else.
+      // PM ruling (5 Nov 2026): succession questions go to RCL's seed run; ON3c lets a decider propose one here first
+      propose: "Propose a succession or co-location: name the site ids, which one carries the record now and the date it counts from. " +
+        "It becomes a site question for the group to decide; an accepted one goes to RCL's reviewed seed run of the monitoring-locations manifest, "
+        + "and once loaded it shows under Monitoring locations." };
+  }
+  // The arguments of public.proposals_propose from the Sites form: site ids (commas or spaces between them), succession or
+  // co-located, the one that carries the record now, the date it counts from, a name and a note. { error } when they would be refused.
+  function proposeArgs(groupId, { sites = "", relation = "succession", current = "", validFrom = "", name = "", note = "" } = {}) {
+    const ids = [...new Set(String(sites).split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean))];
+    if (ids.length < 2 || ids.length > 20) return { error: "Name 2 to 20 site ids." };
+    if (ids.some((s) => s.length > 60)) return { error: "A site id is at most 60 characters." };
+    if (!["succession", "co_located"].includes(relation)) return { error: "Choose a succession or a co-location." };
+    const cur = String(current || "").trim();
+    if (cur && !ids.includes(cur)) return { error: "The site that carries the record now must be one of the sites." };
+    const from = String(validFrom || "").trim();
+    if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) return { error: "Write the date as YYYY-MM-DD." };
+    const subject = { relation, sites: ids };
+    if (cur) subject.current = cur;
+    if (from) subject.valid_from = from;
+    if (String(name).trim()) subject.name = String(name).trim().slice(0, 200);
+    const text = String(note || "").trim();
+    return { kind: "site_succession", org_id: groupId, subject, evidence: text ? { note: text.slice(0, 2000) } : {} };
+  }
+
+  // ---- Updates: the ongoing feed (ON3c) ---------------------------------------------------------------------------------------------
+  // public.proposals rows of the feed kinds, as tools/load_group.py and tools/refresh_reference.py write them (app.feed_review_due,
+  // app.feed_load_gaps, app.feed_reference_change): one line each, newest first, with its evidence in words, and its state: new
+  // (proposed), seen, or follow up (accepted with that answer). Superseded rows are not shown (their successor is).
+  const FEED_WORDS = { review_due: "Analysis due for review", load_gap: "New gaps from a group load", reference_change: "Reference layer changed near members" };
+  // "1, 4, 7 and 5 more": the first three of the names given, and how many more of `total`
+  const listNames = (a, total) => {
+    const s = (Array.isArray(a) ? a : []).map(String), shown = s.slice(0, 3), more = Math.max(Number(total) || 0, s.length) - shown.length;
+    return shown.join(", ") + (more > 0 ? " and " + num(more) + " more" : "");
+  };
+  function feedLine(p) {
+    const e = p.evidence && typeof p.evidence === "object" ? p.evidence : {}, s = p.subject || {};
+    let title, lines = [];
+    if (p.kind === "review_due") {
+      title = "An analysis " + (s.module ? "(" + s.module + ") " : "") + "made " + (day(s.made_at) || "earlier") + " is due for review";
+      lines = (Array.isArray(e.reasons) ? e.reasons : []).map((r) => r?.text).filter(Boolean);
+    } else if (p.kind === "load_gap") {
+      const w = GAP_WORDS[s.gap_kind] || { one: "item set aside", many: "items set aside" }, n = Number(e.new) || 0, open = Number(e.open) || 0;
+      title = "The group load on " + (day(e.loaded_at || p.created_at) || "its last run") + " set aside " + plural(n, "new " + w.one, "new " + w.many)
+        + (open > n ? " (" + num(open) + " unseen and still open)" : "");
+      const items = (Array.isArray(e.items) ? e.items : []).slice(0, 10).map((i) => (i.member_number ? "Member " + i.member_number : i.source_file || i.item_key)
+        + (i.reason ? ": " + i.reason : "") + (i.new === false ? " (earlier)" : ""));
+      const rest = (Number(e.unlisted) || 0) + Math.max(0, (Array.isArray(e.items) ? e.items.length : 0) - 10);
+      lines = rest ? [...items, "and " + num(rest) + " more"] : items;
+    } else {
+      const counts = [["added", "added"], ["changed", "changed"], ["removed", "removed"]].filter(([k]) => Number(e[k])).map(([k, w]) => num(e[k]) + " " + w);
+      title = (e.source_name || s.source_key || "A reference layer") + " was refreshed " + (day(e.refreshed_at) || "") + ": " + (counts.join(", ") || "changes")
+        + " within " + (e.context_buffer_m != null ? num(e.context_buffer_m) + " m" : "the context distance") + " of members";
+      const who = [];
+      if (Number(e.members_count)) who.push("Members " + listNames(e.members, e.members_count));
+      if (Number(e.farms_count)) who.push(plural(e.farms_count, "associated farm", "associated farms"));
+      lines = who.length ? ["Near: " + who.join("; ")] : [];
+      const earlier = Array.isArray(e.earlier) ? e.earlier.length : 0;
+      if (earlier) lines.push(plural(earlier, "earlier refresh", "earlier refreshes") + " not yet seen, included");
+      if (e.first_pull) lines.push("The layer's first load: every feature is new");
+    }
+    const action = p.decision?.candidate?.action || null, note = p.decision?.note || null;
+    const state = p.status === "proposed" ? "new" : p.status === "accepted" ? (action === "follow_up" ? "follow_up" : "seen") : "done";
+    const text = state === "new" ? "New" : state === "follow_up" ? "Follow up" + (day(p.decided_at) ? ", marked " + day(p.decided_at) : "") : state === "seen" ? "Seen " + (day(p.decided_at) || "") : "No longer current";
+    return { id: p.id, kind: p.kind, what: FEED_WORDS[p.kind] || p.kind, title, lines, state, text: text.trim(), note, open: p.status === "proposed", created_at: p.created_at };
+  }
+  function feedTab(rows) {
+    const lines = (Array.isArray(rows) ? rows : []).filter((p) => p && FEED_KINDS.includes(p.kind) && ["proposed", "accepted"].includes(p.status)).map(feedLine)
+      .sort((a, b) => (a.open ? 0 : 1) - (b.open ? 0 : 1) || String(b.created_at).localeCompare(String(a.created_at)) || b.id - a.id);
+    const n = lines.filter((l) => l.open).length;
+    return { lines, open: n, empty: !lines.length, emptyText: "Nothing new: no analysis is due for review, and no group load or reference refresh has changed anything near members.",
+      summary: lines.length ? plural(n, "new update", "new updates") + (lines.length > n ? " · " + num(lines.length - n) + " seen or followed up" : "") : null };
+  }
+  // The arguments of public.proposals_decide for a feed row: seen or follow up (one of its two candidates), with a note.
+  function feedDecision(p, action, note = "") {
+    if (!p || !["seen", "follow_up"].includes(action)) return null;
+    return { id: p.id, status: "accepted", candidate: { action }, note: String(note || "").trim() || null };
+  }
+
+  // ---- "since you last looked" (ON3c) -------------------------------------------------------------------------------------------------
+  // From public.proposals_since_seen ({seen_at, since: {kind: n}}); null (no access) or an unread answer draws no line.
+  const SINCE_WORDS = [["review_due", "analysis due for review", "analyses due for review"], ["load_gap", "new gap update from a group load", "new gap updates from group loads"],
+    ["reference_change", "reference change near members", "reference changes near members"], ["site_succession", "site question", "site questions"]];
+  function sinceLine(r) {
+    if (!r || typeof r !== "object" || typeof r.since !== "object" || r.since == null) return null;
+    const c = r.since, parts = [];
+    for (const [k, one, many] of SINCE_WORDS) if (Number(c[k])) parts.push({ key: k, n: Number(c[k]), text: plural(c[k], one, many) });
+    const other = Object.entries(c).filter(([k]) => !SINCE_WORDS.some(([w]) => w === k)).reduce((n, [, v]) => n + (Number(v) || 0), 0);
+    if (other) parts.push({ key: "proposals", n: other, text: plural(other, "proposal", "proposals") });
+    const when = r.seen_at ? day(r.seen_at) : null;
+    const text = !r.seen_at ? (parts.length ? "Your first look: " + parts.map((p) => p.text).join(" · ") + " open" : "Your first look: nothing open")
+      : parts.length ? "Since you last looked (" + when + "): " + parts.map((p) => p.text).join(" · ") : "Nothing new since you last looked (" + when + ")";
+    return { text, parts, first: !r.seen_at, seenAt: r.seen_at || null };
   }
 
   return { DECIDERS, canDecide, canManage, TABS, tabs, tabFor, showsLink, countLine, noEvidence, waitingByGap, itemOf, evidenceText, line, waitingForLoad, decision, replace,
-    gapsTab, membersTab, associationText, sitesTab, farmId, email, INVITE_ROLES, MEMBER_KINDS, DECIDE_KINDS, day };
+    gapsTab, membersTab, associationText, sitesTab, proposeArgs, feedLine, feedTab, feedDecision, sinceLine, farmId, email, INVITE_ROLES, MEMBER_KINDS, DECIDE_KINDS, FEED_KINDS, day };
 });

@@ -47,7 +47,7 @@
       const suffix = hash.split("?")[0].slice("#/demo/group".length);
       if (suffix === "/farms") return "";
       // ON3b: ".../manage" and its tabs are the group's manage space
-      return /^(?:\/(?:documents|create|settings|manage(?:\/(?:members|gaps|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:documents|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -265,6 +265,29 @@
         subject_key: "demo-creek-at-the-farm-bridge:9102", evidence: { set_aside_because: "two sites 600 m apart on the same creek (invented)", lines: [] },
         candidates: [{ name: "DEMO-02 co-located with the farm bridge location", role: "co_located", site_id: 9102 }], status: "proposed", decision: null, decided_by: null, decided_at: null,
         applied_at: null, outcome: null, method_version: "seed/WQ2-demo", run_id: run, created_at: "2026-11-04T09:00:00Z" },
+      ...feedProposals(),
+    ];
+  }
+  // ON3c: the group's ongoing feed as tools/load_group.py and tools/refresh_reference.py write it: an analysis due for review and
+  // the gaps a group load newly set aside (new), and a reference change near members marked follow up. Invented content.
+  const FEED_ANSWERS = [{ action: "seen" }, { action: "follow_up" }];
+  function feedProposals() {
+    const run = "de000000-0000-4000-8000-000000000a02";
+    const row = (id, kind, subject_key, subject, evidence, created_at, extra = {}) => ({ id, org_id: GROUP, farm_id: null, kind, subject, subject_key, evidence,
+      candidates: copy(FEED_ANSWERS), status: "proposed", decision: null, decided_by: null, decided_at: null, applied_at: null, outcome: null,
+      method_version: "on3c-feed v1", run_id: run, created_at, ...extra });
+    return [
+      row(111, "review_due", "analysis:demo-analysis-1", { analysis_id: "demo-analysis-1", module: "x1/band", theme: "water_quality", made_at: "2026-09-12T02:00:00Z" },
+        { reasons: [{ kind: "reference", source: "ecan-wq-sites", text: "Surface water quality sites (ECan) was refreshed with different content since this analysis was made." }],
+          fingerprint: "0".repeat(32), checked_at: "2026-11-05T03:00:00Z" }, "2026-11-05T03:00:00Z"),
+      row(112, "load_gap", "load_gap:paddock_held", { gap_kind: "paddock_held" },
+        { gap_kind: "paddock_held", new: 2, open: 2, unlisted: 0, carried_from: null, loaded_at: "2026-11-05T02:00:00Z", items: [
+          { item_key: PADDOCKS + "#121", source_file: PADDOCKS, reason: "no member id", new: true },
+          { item_key: PADDOCKS + "#122", source_file: PADDOCKS, external_id: "999", reason: "placeholder member id", new: true }] }, "2026-11-05T02:00:00Z"),
+      row(113, "reference_change", "reference:ecan-consents", { source_key: "ecan-consents" },
+        { source_key: "ecan-consents", source_name: "Resource consents (ECan)", refresh_id: 1, refreshed_at: "2026-11-02T14:30:00Z", first_pull: false, partial: false,
+          added: 1, changed: 2, removed: 0, members: ["3", "5"], members_count: 2, farms_count: 1, context_buffer_m: 2000, earlier: [] }, "2026-11-02T15:00:00Z",
+        { status: "accepted", decision: { candidate: { action: "follow_up" }, note: "Check the new take near member 3 (synthetic)" }, decided_by: USER, decided_at: "2026-11-03T21:00:00Z" }),
     ];
   }
   function manageDemo(data, queue = null) {
@@ -318,6 +341,36 @@
       const out = {};
       for (const p of rows) if (["proposed", "ambiguous"].includes(p.status)) out[p.kind] = (out[p.kind] || 0) + 1;
       return [out];
+    }
+    // ON3c, as public.proposals_since_seen and public.proposals_mark_seen: the demo person's last look (in memory; the invented
+    // last look is 4 Nov 2026, so the feed's rows of 5 Nov are new), and counts of what was made since
+    if (name === "proposals_since_seen") {
+      if (args.org_id !== GROUP || !role) return [null];
+      const seen = d.seenAt === undefined ? "2026-11-04T10:00:00Z" : d.seenAt, out = {};
+      for (const p of rows) if (seen ? Date.parse(p.created_at) > Date.parse(seen) && p.status !== "superseded" : ["proposed", "ambiguous"].includes(p.status)) out[p.kind] = (out[p.kind] || 0) + 1;
+      return [{ seen_at: seen, since: out }];
+    }
+    if (name === "proposals_mark_seen") {
+      if (args.org_id !== GROUP || !role) return [null];
+      d.seenAt = new Date().toISOString();
+      return [d.seenAt];
+    }
+    // ON3c, as public.proposals_propose: a site question only, by the group's admins, advisors and facilitators
+    if (name === "proposals_propose") {
+      if (args.kind !== "site_succession") return [null, { message: "a person proposes only a site question (site_succession), not " + args.kind }];
+      if (args.org_id !== GROUP || !["admin", "advisor", "facilitator"].includes(role)) return [null, { message: "only the group's admins, advisors and facilitators propose a site question" }];
+      const sites = [...new Set((args.subject?.sites || []).map((x) => String(x).trim()).filter(Boolean))].sort();
+      if (sites.length < 2 || sites.length > 20) return [null, { message: "name 2 to 20 site ids, each at most 60 characters" }];
+      const key = "proposed:" + args.subject.relation + ":" + sites.join(",");
+      if (rows.some((r) => r.kind === "site_succession" && r.subject_key === key && ["proposed", "ambiguous", "accepted"].includes(r.status))) return [null, { message: "a question about these sites is already open" }];
+      const note = String(args.evidence?.note || "").trim() || null;
+      const row = { id: Math.max(0, ...rows.map((r) => r.id)) + 1, org_id: GROUP, farm_id: null, kind: "site_succession",
+        subject: { ...args.subject, sites, name: args.subject.name || sites.join(", ") }, subject_key: key,
+        evidence: { ...(note ? { note } : {}), lines: ["Proposed in the group's manage space"] }, candidates: [{ label: "Add it to the reviewed monitoring-locations manifest (RCL applies it)" }],
+        status: "proposed", decision: null, decided_by: null, decided_at: null, applied_at: null, outcome: null, proposed_by: USER,
+        method_version: "proposals_propose v1", run_id: "de000000-0000-4000-8000-000000000a03", created_at: new Date().toISOString() };
+      rows.push(row);
+      return [copy(row)];
     }
     const p = rows.find((r) => r.id === args.id);
     if (!p || !["admin", "advisor", "facilitator"].includes(role)) return [null, { message: "proposal " + args.id + " is not open for you to decide" }];
@@ -784,7 +837,7 @@
         // S5's group functions by name (group_load_gaps is DQ1's, below)
         if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_pick|wq_presets|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON3a/ON3b: the group's proposal counts and decisions (in memory); an association request is not saved in the demo
-        if ((name === "proposals_open_counts" || name === "proposals_decide") && d.group) return result(...proposalsRpc(d, name, args || {}));
+        if (/^proposals_(open_counts|decide|since_seen|mark_seen|propose)$/.test(name) && d.group) return result(...proposalsRpc(d, name, args || {}));
         if (name === "request_farm_group_association") return error("The demo does not save changes");
         // ON1, as public.onboarding_report_inputs: the demo farm's own records, and invented public context.
         if (name === "onboarding_report_inputs") return result(onboardingInputs(d, args.f));
@@ -823,7 +876,7 @@
         if (name === "group_load_gaps") return result(d.tables.profiles[0]?.is_staff ? (d.loadGaps || []).filter((g) => !args?.group_id || g.group_id === args.group_id).map((g) => {
           if (g.group_id !== GROUP || !d.groupTables?.proposals) return g;
           const open = {};
-          for (const p of d.groupTables.proposals) if (["proposed", "ambiguous"].includes(p.status) && p.subject?.gap_kind) open[p.subject.gap_kind] = (open[p.subject.gap_kind] || 0) + 1;
+          for (const p of d.groupTables.proposals) if (["proposed", "ambiguous"].includes(p.status) && p.subject?.gap_kind && /^member_(match_file|match_paddock|extent)$/.test(p.kind)) open[p.subject.gap_kind] = (open[p.subject.gap_kind] || 0) + 1;
           return { ...g, open_proposals: open };
         }) : []);
         // EV1, as public.ai_ratchet_evaluation: invented counts for the demo's advisor (staff only), the same for any period.
