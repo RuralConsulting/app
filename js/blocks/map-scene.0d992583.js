@@ -8,6 +8,9 @@
 // source when it is switched on (farm-reference.js) and hands it to the surface's addReference(entry), which joins it to
 // the scene on the map without drawing the scene again. A payload that does carry reference entries (a group's map, a
 // database before PERF1a) is drawn whole, as before.
+// PERF3b: a group's map (group_map, PERF3a) may list a large layer of its own with no features (`deferred`): its row is
+// drawn empty, and the group space reads its features for the map in view and hands them to layerData(entry, features);
+// view() and onMoveEnd(fn) tell it what is in view.
 (function (root, factory) {
   const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
   const api = factory(blocks);
@@ -631,7 +634,10 @@
     }
     data.layers.forEach((l, i) => {
       // one plain name; where the layer came from is in each feature's popup, and how many features it holds is not for the reader
-      const e = { key: l.theme, name: FP.farmModel.layerName(l), sub: null, section: "farm", ids: layerIds[i], job: l.job || null };
+      const e = { key: l.theme, name: FP.farmModel.layerName(l), sub: null, section: "farm", ids: layerIds[i], job: l.job || null,
+        // PERF3b: which layer it is (a group's deferred layer is read by its id, its features set on source fl-<i>)
+        layerId: l.id ?? null, layerIndex: i, ...(l.deferred === true ? { deferred: true, count: l.feature_count ?? null } : {}),
+        ...(l.truncated === true ? { truncated: true, count: l.feature_count ?? null } : {}) };
       if (l.theme === "land_units") {
         // only the labels: a photo pin made earlier is the Photos layer's, never the land units' (pins showed with Photos off)
         e.markers = landUnitLabels(data.land_units, data.extent);
@@ -760,6 +766,26 @@
     for (const m of entry.markers || []) m.getElement().style.display = on ? "" : "none";
     if (entry.markers?.length && declutter) declutter();
   }
+  // PERF3b: a deferred layer's features, read for the map in view (an empty collection clears it). Its row keeps its switch.
+  function layerData(entry, features) {
+    const src = entry?.layerIndex != null && map?.getSource("fl-" + entry.layerIndex);
+    if (!src) return false;
+    src.setData(features?.features ? features : NONE);
+    return true;
+  }
+  // What is in view: its bounds ([[w, s], [e, n]]) and zoom; null before there is a map.
+  function view() {
+    if (!map) return null;
+    const b = map.getBounds();
+    return { bounds: [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]], zoom: map.getZoom() };
+  }
+  // fn() each time the map comes to rest; returns the way to stop.
+  function onMoveEnd(fn) {
+    if (!map) return () => {};
+    const m = map, handler = () => fn();
+    m.on("moveend", handler);
+    return () => m.off("moveend", handler);
+  }
   // Photo pins by FP.photoModel.pinsShown: hidden at the farm's frame, shown once zoomed in, always while a photo is open.
   function curatePins() {
     if (!map) return;
@@ -851,6 +877,8 @@
     // and the farm mask lifted while the flow shows the land around the farm (put back as it was when it ends)
     unmask: (off) => { if (map?.getLayer("farm-mask")) map.setPaintProperty("farm-mask", "fill-opacity", off ? 0 : masked ? FP.farmModel.MASK_OPACITY : 0); },
     resize: () => map && map.resize(), closePopup, atRest, closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove,
+    // PERF3b: a group's deferred layer drawn for the map in view
+    layerData, view, onMoveEnd,
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.
     addReference, readRiversAhead: () => readRivers(true) };
   }

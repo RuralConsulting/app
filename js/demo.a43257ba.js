@@ -441,15 +441,79 @@
     // group_map: the farm_map shape, so the Map scene block draws it as it draws a farm
     const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
     const fc = (features) => ({ type: "FeatureCollection", features });
+    // PERF3b: by default the demo's group is a database before PERF3a (every layer inline; the per-layer and per-source
+    // functions missing). `d.group.parts` (the screenshots set it) is PERF3a's light result instead (groupParts).
+    if (["group_layer_features", "group_reference_counts", "group_reference_context"].includes(name)) {
+      if (!g.parts) return [null, { code: "PGRST202", message: "Could not find the function in the schema cache" }];
+      return groupParts(d, name, args);
+    }
+    if (g.parts) return [groupPartsMap(d, shown, level)];
     const layers = [
       { id: "demo-g-l1", name: "Catchment boundary (synthetic)", theme: "catchment", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own map", features: fc([feature(g.area, { name: "HDLG catchment (synthetic)" })]) },
-      { id: "demo-g-l2", name: "Member blocks (synthetic)", theme: "farm_blocks", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own members layer",
+      { id: "demo-g-l2", name: "Member blocks (synthetic)", theme: "member_blocks", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own members layer",
         features: fc(MEMBERS.map((m, i) => feature(polygon(...m.box), { member_number: "00" + (i + 1) }))) },
     ];
     if (shown().length) layers.push({ id: "member-farms", name: "Member farms (shared by each farm)", theme: "member_farms", geometry_type: "polygon", group_own: false, epistemic_class: "observation",
       source: "each member farm's own map, shown at the level the farm and the group both allow", features: fc(shown().map((m) => feature(polygon(...m.box), { name: level(m) === "named" ? m.name : "Member farm (not named)", level: level(m), area_ha: m.area_ha }))) });
     return [{ farm: { id: GROUP, name: "HDLG (example)", region: "canterbury" }, group: { id: GROUP, name: "HDLG (example)", member_detail: g.setting }, extent: g.area, extent_ha: 13000, extent_label: "Group area",
       titles: fc([]), land_units: fc([]), layers, reference: [] }];
+  }
+  // PERF3b: the demo group's map as PERF3a's light group_map gives it, for the screenshots (d.group.parts): the catchment
+  // boundary and the member farms inline; the member blocks, an invented paddock grid (more than group_layer_features'
+  // max in the whole group's box) and an invented farm-plan layer deferred, each with its count and box. The farm-plan
+  // layer's first read fails (a statement timeout, as production gave) and the next succeeds. Invented reference: a
+  // nutrient zone and two wetland areas, read per source. Nothing here is real.
+  function groupPartsLayers(d) {
+    const g = d.group;
+    if (g.partsLayers) return g.partsLayers;
+    const f = (geometry, properties, id) => ({ type: "Feature", id, geometry, properties });
+    const [w, s0, e, n] = [171.96, -43.05, 172.115, -42.955], cols = 70, rows = 70, dx = (e - w) / cols, dy = (n - s0) / rows;
+    const paddocks = [];
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) paddocks.push(f(polygon(w + i * dx + dx * .06, s0 + j * dy + dy * .06, w + (i + 1) * dx - dx * .06, s0 + (j + 1) * dy - dy * .06),
+      { name: "Paddock " + (i * rows + j + 1) + " (synthetic)", area_ha: 3.1 }, 50000 + i * rows + j));
+    const lmu = MEMBERS.flatMap((m, k) => [0, 1, 2].map((q) => { const [a, b, c, dd] = m.box, mid = a + (c - a) * (q + 1) / 4;
+      return f(polygon(a + (c - a) * q / 4, b, mid, dd), { name: "LMU " + (k + 1) + "." + (q + 1) + " (synthetic)" }, 60000 + k * 3 + q); }));
+    const blocks = MEMBERS.map((m, i) => f(polygon(...m.box), { member_number: "00" + (i + 1) }, 40000 + i));
+    const bboxOf = (fs) => fs.reduce((b, x) => { const c = x.geometry.coordinates[0]; for (const [lng, lat] of c) { b[0] = Math.min(b[0], lng); b[1] = Math.min(b[1], lat); b[2] = Math.max(b[2], lng); b[3] = Math.max(b[3], lat); } return b; }, [180, 90, -180, -90]);
+    const layer = (id, name, theme, features, extra = {}) => ({ id, name, theme, geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own map",
+      feature_count: features.length, bbox: bboxOf(features), all: features, ...extra });
+    g.partsLayers = [
+      layer("demo-g-l1", "Catchment boundary (synthetic)", "catchment", [f(g.area, { name: "HDLG catchment (synthetic)" }, 39999)]),
+      layer("demo-g-l2", "Member blocks (synthetic)", "member_blocks", blocks, { deferred: true }),
+      layer("demo-g-l3", "Paddocks (synthetic)", "paddocks", paddocks, { deferred: true }),
+      layer("demo-g-l4", "Farm plan: land management units (synthetic)", "land_management_units", lmu, { deferred: true }),
+    ];
+    g.failOnce = new Set(["demo-g-l4"]);
+    const ref = (key, name, theme, features) => ({ key, name, theme, attribution: "Invented for the demo.", replaces_in_extent: null, features: collection(features) });
+    g.partsReference = [
+      ref("ecan-nutrient-zones", "LWRP nutrient allocation zones (ECan)", "zones", [f(polygon(171.9, -43.1, 172.2, -42.9), { name: "Invented nutrient zone (synthetic)", external_id: "demo-z1", in_area: true, authorisations: [] }, 70001)]),
+      ref("ecan-wetland-areas", "Wetland areas, DOC desktop study (ECan)", "wetlands", [f(polygon(172.04, -43.0, 172.046, -42.995), { name: "Invented wetland (synthetic)", external_id: "demo-w1", in_area: true, authorisations: [] }, 70002),
+        f(polygon(172.07, -43.02, 172.074, -43.017), { name: "Invented wetland 2 (synthetic)", external_id: "demo-w2", in_area: true, authorisations: [] }, 70003)]),
+    ];
+    return g.partsLayers;
+  }
+  function groupPartsMap(d, shown, level) {
+    const g = d.group, layers = groupPartsLayers(d).map(({ all, ...l }) => ({ ...l, features: collection(l.deferred ? [] : copy(all)) }));
+    if (shown().length) layers.push({ id: "member-farms", name: "Member farms (shared by each farm)", theme: "member_farms", geometry_type: "polygon", group_own: false, epistemic_class: "observation",
+      source: "each member farm's own map, shown at the level the farm and the group both allow",
+      features: collection(shown().map((m) => feature(polygon(...m.box), { name: level(m) === "named" ? m.name : "Member farm (not named)", level: level(m), area_ha: m.area_ha }))) });
+    return { farm: { id: GROUP, name: "HDLG (example)", region: "canterbury" }, group: { id: GROUP, name: "HDLG (example)", member_detail: g.setting }, extent: g.area, extent_ha: 13000, extent_label: "Group area",
+      titles: collection([]), land_units: collection([]), layers, reference: [] };
+  }
+  // As public.group_layer_features, group_reference_counts and group_reference_context (PERF3a), over the invented layers.
+  function groupParts(d, name, args) {
+    const g = d.group, layers = groupPartsLayers(d);
+    if (name === "group_reference_counts") return [Object.fromEntries(g.partsReference.map((r) => [r.key, r.features.features.length]))];
+    if (name === "group_reference_context") return [copy(g.partsReference.find((r) => r.key === args.source) || null)];
+    const l = layers.find((x) => x.id === args.layer);
+    if (!l) return [null];
+    if (g.failOnce.delete(l.id)) return [null, { code: "57014", message: "canceling statement due to statement timeout" }];
+    const box = args.x0 == null ? null : [args.x0, args.y0, args.x1, args.y1];
+    const hit = (x) => { if (!box) return true; const c = x.geometry.coordinates[0]; const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
+      return Math.max(...xs) >= box[0] && Math.min(...xs) <= box[2] && Math.max(...ys) >= box[1] && Math.min(...ys) <= box[3]; };
+    const inBox = l.all.filter(hit), max = args.max_features ?? 4000;
+    if (inBox.length > max) return [{ features: collection([]), total_in_box: inBox.length, truncated: true }];
+    return [{ features: collection(copy(inBox)), total_in_box: inBox.length, truncated: false }];
   }
   // FB1: invented LINZ-style primary parcels around the illustrative extent (not a survey, not real appellations): the two
   // the farm's rectangle is made of, and its neighbours east, south, north and west. Ids as reference_features ids.
@@ -835,7 +899,7 @@
         // D3, as public.wq_state_trend_for_site: LAWA's results through the crosswalk (one invented matched site)
         if (name === "wq_state_trend_for_site") return result(demoLawa(args.site));
         // S5's group functions by name (group_load_gaps is DQ1's, below)
-        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_pick|wq_presets|readiness)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
+        if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_pick|wq_presets|readiness|layer_features|reference_counts|reference_context)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON3a/ON3b: the group's proposal counts and decisions (in memory); an association request is not saved in the demo
         if (/^proposals_(open_counts|decide|since_seen|mark_seen|propose)$/.test(name) && d.group) return result(...proposalsRpc(d, name, args || {}));
         if (name === "request_farm_group_association") return error("The demo does not save changes");

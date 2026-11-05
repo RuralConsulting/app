@@ -34,6 +34,10 @@
 .group-layers { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .group-layers label { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; min-height: 44px; }
 .group-layers small { grid-column: 2; }
+/* PERF3b: a deferred layer or a reference source on its way shows its switch on but busy (faded), not off; the line under
+   its name says it is loading, couldn't load, or that there are too many in view to draw (zoom in) */
+.group-layers input[aria-busy="true"] { opacity: .6; cursor: progress; }
+.group-layers .layer-state { font-style: italic; }
 .group-links[hidden] { display: none; }
 .group-links { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .group-links a { display: grid; gap: 2px; padding: 8px 0; color: var(--ink); }

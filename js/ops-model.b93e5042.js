@@ -102,10 +102,12 @@
   }
   // PERF1b: how long this browser took to draw the last farm it opened, from the page's start (the `farm-drawn` measure,
   // farm-space.js; kept for the tab). Null when there is no figure. Seconds to one place; the farm is not named.
-  function drawnLine(v) {
+  // PERF3b: what = "Group" for the `group-drawn` measure (group-space.js: the group's area and member blocks on the map),
+  // from the page's start, or from opening the group when the page started elsewhere (from: "open").
+  function drawnLine(v, what = "Farm") {
     const ms = v && v.ms != null ? Number(v.ms) : NaN;
     if (!Number.isFinite(ms) || ms < 0) return null;
-    return "Farm drawn in " + (ms / 1000).toFixed(1) + " s on this browser's last open, from the page's start";
+    return what + " drawn in " + (ms / 1000).toFixed(1) + " s on this browser's last open, from " + (v.from === "open" ? "opening it" : "the page's start");
   }
 
   // AI recipes (AI1): how-to recipes the AI keeps, one row per version (ai_recipes). Drafts wait for a platform advisor; the

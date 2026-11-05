@@ -58,9 +58,11 @@
       (v.items.length ? '<details class="answer-all"><summary>All sources (' + v.items.length + ')</summary><ul class="ops-list">' + v.items.map(refItem).join("") + "</ul></details>" : "") + "</section>";
   }
   // drawn: PERF1b's `farm-drawn` line for this browser (M.drawnLine), beside the version; none when there is no figure.
-  function buildPanel(b, drawn) {
+  // groupDrawn: PERF3b's `group-drawn` line, beside it.
+  function buildPanel(b, drawn, groupDrawn = null) {
     return '<section class="answer-panel answer-compact ops-panel" data-ops="build"><h2>Build</h2><p class="answer-sentence">' + esc(b.answer.text) + " — " + esc(b.answer.because) + "</p>" +
       (drawn ? '<p class="ops-line ops-timing" data-ops-measure="farm-drawn">' + esc(drawn) + "</p>" : "") +
+      (groupDrawn ? '<p class="ops-line ops-timing" data-ops-measure="group-drawn">' + esc(groupDrawn) + "</p>" : "") +
       '<ul class="ops-linklist">' + b.links.map(([label, href]) => "<li>" + ext(href, label) + "</li>").join("") +
       (b.commitUrl ? "<li>" + ext(b.commitUrl, "This version's commit") + "</li>" : "") + "</ul></section>";
   }
@@ -264,7 +266,7 @@
         readRatchet(), readOnboarding()]);
       if (current !== token) return;
       box.innerHTML = jobsPanel(M.jobs(jobRows)) + referencesPanel(M.references(refRows)) + gapsPanel(gapRows ? M.loadGaps(gapRows) : null) +
-        recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + ratchetHtml + onboardingHtml + buildPanel(M.build(v), M.drawnLine(FP.farmSpace?.lastDrawn?.()));
+        recipesPanel(recipeRows ? M.recipes(recipeRows, staff) : null) + ratchetHtml + onboardingHtml + buildPanel(M.build(v), M.drawnLine(FP.farmSpace?.lastDrawn?.()), M.drawnLine(FP.groupSpace?.lastDrawn?.(), "Group"));
     } catch (e) {
       if (current === token) box.innerHTML = '<p class="msg" role="alert">Couldn\'t read the job records: ' + esc(e.message || e) + "</p>";
     }

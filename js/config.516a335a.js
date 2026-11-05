@@ -22,6 +22,16 @@ window.FP_CONFIG = {
     // something switches it on; the region-wide zone polygons are never read ahead.
     prefetch: ["rivers", "ecan-wells", "ecan-consents", "ecan-wq-sites"],
   },
+  // PERF3b: what a catchment group's map opens with when one of its layers is too large to come inline (group_map's
+  // `deferred`): the group's area, the member farms, its member blocks (read once for the frame, simplified) and Rivers;
+  // paddocks and the farm-plan layers are a switch away, read for the map in view. A group with every layer inline opens
+  // with them all, as before. maxFeatures: more than this in view and the layer asks the person to zoom in. prefetch: the
+  // reference sources read ahead once the group is drawn and the map is idle (never a zone polygon).
+  groupView: {
+    defaultOn: ["extent", "member_farms", "member_blocks", "rivers"],
+    maxFeatures: 4000,
+    prefetch: ["ecan-wq-sites"],
+  },
 
   photoLinkSeconds: 3600,
 };

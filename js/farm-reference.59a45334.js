@@ -62,7 +62,9 @@
 
   // One farm's reference sources for its session. sb: the caller's client; farm: its id; counts / sources / preloaded as
   // index(); onArrive(entry): a source's entry has been read (draw it); onChange(key, state): a source's state changed.
-  function create({ sb, farm, counts = null, sources = [], preloaded = [], onArrive = () => {}, onChange = () => {} } = {}) {
+  // context(key): the read of one source's entry (PERF3b: a group's map passes public.group_reference_context's); the
+  // farm's farm_reference_context by default.
+  function create({ sb, farm, counts = null, sources = [], preloaded = [], onArrive = () => {}, onChange = () => {}, context = null } = {}) {
     const idx = index(sources, counts, preloaded), known = new Map(idx.map((s) => [s.key, s]));
     const cache = new Map(), loading = new Map(), failed = new Map();
     let gone = false, contextMissing = false, prefetching = null;
@@ -73,7 +75,7 @@
     async function fetchOne(key) {
       if (contextMissing) return fallback(key);
       let r;
-      try { r = await sb.rpc("farm_reference_context", { f: farm, source: key }); } catch (e) { r = { error: e }; }
+      try { r = await (context ? context(key) : sb.rpc("farm_reference_context", { f: farm, source: key })); } catch (e) { r = { error: e }; }
       if (r?.error && missing(r.error)) { contextMissing = true; return fallback(key); }
       if (r?.error) throw r.error;
       // null: not served, or the farm can no longer be read; nothing to draw

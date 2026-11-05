@@ -56,7 +56,7 @@
     // this look is stamped only once that read has answered
     const sinceRead = optional(sb.rpc("proposals_since_seen", { org_id: group.id }));
     sinceRead.then(() => sb.rpc("proposals_mark_seen", { org_id: group.id })).catch(() => null);
-    const [since, head, register, associations, open, applied, gapRows, sites, locationSites] = await Promise.all([
+    const [since, head, register, associations, open, applied, gapRows] = await Promise.all([
       sinceRead,
       counts(group),
       optional(sb.from("group_members").select("id,member_number,business_name,ended_at,created_at").eq("org_id", group.id)),
@@ -67,19 +67,32 @@
       // the open gaps (a group admin reads them), so an applied proposal whose item the load has not placed yet still reads "placed
       // on the next group load"; open ones only, every page
       admin ? optionalAll(() => sb.from("group_load_gaps").select("id,kind,item_key").eq("org_id", group.id).is("resolved_at", null).order("id")) : null,
-      decide ? optional(sb.rpc("group_wq_sites", { g: group.id })) : null,
-      decide ? optionalAll(() => sb.from("monitoring_location_sites").select("id,location_id,site_id").order("id")) : null,
     ]);
+    // PERF3b (PM, 5 Nov): the sites are the Sites tab's own reads (loadSites), never waited on here: group_wq_sites took the
+    // whole screen to its statement timeout. Members and Gaps open without them.
+    return { ...head, register: register == null ? null : list(register), associations: list(associations),
+      proposals: decide ? [...list(open), ...list(applied)] : [], proposalsRead: !decide || (open != null && applied != null),
+      open: gapRows ? new Set(list(gapRows).map((g) => g.kind + ":" + g.item_key)) : null,
+      sites: decide ? undefined : null, locations: [], since };
+  }
+  // The Sites tab's reads, only when it is opened (a decider): the group's sites, their monitoring locations. Kept with the tab's
+  // other reads (forget drops them); a failed read is null, said on the tab.
+  async function loadSites(group) {
+    const sb = FP.sb;
+    const [sites, locationSites] = await Promise.all([optional(sb.rpc("group_wq_sites", { g: group.id })),
+      optionalAll(() => sb.from("monitoring_location_sites").select("id,location_id,site_id").order("id"))]);
     let locations = [];
-    if (decide && sites) {
+    if (sites) {
       const near = new Set(list(sites).map((s) => s.site_id));
       const ids = [...new Set(list(locationSites).filter((r) => near.has(r.site_id)).map((r) => r.location_id))].slice(0, 50);
       locations = (await Promise.all(ids.map((id) => optional(sb.rpc("monitoring_location", { p_location: id }))))).filter(Boolean);
     }
-    return { ...head, register: register == null ? null : list(register), associations: list(associations),
-      proposals: decide ? [...list(open), ...list(applied)] : [], proposalsRead: !decide || (open != null && applied != null),
-      open: gapRows ? new Set(list(gapRows).map((g) => g.kind + ":" + g.item_key)) : null,
-      sites: sites == null ? null : list(sites), locations, since };
+    return { sites: sites == null ? null : list(sites), locations };
+  }
+  function sitesData(group) {
+    const c = cache.get(group.id);
+    if (!c) return loadSites(group);
+    return c.sites || (c.sites = loadSites(group));
   }
   function data(group) {
     let c = cache.get(group.id);
@@ -271,6 +284,13 @@
 
   // ---- Sites ----------------------------------------------------------------------------------------------------------------------
   function drawSites(body, group, d, wrap) {
+    if (d.sites === undefined) {
+      // read now that the tab is open, with its own loading line; the rest of the screen is already drawn
+      body.replaceChildren(el("p", { class: "group-status", role: "status", "data-state": "sites-loading" }, "Reading the sites near the group…"));
+      sitesData(group).then((s) => { Object.assign(d, s); drawSites(body, group, d, wrap); },
+        () => { d.sites = null; drawSites(body, group, d, wrap); });
+      return;
+    }
     if (d.sites == null) { body.replaceChildren(el("p", { role: "alert" }, "Couldn't read the sites near the group.")); return; }
     const v = M().sitesTab({ sites: d.sites, locations: d.locations, proposals: d.proposals, groupId: group.id, gaps: d.gaps, open: d.open });
     body.replaceChildren(el("p", { class: "manage-scope" }, v.scope), el("p", { class: "group-fine" }, "Monitoring locations join the site ids one place has been sampled under (a site replaced by its successor, or a co-located record), with the dates each counts for. They are reviewed by RCL and read only here."));
