@@ -57,6 +57,17 @@
     const classes = list(record.classes).filter((c) => c && c.value != null && c.value !== "" && read(c[field]) !== undefined);
     // (a class needs something under it for the features in no class: with nothing below, the classes are not drawn)
     if (!record.classify_by || !classes.length || dflt === undefined) return dflt;
+    // LK2: a class may match the start of the value (`starts_with`, e.g. "Water Permit (s" for ECan's "Water Permit (s14)"),
+    // not the whole of it: the classes are then tried in order, the first that matches drawing the feature
+    if (classes.some((c) => typeof c.starts_with === "string" && c.starts_with)) {
+      const text = ["to-string", ["get", record.classify_by]], expr = ["case"];
+      for (const c of classes) {
+        const s = typeof c.starts_with === "string" && c.starts_with ? c.starts_with : null;
+        expr.push(s ? ["==", ["slice", text, 0, s.length], s] : ["==", text, String(c.value)], read(c[field]));
+      }
+      expr.push(dflt);
+      return expr;
+    }
     const expr = ["match", ["to-string", ["get", record.classify_by]]];
     const seen = new Set();
     for (const c of classes) { const v = String(c.value); if (seen.has(v)) continue; seen.add(v); expr.push(v, read(c[field])); }
@@ -83,12 +94,19 @@
     if (hi !== undefined && (lo === undefined || hi > lo)) out.maxzoom = hi;
     return out;
   }
-  // Its labels: the field and the zoom they show from, or null.
+  // Its labels: the field and the zoom they show from, or null. LK2: "PadkName,label" is the first of those fields a feature
+  // has (`fields`); `field` is the first named.
   function label(record) {
-    const field = typeof record?.label_field === "string" ? record.label_field.trim() : "";
-    if (!field) return null;
+    const fields = (typeof record?.label_field === "string" ? record.label_field : "").split(",").map((f) => f.trim()).filter(Boolean);
+    if (!fields.length) return null;
     const from = num(0, 24)(record.label_min_zoom);
-    return { field, minzoom: from };
+    return { field: fields[0], fields, minzoom: from };
+  }
+  // The label's text as a MapLibre expression: the field, or the first of the fields a feature has.
+  // (a field that is missing or empty falls to the next: "PadkName,label" labels a paddock with an empty PadkName by its label)
+  function labelText(lab) {
+    const fields = lab.fields && lab.fields.length > 1 ? lab.fields : [lab.field], text = (f) => ["to-string", ["get", f]];
+    return fields.slice(0, -1).reduceRight((rest, f) => ["case", ["!=", text(f), ""], text(f), rest], text(fields[fields.length - 1]));
   }
   // The sentence the Layers list shows under the layer's name, or null.
   function purpose(record) {
@@ -116,7 +134,7 @@
     return { record, look };
   }
 
-  const api = { pick, paint, range, label, purpose, forLayer, forReference, reviewed, keyOf, REFERENCE };
+  const api = { pick, paint, range, label, labelText, purpose, forLayer, forReference, reviewed, keyOf, REFERENCE };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else (root.FP = root.FP || {}).layerStyle = api;
 })(typeof window !== "undefined" ? window : globalThis);

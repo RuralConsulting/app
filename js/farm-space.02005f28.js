@@ -46,8 +46,18 @@
   // and Layers need) is all the farm needs to be drawn; the rest (loadRest) is the standing answers' and the views'. The
   // space draws the farm as soon as the map's half is back and fills in the rest when it comes.
   // onMap (TIM1): called when farm_map itself is back, whatever the three reads beside it are doing (the route's `data` step).
+  // LK2 (review-444 follow-up 4): the looks read never holds the map. It has its own short limit; the farm is drawn with the
+  // looks if they are back by the time the map's half is, and otherwise they are applied when they come (`lateStyles`).
+  const LOOKS_TIMEOUT_MS = 5000;
+  function readLooks(sb, farm) {
+    let done = false, value = [], timer = null;
+    const limit = new Promise((resolve) => { timer = setTimeout(() => resolve([]), (typeof FP === "object" && FP.farmSpace?.looksTimeoutMs) || LOOKS_TIMEOUT_MS); });
+    const later = Promise.race([optional(sb.rpc("layer_styles_for_map", { f: farm.id })), limit])
+      .then((v) => { clearTimeout(timer); done = true; value = Array.isArray(v) ? v : []; return value; });
+    return { now: () => (done ? { styles: value } : { styles: [], lateStyles: later }) };
+  }
   async function loadMap(sb, farm, user, { onMap } = {}) {
-    const [maps, notes, holding, sources, styles] = await Promise.all([
+    const reads = Promise.all([
       read(sb.rpc("farm_map", { f: farm.id })).then((v) => { onMap?.(); return v; }),
       // The advisor notes on the map's layers (LN1): the narrowest shows in a layer's info panel. Optional: without
       // them the map is as it was.
@@ -58,12 +68,13 @@
       // Where the reference layers came from (PROV1): each served source's provider, licence, as-at date and summary. Optional:
       // without them a popup still names its layer's source, and the Layers drawer has no Sources entry.
       optional(sb.from("reference_sources").select(SOURCE_COLUMNS).eq("serve_to_customers", true)),
-      // The reviewed looks of the farm's layers and of the shared sources and themes (LK1, #416). Optional: without them
-      // every layer is drawn as it was (its QGIS style, then today's rule).
-      optional(sb.rpc("layer_styles_for_map", { f: farm.id })),
     ]);
+    // The reviewed looks of the farm's layers and of the shared sources and themes (LK1, #416), in the same round. Optional:
+    // without them every layer is drawn as it was (its QGIS style, then today's rule). Never waited for (readLooks).
+    const looks = readLooks(sb, farm);
+    const [maps, notes, holding, sources] = await reads;
     if (!maps) throw Error("This farm isn't shared with your login.");
-    maps.styles = Array.isArray(styles) ? styles : [];
+    Object.assign(maps, looks.now());
     // CAP1b: a layer farm_map defers (CAP1a: too large to come inline) may come with no features at all: an empty
     // collection, so the Map scene draws its row and the features read for the map in view fill it
     for (const l of maps.layers || []) if (l && !Array.isArray(l.features?.features)) l.features = { type: "FeatureCollection", features: [] };
@@ -1443,6 +1454,9 @@
         if (current !== token) return;
         if (!drawn) throw Error("Map unavailable for this farm.");
         sceneEntries = drawn.entries; openedMap = farm.id;
+        // LK2: looks that were not back when the farm was drawn are applied to its map when they come (none: nothing changes)
+        // (and the Layers drawer's rows, once drawn, take the looks' sentences)
+        maps.lateStyles?.then((styles) => { if (openedMap === farm.id && styles.length) { maps.styles = styles; FP.farmMap.restyle?.(styles); if (refs) renderLayers(layerRows(sceneEntries)); } });
         startParts(farm.id, maps);   // CAP1b: a deferred layer the map opens with is read for the view (nothing, with none)
         // the farm is on the map: the message goes now, not when the standing answers have been read (PERF1b)
         $("#map-msg").hidden = true; farmDrawn(run);
@@ -1503,5 +1517,5 @@
   }
   // The last figure for this browser's tab: { ms, farm, from, steps, at }, or null.
   const lastDrawn = () => T?.last("farm") ?? null;
-  return { load, loadMap, loadRest, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock, lastDrawn, GOVERNS, ASK_SETS };
+  return { load, loadMap, loadRest, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock, lastDrawn, GOVERNS, ASK_SETS, looksTimeoutMs: LOOKS_TIMEOUT_MS };
 });

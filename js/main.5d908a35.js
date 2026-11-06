@@ -1,5 +1,5 @@
 // Screens and routing: sign in -> the farm (or the portfolio if there are several) -> the farm space.
-// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops and #/ops/layers (RCL staff);
+// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops, #/ops/layers and #/ops/looks (RCL staff);
 // #/group/<id> (a catchment group's space, S5) and its /documents, /create and /settings.
 (() => {
   const { $, $$, el, show, sb } = FP;
@@ -91,6 +91,10 @@
     if (FP.demo?.active && /^#\/blocks(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.open(hash); return; }
     FP.gallery.close();
     // Operations: RCL staff only. Anyone else asking for it is simply taken to their farms.
+    // Operations → Looks (LK2): a proposed layer look judged on two pictures, accepted or sent back with a note; RCL staff only.
+    // Any other route takes its two maps away.
+    if (hash === "#/ops/looks" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.ops.close(); FP.opsLayers.close(); FP.opsLooks.open(); return; }
+    FP.opsLooks?.close();
     if (hash === "#/ops" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.opsLayers.close(); FP.ops.open(); return; }
     // Operations → Layers (LN1): the advisor notes on every layer, for RCL staff.
     if (hash === "#/ops/layers" && FP.ops.isStaff()) { FP.farmSpace.close(); FP.ops.close(); FP.opsLayers.open(); return; }

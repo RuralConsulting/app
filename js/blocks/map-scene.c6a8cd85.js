@@ -205,7 +205,7 @@
       if (kind === "layer" && map.getLayer(id)) map.removeLayer(id);
       if (kind === "source" && map.getSource(id)) map.removeSource(id);
     }
-    added = [];
+    added = []; drawnSpecs.clear();
     interactive.clear(); unitHits.clear(); sourceData.clear(); saved.clear(); refKeys.clear();
     drawn = null; farmZoom = null; masked = false; photoEntries.length = 0; rivers = null; refDrawn = [];
   }
@@ -257,9 +257,11 @@
   function layer(spec, describe, before) {
     if (before && map.getLayer(before)) map.addLayer(spec, before); else map.addLayer(spec);
     added.push({ kind: "layer", id: spec.id });
+    drawnSpecs.set(spec.id, spec);   // LK2: as drawn, so a restyle can unset what a new look no longer sets
     if (describe) interactive.set(spec.id, describe);
     return spec.id;
   }
+  const drawnSpecs = new Map();
 
   // The two sources behind the shared Rivers layer, with the name to use if their rows cannot be read (PROV1).
   const RIVER_SOURCES = [["niwa-rec2-rivers", "River network (REC2), NIWA"], ["linz-topo50-river-centrelines", "River lines (Topo50), LINZ"]];
@@ -306,7 +308,7 @@
     ];
     const past = consents ? [layer({ id: sid + "-past", type: "circle", source: sid, filter: ["all", POINT, ["==", ["get", "fp_past"], true]], paint: {
       "circle-color": "#78909c", "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } }, describe, before)] : null;
-    refDrawn.push({ key, name: String(r.name || key), first: ids[0] });
+    if (!restyling) refDrawn.push({ key, name: String(r.name || key), first: ids[0], sid, r });   // (LK2: sid and r, for a restyle)
     refKeys.set(sid, r.key || key);   // GE1b: a tap on it is on a shared reference layer (the shape editor says it isn't edited)
     const purpose = record ? FP.layerStyle.purpose(record) : null;   // LK1: the Layers list's sentence, when the record has one
     return { key, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}), ...(purpose ? { purpose } : {}) };
@@ -322,6 +324,7 @@
     const next = refDrawn.filter((x) => x.name.localeCompare(String(r.name || r.key)) > 0).map((x) => x.first).find((id) => map.getLayer(id));
     const before = next || (rivers?.ids || []).find((id) => map.getLayer(id)) || (map.getLayer("focus-dim") ? "focus-dim" : undefined);
     const row = referenceLayers(r, "ref-on-" + ++refAdded, r.key, before);
+    refDrawn.find((x) => x.key === r.key).row = row;   // LK2: the row the host switches, for a restyle
     refDrawn.sort((a, b) => a.name.localeCompare(b.name));
     if (!(drawn.reference || []).some((x) => x.key === r.key)) drawn.reference = [...(drawn.reference || []), r];   // focus() and popups find it
     setVisible(row, false);
@@ -332,6 +335,67 @@
   // public.layer_styles_for_map), and the records a preview shows (open's stylePreview; nothing else ever passes one).
   // With no record a layer is drawn exactly as before: its QGIS style, then today's rule.
   let looks = { styles: [], preview: null };
+  // LK2 (review-444 follow-up 4): a host draws its map without waiting for the looks; looks that come after it was drawn are
+  // applied here to the layers already on the map, exactly as open would have drawn them: the same farmLayer and
+  // referenceLayers, drawing on a stand-in for the map (`restyling`) on which no source is added again and a layer already
+  // there takes the new paint, layout and zoom range. A label layer the look adds is shown or hidden as its row's other
+  // layers are, and joins that row's switch. The preview's records are kept as they were. False when nothing is drawn.
+  let restyling = false, drawnEntries = [];
+  function restyle(styles) {
+    if (!map || !drawn) return false;
+    looks = { ...looks, styles: Array.isArray(styles) ? styles : [] };
+    drawn.styles = looks.styles;
+    const real = map, fresh = new Set();
+    // (a paint or layout key the layer was drawn with that the new spec lacks is unset: a fresh draw would not have it)
+    const restyleLayer = (spec) => {
+      const was = drawnSpecs.get(spec.id) || {};
+      for (const k of Object.keys(was.paint || {})) if (!(k in (spec.paint || {}))) real.setPaintProperty(spec.id, k, undefined);
+      for (const k of Object.keys(was.layout || {})) if (k !== "visibility" && !(k in (spec.layout || {}))) real.setLayoutProperty(spec.id, k, undefined);
+      for (const [k, v] of Object.entries(spec.paint || {})) real.setPaintProperty(spec.id, k, v);
+      for (const [k, v] of Object.entries(spec.layout || {})) if (k !== "visibility") real.setLayoutProperty(spec.id, k, v);
+      real.setLayerZoomRange?.(spec.id, spec.minzoom ?? 0, spec.maxzoom ?? 24);
+      drawnSpecs.set(spec.id, spec);
+    };
+    // A layer new to the map goes where open would have put it: before the next layer the replay finds already drawn, or
+    // (at the end of a layer's or a source's replay) just after the last one it found.
+    let pending = [], last = null;
+    const place = (beforeId) => { for (const s of pending) real.addLayer(s, beforeId); pending = []; };
+    const flush = () => {
+      if (!pending.length) return;
+      const ids = (real.getStyle()?.layers || []).map((l) => l.id), next = last ? ids[ids.indexOf(last) + 1] : undefined;
+      place(next && real.getLayer(next) ? next : undefined);
+    };
+    const stand = new Proxy(real, { get(t, k) {
+      if (k === "addSource") return () => {};
+      if (k === "addLayer") return (spec) => { if (t.getLayer(spec.id)) { restyleLayer(spec); place(spec.id); last = spec.id; } else { fresh.add(spec.id); pending.push(spec); } };
+      const v = t[k];
+      return typeof v === "function" ? v.bind(t) : v;
+    } });
+    const join = (e, ids, purpose) => {
+      if (!e) return;
+      const shown = e.ids.find((id) => !fresh.has(id) && real.getLayer(id));
+      const vis = (shown && real.getLayoutProperty?.(shown, "visibility")) || (e.on ? "visible" : "none");
+      for (const id of ids) if (!e.ids.includes(id)) { e.ids.push(id); if (real.getLayer(id)) real.setLayoutProperty(id, "visibility", vis); }
+      if (purpose) e.purpose = purpose; else delete e.purpose;
+    };
+    const before = added.length;
+    restyling = true; map = stand;
+    try {
+      const layers = drawn.layers || [], byIndex = layers.map(() => []);
+      for (const pass of ["polygon", "line", "point"]) layers.forEach((l, i) => byIndex[i].push(...farmLayer(l, i, pass)));
+      flush();
+      const rows = refDrawn.map((d) => { last = null; const row = referenceLayers(d.r, d.sid, d.key); flush(); return [d, row]; });
+      map = real;
+      layers.forEach((l, i) => {
+        const rec = FP.layerStyle ? lookFor(l).record : null;
+        join(drawnEntries.find((e) => e.layerIndex === i), byIndex[i], rec ? FP.layerStyle.purpose(rec) : null);
+      });
+      for (const [d, row] of rows) join(d.row || drawnEntries.find((e) => e.section === "reference" && e.key === d.key), row.ids, row.purpose || null);
+    } finally { restyling = false; map = real; }
+    // only the layers new to the map are kept as added (the rest were already: clear() removes each once)
+    added = [...added.slice(0, before), ...added.slice(before).filter((a) => a.kind === "layer" && fresh.has(a.id))];
+    return true;
+  }
   const lookFor = (l) => (FP.layerStyle ? FP.layerStyle.forLayer(l, looks.styles, looks) : { record: null, look: FP.qml.style(l) });
   const refLookFor = (r) => (FP.layerStyle ? FP.layerStyle.forReference(r, looks.styles, looks) : { record: null, look: null });
   const zoomsOf = (record) => (record && FP.layerStyle ? FP.layerStyle.range(record) : {});
@@ -341,7 +405,7 @@
     if (!lab || !map.getStyle()?.glyphs) return [];
     const z = zoomsOf(record), minzoom = lab.minzoom ?? z.minzoom;
     return [layer({ id: sid + "-label", type: "symbol", source: sid, ...z, ...(minzoom != null ? { minzoom } : {}),
-      layout: { "text-field": ["to-string", ["get", lab.field]], "text-font": ["Open Sans Regular"], "text-size": 12, "text-padding": 4, "text-allow-overlap": false },
+      layout: { "text-field": FP.layerStyle.labelText ? FP.layerStyle.labelText(lab) : ["to-string", ["get", lab.field]], "text-font": ["Open Sans Regular"], "text-size": 12, "text-padding": 4, "text-allow-overlap": false },
       paint: { "text-color": "#ffffff", "text-halo-color": "rgba(0, 0, 0, 0.6)", "text-halo-width": 1.2 } }, null, before)];
   }
   const plus = (v, n) => (typeof v === "number" ? v + n : ["+", v, n]);
@@ -727,7 +791,7 @@
     // TIM1: a sketch of this farm's outline stays on screen until the extent layer is painted; anything else starts unseen
     const key = data.extent ? JSON.stringify(bbox(data.extent)) : null, kept = !!sketchNode && sketched === key;
     if (!kept) { removeSketch(); outlineAt = null; }
-    const entries = [];   // what the layer list shows: {key, name, sub, ids, on, markers, job}
+    const entries = drawnEntries = [];   // what the layer list shows: {key, name, sub, ids, on, markers, job}
 
     if (data.extent) {
       source("extent", { type: "Feature", geometry: data.extent, properties: {} });
@@ -1050,6 +1114,8 @@
     resize: () => map && map.resize(), closePopup, atRest, closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove,
     // PERF3b: a group's deferred layer drawn for the map in view
     layerData, view, onMoveEnd,
+    // LK2: looks that came after the scene was drawn, applied to it
+    restyle,
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.
     // TIM1 (#410): the outline at once on a fresh map; when the style loaded and the outline was first on screen (route timing)
     sketch, unsketch: removeSketch, outlineShown, styleLoadedAt: () => styleAt,

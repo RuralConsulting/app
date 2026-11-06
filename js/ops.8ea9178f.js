@@ -24,6 +24,7 @@
     for (const a of $$(".ops-link")) { a.hidden = !staff; for (const n of $$("a", a)) n.setAttribute("href", FP.href("#/ops")); }
     const header = $("#space-ops");
     if (header) header.setAttribute("href", FP.href("#/ops"));
+    $("#ops-looks-tab")?.setAttribute("href", FP.href("#/ops/looks"));   // LK2: Layer looks, beside Layers
   }
 
   const badge = (j) => '<span class="ops-badge" data-health="' + esc(j.health) + '">' + esc(j.badge) + "</span>";

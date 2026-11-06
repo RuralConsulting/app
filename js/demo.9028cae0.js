@@ -10,10 +10,12 @@
     root.FP = root.FP || {};
     const hash = root.location.hash;
     const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash), group = api.isGroup(hash), queue = api.queueOf(hash);
-    const ready = active ? fetch("demo/demo-farm.json").then((r) => {
+    // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
+    const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
+    const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }).then((fixture) => api.dataset(fixture, { sparse, farmer, multi, group, queue })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -48,6 +50,8 @@
     if (isGroup(hash)) {
       const suffix = hash.split("?")[0].slice("#/demo/group".length);
       if (suffix === "/farms") return "";
+      // LK2: the staff page for layer looks, with the group's map at group scale
+      if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
       return /^(?:\/(?:documents|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
@@ -58,6 +62,7 @@
     if (suffix === "/layers") return "#/layers";                  // Layer notes (LN2): the same screen for advisors and farm editors
     if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
     if (suffix === "/ops/layers" && !multi) return "#/ops/layers";   // and its Layers page (advisor notes)
+    if (suffix === "/ops/looks" && !multi) return "#/ops/looks";     // and its Looks page (LK2)
     if (suffix === "/blocks" && !multi) return "#/blocks" + (query ? "?" + query : "");   // the block gallery
     if (suffix === "/plans" && !multi) return "#/plans" + (query ? "?" + query : "");     // the FEP and FWFP documents
     // Two farms: "#/demo/multi" is the portfolio; "#/demo/multi/farm-1" and ".../farm-2" open one.
@@ -76,6 +81,7 @@
     if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
+    if (hash === "#/ops/looks") return group ? "#/demo/group/ops/looks" + (queue ? "?queue=" + queue : "") : "#/demo/ops/looks";
     if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
     if (hash.startsWith("#/group/" + GROUP)) return "#/demo/group" + hash.slice(("#/group/" + GROUP).length) + (queue ? "?queue=" + queue : "");
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
@@ -86,7 +92,42 @@
   const feature = (geometry, properties) => ({ type: "Feature", geometry, properties });
   const collection = (features) => ({ type: "FeatureCollection", features });
   const owned = (rows, farm) => rows.map((r) => ({ ...r, farm_id: farm }));
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null } = {}) {
+  // LK2: the first batch of looks as tools/seed_looks.py proposes them (shared looks, proposed, in the demo advisor's name), and
+  // invented reference features for the staff page's pictures only (demo_looks_reference: no other screen asks for them, so no
+  // farm's or group's map changes). Nothing here is real.
+  const LOOK_ID = (i) => "de000000-0000-4000-8000-00000000c" + String(i + 1).padStart(3, "0");
+  function looksRows(batch) {
+    return (batch?.looks || []).map((x, i) => ({ id: LOOK_ID(i), layer_id: null, source_key: x.record.source_key || null, theme: x.record.theme || null,
+      classify_by: x.record.classify_by || null, classes: copy(x.record.classes || []), symbol: copy(x.record.symbol || {}), label_field: x.record.label_field || null,
+      label_min_zoom: x.record.label_min_zoom ?? null, min_zoom: x.record.min_zoom ?? null, max_zoom: x.record.max_zoom ?? null, purpose: x.record.purpose || null,
+      status: "proposed", proposed_by: USER, proposed_at: "2026-11-07T01:00:00.000000+00:00", updated_at: "2026-11-07T01:00:" + String(i).padStart(2, "0") + ".123456+00:00",
+      reviewed_by: null, reviewed_at: null, superseded_at: null, superseded_by: null, returned_note: null, returned_by: null, returned_at: null }));
+  }
+  function looksReference(extent) {
+    const [[w, s], , [e, n]] = extent.coordinates[0], f = (id, geometry, properties) => ({ type: "Feature", id, geometry, properties: { in_area: true, on_farm: true, authorisations: [], ...properties } });
+    const pt = (fx, fy) => ({ type: "Point", coordinates: [w + (e - w) * fx, s + (n - s) * fy] });
+    const box = (a, b, c, d) => polygon(w + (e - w) * a, s + (n - s) * b, w + (e - w) * c, s + (n - s) * d);
+    const entry = (key, name, theme, features) => ({ key, name, theme, attribution: "Invented for the demo.", replaces_in_extent: [], features: collection(features) });
+    return [
+      // (with the fields the production sources hold: the PM's samples, 7 Nov 2026)
+      entry("ecan-wq-sites", "Surface water quality sites (ECan)", "monitoring_sites", [f(71001, pt(.47, .55), { SITE_NAME: "Demo Creek at the farm bridge (synthetic)", SITE_ID: "SYN-WQ1" }),
+        f(71002, pt(.52, .4), { SITE_NAME: "Demo Drain at the culvert (synthetic)", SITE_ID: "SYN-WQ2" })]),
+      entry("ecan-consents", "Resource consents (ECan)", "consents", [f(71011, pt(.45, .52), { ConsentNo: "CRC000101", ConsentType: "Water Permit (s14)", ConsentStatus: "Issued - Active" }),
+        f(71012, pt(.55, .48), { ConsentNo: "CRC000102", ConsentType: "Discharge Permit (s15)", ConsentStatus: "Issued - Active" }),
+        f(71013, pt(.5, .58), { ConsentNo: "CRC000103", ConsentType: "Land Use Consent (s9)", ConsentStatus: "Issued - Active" })]),
+      entry("ecan-wells", "Wells and bores (ECan)", "wells", [f(71021, pt(.48, .46), { external_id: "SYN/W1", USE_CODE_1_DESC: "Irrigation", DEPTH: 42 }),
+        f(71022, pt(.53, .53), { external_id: "SYN/W2", USE_CODE_1_DESC: "Domestic and Stockwater", DEPTH: 18 })]),
+      entry("ecan-lri", "Land Resource Inventory and LUC, Canterbury (NZLRI via ECan)", "luc", [f(71031, box(0, 0, .5, 1), { LUC_CLASS: "3", lcorrunit: "3s 1 (synthetic)" }),
+        f(71032, box(.5, 0, 1, 1), { LUC_CLASS: "6", lcorrunit: "6e 2 (synthetic)" })]),
+      entry("gns-qmap-250k-geology", "Geological map of New Zealand 1:250,000, geological units (GNS)", "geology", [f(71041, box(0, 0, 1, .5), { rockclass: "gravel", simplename: "Demo gravels (synthetic)" }),
+        f(71042, box(0, .5, 1, 1), { rockclass: "loess", simplename: "Demo loess (synthetic)" })]),
+      // registered with nothing loaded, as S-map is in production: an empty read (the demo has no S-map sources row, so the
+      // page says "none near"; with the source's own count of 0 it says "no data loaded yet")
+      { ...entry("smap", "S-map soils (Manaaki Whenua)", "soils", []), feature_count: 0 },
+      entry("ecan-nutrient-zones", "LWRP nutrient allocation zones (ECan)", "zones", [f(71061, polygon(171.9, -43.1, 172.2, -42.9), { ZONE_NAME: "Invented nutrient zone (synthetic)", ZONE_CLASS: "Green" })]),
+    ];
+  }
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -134,6 +175,10 @@
       plan_import_requests: [],   // FU4: "Read this plan in" requests made in this session (public.request_plan_import)
       proposals: [],   // ON3d: the farm's "to confirm" lines as proposals (farmChecksSync), made when the Onboarding view is opened
     }, reference: { [FARM]: f.reference || [] }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, onboardingEffort: f.ops.onboarding_effort || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
+    // LK2: the first batch, proposed (served to no map: layer_styles_for_map serves reviewed looks only), and the staff page's
+    // invented reference for its pictures
+    data.tables.layer_styles = looksRows(looks);
+    data.looksReference = looksReference(extent);
     if (sparse) {
       farm.name = "Example farm — almost empty";
       data.map = { ...map, farm: { id: FARM, name: farm.name, region: farm.region }, titles: collection([]), land_units: collection([]), layers: [] };
@@ -1151,6 +1196,26 @@
         if (name === "farm_people") return result(d.people[args.f] || []);
         // LK1, as public.layer_styles_for_map: the reviewed looks in force (the demo has none, so every layer is drawn as before)
         if (name === "layer_styles_for_map") return result((d.tables.layer_styles || []).filter((s) => s.status === "reviewed" && !s.superseded_at));
+        // LK2, as public.layer_style_accept and public.layer_style_send_back for a shared look (the batch's): RCL staff only, a
+        // proposed look only, against the version the page drew (a changed one: PT409), a send-back with a note. In memory.
+        if (name === "layer_style_accept" || name === "layer_style_send_back") {
+          const s = (d.tables.layer_styles || []).find((x) => x.id === args.style_id), back = name === "layer_style_send_back";
+          const note = String(args.note ?? "").trim();
+          if (back && !note) return error("say what to change: a look is sent back with a note");
+          if (back && note.length > 2000) return error("a note is at most 2000 characters");
+          if (!s || (s.layer_id == null && !d.tables.profiles[0]?.is_staff)) return error("look " + args.style_id + " is not open for you to " + (back ? "send back" : "accept"));
+          if (s.status !== "proposed") return error("look " + s.id + " is already reviewed");
+          if (args.expected_updated_at != null && args.expected_updated_at !== s.updated_at) return result(null, { code: "PT409", message: "look " + s.id + " has changed since you looked at it: open it again to see the change" });
+          const now = new Date().toISOString();
+          if (back) Object.assign(s, { returned_note: note, returned_by: USER, returned_at: now });
+          else {
+            for (const x of d.tables.layer_styles) if (x !== s && x.status === "reviewed" && !x.superseded_at && x.layer_id === s.layer_id && x.source_key === s.source_key && x.theme === s.theme) Object.assign(x, { superseded_at: now, superseded_by: s.id });
+            Object.assign(s, { status: "reviewed", reviewed_by: USER, reviewed_at: now });
+          }
+          return result(s);
+        }
+        // LK2: the staff page's invented reference entries (its pictures only; the demo farm and group hold none of these)
+        if (name === "demo_looks_reference") return result(copy((d.looksReference || []).find((r) => r.key === args.source) || null));
         // As public.layer_notes_for_farm: the global notes, the advisor's organisation's, and the farm's own.
         if (name === "layer_notes_for_farm") return result((d.tables.layer_notes || []).filter((n) => n.scope === "global" || (n.scope === "group" && n.org_id === ORG) || (n.scope === "farm" && n.farm_id === args.f)));
         // As public.accept_consent_conditions (CC1): the proposal's conditions become the consent's, once.

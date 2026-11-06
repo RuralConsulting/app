@@ -40,6 +40,7 @@
   // (every feature of every layer the group owns: the one heavy read) is drawn beside the Map, Documents and Create views, but no
   // panel waits for it, and a failure or a wait there only fails the map area. The manage space reads none of the three.
   const MAP_TIMEOUT_MS = 25000;
+  const LOOKS_TIMEOUT_MS = 5000;   // LK2: the looks read's own limit (it takes about 0.05 s; the map never waits for it)
   async function load(group) {
     const sb = FP.sb, today = typeof sb.today === "function" ? await sb.today() : G().isoDay(Date.now());
     const since = new Date(Date.parse(String(today).slice(0, 10) + "T00:00:00Z") - 30 * 86400000).toISOString();
@@ -72,6 +73,13 @@
     ]);
     return { sources: list(sources), readiness: readiness || null, area: G().groupArea(areas) };
   }
+  // LK2: a read the map does not wait for. now(): {styles} when it is back already, else {styles: [], lateStyles} (a promise of
+  // them, [] when the read failed or ran out of time).
+  function readLater(promise) {
+    let done = false, value = [];
+    const later = Promise.resolve(promise).then((v) => { done = true; value = list(v); return value; }, () => { done = true; return value; });
+    return { now: () => (done ? { styles: value } : { styles: [], lateStyles: later }) };
+  }
   const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("the map took too long")), ms);
     Promise.resolve(promise).then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
@@ -86,10 +94,17 @@
   function ensureMap(c) {
     // (a failed or slow answer is kept too: the heavy read is not repeated on every view; leaving the group space asks again)
     // LK1 (#416): beside it, the reviewed looks of the group's layers and of the shared sources and themes. Optional: without
-    // them every layer is drawn as it was (its QGIS style, then today's rule); never waited for past the map's own time limit.
+    // them every layer is drawn as it was (its QGIS style, then today's rule).
+    // LK2 (review-444 follow-up 4): the map never waits for them. The looks read has its own short limit; the map is drawn as
+    // soon as group_map is back, with the looks if they are here by then, and otherwise they are applied when they come
+    // (`lateStyles`, drawMap).
+    if (c.mapPending) return c.mapPending;
     const ms = FP.groupSpace.mapTimeoutMs || MAP_TIMEOUT_MS;
-    return c.mapPending || (c.mapPending = Promise.all([withTimeout(read(FP.sb.rpc("group_map", { g: c.group.id })), ms),
-      optional(withTimeout(FP.sb.rpc("layer_styles_for_map", { g: c.group.id }), ms))]).then(([map, styles]) => { if (map && typeof map === "object") map.styles = list(styles); return map; }));
+    const looks = readLater(optional(withTimeout(FP.sb.rpc("layer_styles_for_map", { g: c.group.id }), Math.min(ms, FP.groupSpace.looksTimeoutMs || LOOKS_TIMEOUT_MS))));
+    return (c.mapPending = withTimeout(read(FP.sb.rpc("group_map", { g: c.group.id })), ms).then((map) => {
+      if (map && typeof map === "object") Object.assign(map, looks.now());
+      return map;
+    }));
   }
 
   // ---- the screen ----------------------------------------------------------------------------------------------------------
@@ -208,6 +223,18 @@
     if (mapHandle !== handle || !drawn) { if (!drawn && current === token) mapSettled(data, true); return; }
     surface = drawn.surface || null; entries = drawn.entries || [];
     startParts(data, show, counts);
+    // LK2: looks that were not back when the map was drawn are applied to it when they come (none: nothing changes)
+    data.map.lateStyles?.then((styles) => {
+      if (mapHandle !== handle || !surface || !styles.length) return;
+      data.map.styles = styles; surface.restyle?.(styles);
+      // the rows of sources not read yet take their sentence from the looks now here, in place (a row on or being read keeps
+      // its switch and state)
+      for (const [key, e] of placeholders) {
+        const rec = FP.layerStyle?.pick(styles, { sourceKey: key, theme: e.theme }), purpose = rec ? FP.layerStyle.purpose(rec) : null;
+        if (purpose) e.purpose = purpose; else delete e.purpose;
+      }
+      renderLayerList();
+    });
     // GE1b: Edit shape in a feature's popup (FP.shapeEditor; only with its trial switched on, so by default nothing changes).
     // The boundary to snap to: the group's area and the member farms' outlines as the map drew them.
     const own = surface;
@@ -381,7 +408,7 @@
     if (!placeholders.has(s.key)) {
       // LK1: the source's sentence before it is read, from the reviewed look of the source or its theme
       const rec = FP.layerStyle?.pick(ctx?.data?.map?.styles, { sourceKey: s.key, theme: s.theme }), purpose = rec ? FP.layerStyle.purpose(rec) : null;
-      placeholders.set(s.key, { key: s.key, name: FP.farmModel.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true, ...(purpose ? { purpose } : {}) });
+      placeholders.set(s.key, { key: s.key, name: FP.farmModel.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true, theme: s.theme ?? null, ...(purpose ? { purpose } : {}) });
     }
     return placeholders.get(s.key);
   }
@@ -684,6 +711,6 @@
     return form;
   }
 
-  FP.groupSpace = { setGroups, find, open, close, load, lastDrawn, groups: () => groups, hasPortfolio: null, mapTimeoutMs: MAP_TIMEOUT_MS,
+  FP.groupSpace = { setGroups, find, open, close, load, lastDrawn, groups: () => groups, hasPortfolio: null, mapTimeoutMs: MAP_TIMEOUT_MS, looksTimeoutMs: LOOKS_TIMEOUT_MS,
     surface: () => surface };   // GE1b: the group map's surface (the browser walk projects a block's corners with it)
 })(typeof window === "undefined" ? globalThis : window);

@@ -1,0 +1,218 @@
+{
+  "batch": "LK2 first batch (#416 slice 2), from _claude/design-416-layer-look.md's table of nine looks; fields from the PM's production samples (7 Nov 2026, lk2-pm-fields.md)",
+  "note": "Starting points to react to, not decisions. Each record is a shared look (a theme's default, or a reference source's), so RCL staff decide it. `record` holds exactly the public.layer_styles columns the tool writes; the rest says what the look is for and what the record cannot draw yet (LK1's record has one fill and one label for every zoom, and a dash for the whole layer, not per class). A class with `starts_with` matches the start of the value; a label_field of `a,b` labels by a, else b.",
+  "not_seeded": [
+    { "source_key": "ecan-cwms-zones", "why": "a zone source with its own fields: not sampled today, so no look yet (the nutrient zones are the zones look)" },
+    { "source_key": "ecan-subregions", "why": "as above" },
+    { "source_key": "ecan-nutrient-subareas", "why": "as above" },
+    { "source_key": "ecan-gw-allocation-zones", "why": "as above" },
+    { "source_key": "ecan-sw-allocation-zones", "why": "as above" },
+    { "source_key": "ecan-hwrrp-gw-zones", "why": "as above" },
+    { "source_key": "ecan-hwrrp-sw-zones", "why": "as above" },
+    { "source_key": "lris-nzlri-luc-2021", "why": "not served to people: it gets its own look when it is (PM, 7 Nov 2026); the LUC look is ecan-lri's" }
+  ],
+  "looks": [
+    {
+      "look": "Member blocks",
+      "question": "Whose land is this?",
+      "group_scale": "Outline only, one colour, member number at the centre",
+      "paddock_scale": "Light fill, member name",
+      "not_yet": "One fill and one label at every zoom: a faint fill and the member number throughout (the name at paddock scale needs a label per zoom).",
+      "record": {
+        "theme": "member_blocks",
+        "symbol": { "line": "#ffd54f", "line_width": 2, "line_opacity": 1, "fill": "#ffd54f", "fill_opacity": 0.08 },
+        "label_field": "member_number",
+        "purpose": "Member blocks: whose land this is."
+      }
+    },
+    {
+      "look": "Paddocks",
+      "question": "What are the working units?",
+      "group_scale": "Not drawn",
+      "paddock_scale": "Thin outline, paddock name",
+      "not_yet": "Nothing: the name is PadkName where a paddock has one, else its label.",
+      "record": {
+        "theme": "paddocks",
+        "symbol": { "line": "#ffffff", "line_width": 1, "line_opacity": 0.9, "fill_opacity": 0 },
+        "label_field": "PadkName,label",
+        "label_min_zoom": 15,
+        "min_zoom": 13,
+        "purpose": "Paddocks: the working units of a farm."
+      }
+    },
+    {
+      "look": "Land units (LMUs)",
+      "question": "What kind of land is it?",
+      "group_scale": "Not drawn",
+      "paddock_scale": "Fill by unit type, name",
+      "not_yet": "There is no unit-type field: units are by lmu_id, whose values differ by farm, so there is one fill for every unit until the classes are listed. A farm's register land units keep their own code and name labels.",
+      "record": {
+        "theme": "land_units",
+        "classify_by": "lmu_id",
+        "symbol": { "fill": "#a5d6a7", "fill_opacity": 0.3, "line": "#e8f5e9", "line_width": 1 },
+        "label_field": "lmu_id",
+        "label_min_zoom": 14,
+        "min_zoom": 13,
+        "purpose": "Land units: what kind of land it is."
+      }
+    },
+    {
+      "look": "Waterways",
+      "question": "Where does water run, and how big?",
+      "group_scale": "Rivers by stream order, named rivers labelled",
+      "paddock_scale": "All orders, drains dashed",
+      "not_yet": "The shared Rivers row (public.current_waterways, where the names are) keeps its own rule, by stream order with named rivers labelled, and reads no look yet. This look draws a farm's own waterways and the waterway sources, wider by REC2's StreamOrde. Drains dashed needs a dash per class.",
+      "record": {
+        "theme": "waterways",
+        "classify_by": "StreamOrde",
+        "classes": [
+          { "value": "1", "label": "Order 1", "line_width": 1 },
+          { "value": "2", "label": "Order 2", "line_width": 1 },
+          { "value": "3", "label": "Order 3", "line_width": 1.5 },
+          { "value": "4", "label": "Order 4", "line_width": 2 },
+          { "value": "5", "label": "Order 5", "line_width": 3 },
+          { "value": "6", "label": "Order 6", "line_width": 4 },
+          { "value": "7", "label": "Order 7", "line_width": 5 },
+          { "value": "8", "label": "Order 8", "line_width": 6 }
+        ],
+        "symbol": { "line": "#4fc3f7", "line_width": 2 },
+        "label_field": "name",
+        "label_min_zoom": 13,
+        "purpose": "Waterways: where water runs, and how big."
+      }
+    },
+    {
+      "look": "Water-quality sites",
+      "question": "Where is water measured, and how good is it?",
+      "group_scale": "Dot coloured by nitrate band, long-term sites larger",
+      "paddock_scale": "Site name and latest value",
+      "not_yet": "A colour by nitrate band and larger long-term sites need the band and the record's length, which come from the site record's summary, not the source's features; the latest value is in the site's panel. The group's Water quality view draws its own sites.",
+      "record": {
+        "source_key": "ecan-wq-sites",
+        "symbol": { "fill": "#26a69a", "radius": 6, "line": "#ffffff" },
+        "label_field": "SITE_NAME",
+        "label_min_zoom": 14,
+        "purpose": "Water-quality sites: where water is measured."
+      }
+    },
+    {
+      "look": "Consents",
+      "question": "What is authorised here?",
+      "group_scale": "Not drawn",
+      "paddock_scale": "Symbol by type, current solid, expired hollow",
+      "not_yet": "A colour by type, not a symbol. Expired consents keep today's grey dot under Past consents.",
+      "record": {
+        "source_key": "ecan-consents",
+        "classify_by": "ConsentType",
+        "classes": [
+          { "value": "Water Permit", "starts_with": "Water Permit (s", "label": "Water permit", "fill": "#1e88e5" },
+          { "value": "Discharge Permit", "starts_with": "Discharge Permit (s", "label": "Discharge permit", "fill": "#e53935" },
+          { "value": "Land Use Consent", "starts_with": "Land Use Consent (s", "label": "Land use consent", "fill": "#43a047" },
+          { "value": "Coastal Permit", "starts_with": "Coastal Permit (s", "label": "Coastal permit", "fill": "#00897b" },
+          { "value": "Permitted Activity", "label": "Permitted activity", "fill": "#9e9e9e" },
+          { "value": "De Minimis", "label": "De minimis", "fill": "#bdbdbd" },
+          { "value": "Certif of Compliance", "label": "Certificate of compliance", "fill": "#757575" }
+        ],
+        "symbol": { "fill": "#8e24aa", "radius": 6, "line": "#ffffff" },
+        "min_zoom": 12,
+        "purpose": "Consents: what is authorised here."
+      }
+    },
+    {
+      "look": "Zones (nutrient, allocation)",
+      "part": "Nutrient zones",
+      "question": "Which rules apply?",
+      "group_scale": "Boundary lines with the zone name along them",
+      "paddock_scale": "The same, lighter",
+      "not_yet": "The name is placed in the zone, not along its edge, and the line is the same weight at every zoom. The zones are classed by ZONE_CLASS once its values are listed (the dry run reports them); ZONE_COLOUR, the source's own colour, cannot be drawn from the data. The other zone sources have their own fields and no look yet.",
+      "record": {
+        "source_key": "ecan-nutrient-zones",
+        "classify_by": "ZONE_CLASS",
+        "symbol": { "line": "#ff8a65", "line_width": 2, "fill_opacity": 0 },
+        "label_field": "ZONE_NAME",
+        "purpose": "Nutrient zones: which nutrient rules apply here."
+      }
+    },
+    {
+      "look": "LUC, geology, soils",
+      "part": "LUC",
+      "question": "What is the land like?",
+      "group_scale": "One at a time, classed fill with a legend",
+      "paddock_scale": "The same",
+      "not_yet": "No legend yet; one at a time is the Layers switch.",
+      "record": {
+        "source_key": "ecan-lri",
+        "classify_by": "LUC_CLASS",
+        "classes": [
+          { "value": "1", "starts_with": "1", "label": "Class 1", "fill": "#1a9850" },
+          { "value": "2", "starts_with": "2", "label": "Class 2", "fill": "#66bd63" },
+          { "value": "3", "starts_with": "3", "label": "Class 3", "fill": "#a6d96a" },
+          { "value": "4", "starts_with": "4", "label": "Class 4", "fill": "#d9ef8b" },
+          { "value": "5", "starts_with": "5", "label": "Class 5", "fill": "#fee08b" },
+          { "value": "6", "starts_with": "6", "label": "Class 6", "fill": "#fdae61" },
+          { "value": "7", "starts_with": "7", "label": "Class 7", "fill": "#f46d43" },
+          { "value": "8", "starts_with": "8", "label": "Class 8", "fill": "#d73027" }
+        ],
+        "symbol": { "fill": "#bdbdbd", "fill_opacity": 0.4, "line": "#ffffff", "line_width": 0.5 },
+        "label_field": "lcorrunit",
+        "label_min_zoom": 13,
+        "purpose": "Land use capability: what the land can sustain."
+      }
+    },
+    {
+      "look": "LUC, geology, soils",
+      "part": "Geology",
+      "question": "What is the land like?",
+      "group_scale": "One at a time, classed fill with a legend",
+      "paddock_scale": "The same",
+      "not_yet": "Classed by rockclass once its values are listed (the dry run reports them): one fill for every unit until then. No legend yet.",
+      "record": {
+        "source_key": "gns-qmap-250k-geology",
+        "classify_by": "rockclass",
+        "symbol": { "fill": "#bcaaa4", "fill_opacity": 0.35, "line": "#ffffff", "line_width": 0.5 },
+        "label_field": "simplename",
+        "label_min_zoom": 12,
+        "purpose": "Geology: the rock under the land."
+      }
+    },
+    {
+      "look": "LUC, geology, soils",
+      "part": "Soils",
+      "question": "What is the land like?",
+      "group_scale": "One at a time, classed fill with a legend",
+      "paddock_scale": "The same",
+      "not_yet": "No data loaded yet: the S-map source is registered with no features, so this look has nothing to draw and no picture. Its fields are set when the soils are loaded.",
+      "record": {
+        "source_key": "smap",
+        "symbol": { "fill": "#d7ccc8", "fill_opacity": 0.35, "line": "#ffffff", "line_width": 0.5 },
+        "purpose": "Soils: what the soil is."
+      }
+    },
+    {
+      "look": "Wells",
+      "question": "Where is groundwater reached?",
+      "group_scale": "Not drawn",
+      "paddock_scale": "Dot by use, depth on click",
+      "not_yet": "Nothing: by USE_CODE_1_DESC; the depth (DEPTH) is in the bore's panel on click.",
+      "record": {
+        "source_key": "ecan-wells",
+        "classify_by": "USE_CODE_1_DESC",
+        "classes": [
+          { "value": "Irrigation", "label": "Irrigation", "fill": "#1565c0" },
+          { "value": "Domestic Supply", "label": "Domestic", "fill": "#43a047" },
+          { "value": "Domestic and Stockwater", "label": "Domestic and stock", "fill": "#7cb342" },
+          { "value": "Stock Supply", "label": "Stock", "fill": "#c0ca33" },
+          { "value": "Dairy Use", "label": "Dairy", "fill": "#00897b" },
+          { "value": "Public Water Supply", "label": "Public supply", "fill": "#8e24aa" },
+          { "value": "Small Community Supply", "label": "Community supply", "fill": "#ab47bc" },
+          { "value": "Commercial / Industrial", "label": "Commercial or industrial", "fill": "#6d4c41" },
+          { "value": "Water Level Observation", "label": "Water level observation", "fill": "#fb8c00" },
+          { "value": "Groundwater Quality", "label": "Groundwater quality", "fill": "#f4511e" }
+        ],
+        "symbol": { "fill": "#78909c", "radius": 5, "line": "#ffffff" },
+        "min_zoom": 13,
+        "purpose": "Wells: where groundwater is reached, and what for."
+      }
+    }
+  ]
+}
