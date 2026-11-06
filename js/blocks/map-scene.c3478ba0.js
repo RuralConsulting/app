@@ -824,7 +824,9 @@
       const sheet = inset();
       // TIM1: framed by the sketch already; a person who moved the camera since keeps it (no settle back to the frame)
       if (kept) { flightKey = null; framed = data.extent; framedWidth = window.innerWidth; if (!touched) settle(data.extent); }
-      else if (flightKey === JSON.stringify(b) && !sheet) { flightKey = null; framed = data.extent; touched = false; framedWidth = window.innerWidth; settle(data.extent); }
+      // APP2: the same for the flight the portfolio started (zoomTo -> fit, which cleared `touched` as it began): a Zoom in, a drag
+      // or the wheel pressed during it is the person's, so `touched` is kept and no settle or re-ground takes the camera back
+      else if (flightKey === JSON.stringify(b) && !sheet) { flightKey = null; framed = data.extent; framedWidth = window.innerWidth; if (!touched) settle(data.extent); }
       else { flightKey = null; fit(b, FP.farmModel.framePadding(sheet, wide()), data.extent); }
     }
     if (data.extent) revealMask(request);

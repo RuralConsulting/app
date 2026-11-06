@@ -204,7 +204,8 @@
     mapReady = handle.ready.catch(() => null);
     const drawn = await mapReady;
     // the map belongs to the group, not the view: kept for later views unless the group itself changed meanwhile
-    if (mapHandle !== handle || !drawn) { if (!drawn) mapSettled(data, true); return; }
+    // APP2: a put-away map's late "nothing drawn" is no longer this open's to settle: it must not open a newer open's gate
+    if (mapHandle !== handle || !drawn) { if (!drawn && current === token) mapSettled(data, true); return; }
     surface = drawn.surface || null; entries = drawn.entries || [];
     startParts(data, show, counts);
     // TIM1 (#410): the map's style loaded and the group's outline first on screen, as steps of the route's run
