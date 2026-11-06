@@ -133,28 +133,72 @@
     }
     return out;
   }
-  // ONB2: the one route the "Drains to" line names, from what onboarding_report_inputs carries under context.downstream:
-  //   {starts, reaches: [{name, cum_km}], max_km, end_reasons}  (today) and, when the report carries it,
-  //   chains: [{start?, catchment_area, reaches: [{name, cum_km}]}]  one per starting reach: its names with the distance along it.
-  // With chains, the main stem is the chain with the largest catchment area (the longer one if they tie); its names are listed in
-  // downstream order, once each, and the other chains' extra names go in the detail, not the sentence. Without them, `reaches` is
-  // every start's names merged and ordered by the nearest distance: it is one route in downstream order only when there is one start,
-  // so with several the sentence names them without "then" and says it is not one route. Never a guess: no catchment area, no main stem.
+  // The "Drains to" sentence, from what onboarding_report_inputs carries under context.downstream:
+  //   {starts, reaches: [{name, cum_km}], max_km, end_reasons}: every start's names merged, ordered by the nearest distance; and
+  //   (ONB2b, migration 20261106040000) chains: [{start, catchment_area, end_reason, max_km, reaches: [{name, cum_km}]}], one per
+  //   route from the farm, its names in downstream order, and chains_more (routes past the 24 listed).
+  // ONB2b, with chains (all of them listed): the routes that share a named waterway drain together; the largest such set (most
+  // routes) is the farm's main drainage. Its trunk is the named waterways common to every route in it, in downstream order, up to
+  // where the walk ends; its tributaries are the names a route reaches before it reaches the trunk's first name, nearest first, at
+  // most three (a name past the trunk's start on only some routes, where one walk went further than another or the 12-name cut fell,
+  // is downstream, never a tributary, and is not named):
+  //   "Drains by <tributaries> to <first trunk name>, then <next trunk names>, to the sea"
+  // ("Drains to A, then B, to the sea" with one route or no tributaries). The end: "to the sea" when a route in it reaches the
+  // sea; "the route is not held past <last trunk name>" only when every route in it ends missing_link; "followed for N km" when it
+  // ends at the walk's limit. A set of routes that never joins it within the limit is a second sentence, "Part of the farm drains to <its
+  // first trunk name>". No number of starting reaches, no main stem by catchment area.
+  // Without chains (or with some left out), ONB2's interim sentence: one start's names are its route in order; several starts'
+  // names are listed nearest first, without "then", saying the order along the river isn't known.
+  const listOf = (xs, max) => { const shown = xs.slice(0, max), more = xs.length - shown.length;
+    return more > 0 ? shown.join(", ") + " and " + more + " more" : shown.length > 1 ? shown.slice(0, -1).join(", ") + " and " + shown[shown.length - 1] : shown.join(""); };
+  function riverSentence(chains) {
+    const key = (n) => n.toLowerCase();
+    const routes = list(chains).filter((c) => c && typeof c === "object").map((c) => {
+      const rs = list(c.reaches).filter((r) => r && typeof r === "object");
+      const ordered = rs.every((r) => num(r.cum_km) != null) ? [...rs].sort((a, b) => num(a.cum_km) - num(b.cum_km)) : rs;
+      const names = distinctNames(ordered.map((r) => r.name)), km = new Map();
+      for (const r of ordered) { const n = String(r.name ?? "").trim().replace(/\s+/g, " "); if (n && !km.has(key(n))) km.set(key(n), num(r.cum_km)); }
+      return { names, km, end: String(c.end_reason || ""), max_km: num(c.max_km) };
+    }).filter((r) => r.names.length);
+    if (!routes.length) return null;
+    // routes sharing a name drain together (joined transitively)
+    const groups = [];
+    for (const r of routes) {
+      const meets = groups.filter((g) => g.some((x) => x.names.some((n) => r.names.some((m) => key(m) === key(n)))));
+      const merged = [r, ...meets.flat()];
+      for (const g of meets) groups.splice(groups.indexOf(g), 1);
+      groups.push(merged);
+    }
+    const trunkOf = (g) => g[0].names.filter((n) => g.every((r) => r.km.has(key(n))));
+    const reach = (g) => Math.max(0, ...g.map((r) => r.max_km ?? 0));
+    const main = groups.reduce((a, b) => b.length > a.length || (b.length === a.length && (trunkOf(b).length > trunkOf(a).length ||
+      (trunkOf(b).length === trunkOf(a).length && reach(b) > reach(a)))) ? b : a);
+    const trunk = trunkOf(main);
+    if (!trunk.length) return null;
+    const near = (g, n) => Math.min(...g.map((r) => r.km.get(key(n))).filter((v) => v != null), Infinity);
+    // a tributary is a name a route reaches before it reaches the trunk (its names are in downstream order)
+    const before = (r) => r.names.slice(0, Math.max(0, r.names.findIndex((n) => key(n) === key(trunk[0]))));
+    const tributaries = distinctNames(main.flatMap(before)).filter((n) => !trunk.some((t) => key(t) === key(n)))
+      .sort((a, b) => near(main, a) - near(main, b));
+    const ends = new Set(main.map((r) => r.end));
+    const tail = ends.has("sea") ? ", to the sea"
+      : ends.size === 1 && ends.has("missing_link") ? ", the route is not held past " + trunk[trunk.length - 1]
+      : ends.has("max_km") || ends.has("max_steps") ? ", followed for " + Math.round(reach(main)) + " km" : "";
+    const MAX = 4, path = trunk.length > MAX ? trunk.slice(0, MAX).join(", then ") + ", and " + (trunk.length - MAX) + " more further down" : trunk.join(", then ");
+    const others = groups.filter((g) => g !== main).map((g) => (trunkOf(g)[0] || g[0].names[0]));
+    const part = others.length ? (others.length === 1 ? "Part of the farm drains to " : "Parts of the farm drain to ") + listOf(distinctNames(others), 3) : null;
+    const sentence = "Drains " + (tributaries.length ? "by " + listOf(tributaries, 3) + " " : "") + "to " + path + tail + (part ? ". " + part : "");
+    return { names: distinctNames([...trunk, ...tributaries, ...others]), sentence, detail: null, followed: tail.startsWith(", followed") };
+  }
   function downstreamRoute(d) {
     const MAX = 4, clip = (names) => names.length > MAX ? names.slice(0, MAX).join(", then ") + ", and " + (names.length - MAX) + " more further down" : names.join(", then ");
-    const along = (rs) => { const r = list(rs).filter((x) => x && typeof x === "object"); return r.every((x) => num(x.cum_km) != null) ? [...r].sort((a, b) => num(a.cum_km) - num(b.cum_km)) : r; };
-    const chains = list(d?.chains).filter((c) => c && typeof c === "object" && num(c.catchment_area) != null && distinctNames(list(c.reaches).map((r) => r?.name)).length);
-    if (chains.length) {
-      const reach = (c) => Math.max(0, ...list(c.reaches).map((r) => num(r?.cum_km) ?? 0));
-      const main = chains.reduce((a, b) => num(b.catchment_area) > num(a.catchment_area) || (num(b.catchment_area) === num(a.catchment_area) && reach(b) > reach(a)) ? b : a);
-      const names = distinctNames(along(main.reaches).map((r) => r?.name));
-      const others = distinctNames(chains.filter((c) => c !== main).flatMap((c) => along(c.reaches).map((r) => r?.name))).filter((n) => !names.some((m) => m.toLowerCase() === n.toLowerCase()));
-      return { names, sentence: "Drains to " + clip(names), detail: others.length ? "Other starting reaches also reach " + others.slice(0, 6).join(", ") + (others.length > 6 ? " and " + (others.length - 6) + " more" : "") : null };
-    }
+    const full = Array.isArray(d?.chains) && !(num(d?.chains_more) > 0);
+    const route = full ? riverSentence(d.chains) : null;
+    if (route) return route;
     const names = distinctNames(list(d?.reaches).map((r) => r?.name));
     if (names.length < 2 || !(num(d?.starts) > 1)) return { names, sentence: "Drains to " + clip(names), detail: null };
-    return { names, sentence: "Drains to " + names.slice(0, MAX).join(", ") + (names.length > MAX ? " and " + (names.length - MAX) + " more" : "") + " from " + plural(num(d.starts), "starting reach", "starting reaches") + " (nearest first, not one route)",
-      detail: "The report doesn't yet say which starting reach is the main route, so these are not listed as one chain" };
+    return { names, sentence: "Drains to " + names.slice(0, MAX).join(", ") + (names.length > MAX ? " and " + (names.length - MAX) + " more" : "") + " (nearest first; the order along the river isn't known)",
+      detail: null };
   }
   function contextItems(inputs, src) {
     const ctx = inputs.context || {}, errors = inputs.errors || {}, out = [];
@@ -177,7 +221,7 @@
         const d = ctx.downstream, route = downstreamRoute(d), names = route.names;
         if (!d || !num(d.starts)) none(label + ": no REC2 river reach found from the farm");
         else found(names.length ? route.sentence : label + ": " + plural(num(d.starts), "starting reach", "starting reaches") + ", unnamed",
-          [num(d.max_km) != null ? "Followed " + Math.round(num(d.max_km)) + " km down the REC2 network" : null, route.detail].filter(Boolean).join(". ") || null, names);
+          [num(d.max_km) != null && !route.followed ? "Followed " + Math.round(num(d.max_km)) + " km down the REC2 network" : null, route.detail].filter(Boolean).join(". ") || null, names);
       } else if (key === "sites") {
         const s = list(ctx.sites);
         if (!s.length) none(label + ": none within 25 km downstream");

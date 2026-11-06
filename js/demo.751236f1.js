@@ -713,7 +713,10 @@
         src("ecan-wq-sites", "Water quality monitoring sites (ECan)", "monitoring_sites", "Environment Canterbury"), src("ecan-wells", "Wells and bores (ECan)", "wells", "Environment Canterbury"),
         src("ecan-consents", "Resource consents (ECan)", "consents", "Environment Canterbury"), src("smap", "S-map soils (Manaaki Whenua)", "soils", "Manaaki Whenua")],
       context: mine ? { in_context: [{ source_key: "smap", count: 5, on_farm: 3 }, { source_key: "ecan-consents", count: 4, on_farm: 2 }, { source_key: "ecan-wells", count: 6, on_farm: 1 }],
-        downstream: { starts: 2, reaches: [{ name: "Example Stream (synthetic)", cum_km: 0.8 }, { name: "Example River (synthetic)", cum_km: 7.4 }], max_km: 50, end_reasons: ["max_km"] },
+        downstream: { starts: 2, reaches: [{ name: "Example Stream (synthetic)", cum_km: 0.8 }, { name: "Example River (synthetic)", cum_km: 7.4 }], max_km: 50, end_reasons: ["max_km"],
+          // ONB2b: each start's route (one down Example Stream, one straight into Example River further down)
+          chains: [{ start: 9100001, catchment_area: 14.2, end_reason: "max_km", max_km: 50, reaches: [{ name: "Example Stream (synthetic)", cum_km: 0.8 }, { name: "Example River (synthetic)", cum_km: 7.4 }] },
+            { start: 9100002, catchment_area: 3.1, end_reason: "max_km", max_km: 50, reaches: [{ name: "Example River (synthetic)", cum_km: 9.2 }] }], chains_more: 0 },
         sites: [{ source_key: "ecan-wq-sites", external_id: "SYN-1", site_kind: "wq", site_name: "Example Stream at Ford Road (synthetic)", distance_km_along: 2.6 }],
         groundwater: { allocation_zone: { groundwater: [{ name: "Example groundwater zone (synthetic)" }], surface_water: [] },
           wells: [{ external_id: "SYN/0001", well_no: "SYN/0001", distance_m: 140, on_farm: true, depth_m: 38 }, { external_id: "SYN/0002", well_no: "SYN/0002", distance_m: 820, on_farm: false, depth_m: 61 }] },
