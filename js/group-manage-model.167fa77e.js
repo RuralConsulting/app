@@ -40,7 +40,9 @@
     const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(String(t)), d = new Date(dateOnly ? String(t) + "T12:00:00Z" : t);
     return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: dateOnly ? "UTC" : TZ }) : null;
   };
-  const MEMBER_KINDS = ["member_match_file", "member_match_paddock", "member_extent"];
+  // DEC1c: held paddocks inside one member's blocks, one proposal per member and source layer (several paddocks, one decision)
+  const GROUP_KIND = "member_match_paddock_group";
+  const MEMBER_KINDS = ["member_match_file", "member_match_paddock", "member_extent", GROUP_KIND];
   const DECIDE_KINDS = [...MEMBER_KINDS, "document_tier"];
   // ON3c: the feed's kinds. A person marks each seen or follow up (its two candidates, through proposals_decide); never "to decide".
   const FEED_KINDS = ["review_due", "load_gap", "reference_change"];
@@ -57,7 +59,7 @@
     fep_not_in_register: "Add the member to the register, or correct the number in the file name; then re-run the group load.",
     paddock_held: "Give each paddock its member's id in the paddock layer, then re-run the group load.",
   };
-  const SIGNAL_WORD = { member_number: "member number", business_name: "business name", fep_title: "the plan's title" };
+  const SIGNAL_WORD = { member_number: "member number", business_name: "business name", fep_title: "the plan's title", member_blocks: "inside the member's blocks" };
   const ROLE_WORD = { current: "current site", successor: "successor", predecessor: "predecessor", co_located: "co-located" };
 
   // ---- the count line -----------------------------------------------------------------------------------------------------
@@ -108,7 +110,8 @@
     const out = {};
     for (const p of Array.isArray(rows) ? rows : []) {
       const k = p?.subject?.gap_kind;
-      if (k && MEMBER_KINDS.includes(p.kind) && waitingForLoad(p, ctx)) out[k] = (out[k] || 0) + 1;
+      // a group waits for the load with each of its paddocks
+      if (k && MEMBER_KINDS.includes(p.kind) && waitingForLoad(p, ctx)) out[k] = (out[k] || 0) + (p.kind === GROUP_KIND ? groupWaiting(p) : 1);
     }
     return out;
   }
@@ -116,8 +119,20 @@
   // ---- proposals ------------------------------------------------------------------------------------------------------------
   const base = (p) => String(p || "").split("/").pop();
   // What the proposal is about, in words: the file, the paddock (its layer file and feature id), the member, the site.
+  const groupItems = (p) => (Array.isArray(p?.subject?.items) ? p.subject.items.filter((i) => i && i.item_key) : []);
+  // the paddocks of a group that wait for the load: every one while it is accepted; once applied (--confirm), only those recorded
+  // (outcome.paddocks) or already recorded, never its not_used ones, which are proposed again
+  const groupWaiting = (p) => {
+    if (p.status !== "applied" || !p.outcome || typeof p.outcome !== "object") return groupItems(p).length || 1;
+    return (Number(p.outcome.paddocks) || 0) + (Number(p.outcome.already_recorded) || 0);
+  };
   function itemOf(p) {
     const s = p?.subject || {}, gap = GAP_WORDS[s.gap_kind];
+    if (p.kind === GROUP_KIND) {
+      const n = groupItems(p).length || Number(s.count) || 0, part = Number(s.parts) > 1 ? " (part " + s.part + ")" : "";   // no "of M": once another part is decided, M is stale (F4)
+      return { title: num(n) + (n === 1 ? " paddock" : " paddocks") + " in " + (base(s.source_file) || "the paddock layer") + part, what: "Paddocks held back from the map, inside one member's blocks",
+        path: null, id: "no member id" };
+    }
     if (p.kind === "member_match_file") return { title: s.source_file || base(s.item_key) || p.subject_key, what: gap?.what || "FEP file", path: s.item_key || null,
       id: s.external_id ? "number given: " + s.external_id : null };
     if (p.kind === "member_match_paddock") {
@@ -156,6 +171,12 @@
       if (e.field && e.text) return "The plan's cover gives " + q(e.text) + ", like " + q(e.name) + (e.name_from ? " (" + e.name_from + ")" : "");
       return "The plan's title names the " + (e.found === "business name" ? "business" : e.found || "member") + " " + q(e.number || e.name) + (e.text ? ": " + q(e.text) : "");
     }
+    if (e.signal === "member_blocks") {
+      // DEC1c: the paddocks' shapes against the member's blocks
+      const pct = (v) => Math.round(Number(v) * 100) + "%", n = Number(e.paddocks) || 0;
+      return (n === 1 ? "The paddock has" : "Each of the " + num(n) + " paddocks has") + " at least " + pct(e.share_min ?? 0.9) + " of its area inside the member's blocks"
+        + (e.least_share != null && n > 1 ? " (the least " + pct(e.least_share) + ")" : "");
+    }
     return Object.entries(e).filter(([k]) => k !== "confidence").map(([k, v]) => k + " " + v).join(", ");
   }
   const memberLabel = (c) => c ? "Member " + c.member + (c.business_name ? ", " + c.business_name : "") : "No member";
@@ -189,6 +210,13 @@
     else if (waitingForLoad(p, ctx)) { state = "accepted"; text = "Accepted" + (chosen ? " (" + chosen.label + (chosen.register ? ", from the register" : "") + ")" : "") + ", placed on the next group load"; }
     else if (p.status === "rejected") { state = "rejected"; text = "Not this: it stays set aside"; }
     else { state = "done"; text = p.status === "applied" ? "Placed" : "No longer open"; }
+    if (p.kind === GROUP_KIND) {
+      // DEC1c: one answer for every paddock in the group
+      const n = groupItems(p).length, all = n === 1 ? "the paddock" : "all " + num(n);
+      if (state === "proposed" && cands.length) text = "Proposed for " + all + ": " + cands[0].label;
+      else if (state === "accepted") text = "Accepted " + all + (chosen ? " (" + chosen.label + (chosen.register ? ", from the register" : "") + ")" : "") + ", placed on the next group load";
+      else if (state === "rejected") text = "Not this: " + (n === 1 ? "it stays" : "they stay") + " held back";
+    }
     const evidence = p.evidence && typeof p.evidence === "object" ? p.evidence : {};
     return { id: p.id, kind: p.kind, status: p.status, state, text, item, candidates: cands, proposed: p.status === "proposed" ? cands[0] || null : null, chosen, note,
       decided: by ? "Decided " + by + (note ? " · " + note : "") : null,
@@ -226,7 +254,14 @@
     return { id: l.id, p, line: l, title: l.item.title, sub: [l.item.what, l.item.id, l.item.path && l.item.path !== l.item.title ? l.item.path : null].filter(Boolean).join(" · "),
       state: l.state, stateText: l.text, lines: [l.because, l.replaces], thing: dc.thingOf(p),
       candidates: answering ? l.candidates.map(candidateCard) : readOnly, shown: answering ? [] : readOnly.map((_, i) => i),
-      answer: dc.answerOf(p), register: dc.registerAllowed(p) ? register : null, canAnswer: false, decided: l.decided && !l.open ? l.decided : null };
+      answer: dc.answerOf(p), register: dc.registerAllowed(p) ? register : null, canAnswer: false, decided: l.decided && !l.open ? l.decided : null,
+      // DEC1c: accept all, pick another member (for all of them), or not this
+      ...(p.kind === GROUP_KIND ? { labels: groupLabels(p) } : {}) };
+  }
+  function groupLabels(p) {
+    const n = groupItems(p).length, all = n === 1 ? "the paddock" : "all " + num(n);
+    return { accept: "Accept " + all, pick: "Accept " + all + " for the member picked", reject: "Not this",
+      register: "Or another member, for " + all + ": search the register by number or name" };
   }
   // A feed row (Updates) as a card: its words, and its two answers as buttons (Seen, Follow up).
   function feedCard(p) {

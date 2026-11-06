@@ -16,8 +16,9 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   const list = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => (v == null ? "" : String(v));
-  // proposals_decide takes a member from the register for these kinds only (DEC1a)
-  const REGISTER_KINDS = ["member_match_file", "member_match_paddock"];
+  // proposals_decide takes a member from the register for these kinds only (DEC1a; DEC1c's grouped held paddocks too)
+  const GROUP_KIND = "member_match_paddock_group";
+  const REGISTER_KINDS = ["member_match_file", "member_match_paddock", GROUP_KIND];
   // (a group's row: the manage space reads org_id; a farm's row has none)
   const registerAllowed = (p) => !!p && REGISTER_KINDS.includes(p.kind) && p.org_id != null;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,6 +46,22 @@
         simplifiedM: Number.isFinite(Number(id.simplified_m)) ? Number(id.simplified_m) : 0, why: id.why ? str(id.why) : null };
     }
     if (id.kind === "file") return { kind: "file", notRead: str(id.not_read) || "it could not be read" };
+    if (id.kind === "paddock_group") {
+      // DEC1c: the held paddocks inside one member's blocks, each with its shape (simplified), area, share inside and the id it was given
+      const num = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+      const paddocks = list(id.paddocks).filter((x) => x && typeof x === "object").map((x) => {
+        const g = x.geometry && typeof x.geometry === "object" && /^(Multi)?Polygon$/.test(x.geometry.type) && Array.isArray(x.geometry.coordinates) ? x.geometry : null;
+        return { itemKey: x.item_key ? str(x.item_key) : null, fid: x.fid != null ? str(x.fid) : null, idGiven: x.id_given != null && str(x.id_given) ? str(x.id_given) : null,
+          areaHa: num(x.area_ha), share: num(x.share), geometry: g };
+      });
+      const shapes = paddocks.filter((x) => x.geometry);
+      // one outline for all of them: a multipolygon of each paddock's polygons
+      const geometry = shapes.length ? { type: "MultiPolygon", coordinates: shapes.flatMap((x) => (x.geometry.type === "Polygon" ? [x.geometry.coordinates] : x.geometry.coordinates)) } : null;
+      const b = list(id.bbox).length === 4 && list(id.bbox).every((n) => Number.isFinite(Number(n))) ? id.bbox.map(Number) : null;
+      return { kind: "paddock_group", member: id.member != null ? str(id.member) : null, businessName: id.business_name ? str(id.business_name) : null,
+        sourceFile: id.source_file ? str(id.source_file) : null, count: num(id.count) ?? paddocks.length, shareMin: num(id.share_min), leastShare: num(id.least_share),
+        areaHa: num(id.area_ha), paddocks, geometry, bbox: b || (geometry ? bboxOf(geometry) : null) };
+    }
     return null;
   }
   // [west, south, east, north] of a GeoJSON polygon or multipolygon
@@ -61,6 +78,13 @@
   function thingOf(p, { doc = null } = {}) {
     const identity = identityOf(p), s = p?.subject || {};
     const documentId = UUID.test(str(p?.document_id)) ? str(p.document_id).toLowerCase() : doc?.id ? str(doc.id) : null;
+    if (p?.kind === GROUP_KIND || identity?.kind === "paddock_group") {
+      // DEC1c: the grouped paddocks, framed together with the member's blocks
+      const g = identity?.kind === "paddock_group" ? identity : null;
+      const file = s.source_file || g?.sourceFile || null;
+      return { type: "place", group: true, identity: g, geometry: g?.geometry || null, bbox: g?.bbox || null, itemKey: p?.subject_key ? str(p.subject_key) : null,
+        featureId: null, layerFile: file ? str(file).split("/").pop() : null, member: s.member != null ? str(s.member) : g?.member || null, count: g?.count ?? list(s.items).length };
+    }
     if (p?.kind === "member_match_paddock" || identity?.kind === "paddock") {
       const g = identity?.geometry || (identity?.bbox ? polygonOf(identity.bbox) : null);
       const [layer, fid] = str(s.item_key).split("#");
@@ -96,6 +120,17 @@
         ...identity.names.map((n) => n.field + ": " + n.value), identity.areaHa != null ? (Math.round(identity.areaHa * 10) / 10).toLocaleString("en-NZ") + " ha" : null].filter(Boolean);
       return { kind: "paddock", facts, empty: !identity.geometry && !identity.bbox,
         text: !identity.geometry ? "Its shape is not held" + (identity.why ? ": " + identity.why : "") + "." : identity.envelope ? "Shown as the box around it (the shape is too detailed to hold here)." : identity.simplifiedM ? "Its shape simplified to about " + identity.simplifiedM + " m." : null };
+    }
+    if (identity.kind === "paddock_group") {
+      const ha = (v) => (Math.round(v * 10) / 10).toLocaleString("en-NZ") + " ha";
+      const pct = (v) => Math.round(v * 100) + "%";
+      const n = identity.count, who = identity.member ? "member " + identity.member + (identity.businessName ? " (" + identity.businessName + ")" : "") : "the member";
+      const facts = [n + (n === 1 ? " paddock" : " paddocks") + (identity.sourceFile ? " in " + identity.sourceFile : ""), identity.areaHa != null ? ha(identity.areaHa) + " in all" : null,
+        identity.shareMin != null ? "each at least " + pct(identity.shareMin) + " inside the blocks of " + who + (identity.leastShare != null ? " (the least " + pct(identity.leastShare) + ")" : "") : null].filter(Boolean);
+      const rows = identity.paddocks.map((x) => ({ label: "Paddock " + (x.fid || x.itemKey || "?"), detail: [x.areaHa != null ? ha(x.areaHa) : null, x.share != null ? pct(x.share) + " inside" : null,
+        x.idGiven ? "id given: " + x.idGiven : "no member id"].filter(Boolean).join(" · ") }));
+      return { kind: "paddock_group", facts, rows, empty: !identity.geometry,
+        text: identity.geometry ? "Outlined on the map with the blocks of " + who + "; each shape simplified to draw." : "Their shapes are not held, so they can't be shown on the map." };
     }
     return { kind: "file", empty: true, text: "The file could not be read: " + identity.notRead + "." };
   }
@@ -196,6 +231,6 @@
   const seenFeature = (thing, camera, at) => ({ kind: "feature", ...(thing?.itemKey ? { item_key: thing.itemKey } : {}), ...(thing?.featureId ? { feature_id: thing.featureId } : {}),
     ...(thing?.bbox ? { bbox: thing.bbox } : {}), ...(camera && Number.isFinite(camera.zoom) ? { zoom: Math.max(0, Math.min(24, camera.zoom)) } : {}), at: stamp(at) });
 
-  return { REGISTER_KINDS, registerAllowed, identityOf, bboxOf, polygonOf, thingOf, identityView, registerOf, searchRegister, answerOf, decide, viewedItem, viewedList,
+  return { GROUP_KIND, REGISTER_KINDS, registerAllowed, identityOf, bboxOf, polygonOf, thingOf, identityView, registerOf, searchRegister, answerOf, decide, viewedItem, viewedList,
     seenIdentity, seenDocument, seenFeature, stamp };
 });

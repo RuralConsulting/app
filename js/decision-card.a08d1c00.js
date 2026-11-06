@@ -65,6 +65,22 @@
       }
       return el("section", { class: "card-thing", "data-thing": "document" }, ...kids);
     }
+    if (t.type === "place" && t.group) {
+      // DEC1c: the grouped paddocks outlined together, with the member's blocks; each paddock listed under the map
+      const v = t.identity ? M.identityView(t.identity) : null, n = t.count || 0;
+      const list0 = v?.rows?.length ? el("details", { class: "card-more card-paddocks" }, el("summary", {}, "The " + (n === 1 ? "paddock" : n + " paddocks")),
+        el("ul", { class: "card-fine" }, ...v.rows.map((r) => el("li", {}, r.label + (r.detail ? " · " + r.detail : ""))))) : null;
+      if (!t.geometry) {
+        return el("section", { class: "card-thing", "data-thing": "place", "data-map": "none", "data-group": String(n) }, el("h4", { class: "card-thing-title" }, "Where they are"),
+          el("p", { class: "card-fine" }, v ? v.text : "Their shapes aren't held yet, so they can't be shown on the map: the next proposal run adds them."),
+          v?.facts?.length ? el("p", { class: "card-fine" }, v.facts.join(" · ")) : null, list0);
+      }
+      return el("section", { class: "card-thing", "data-thing": "place", "data-map": "pending", "data-group": String(n) }, el("h4", { class: "card-thing-title" }, "Where they are"),
+        el("div", { class: "card-map", "data-card-map": String(card.id), role: "img", "aria-label": "Map: the " + (n === 1 ? "paddock" : n + " paddocks") + " asked about, outlined, with the blocks of member " + (t.member || "") + " and the group's paddocks around them" }),
+        el("p", { class: "card-fine card-map-note", "data-card-map-note": "" }, [v.facts.join(" · "), v.text].filter(Boolean).join(". ")),
+        list0,
+        el("button", { type: "button", class: "secondary card-frame", "data-card-frame": String(card.id) }, "Frame them again"));
+    }
     if (t.type === "place") {
       const v = M.identityView(t.identity);
       const facts = v.kind === "paddock" ? v.facts : [];
@@ -148,7 +164,7 @@
             results.replaceChildren(...hits.map((m) => el("li", {}, el("button", { type: "button", class: "card-result", "data-card-member": m.member, onclick: () => choose(m) }, m.label))));
             if (String(q || "").trim() && !hits.length) results.append(el("li", { class: "card-fine" }, "No current member matches “" + String(q).trim() + "”."));
           } });
-        parts.push(el("div", { class: "card-register" }, el("label", { for: searchId }, a.noSuggestion ? "Search the register by member number or name" : "Or any member of the register, by number or name"),
+        parts.push(el("div", { class: "card-register" }, el("label", { for: searchId }, a.noSuggestion ? "Search the register by member number or name" : labels.register || "Or any member of the register, by number or name"),
           search, results, picked));
         if (card.register == null) parts.push(el("p", { class: "card-fine" }, "The register couldn't be read, so only the platform's suggestions can be picked."));
       }
@@ -271,6 +287,15 @@
     return list(rows).filter(want).slice(0, 4).map((l) => ({ id: l.id, name: l.name, theme: l.theme, geometry_type: "polygon", group_own: true, style: l.style || {}, source: l.source || "the group's own map",
       deferred: true, feature_count: null, features: EMPTY }));
   }
+  // DEC1c: the proposed member's own blocks, a layer of the card's own (never read: its features are the member-blocks layer's that
+  // carry the member's number, "007" and "7" alike).
+  const memberNo = (v) => { const s = String(v ?? "").trim(); return /^\d+$/.test(s) ? String(Number(s)) : s; };
+  const memberBlocksLayer = (member) => ({ id: "member-blocks-of-" + memberNo(member), name: "Member " + memberNo(member) + "'s blocks", theme: "proposed_member_blocks", geometry_type: "polygon",
+    group_own: true, style: {}, source: "the group's member blocks", deferred: true, feature_count: null, features: EMPTY });
+  function ownBlocks(features, member) {
+    const want = memberNo(member);
+    return { type: "FeatureCollection", features: list(features?.features).filter((f) => memberNo(f?.properties?.member_number) === want) };
+  }
   // With MAX_MAPS open and the person asking for another: the map framed longest ago gives way (one off the screen first). Its card
   // goes back to waiting, and its own "Frame it again" brings it back the same way.
   function evict() {
@@ -298,10 +323,13 @@
     if (gone()) return;
     if (!box.isConnected) { drop(entry); return; }
     const layers = neighbourLayers(rows, t);
-    const scene = { farm: { id: null, name: t.layerFile || "The paddock" }, extent: t.geometry, extent_label: "The paddock asked about", extent_ha: t.identity?.areaHa ?? null,
-      titles: EMPTY, land_units: EMPTY, layers, reference: [] };
+    // DEC1c: a group's member's own blocks drawn over the rest, from the member-blocks layer's features as they are read
+    const own = t.group && t.member ? memberBlocksLayer(t.member) : null;
+    const scene = { farm: { id: null, name: t.layerFile || "The paddock" }, extent: t.geometry,
+      extent_label: t.group ? "The " + (t.count === 1 ? "paddock" : (t.count || "") + " paddocks") + " asked about" : "The paddock asked about", extent_ha: t.identity?.areaHa ?? null,
+      titles: EMPTY, land_units: EMPTY, layers: own ? [...layers, own] : layers, reference: [] };
     let view = null;
-    try { view = await entry.surface.open(null, scene, { show: ["extent", ...layers.map((l) => l.theme)] }); } catch { view = null; }
+    try { view = await entry.surface.open(null, scene, { show: ["extent", ...scene.layers.map((l) => l.theme)] }); } catch { view = null; }
     if (gone()) return;
     // a map that did not open gives its place back at once (its WebGL context with it)
     if (!view || !box.isConnected) { drop(entry); if (!view) say("failed", "The map couldn't be drawn just now."); return; }
@@ -311,7 +339,14 @@
     if (!layers.length || !root.FP.groupLayers || !env.sb || !env.groupId) return;
     const entries = list(view.entries);
     entry.parts = root.FP.groupLayers.create({ sb: env.sb, group: env.groupId, layers, max: 1500,
-      onData: (id, features) => { for (const e of entries) if (e.deferred && String(e.layerId) === String(id)) entry.surface.layerData(e, features); } });
+      onData: (id, features) => {
+        for (const e of entries) if (e.deferred && String(e.layerId) === String(id)) entry.surface.layerData(e, features);
+        // the member's own blocks, out of the member-blocks layer's features for this box
+        if (own && layers.some((l) => String(l.id) === String(id) && l.theme === "member_blocks")) {
+          const mine = ownBlocks(features, t.member), e = entries.find((x) => x.deferred && String(x.layerId) === own.id);
+          if (e) entry.surface.layerData(e, mine);
+        }
+      } });
     // the paddock's box with a margin about its own size (at least about 300 m): the neighbours, never the whole layer
     const [w, s, e, n] = t.bbox, mx = Math.max((e - w) * 0.75, 0.004), my = Math.max((n - s) * 0.75, 0.003);
     const frame = { bounds: [[w - mx, s - my], [e + mx, n + my]], zoom: 15 };
@@ -389,5 +424,5 @@
     return openDocument(node, { id: node.dataset.proposal, thing: { type: "document", documentId: id, title: doc?.title || null } }, env, button);
   }
 
-  return { NS, render, html, thingNode, answerNode, mount, openFrom, openDocument, seen, note, forget, sweep, neighbourLayers, frameType, MAX_FRAME_BYTES, sel, MAX_MAPS, live: () => live.size };
+  return { NS, render, html, thingNode, answerNode, mount, openFrom, openDocument, seen, note, forget, sweep, neighbourLayers, memberBlocksLayer, ownBlocks, frameType, MAX_FRAME_BYTES, sel, MAX_MAPS, live: () => live.size };
 });

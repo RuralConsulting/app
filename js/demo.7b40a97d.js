@@ -251,6 +251,29 @@
       "Date: 14 February 2022\n\n1. About the farm\nThe farm runs sheep and beef on rolling hill country with two invented streams crossing it. Most of the land is in pasture; " +
       "the gullies are retired into native planting. This text is invented for the demo and stands for the first page of a real plan, cut at the bound the proposal run keeps." },
   };
+  // DEC1c: a grouped proposal as tools/reconcile_group.py writes it: four held paddocks (no member id, or the placeholder 999) that lie
+  // inside member 1's block (Alpha; MEMBERS[0]'s box), each with its share inside, shape and area. Invented shapes and numbers.
+  function paddockGroup(id) {
+    const [w, s] = [172.034, -43.002], dx = 0.0035, dy = 0.0028;
+    const cells = [[0, 0, 1.0, null, 9.8], [1, 0, 0.97, "999", 10.1], [0, 1, 1.0, null, 9.7], [2, 1, 0.93, null, 8.9]];
+    const paddocks = cells.map(([i, j, share, given, ha], k) => {
+      const a = w + i * dx * 1.3, b = s + j * dy * 1.3, fid = String(2101 + k);
+      return { item_key: PADDOCKS + "#" + fid, fid, id_given: given, names: { PadkName: "Paddock " + fid + " (synthetic)" }, area_ha: ha, share, envelope: false,
+        geometry: { type: "Polygon", coordinates: [[[a, b], [a + dx, b], [a + dx, b + dy], [a, b + dy], [a, b]]] } };
+    });
+    const items = paddocks.map((p) => ({ item_key: p.item_key, gap_id: null, item_sha256: "0".repeat(60) + p.fid, external_id: p.id_given, share: p.share }));
+    const m = GROUP_MEMBERS[0];
+    const cand = { member: "1", business_name: m.business_name, confidence: 0.93, signals: ["member_blocks"],
+      evidence: [{ signal: "member_blocks", paddocks: 4, share_min: 0.9, least_share: 0.93, from: "the paddocks' shapes against the member's blocks in the group's member-blocks layer" }] };
+    return { id, org_id: GROUP, farm_id: null, kind: "member_match_paddock_group", subject_key: "paddock_group:" + PADDOCKS + ":1:0000demo0116",
+      subject: { gap_kind: "paddock_held", source_file: PADDOCKS, member: "1", part: 1, parts: 1, count: 4, items },
+      evidence: { set_aside_because: "held back from the map with no member id; it lies inside one member's blocks", lines: ["  (the reconcile summary's lines for this group, invented)"],
+        identity: { kind: "paddock_group", member: "1", business_name: m.business_name, source_file: PADDOCKS, count: 4, share_min: 0.9, least_share: 0.93,
+          bbox: [w, s, w + 2 * dx * 1.3 + dx, s + dy * 1.3 + dy], area_ha: 38.5, crs: "EPSG:4326", paddocks },
+        test: { share_min: 0.9, method: "reconcile_group/DEC1c-2026-11-07", rule: "the share of the paddock's area inside the member's blocks" } },
+      candidates: [cand], status: "proposed", decision: null, decided_by: null, decided_at: null, applied_at: null, outcome: null, document_id: null,
+      method_version: "reconcile_group/DEC1c-2026-11-07", run_id: "de000000-0000-4000-8000-000000000a03", created_at: "2026-11-07T03:00:00Z" };
+  }
   function manageProposals() {
     const run = "de000000-0000-4000-8000-000000000a01", mv = "reconcile_group/A14a-2026-11-06";
     const cand = (n, confidence, signals, evidence) => ({ member: String(n), business_name: GROUP_MEMBERS[n - 1].business_name, confidence, signals, evidence });
@@ -367,11 +390,11 @@
       const none = (id, path, identity) => ({ ...copy(t.proposals.find((p) => p.id === 104)), id, subject: file(path), subject_key: "fep_unmatched:" + path, status: "proposed", candidates: [],
         evidence: { set_aside_because: "no member number in the file name", lines: [], replaces_stale_match: null, ...(identity ? { identity } : {}) } });
       t.proposals = [...t.proposals.filter((p) => [101, 102, 103, 104].includes(p.id)), none(114, "FarmData/Hill station plan draft (synthetic).docx", IDENTITY.golf),
-        none(115, "FarmData/Scan 0042 (synthetic).pdf", null)];
+        none(115, "FarmData/Scan 0042 (synthetic).pdf", null), paddockGroup(116)];
       t.proposals.find((p) => p.id === 102).document_id = HELD_DOC;
       t.documents.push({ id: HELD_DOC, org_id: GROUP, farm_id: null, title: "Charlie plan final (synthetic).pdf", doc_type: "fep", tier: "archive", storage_path: "demo/held/charlie-plan-final.pdf",
         created_at: "2026-11-06T02:00:00Z", visibility: "farm" });
-      Object.assign(mine, { counts: { fep_unmatched: 5, paddock_held: 1, member_no_extent: 0 }, items: mine.items.filter((i) => i.kind === "fep_unmatched") });
+      Object.assign(mine, { counts: { fep_unmatched: 5, paddock_held: 5, member_no_extent: 0 }, items: mine.items.filter((i) => i.kind === "fep_unmatched") });
     }
   }
   // As public.proposals_open_counts and public.proposals_decide (ON3a): counts for any member of the group; a decision by an
@@ -424,7 +447,7 @@
     d.lastDecide = copy(args);
     let chosen = null, from = args.status === "accepted" ? "candidates" : null;
     if (args.status === "accepted" && args.chosen_from === "register") {
-      if (!/^member_match_(file|paddock)$/.test(p.kind)) return [null, { message: "only a member match (a set-aside file or paddock) takes a member from the group's register" }];
+      if (!/^member_match_(file|paddock|paddock_group)$/.test(p.kind)) return [null, { message: "only a member match (a set-aside file or paddock) takes a member from the group's register" }];
       const m = GROUP_MEMBERS.find((x) => (args.candidate?.member == null || x.member_number === String(args.candidate.member)) && (args.candidate?.group_member_id == null || x.id === args.candidate.group_member_id));
       if (!m) return [null, { message: "member " + (args.candidate?.member ?? "") + " is not on this group's register" }];
       if (m.ended_at) return [null, { message: "member " + m.member_number + " has left this group's register" }];
@@ -1157,7 +1180,9 @@
         if (name === "group_load_gaps") return result(d.tables.profiles[0]?.is_staff ? (d.loadGaps || []).filter((g) => !args?.group_id || g.group_id === args.group_id).map((g) => {
           if (g.group_id !== GROUP || !d.groupTables?.proposals) return g;
           const open = {};
-          for (const p of d.groupTables.proposals) if (["proposed", "ambiguous"].includes(p.status) && p.subject?.gap_kind && /^member_(match_file|match_paddock|extent)$/.test(p.kind)) open[p.subject.gap_kind] = (open[p.subject.gap_kind] || 0) + 1;
+          // DEC1c: a held paddock in an open grouped proposal counts, one for each paddock in the group
+          for (const p of d.groupTables.proposals) if (["proposed", "ambiguous"].includes(p.status) && p.subject?.gap_kind && /^member_(match_file|match_paddock|extent|match_paddock_group)$/.test(p.kind))
+            open[p.subject.gap_kind] = (open[p.subject.gap_kind] || 0) + (p.kind === "member_match_paddock_group" ? (p.subject.items || []).length : 1);
           return { ...g, open_proposals: open };
         }) : []);
         // EV1, as public.ai_ratchet_evaluation: invented counts for the demo's advisor (staff only), the same for any period.
