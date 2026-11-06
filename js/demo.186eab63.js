@@ -37,8 +37,10 @@
   // The catchment group demo (S5): the advisor is also an admin of "HDLG (example)", a group with invented members.
   const isGroup = (hash) => /^#\/demo\/group(?:\/|\?|$)/.test(hash);
   // ON3b: the group demo's queue as the live one can be: "?queue=sparse" (a handful of rows, mostly ambiguous, and many items
-  // with no member evidence) or "?queue=empty" (nothing open); null is the full invented queue.
-  const queueOf = (hash) => (isGroup(hash) && /[?&]queue=(sparse|empty)(?:&|$)/.exec(hash)?.[1]) || null;
+  // with no member evidence) or "?queue=empty" (nothing open); null is the full invented queue. DEC1b: "?queue=cards" is one open row
+  // of each kind of decision card, as HDLG's are after DEC1a (workbook and PDF identities, a file the group holds, a held paddock, two
+  // files with no candidate, one of them written before DEC1a with no identity).
+  const queueOf = (hash) => (isGroup(hash) && /[?&]queue=(sparse|empty|cards)(?:&|$)/.exec(hash)?.[1]) || null;
   // "#/demo..." -> the app's own "#/farm/<id>..." route ("" is the portfolio, null is not a demo route).
   function routeHash(hash) {
     const multi = isMulti(hash);
@@ -232,15 +234,32 @@
     id: "de000000-0000-4000-8000-0000000003" + String(i + 1).padStart(2, "0"), org_id: GROUP, member_number: String(i + 1), business_name: w + " Invented Ltd",
     ended_at: w === "India" ? "2025-06-30T00:00:00Z" : null, created_at: "2026-06-01T00:00:00Z" }));
   const PADDOCKS = "Paddock master (synthetic).gpkg";
+  // DEC1b: what identifies each proposal's subject, as tools/reconcile_group.py stores it after DEC1a (evidence.identity), and a
+  // group-held copy of one file (proposals.document_id, as VIS1 will link it). Invented text and shapes only.
+  const HELD_DOC = "de000000-0000-4000-8000-000000000d01";
+  const IDENTITY = {
+    charlie: { kind: "workbook", format: "xlsm", cover: [{ label: "Farm Name", value: "Charlie Downs (synthetic)", sheet: "CoverPage" }, { label: "Owner", value: "C. Invented", sheet: "CoverPage" },
+      { label: "Farm Address", value: "12 Invented Road, Example Valley (synthetic)", sheet: "CoverPage" }, { label: "Audit Date", value: "2021-03-04", sheet: "CoverPage" }] },
+    bravo: { kind: "workbook", format: "xlsm", cover: [{ label: "Farm Name", value: "Bravo Foxtrot Partnership (synthetic)", sheet: "CoverPage" }, { label: "Owner(s)", value: "B. and F. Invented", sheet: "CoverPage" },
+      { label: "Date Prepared", value: "2019-08-21", sheet: "CoverPage" }] },
+    charliePdf: { kind: "document", format: "pdf", pages: 14, truncated: false, first_page: "Farm Environment Plan (synthetic)\nCharlie Invented Ltd\nCharlie Downs, 12 Invented Road, Example Valley\n" +
+      "Prepared for the example catchment group\nVersion 3, March 2021\nPrepared by an invented consultant\nThis plan is an invented example for the demo; no part of it is real." },
+    paddock: { kind: "paddock", id_field: "hdlg_id", id_given: "999", names: { PadkName: "Winter block (synthetic)" }, crs: "EPSG:4326", area_ha: 11.8, vertices: 6, simplified_m: 0, envelope: false,
+      geometry: { type: "Polygon", coordinates: [[[172.0285, -43.0012], [172.0322, -43.001], [172.0327, -42.9985], [172.0301, -42.9978], [172.0283, -42.999], [172.0285, -43.0012]]] },
+      bbox: [172.0283, -43.0012, 172.0327, -42.9978] },
+    golf: { kind: "document", format: "docx", truncated: true, first_page: "Golf Hill Station (synthetic)\nFarm Environment Plan, draft for review\nOwner: G. Invented\nAddress: 3 Invented Lane, Example Valley (synthetic)\n" +
+      "Date: 14 February 2022\n\n1. About the farm\nThe farm runs sheep and beef on rolling hill country with two invented streams crossing it. Most of the land is in pasture; " +
+      "the gullies are retired into native planting. This text is invented for the demo and stands for the first page of a real plan, cut at the bound the proposal run keeps." },
+  };
   function manageProposals() {
     const run = "de000000-0000-4000-8000-000000000a01", mv = "reconcile_group/A14a-2026-11-06";
     const cand = (n, confidence, signals, evidence) => ({ member: String(n), business_name: GROUP_MEMBERS[n - 1].business_name, confidence, signals, evidence });
     const file = (path, kind = "fep_unmatched", external_id = null) => ({ gap_kind: kind, item_key: path, gap_id: null, source_file: path.split("/").pop(), external_id, item_sha256: "0".repeat(63) + "1" });
     const paddock = (fid, external_id = null) => ({ gap_kind: "paddock_held", item_key: PADDOCKS + "#" + fid, gap_id: null, source_file: PADDOCKS, external_id, item_sha256: null });
-    const ev = (because) => ({ set_aside_because: because, lines: ["  (the reconcile summary's lines for this item, invented)"], replaces_stale_match: null });
+    const ev = (because, identity) => ({ set_aside_because: because, lines: ["  (the reconcile summary's lines for this item, invented)"], replaces_stale_match: null, ...(identity ? { identity } : {}) });
     const row = (id, kind, subject, status, candidates, extra = {}) => ({ id, org_id: GROUP, farm_id: null, kind, subject, subject_key: subject.gap_kind ? subject.gap_kind + ":" + subject.item_key : String(subject.location_key),
-      evidence: ev(extra.because || "no member number in the file name"), candidates, status, decision: null, decided_by: null, decided_at: null, applied_at: null, outcome: null,
-      method_version: mv, run_id: run, created_at: "2026-11-04T09:00:00Z", ...extra.row });
+      evidence: ev(extra.because || "no member number in the file name", extra.identity), candidates, status, decision: null, decided_by: null, decided_at: null, applied_at: null, outcome: null,
+      document_id: extra.document_id || null, method_version: mv, run_id: run, created_at: "2026-11-04T09:00:00Z", ...extra.row });
     const decided = (c, note, at) => ({ decision: { candidate: c, note }, decided_by: USER, decided_at: at });
     const c4 = cand(4, 0.9, ["member_number"], [{ signal: "member_number", from: "member folder in the path", folder: "HDLG 4 Delta (synthetic)", number: "4", confidence: 0.9 }]);
     const c1 = cand(1, 0.8, ["member_number"], [{ signal: "member_number", from: "field AltId", value: "HDLG-1", number: "1", confidence: 0.8 }]);
@@ -248,16 +267,19 @@
     return [
       row(101, "member_match_file", file("FarmData/HDLG 3 Charlie (synthetic)/Charlie Downs FEP 2021 (synthetic).xlsm"), "proposed", [
         cand(3, 0.97, ["member_number", "business_name"], [{ signal: "member_number", from: "member folder in the path", folder: "HDLG 3 Charlie (synthetic)", number: "3", confidence: 0.9 },
-          { signal: "business_name", file_words: "charlie downs", name: "Charlie Invented Ltd", name_from: "the register", similarity: 0.82, confidence: 0.697 }])]),
+          { signal: "business_name", file_words: "charlie downs", name: "Charlie Invented Ltd", name_from: "the register", similarity: 0.82, confidence: 0.697 }])],
+        { identity: IDENTITY.charlie }),
       row(102, "member_match_file", file("FarmData/Charlie plan final (synthetic).pdf"), "proposed", [
-        cand(3, 0.75, ["fep_title"], [{ signal: "fep_title", found: "business name", name: "Charlie Invented Ltd", name_from: "the register", text: "Farm Environment Plan for Charlie Invented Ltd (synthetic)", confidence: 0.75 }])]),
+        cand(3, 0.75, ["fep_title"], [{ signal: "fep_title", found: "business name", name: "Charlie Invented Ltd", name_from: "the register", text: "Farm Environment Plan for Charlie Invented Ltd (synthetic)", confidence: 0.75 }])],
+        { identity: IDENTITY.charliePdf }),
       row(103, "member_match_paddock", paddock(118, "999"), "proposed", [
         cand(5, 0.86, ["member_number", "business_name"], [{ signal: "member_number", from: "text in field Notes", value: "HDLG 5 winter block", number: "5", confidence: 0.6 },
           { signal: "business_name", field: "Owner", value: "Echo Invented", name: "Echo Invented Ltd", name_from: "the register", similarity: 0.9, confidence: 0.765 }])],
-        { because: "placeholder member id" }),
+        { because: "placeholder member id", identity: IDENTITY.paddock }),
       row(104, "member_match_file", file("FarmData/Bravo Foxtrot plan (synthetic).xlsm"), "ambiguous", [
         cand(2, 0.72, ["business_name"], [{ signal: "business_name", file_words: "bravo foxtrot", name: "Bravo Invented Ltd", name_from: "the register", similarity: 0.85, confidence: 0.722 }]),
-        cand(6, 0.68, ["business_name"], [{ signal: "business_name", file_words: "bravo foxtrot", name: "Foxtrot Invented Ltd", name_from: "the register", similarity: 0.8, confidence: 0.68 }])]),
+        cand(6, 0.68, ["business_name"], [{ signal: "business_name", file_words: "bravo foxtrot", name: "Foxtrot Invented Ltd", name_from: "the register", similarity: 0.8, confidence: 0.68 }])],
+        { identity: IDENTITY.bravo }),
       row(105, "member_match_file", file("FarmData/HDLG 4 Delta (synthetic)/FEP 2020 (synthetic).pdf"), "accepted", [c4], { row: decided(c4, "Checked with the facilitator (synthetic)", "2026-11-04T21:10:00Z") }),
       row(106, "member_match_paddock", paddock(7), "applied", [c1], { because: "no member id", row: { ...decided(c1, null, "2026-11-04T21:20:00Z"), applied_at: "2026-11-05T02:00:00Z", outcome: { recorded: true } } }),
       row(107, "member_match_file", file("FarmData/HDLG member 2 plan (synthetic).pdf"), "applied", [c2], { row: { ...decided(c2, null, "2026-10-18T21:00:00Z"), applied_at: "2026-10-20T02:00:00Z", outcome: { recorded: true } } }),
@@ -332,6 +354,23 @@
       t.proposals = t.proposals.filter((p) => p.status === "applied" && p.id === 107);   // only what was placed long ago
       t.group_load_gaps = []; Object.assign(mine, { counts: {}, open_proposals: {}, items: [] });
     }
+    // DEC1b: the group's own layers by name and theme (map_layers: the card's map reads the neighbours of a held paddock by box)
+    data.tables.map_layers = data.tables.map_layers || [];
+    t.map_layers = groupPartsLayers(data).map((l) => ({ id: l.id, org_id: GROUP, name: l.name, theme: l.theme, geometry_type: l.geometry_type, source_file: l.theme === "paddocks" ? PADDOCKS : null,
+      source: l.source, style: {} }));
+    if (queue === "cards") {
+      // one open row of each kind of card: the workbook (101) and the PDF the group holds a copy of (102), the held paddock (103), the
+      // ambiguous workbook (104), a Word file with no candidate (114) and a file proposed before DEC1a with no candidate and no identity (115)
+      const file = (path) => ({ gap_kind: "fep_unmatched", item_key: path, gap_id: null, source_file: path.split("/").pop(), external_id: null, item_sha256: "0".repeat(63) + "3" });
+      const none = (id, path, identity) => ({ ...copy(t.proposals.find((p) => p.id === 104)), id, subject: file(path), subject_key: "fep_unmatched:" + path, status: "proposed", candidates: [],
+        evidence: { set_aside_because: "no member number in the file name", lines: [], replaces_stale_match: null, ...(identity ? { identity } : {}) } });
+      t.proposals = [...t.proposals.filter((p) => [101, 102, 103, 104].includes(p.id)), none(114, "FarmData/Hill station plan draft (synthetic).docx", IDENTITY.golf),
+        none(115, "FarmData/Scan 0042 (synthetic).pdf", null)];
+      t.proposals.find((p) => p.id === 102).document_id = HELD_DOC;
+      t.documents.push({ id: HELD_DOC, org_id: GROUP, farm_id: null, title: "Charlie plan final (synthetic).pdf", doc_type: "fep", tier: "archive", storage_path: "demo/held/charlie-plan-final.pdf",
+        created_at: "2026-11-06T02:00:00Z", visibility: "farm" });
+      Object.assign(mine, { counts: { fep_unmatched: 5, paddock_held: 1, member_no_extent: 0 }, items: mine.items.filter((i) => i.kind === "fep_unmatched") });
+    }
   }
   // As public.proposals_open_counts and public.proposals_decide (ON3a): counts for any member of the group; a decision by an
   // admin, advisor or facilitator only, from proposed or ambiguous, naming one of the row's own candidates (kept in memory).
@@ -378,8 +417,19 @@
     if (!p || !["admin", "advisor", "facilitator"].includes(role)) return [null, { message: "proposal " + args.id + " is not open for you to decide" }];
     if (!["proposed", "ambiguous"].includes(p.status)) return [null, { message: "proposal " + args.id + " is already " + p.status }];
     if (!["accepted", "rejected"].includes(args.status)) return [null, { message: "a decision is accepted or rejected" }];
-    let chosen = null;
-    if (args.status === "accepted") {
+    // DEC1b, as DEC1a's proposals_decide: the arguments the card sent (the screenshots read them), a member from the register
+    // (current members of this group only; one of the candidates is recorded as that candidate), and what was in view
+    d.lastDecide = copy(args);
+    let chosen = null, from = args.status === "accepted" ? "candidates" : null;
+    if (args.status === "accepted" && args.chosen_from === "register") {
+      if (!/^member_match_(file|paddock)$/.test(p.kind)) return [null, { message: "only a member match (a set-aside file or paddock) takes a member from the group's register" }];
+      const m = GROUP_MEMBERS.find((x) => (args.candidate?.member == null || x.member_number === String(args.candidate.member)) && (args.candidate?.group_member_id == null || x.id === args.candidate.group_member_id));
+      if (!m) return [null, { message: "member " + (args.candidate?.member ?? "") + " is not on this group's register" }];
+      if (m.ended_at) return [null, { message: "member " + m.member_number + " has left this group's register" }];
+      chosen = p.candidates.find((c) => c.member === m.member_number) || { member: m.member_number, business_name: m.business_name, group_member_id: m.id };
+      if (!p.candidates.includes(chosen)) from = "register";
+    } else if (args.status === "accepted") {
+      if (!p.candidates.length) return [null, { message: "proposal " + p.id + " has no candidates: name the member from the register (chosen_from register)" }];
       if (args.candidate == null) { if (p.status === "ambiguous") return [null, { message: "an ambiguous proposal needs one of its candidates chosen" }]; chosen = p.candidates[0]; }
       else {
         const hits = p.candidates.filter((e) => contains(e, args.candidate));
@@ -388,7 +438,8 @@
       }
     } else if (args.candidate != null) return [null, { message: "a rejection names no candidate" }];
     const note = String(args.note || "").trim() || null;
-    Object.assign(p, { status: args.status, decision: { candidate: copy(chosen), note }, decided_by: USER, decided_at: new Date().toISOString() });
+    Object.assign(p, { status: args.status, decision: { candidate: copy(chosen), note, ...(from ? { chosen_from: from } : {}), ...(Array.isArray(args.viewed) && args.viewed.length ? { viewed: copy(args.viewed) } : {}) },
+      decided_by: USER, decided_at: new Date().toISOString() });
     return [p];
   }
   function groupRpc(d, name, args) {
@@ -1100,8 +1151,9 @@
         if (name === "consent-conditions") { const r = demoConditions(await ready, options?.body); return r ? result(r) : error("You can fetch the conditions only of a consent on a farm you edit, whose conditions aren't recorded yet."); }
         return error("The demo does not save changes");
       } },
-      // Every document opens the one stand-in page; the demo's photo points name the one stand-in picture.
-      storage: { from: () => ({ createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
+      // Every document opens the one stand-in page (DEC1b: a file the group holds, under demo/held/, the stand-in PDF a card frames);
+      // the demo's photo points name the one stand-in picture.
+      storage: { from: () => ({ createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : String(path).startsWith("demo/held/") && String(path).endsWith(".pdf") ? "demo/source.pdf" : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
         upload: async (path) => result({ path }) }) },
     };
   }

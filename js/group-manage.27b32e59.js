@@ -14,7 +14,9 @@
   const M = () => FP.groupManageModel;
   const el = (...a) => FP.el(...a);
   const list = (v) => (Array.isArray(v) ? v : []);
-  const PROPOSAL_COLUMNS = "id,kind,subject,subject_key,evidence,candidates,status,decision,decided_by,decided_at,applied_at,created_at";
+  // DEC1b: document_id, the group document a proposal is about (DEC1a; null until VIS1 lets the group hold set-aside files), and
+  // org_id, so the card offers the register only for a group's row (decision-card-model.js registerAllowed)
+  const PROPOSAL_COLUMNS = "id,org_id,kind,subject,subject_key,evidence,candidates,status,decision,decided_by,decided_at,applied_at,created_at,document_id";
   const ASSOC_COLUMNS = "id,farm_id,group_member_id,status,group_approved_at,farm_approved_at,ended_at,ended_side,created_at";
   const cache = new Map();   // group id -> { pending, data }, kept while the person moves between the tabs
   const decidedHere = new Set(), refusals = new Map();   // this visit's decisions and refusals, by proposal id
@@ -159,38 +161,31 @@
       el("ul", { class: "group-lines" }, ...v.setAside.map((s) => el("li", { "data-kind": s.kind }, el("span", {}, s.text), s.resolve ? el("small", {}, "To place them: " + s.resolve) : null))),
       v.checked ? el("p", { class: "group-fine" }, v.checked + ".") : null));
   }
-  function evidenceList(c) {
-    return el("ul", { class: "manage-evidence" }, ...c.evidence.map((t) => el("li", {}, t)));
-  }
+  // DEC1b: each proposal is a decision card (decision-card.js): the question with the thing it is about (the file's identity, the file
+  // itself when the group holds it, or the held paddock framed on a small map with its neighbours), the candidates first with their
+  // evidence, any current member of the register for a member match, Not this, and a note; what was on screen goes with the answer.
+  const DC = () => FP.decisionCard;
   function proposalItem(l, group, d, redraw, wrap) {
-    const li = el("li", { class: "manage-line", "data-proposal": l.id, "data-state": l.state },
-      el("div", { class: "manage-item" }, el("b", {}, l.item.title), el("small", {}, [l.item.what, l.item.id, l.item.path && l.item.path !== l.item.title ? l.item.path : null].filter(Boolean).join(" · "))),
-      el("p", { class: "manage-state", tabindex: "-1" }, l.text));
-    if (l.because) li.append(el("small", { class: "manage-because" }, l.because));
-    if (l.replaces) li.append(el("small", {}, l.replaces));
-    // the evidence: the proposed (or chosen) member's, or every candidate's when more than one could fit
-    const shown = l.state === "ambiguous" ? l.candidates : [l.proposed || l.chosen].filter(Boolean);
-    for (const c of shown) li.append(el("div", { class: "manage-candidate" }, el("span", {}, c.label + (c.confidence != null ? " · confidence " + c.confidence : "") + (c.signals.length ? " (" + c.signals.join(", ") + ")" : "")), evidenceList(c)));
-    if (l.decided && !l.open) li.append(el("small", {}, l.decided));
+    const row = d.proposals.find((p) => p.id === l.id) || { id: l.id, kind: l.kind, status: l.status, candidates: [] };
+    const answering = (!refusals.has(l.id) || unreadAfterRefusal.has(l.id)) && l.open && M().canDecide(group.role);
+    const card = M().card(row, { open: d.open, checkedAt: d.gaps?.checked_at || null }, { register: d.register, answering });
+    const li = DC().render(card, { el, ns: "manage", tag: "li", wrapClass: "manage-line decision-card" });
     // a decision the database refused (another decider got there first, a re-run superseded it, the role was lost): the refusal,
     // and the row as it is now, with no buttons; but when the row could not be read again either, its buttons stay (FU3), with the
     // error line, since nothing says it is no longer open
     if (refusals.has(l.id)) li.append(el("p", { class: "manage-msg manage-refused", role: "alert" }, refusals.get(l.id)));
-    if ((!refusals.has(l.id) || unreadAfterRefusal.has(l.id)) && l.open && M().canDecide(group.role)) li.append(controls(l, group, d, redraw, wrap));
+    if ((!refusals.has(l.id) || unreadAfterRefusal.has(l.id)) && l.open && M().canDecide(group.role)) (li.querySelector(".card-question") || li).append(controls(l, group, d, redraw, wrap, card));
+    DC().mount(li, card, { sb: FP.sb, groupId: group.id });
     return li;
   }
-  function controls(l, group, d, redraw, wrap) {
-    const row = d.proposals.find((p) => p.id === l.id);
-    const note = el("input", { type: "text", maxlength: "2000", class: "manage-note", "aria-label": "Note on " + l.item.title, placeholder: "Note (optional)" });
-    const msg = el("p", { class: "manage-msg", role: "status" });
-    const pick = l.canPick ? el("select", { class: "manage-pick", "aria-label": "Pick a member for " + l.item.title },
-      el("option", { value: "" }, "Pick a member…"), ...l.candidates.filter((c) => c.member != null).map((c) => el("option", { value: String(c.member) }, c.label))) : null;
-    const buttons = [];
-    const go = async (action, button) => {
-      const args = M().decision(row, action, { member: action === "pick" ? pick?.value || null : null, note: note.value });
-      if (!args) { msg.textContent = "Pick one of the members first."; pick?.focus(); return; }
+  function controls(l, group, d, redraw, wrap, card) {
+    const row = card.p;
+    const go = async (action, { pick, say, buttons, note }) => {
+      const args = FP.decisionCardModel.decide(row, action === "pick" ? "accept" : action, { pick, note, viewed: DC().seen(l.id), mode: card.answer.mode });
+      // a row that names no member (ambiguous, or no candidate at all) sends nothing until one is picked
+      if (!args) { say(card.answer.mode === "member" ? "Pick a member first." : "Pick one first."); return; }
       for (const b of buttons) b.disabled = true;
-      msg.textContent = "Saving…";
+      say("Saving…");
       const { data: saved, error } = await decideRpc(args);
       if (error || !saved) {
         // refused: read the row again and show it as it is now (or drop it when it can no longer be read), with the refusal
@@ -221,11 +216,7 @@
       wrap.querySelector('[data-proposal="' + saved.id + '"] .manage-state')?.focus?.();
       refreshCount(wrap, group, d);
     };
-    if (l.state === "proposed") buttons.push(el("button", { type: "button", class: "primary", "data-act": "accept", onclick: (e) => go("accept", e.target) }, "Accept"));
-    buttons.push(el("button", { type: "button", class: "secondary", "data-act": "reject", onclick: (e) => go("reject", e.target) }, "Not this"));
-    if (pick) buttons.push(el("button", { type: "button", class: l.state === "ambiguous" ? "primary" : "secondary", "data-act": "pick", onclick: (e) => go("pick", e.target) },
-      l.state === "ambiguous" ? "Accept the member picked" : "Accept another member"));
-    return el("div", { class: "manage-controls" }, ...(pick ? [pick] : []), note, el("div", { class: "manage-buttons" }, ...buttons), msg);
+    return DC().answerNode(card, { el, ns: "manage", onDecide: go });
   }
 
   // ---- Members ----------------------------------------------------------------------------------------------------------------
@@ -360,33 +351,29 @@
     if (v.empty && d.proposalsRead) { body.append(el("p", { class: "manage-empty" }, v.emptyText)); return; }
     body.append(el("ul", { class: "manage-lines manage-feed" }, ...v.lines.map((l) => feedItem(l, group, d, body, wrap))));
   }
+  // DEC1b: a feed row is the same decision card, its two answers (Seen, Follow up) as its buttons
   function feedItem(l, group, d, body, wrap) {
-    const li = el("li", { class: "manage-line", "data-proposal": l.id, "data-kind": l.kind, "data-state": l.state },
-      el("div", { class: "manage-item" }, el("b", {}, l.title), el("small", {}, l.what)),
-      el("p", { class: "manage-state" }, l.text + (l.note ? " · " + l.note : "")));
-    if (l.lines.length) li.append(el("ul", { class: "manage-evidence" }, ...l.lines.map((t) => el("li", {}, t))));
+    const row = d.proposals.find((p) => p.id === l.id) || { id: l.id, kind: l.kind, status: "proposed", candidates: [] };
+    const card = M().feedCard(row);
+    const li = DC().render(card, { el, ns: "manage", tag: "li", wrapClass: "manage-line decision-card", attrs: { "data-kind": l.kind } });
     if (!l.open || !M().canDecide(group.role)) return li;
-    const row = d.proposals.find((p) => p.id === l.id);
-    const note = el("input", { type: "text", maxlength: "2000", class: "manage-note", "aria-label": "Note on this update", placeholder: "Note (optional)" });
-    const msg = el("p", { class: "manage-msg", role: "status" });
-    const buttons = [];
-    const go = async (action) => {
+    const go = async (action, { say, buttons, note }) => {
       for (const b of buttons) b.disabled = true;
-      msg.textContent = "Saving…";
-      const { data: saved, error } = await decideRpc(M().feedDecision(row, action, note.value));
-      if (error || !saved) { for (const b of buttons) b.disabled = false; msg.textContent = "Couldn't save it: " + (error?.message || "no reply"); return; }
+      say("Saving…");
+      const args = M().feedDecision(row, action, note);
+      const seen = FP.decisionCardModel.viewedList(DC().seen(l.id));
+      const { data: saved, error } = await decideRpc(seen.length ? { ...args, viewed: seen } : args);
+      if (error || !saved) { for (const b of buttons) b.disabled = false; say("Couldn't save it: " + (error?.message || "no reply")); return; }
       d.proposals = M().replace(d.proposals, saved);
       drawUpdates(body, group, d, wrap);
       refreshCount(wrap, group, d);
     };
-    buttons.push(el("button", { type: "button", class: "primary", "data-act": "seen", onclick: () => go("seen") }, "Seen"),
-      el("button", { type: "button", class: "secondary", "data-act": "follow_up", onclick: () => go("follow_up") }, "Follow up"));
-    li.append(el("div", { class: "manage-controls" }, note, el("div", { class: "manage-buttons" }, ...buttons), msg));
+    (li.querySelector(".card-question") || li).append(DC().answerNode(card, { el, ns: "manage", onDecide: go }));
     return li;
   }
 
   // forget: the cache lasts only across tab switches (group-space.js drops it on entering Manage from another view, on a change of
   // group and on leaving the group space), so a later visit reads the queue again
-  function forget(id) { if (id) cache.delete(id); else cache.clear(); decidedHere.clear(); refusals.clear(); unreadAfterRefusal.clear(); }
+  function forget(id) { if (id) cache.delete(id); else cache.clear(); decidedHere.clear(); refusals.clear(); unreadAfterRefusal.clear(); FP.decisionCard?.forget(); }
   FP.groupManage = { view, load, readAll, forget };
 })(typeof window === "undefined" ? globalThis : window);

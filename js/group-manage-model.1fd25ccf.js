@@ -177,12 +177,14 @@
   }
   function line(p, ctx = {}) {
     const item = itemOf(p), cands = (Array.isArray(p.candidates) ? p.candidates : []).map(candidateOf);
-    const chosen = p.decision?.candidate ? candidateOf(p.decision.candidate) : null;
+    // DEC1a: a member named from the register (chosen_from "register") is not one of the candidates; rows decided before it have none
+    const chosen = p.decision?.candidate ? { ...candidateOf(p.decision.candidate), register: p.decision.chosen_from === "register" } : null;
     const note = p.decision?.note || null, by = p.decided_at ? day(p.decided_at) : null;
     let state, text;
-    if (p.status === "proposed") { state = "proposed"; text = "Proposed: " + (cands[0]?.label || "no member"); }
+    // DEC1a: a set-aside file with no candidate is proposed with none; DEC1b: the register is searched for its member
+    if (p.status === "proposed") { state = "proposed"; text = cands.length ? "Proposed: " + cands[0].label : "No suggestion: pick a member"; }
     else if (p.status === "ambiguous") { state = "ambiguous"; text = cands.length === 1 ? "One possible member: pick it, or Not this" : "Pick one of these members, or Not this"; }
-    else if (waitingForLoad(p, ctx)) { state = "accepted"; text = "Accepted" + (chosen ? " (" + chosen.label + ")" : "") + ", placed on the next group load"; }
+    else if (waitingForLoad(p, ctx)) { state = "accepted"; text = "Accepted" + (chosen ? " (" + chosen.label + (chosen.register ? ", from the register" : "") + ")" : "") + ", placed on the next group load"; }
     else if (p.status === "rejected") { state = "rejected"; text = "Not this: it stays set aside"; }
     else { state = "done"; text = p.status === "applied" ? "Placed" : "No longer open"; }
     const evidence = p.evidence && typeof p.evidence === "object" ? p.evidence : {};
@@ -206,6 +208,31 @@
     return { id: p.id, status: "accepted", candidate: choose(pick), note: text };
   }
   const replace = (rows, row) => (rows || []).map((r) => (r.id === row?.id ? row : r));
+
+  // ---- DEC1b: the decision card (decision-card.js) for a proposal line ------------------------------------------------------------
+  // The card puts the question with the thing it is about (the file's identity, or the held paddock framed on a small map) and
+  // answers it with the candidates first and, for a member match, any current member of the register (`register`: the
+  // group_members rows read, or null when they could not be read). `answering`: the person decides here (the buttons are drawn).
+  const DC = () => (typeof module === "object" && module.exports ? require("./decision-card-model.js") : globalThis.FP.decisionCardModel);
+  const candidateCard = (c) => ({ label: c.label, detail: [c.confidence != null ? "confidence " + c.confidence : null, c.signals.length ? c.signals.join(", ") : null].filter(Boolean).join(" · ") || null,
+    evidence: c.evidence });
+  function card(p, ctx = {}, { register = null, answering = false } = {}) {
+    const l = line(p, ctx), dc = DC();
+    const chosen = l.chosen ? { ...candidateCard(l.chosen), detail: l.chosen.register ? "from the register" : candidateCard(l.chosen).detail } : null;
+    // read only: the proposed (or chosen) member's evidence, or every candidate's when more than one could fit
+    const readOnly = l.state === "ambiguous" ? l.candidates.map(candidateCard) : l.proposed ? [candidateCard(l.proposed)] : chosen ? [chosen] : [];
+    return { id: l.id, p, line: l, title: l.item.title, sub: [l.item.what, l.item.id, l.item.path && l.item.path !== l.item.title ? l.item.path : null].filter(Boolean).join(" · "),
+      state: l.state, stateText: l.text, lines: [l.because, l.replaces], thing: dc.thingOf(p),
+      candidates: answering ? l.candidates.map(candidateCard) : readOnly, shown: answering ? [] : readOnly.map((_, i) => i),
+      answer: dc.answerOf(p), register: dc.registerAllowed(p) ? register : null, canAnswer: false, decided: l.decided && !l.open ? l.decided : null };
+  }
+  // A feed row (Updates) as a card: its words, and its two answers as buttons (Seen, Follow up).
+  function feedCard(p) {
+    const l = feedLine(p);
+    return { id: l.id, p, line: l, title: l.title, sub: l.what, state: l.state, stateText: l.text + (l.note ? " · " + l.note : ""), lines: l.lines, thing: { type: "plain" },
+      candidates: [], shown: [], answer: { mode: "actions", actions: [{ key: "seen", label: "Seen", primary: true }, { key: "follow_up", label: "Follow up" }] },
+      register: null, canAnswer: false, decided: null };
+  }
 
   // The Gaps tab: the open, accepted and still-to-be-placed proposals about the group's set-aside items, one line each with its
   // evidence, grouped by proposed member (a row with several close candidates under "More than one member could fit"); then, per
@@ -412,5 +439,6 @@
   }
 
   return { DECIDERS, canDecide, canManage, TABS, tabs, tabFor, showsLink, countLine, noEvidence, waitingByGap, itemOf, evidenceText, line, waitingForLoad, decision, replace,
-    gapsTab, membersTab, associationText, sitesTab, proposeArgs, feedLine, feedTab, feedDecision, sinceLine, farmId, email, INVITE_ROLES, MEMBER_KINDS, DECIDE_KINDS, FEED_KINDS, day };
+    gapsTab, membersTab, associationText, sitesTab, proposeArgs, feedLine, feedTab, feedDecision, sinceLine, farmId, email, INVITE_ROLES, MEMBER_KINDS, DECIDE_KINDS, FEED_KINDS, day,
+    card, feedCard };
 });

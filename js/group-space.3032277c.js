@@ -117,6 +117,8 @@
     $("#screen-group").dataset.view = route.view;
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
     if (route.view === "manage" && (lastView !== "manage" || ctx?.group.id !== group.id)) FP.groupManage?.forget(group.id);
+    // DEC1b: leaving Manage removes its decision cards' small maps (each a WebGL context and the engine's listeners)
+    if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
     if (route.view === "manage") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }

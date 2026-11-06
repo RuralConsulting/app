@@ -57,21 +57,20 @@
     }
     if (!o.canDecide) return '<div class="onboarding-decision" data-proposal="' + id + '" data-status="' + esc(p.status) + '">' + first +
       '<p class="onboarding-who">Waiting for a farm editor to decide.</p></div>';
-    if (ack) return '<div class="onboarding-decision" data-proposal="' + id + '" data-status="' + esc(p.status) + '">' +
-      '<label class="visually-hidden" for="ob-dnote-' + id + '">Note</label><input type="text" maxlength="500" id="ob-dnote-' + id + '" data-onboarding-dnote="' + id + '" placeholder="Note (optional)">' +
-      '<div class="onboarding-buttons"><button type="button" class="primary" data-onboarding-decide="accept" data-proposal-id="' + id + '">Seen, correct</button>' +
-      '<button type="button" data-onboarding-decide="reject" data-proposal-id="' + id + '">Not the farm\'s</button></div>' +
-      '<p class="onboarding-who">To follow it up later, leave it undecided: it stays open.</p>' +
-      '<p class="onboarding-decide-msg" role="status" data-decide-msg="' + id + '"></p></div>';
-    const several = cands.length > 1;
-    const pick = several ? '<label class="visually-hidden" for="ob-pick-' + id + '">Pick one</label><select id="ob-pick-' + id + '" data-onboarding-pick="' + id + '"><option value="">Pick one…</option>' +
-      cands.map((c, n) => '<option value="' + n + '">' + esc(model().candidateText(c)) + "</option>").join("") + "</select>" : "";
-    return '<div class="onboarding-decision" data-proposal="' + id + '" data-status="' + esc(p.status) + '">' + (several ? "" : first) + pick +
-      '<label class="visually-hidden" for="ob-dnote-' + id + '">Note</label><input type="text" maxlength="500" id="ob-dnote-' + id + '" data-onboarding-dnote="' + id + '" placeholder="Note (optional)">' +
-      '<div class="onboarding-buttons">' + (p.status === "proposed" ? '<button type="button" class="primary" data-onboarding-decide="accept" data-proposal-id="' + id + '">Accept</button>' : "") +
-      '<button type="button" data-onboarding-decide="reject" data-proposal-id="' + id + '">Not this</button>' +
-      (several ? '<button type="button" data-onboarding-decide="pick" data-proposal-id="' + id + '">Accept the one picked</button>' : "") + "</div>" +
-      '<p class="onboarding-decide-msg" role="status" data-decide-msg="' + id + '"></p></div>';
+    // DEC1b: an editor answers on the decision card every queue uses (decision-card.js): the finding's document, when the farm holds
+    // it, opened beside the question; its candidates (Accept / Not this / Pick), or an acknowledgement's two answers
+    return card().html(cardOf(i, p, o), { ns: "onboarding", tag: "div", wrapClass: "onboarding-decision decision-card", attrs: { "data-status": p.status } });
+  }
+  const card = () => (typeof module === "object" && module.exports ? require("./decision-card.js") : root.FP.decisionCard);
+  const cardModel = () => (typeof module === "object" && module.exports ? require("./decision-card-model.js") : root.FP.decisionCardModel);
+  // The card for a finding's open proposal: its document (a finding that rests on one the farm holds, with a file to open), and
+  // its answer: an acknowledgement's "Seen, correct" / "Not the farm's", or the candidates (one named, several picked from).
+  function cardOf(i, p, o) {
+    const cands = list(p.candidates), src = [i.source, ...list(i.sources)].find((s) => s?.kind === "document" && s.id);
+    const held = src && list(o.docs).some((d) => String(d.id) === String(src.id) && d.storage_path) ? { id: src.id, title: src.title } : null;
+    return { id: p.id, p, thing: held ? cardModel().thingOf(p, { doc: held }) : { type: "plain" }, candidates: cands.map((c) => ({ label: model().candidateText(c) })), canAnswer: true,
+      answer: isAck(p) ? { mode: "actions", actions: [{ key: "accept", label: "Seen, correct", primary: true }, { key: "reject", label: "Not the farm's" }], hint: "To follow it up later, leave it undecided: it stays open." }
+        : { mode: "choice", several: cands.length > 1, preselect: p.status === "proposed" && cands.length ? 0 : null } };
   }
   function itemHtml(i, o) {
     const sources = [i.source, ...list(i.sources)].filter(Boolean).map(sourceText).filter(Boolean);
@@ -165,7 +164,9 @@
   async function mount(host, env) {
     const M = model(), farm = env.farm.id, user = env.user?.id || null;
     let inputs = null, report = null, plans = {}, saved = null, draft = readDraft(user, farm), message = null, minutes = null, started = 0, proposals = null, requests = [], listed = true;
-    const draw = (o = {}) => { host.innerHTML = html(report, { canDecide: !!env.canEdit, userId: user, canSave: !!env.canEdit, liveHref: env.liveHref, listed, message, minutes, ...o }); };
+    // DEC1b: the farm's documents (with their storage paths) let a finding's card open the file it rests on
+    const docs = () => [...list(env.docs), ...list(inputs?.documents)];
+    const draw = (o = {}) => { host.innerHTML = html(report, { canDecide: !!env.canEdit, userId: user, canSave: !!env.canEdit, liveHref: env.liveHref, listed, message, minutes, docs: docs(), ...o }); };
     const rebuild = (o) => { report = M.build(inputs, { now: new Date().toISOString(), plans, saved, draft, proposals, requests, client_ms: (globalThis.performance?.now() || 0) - started }); draw(o); };
     host.innerHTML = '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2><p class="onboarding-status" role="status">Reading what the platform holds for this farm…</p></section>';
     // A saved report: drawn as it was saved.
@@ -228,6 +229,8 @@
     host.onclick = async (e) => {
       const go = e.target.closest("[data-onboarding-action]");
       if (go) { env.onAction?.(go.dataset.onboardingAction, go.dataset.onboardingItem || null); return; }
+      const open = e.target.closest("[data-card-open]");
+      if (open) { card().openFrom(open, { sb: env.sb, docs: docs() }); return; }
       const dec = e.target.closest("[data-onboarding-decide]");
       if (dec) await decide(dec);
     };
@@ -242,6 +245,9 @@
       const args = M.decisionArgs(item.proposal, button.dataset.onboardingDecide, { pick: box?.querySelector("[data-onboarding-pick]")?.value ?? null,
         note: box?.querySelector("[data-onboarding-dnote]")?.value });
       if (!args) { say("Pick one first."); box?.querySelector("[data-onboarding-pick]")?.focus(); return; }
+      // DEC1b: what was on screen when the person answered (the finding's file, when it was opened from the card)
+      const seen = cardModel().viewedList(card().seen(id));
+      if (seen.length) args.viewed = seen;
       for (const b of box.querySelectorAll("button")) b.disabled = true;
       say("Saving…");
       let row = null, failure = null;
