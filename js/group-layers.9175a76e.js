@@ -95,6 +95,32 @@
   const featureCount = (n) => Number(n).toLocaleString("en-NZ") + (Number(n) === 1 ? " feature" : " features");
   const zoomLine = (name, n) => "Zoom in to see " + name + " (" + Number(n).toLocaleString("en-NZ") + ")";
 
+  // #411 (3): where a layer came from, for the Layers line that tells same-named rows apart (HDLG lists "Farm plan: features"
+  // six times). The loader records `source` as "<set or author>, <folder>/<file>" (tools/load_group.py): its file and its set,
+  // "From Features areas.sqlite (JH)"; a source with no path is said as it is; with no source, the layer's own full name.
+  function fromLine(layer) {
+    const source = String(layer?.source || "").trim(), name = String(layer?.name || "").trim();
+    if (!source) return name || null;
+    const file = source.split(/[\\/]/).pop().trim();
+    if (file === source || !file) return "From " + source;
+    const set = source.split(/,\s*/)[0].trim();
+    return "From " + file + (set && set !== source && !/[\\/]/.test(set) ? " (" + set + ")" : "");
+  }
+  // rows: [{ name, from, full }] as the Layers list shows them (name: the plain name; from: where it came from; full: its own full
+  // name). Each row whose name another row shares gets a line, [from], or its full name where two of them came from the same
+  // place; every other row gets null (a name no other row has needs no line).
+  function sameNameLines(rows) {
+    const items = list(rows), by = new Map();
+    for (const r of items) { const k = String(r?.name ?? ""); by.set(k, (by.get(k) || 0) + 1); }
+    return items.map((r) => {
+      if ((by.get(String(r?.name ?? "")) || 0) < 2) return null;
+      const twins = items.filter((x) => x !== r && String(x?.name ?? "") === String(r?.name ?? ""));
+      const from = r?.from || null, full = r?.full || null;
+      if (from && !twins.some((x) => x?.from === from)) return from;
+      return full && full !== r.name && !twins.some((x) => x?.full === full) ? (from ? from + " · " + full : full) : from || full || null;
+    });
+  }
+
   // One owner's deferred layers for its session: a group's (group: its id, read with group_layer_features) or, CAP1b, a
   // farm's (farm: its id, read with farm_layer_features). layers: the map's layer entries; onData(id, featureCollection):
   // draw these features for the layer (an empty collection clears it); onChange(id, state). setTimer/clearTimer: the
@@ -242,5 +268,5 @@
     };
   }
 
-  return { DEFAULT_ON, MAX_FEATURES, DEBOUNCE_MS, IN_FLIGHT, STEPS, NONE, isDeferred, hasDeferred, tooMany, tooManyLine, readable, defaultShow, tolerance, boxFor, want, frameOf, holds, missing, zoomLine, featureCount, create };
+  return { DEFAULT_ON, MAX_FEATURES, DEBOUNCE_MS, IN_FLIGHT, STEPS, NONE, isDeferred, hasDeferred, tooMany, tooManyLine, readable, defaultShow, tolerance, boxFor, want, frameOf, holds, missing, zoomLine, featureCount, fromLine, sameNameLines, create };
 });

@@ -61,6 +61,7 @@
   let added = [];      // MapLibre layer and source ids for the current farm
   let markers = [];    // land unit labels
   const interactive = new Map();   // MapLibre layer id -> how to describe a hit
+  const unitHits = new Set();      // the land-units hit layers' ids (#411: one per land-units layer), ranked under other areas
   let declutter = null;            // the label-collision handler for what is drawn (portfolio pins, or a farm's land unit labels)
   const photoSets = new Map();     // farm layer index -> { layer, list (its photos in time order), markers }
   let photo = null;                // the photo open on the map: { i, k, card }
@@ -115,7 +116,16 @@
     });
     scheme = window.matchMedia("(prefers-color-scheme: dark)"); scheme.addEventListener("change", syncPalette);
     observer = new MutationObserver(syncPalette); observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] });
-    for (const ev of ["dragstart", "zoomstart", "rotatestart", "pitchstart"]) map.on(ev, (e) => { if (e.originalEvent) { settling++; touched = true; } });   // the person has taken the camera
+    const taken = () => { settling++; touched = true; };   // the person has taken the camera
+    for (const ev of ["dragstart", "zoomstart", "rotatestart", "pitchstart"]) map.on(ev, (e) => { if (e.originalEvent) taken(); });
+    // #407: so have three moves MapLibre (5.24) starts with no originalEvent: a wheel or trackpad zoom (its zoomstart), a
+    // shift-drag box zoom (fitScreenCoordinates after boxzoomstart) and the Locate me button and its tracking (geolocateSource).
+    // Without these the map was framed again after the person moved it: the re-ground (250 ms after each rest, with the hills
+    // in 3D), a window resize and a settle still waiting for idle all took the camera to be the frame's.
+    // (A wheel that zooms nothing, a horizontal two-finger swipe, leaves the camera to the frame: MapLibre ignores it too.)
+    map.getCanvasContainer().addEventListener("wheel", (e) => { if (e.deltaY || e.ctrlKey) taken(); }, { passive: true });
+    map.on("boxzoomstart", taken);
+    map.on("movestart", (e) => { if (e.geolocateSource) taken(); });
     window.addEventListener("resize", onResize);
     map.on("click", onClick);
     map.on("moveend", reground);
@@ -145,7 +155,7 @@
       if (kind === "source" && map.getSource(id)) map.removeSource(id);
     }
     added = [];
-    interactive.clear();
+    interactive.clear(); unitHits.clear();
     drawn = null; farmZoom = null; masked = false; photoEntries.length = 0; rivers = null; refDrawn = [];
   }
 
@@ -268,6 +278,11 @@
     return ids;
   }
 
+  // A land unit drawn from a layer's own features (#411): its code and name where the file has them, else the layer's name.
+  function unitTitle(p, l) {
+    const code = p.code ?? p.Code ?? p.CODE, name = p.name ?? p.Name ?? p.NAME ?? p.label;
+    return [code, name].filter((v) => v != null && String(v).trim()).join(" ").trim() || String(l.name || "Land unit");
+  }
   // Land unit labels: a code (LU1) and a name. When two would touch, the name goes and the code stays, the largest
   // unit keeping its name first; zoom in and the names come back (FP.farmModel.unitNames decides, from screen boxes).
   // At national scale the farm is a speck and its labels would pile into one glyph: they wait until it is in frame.
@@ -631,6 +646,7 @@
     source("land-units", data.land_units);
     units = data.land_units;
     const layerIds = data.layers.map(() => []);
+    let registerRow = null;   // the land-units row that carries the register's labels (the first land-units layer)
     for (const pass of ["polygon", "line", "point"]) {
       data.layers.forEach((l, i) => layerIds[i].push(...farmLayer(l, i, pass)));
     }
@@ -641,11 +657,17 @@
         layerId: l.id ?? null, layerIndex: i, ...(l.deferred === true ? { deferred: true, count: l.feature_count ?? null } : {}),
         ...(l.truncated === true ? { truncated: true, count: l.feature_count ?? null } : {}) };
       if (l.theme === "land_units") {
+        // #411: a scene may hold more than one land-units layer (HDLG's group map holds two). The register's land units
+        // (data.land_units: a farm's own, with their codes and label points) are labelled and made clickable once, on the
+        // first such layer's row. Every other land-units layer, and each one when the scene has no register (a group's map),
+        // answers a click from its own features, with a hit layer of its own (one id per layer: the second used to collide).
+        const register = !registerRow && count(data.land_units) > 0;
         // only the labels: a photo pin made earlier is the Photos layer's, never the land units' (pins showed with Photos off)
-        e.markers = landUnitLabels(data.land_units, data.extent);
-        e.ids.push(layer({ id: "land-units-hit", type: "fill", source: "land-units", paint: { "fill-color": "#000", "fill-opacity": 0 } },
-          (f) => ({ title: `${f.properties.code} ${f.properties.name || ""}`.trim(), qualifier: FP.farmModel.sourceLine(l),
-                    props: { area_ha: f.properties.area_ha } })));
+        if (!registerRow) { e.markers = landUnitLabels(data.land_units, data.extent); registerRow = e; }
+        const id = register ? "land-units-hit" : `fl-${i}-units-hit`, title = register ? (p) => `${p.code} ${p.name || ""}`.trim() : (p) => unitTitle(p, l);
+        unitHits.add(id);
+        e.ids.push(layer({ id, type: "fill", source: register ? "land-units" : `fl-${i}`, paint: { "fill-color": "#000", "fill-opacity": 0 } },
+          (f) => ({ title: title(f.properties), qualifier: FP.farmModel.sourceLine(l), props: { area_ha: f.properties.area_ha } })));
       }
       // DM2: a farm's own waterways layer the shared network has set aside has nothing left to draw: not listed (it is
       // kept, and named under the network's `replaces`); Rivers below is the waterways layer
@@ -822,7 +844,7 @@
     if (!hits.length) return;
     // points over lines over areas; titles last
     // (land units are under every other area: a planting tapped inside a land unit is the planting)
-    const rank = (h) => (h.layer.type === "circle" ? 0 : h.layer.type === "line" ? 1 : h.layer.id === "titles-hit" ? 4 : h.layer.id === "land-units-hit" ? 3 : 2);
+    const rank = (h) => (h.layer.type === "circle" ? 0 : h.layer.type === "line" ? 1 : h.layer.id === "titles-hit" ? 4 : unitHits.has(h.layer.id) ? 3 : 2);
     hits.sort((a, b) => rank(a) - rank(b));
     const f = hits[0];
     const props = {};

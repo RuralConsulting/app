@@ -289,17 +289,32 @@
     return box;
   }
   function layersCard() {
-    return card("Layers", el("ul", { class: "group-layers" }, ...layerRows().map(layerRow)), el("div", { class: "group-sources" }, sourcesNode()));
+    return card("Layers", el("ul", { class: "group-layers" }, ...rowNodes()), el("div", { class: "group-sources" }, sourcesNode()));
+  }
+  // The card's rows, each with a line where another row has the same name (#411: HDLG lists "Land units" twice and "Farm plan:
+  // features" six times): where it came from (FP.groupLayers.fromLine: the load's file and set), so a reader can tell them apart.
+  function rowNodes() {
+    const rows = layerRows(), layers = list(ctx?.data?.map?.layers), sources = list(ctx?.data?.map?.sources);
+    const origin = (e) => {
+      const l = e.layerIndex != null ? layers[e.layerIndex] : null;
+      if (l) return { from: FP.groupLayers.fromLine(l), full: l.name || null };
+      if (e.rivers) return { from: "From the shared river network", full: null };
+      const s = e.section === "reference" ? sources.find((x) => x.key === e.key) || refs?.index?.find((x) => x.key === e.key) : null;
+      return { from: s?.name ? "From " + s.name : null, full: s?.name || null };
+    };
+    const lines = FP.groupLayers.sameNameLines(rows.map((e) => (e.countsError ? { name: null } : { name: e.name, ...origin(e) })));
+    return rows.map((e, n) => layerRow(e, lines[n]));
   }
   // One row: a switch, the layer's name and what it is. PERF3b: a deferred layer says how many features it holds, and a row
   // has a line under it while it is read, when it couldn't be, or when too many are in view to draw ("Zoom in to see …").
-  function layerRow(e) {
+  function layerRow(e, from = null) {
     if (e.countsError) return countsError();
     const own = new Set(list(ctx?.data?.map?.layers).filter((l) => l.group_own).map((l) => l.theme));
     e.input = el("input", { type: "checkbox", role: "switch", ...(e.on ? { checked: true } : {}), onchange: (ev) => setRow(e, ev.target.checked) });
     const what = e.key === "member_farms" ? "shared by each farm, at the level both allow" : e.section === "farm" && own.has(e.key) ? "the group's own map" : e.section === "reference" ? "shared reference" : null;
     const sub = [what, e.deferred && e.count != null ? featureCount(e.count) : null].filter(Boolean).join(" · ");
-    const li = el("li", { "data-layer": e.deferred ? "deferred" : e.pending ? "pending" : e.section }, el("label", {}, e.input, el("span", {}, e.name), sub ? el("small", {}, sub) : null));
+    const li = el("li", { "data-layer": e.deferred ? "deferred" : e.pending ? "pending" : e.section }, el("label", {}, e.input, el("span", {}, e.name), sub ? el("small", {}, sub) : null,
+      from ? el("small", { class: "layer-from" }, from) : null));
     rowState(e);
     return li;
   }
@@ -338,7 +353,7 @@
   // The Layers card's list drawn again (the counts have come): the card itself stays where it is.
   function renderLayerList() {
     const ul = document.querySelector("#group-panel .group-layers");
-    if (ul) ul.replaceChildren(...layerRows().map(layerRow));
+    if (ul) ul.replaceChildren(...rowNodes());
     renderSourcesSlot();
   }
   // A switch. PERF3b: a deferred layer is read for the map in view, a reference source not read yet is read now (its
