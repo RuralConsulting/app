@@ -104,6 +104,7 @@
     });
     // 3D terrain where the device copes (the layers drawer can switch it)
     ready.then(() => FP.basemaps.setTerrain(map, FP.basemaps.terrainDefault()));
+    ready.then(() => { if (styleAt == null) styleAt = performance.now(); });   // TIM1: when the style was loaded (a route's `style` step)
     // UI colours follow the same tokens as the shell, including a live OS/theme change.
     syncPalette = () => ready.then(() => {
       if (!map) return;
@@ -142,6 +143,56 @@
   }
 
   const loaded = () => ready;
+
+  // ---- TIM1 (#410): the outline at once, and when it was first on screen -----------------------------------------------
+  // styleAt: when this map's style finished loading (performance.now()); outlineAt: when the open scene's outline was first
+  // on screen, by the sketch below or by the map's own extent layer (outlineShown() waits for it). hasShown: this map has drawn
+  // a farm, a group or the portfolio, so it is not black and has somewhere to fly from.
+  let styleAt = null, outlineAt = null, outlineWaiters = [], hasShown = false, sketchNode = null, sketched = null, offSketch = null;
+  function outlineSeen(at = performance.now()) {
+    if (outlineAt != null) return;
+    outlineAt = at;
+    for (const res of outlineWaiters.splice(0)) res(at);
+  }
+  const outlineShown = () => new Promise((res) => (outlineAt != null ? res(outlineAt) : outlineWaiters.push(res)));
+  // The farm's boundary on screen the moment farm_map is back, instead of a black map while the style, the tiles and a
+  // flight in from all of New Zealand come. Only on a map that has shown nothing yet (a page opened on a farm): the camera
+  // is put on the farm's frame at once (there is nothing on the map to fly from), and the boundary drawn over the canvas as
+  // a plain SVG line, following the camera, until the map paints its own (open: the extent layer). True when it sketched.
+  function sketch(extent) {
+    outlineAt = null;
+    if (hasShown || !extent?.coordinates) return false;
+    init(); map.resize();
+    removeSketch();
+    const b = bbox(extent);
+    fit(b, FP.farmModel.framePadding(inset(), wide()), null, 0);
+    touched = false;   // the farm's frame, from here: a wheel or drag from now on is the person's (open keeps it)
+    sketched = JSON.stringify(b);
+    const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"), path = document.createElementNS(ns, "path");
+    svg.setAttribute("class", "map-sketch"); svg.setAttribute("aria-hidden", "true"); svg.append(path);
+    const draw = () => { if (map) path.setAttribute("d", sketchPath(extent)); };
+    draw();
+    map.getContainer().append(svg); sketchNode = svg;
+    map.on("move", draw); offSketch = () => map?.off("move", draw);
+    // on screen once the frame it was added in has been painted
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (sketchNode === svg) outlineSeen(); }));
+    return true;
+  }
+  function sketchPath(geom) {
+    const rings = geom.type === "Polygon" ? geom.coordinates : geom.type === "MultiPolygon" ? geom.coordinates.flat() : [];
+    return rings.map((ring) => ring.map((c, i) => { const p = map.project(c); return (i ? "L" : "M") + p.x.toFixed(1) + " " + p.y.toFixed(1); }).join("") + "Z").join("");
+  }
+  function removeSketch() { offSketch?.(); offSketch = null; sketchNode?.remove(); sketchNode = null; sketched = null; }
+  // When the map has painted a source (its data loaded and a frame rendered with it); a newer open stops the wait.
+  function painted(id, request) {
+    return new Promise((res) => {
+      const check = () => {
+        if (request !== opening || !map) { map?.off("render", check); return; }
+        if (map.getSource(id) && map.isSourceLoaded(id)) { map.off("render", check); res(performance.now()); }
+      };
+      map.on("render", check); map.triggerRepaint();
+    });
+  }
 
   function clear() {
     if (photo) closePhoto();   // (and the hills come back if a photo had flattened them)
@@ -568,7 +619,7 @@
     const request = ++opening;
     init(); await loaded();
     if (request !== opening) return;
-    clear(); flightKey = null; framed = null;
+    clear(); flightKey = null; framed = null; removeSketch(); hasShown = true;
     map.resize();
     const shown = items.filter((i) => i.extent?.coordinates);
     if (!shown.length) return;
@@ -616,6 +667,9 @@
     await loaded();
     if (request !== opening) return null;
     clear(); framed = null;
+    // TIM1: a sketch of this farm's outline stays on screen until the extent layer is painted; anything else starts unseen
+    const key = data.extent ? JSON.stringify(bbox(data.extent)) : null, kept = !!sketchNode && sketched === key;
+    if (!kept) { removeSketch(); outlineAt = null; }
     const entries = [];   // what the layer list shows: {key, name, sub, ids, on, markers, job}
 
     if (data.extent) {
@@ -734,10 +788,14 @@
       const b = bbox(data.extent);
       // The portfolio may already have started this zoom; it is kept unless a phone sheet covers part of the map.
       const sheet = inset();
-      if (flightKey === JSON.stringify(b) && !sheet) { flightKey = null; framed = data.extent; touched = false; framedWidth = window.innerWidth; settle(data.extent); }
+      // TIM1: framed by the sketch already; a person who moved the camera since keeps it (no settle back to the frame)
+      if (kept) { flightKey = null; framed = data.extent; framedWidth = window.innerWidth; if (!touched) settle(data.extent); }
+      else if (flightKey === JSON.stringify(b) && !sheet) { flightKey = null; framed = data.extent; touched = false; framedWidth = window.innerWidth; settle(data.extent); }
       else { flightKey = null; fit(b, FP.farmModel.framePadding(sheet, wide()), data.extent); }
     }
     if (data.extent) revealMask(request);
+    if (data.extent) painted("extent", request).then((at) => { removeSketch(); outlineSeen(at); });
+    hasShown = true;
     if (asked) showPhoto(...asked);
     return { farm: data.farm, extentHa: data.extent_ha, entries };
   }
@@ -901,7 +959,8 @@
     if (!map) return;
     opening++; resizing++; framed = null; photo?.card.remove(); photo = null; heldTerrain = false; photoSets.clear(); window.removeEventListener("resize", onResize); scheme?.removeEventListener("change", syncPalette); observer?.disconnect();
     for (const m of markers) m.remove();
-    markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null;
+    removeSketch();
+    markers = []; added = []; interactive.clear(); map.remove(); map = null; ready = null; styleAt = null;
   }
   return { open, portfolio, zoomTo, reframe, focus, project, camera: () => map && { zoom: map.getZoom(), center: map.getCenter().toArray(), pitch: map.getPitch(), bearing: map.getBearing(), moving: map.isMoving(), terrain: !!map.getTerrain?.(), elevation: map.getCameraTargetElevation?.() ?? 0, dimmed, labelsOff: map.getContainer().querySelectorAll(".lu-label.on-line").length, masked, mask: map.getLayer("farm-mask") ? map.getPaintProperty("farm-mask", "fill-opacity") : null }, setVisible, setPast, addControl: (control, position) => init().addControl(control, position), whenIdle, basemap: (k) => FP.basemaps.pick(init(), k), terrain: (on) => { heldTerrain = false; return FP.basemaps.setTerrain(init(), on); }, frame: (geom) => { if (map && geom?.coordinates) map.fitBounds(bbox(geom), { padding: 55, duration: 400 }); }, addActions,
     // FB1: the live MapLibre map, for a flow that draws its own layers over the farm (add-block.js); it removes them itself.
@@ -912,6 +971,8 @@
     // PERF3b: a group's deferred layer drawn for the map in view
     layerData, view, onMoveEnd,
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.
+    // TIM1 (#410): the outline at once on a fresh map; when the style loaded and the outline was first on screen (route timing)
+    sketch, unsketch: removeSketch, outlineShown, styleLoadedAt: () => styleAt,
     addReference, readRiversAhead: () => readRivers(true) };
   }
 

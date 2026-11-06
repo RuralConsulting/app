@@ -2,9 +2,9 @@
 // (owners and admins add, change and remove people; the farm_members policies decide what is allowed).
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
-  const api = factory(node ? require("./farm-model.js") : root.FP.farmModel, node ? require("./farm-reference.js") : root.FP.farmReference);
+  const api = factory(node ? require("./farm-model.js") : root.FP.farmModel, node ? require("./farm-reference.js") : root.FP.farmReference, node ? require("./route-timing.js") : root.FP.routeTiming);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
-})(typeof window === "undefined" ? globalThis : window, function (M, R) {
+})(typeof window === "undefined" ? globalThis : window, function (M, R, T) {
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   // Tiers (F1e) and who chose one (B3's tiered_at) are read when the database has them. relates_to is read through
   // document_relations, which withholds a relationship whose other end the reader can't see. context.documentTiers
@@ -45,9 +45,10 @@
   // PERF1b: two halves read at once. The map's (loadMap: farm_map, the farm's own layers since PERF1a, with what its popups
   // and Layers need) is all the farm needs to be drawn; the rest (loadRest) is the standing answers' and the views'. The
   // space draws the farm as soon as the map's half is back and fills in the rest when it comes.
-  async function loadMap(sb, farm, user) {
+  // onMap (TIM1): called when farm_map itself is back, whatever the three reads beside it are doing (the route's `data` step).
+  async function loadMap(sb, farm, user, { onMap } = {}) {
     const [maps, notes, holding, sources] = await Promise.all([
-      read(sb.rpc("farm_map", { f: farm.id })),
+      read(sb.rpc("farm_map", { f: farm.id })).then((v) => { onMap?.(); return v; }),
       // The advisor notes on the map's layers (LN1): the narrowest shows in a layer's info panel. Optional: without
       // them the map is as it was.
       optional(sb.rpc("layer_notes_for_farm", { f: farm.id })),
@@ -119,12 +120,14 @@
   // PERF1b: the farm being read (its map's half, and the id it is for), and its reference sources (farm-reference.js),
   // read one at a time when something switches one on; the drawn scene's own rows until the Layers rows are made.
   let mapsPending = null, pendingFor = null, refs = null, sceneEntries = [];
+  // TIM1 (#409, #410): the route timing run for the farm being read (route-timing.js), from when its route began loading.
+  let timing = null;
   // CAP1b: what is read for the map in view (group-layers.js, the module the group map uses): the farm's deferred layers and
   // the reference sources whose entry came truncated; made only when the farm has one, with the map's moveend hook.
   let parts = null, offMove = null;
   const unmount = (...handles) => { for (const h of handles.flat()) h?.destroy(); };
   // A farm left: what was being read for it is dropped (a read still on its way is ignored when it lands).
-  function forget() { pending = null; mapsPending = null; pendingFor = null; refs?.destroy(); refs = null; sceneEntries = []; dropParts(); }
+  function forget() { pending = null; mapsPending = null; pendingFor = null; refs?.destroy(); refs = null; sceneEntries = []; dropParts(); timing = null; T?.cancel("farm"); }
   function dropParts() { parts?.destroy(); parts = null; offMove?.(); offMove = null; }
   // Each answer is an Answer block in its own host, so the space never writes answer HTML itself.
   function answer(host, model, options) {
@@ -1382,14 +1385,17 @@
     setSheet("due", "peek", false); setSheet("space", "open", false);
     FP.farmMap.closePopup?.();   // UI1: a feature popup belongs to the view it was opened in
     // (a farm whose read is still on its way is not read again: a second route to it waits for the same reads)
-    if (context?.farm.id !== farm.id && pendingFor !== farm.id) {
+    const reading = context?.farm.id !== farm.id && pendingFor !== farm.id;
+    if (reading) {
       context = null; openedMap = null; forget();
       unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
       wq?.destroy(); wq = null;
       layerEntries = []; handSet = new Map();
       $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren(); $("#overview-peek").textContent = "";
+      // TIM1 (#409): the drawn-time clock starts here, as the farm's reads start (after sign-in, whatever screen came before)
+      const run = timing = T?.begin("farm", farm.id) || null;
       // PERF1b: the map's half and the rest are read at once; the farm is drawn as soon as the map's half is back
-      const maps = loadMap(FP.sb, farm, user), rest = loadRest(FP.sb, farm, user);
+      const maps = loadMap(FP.sb, farm, user, { onMap: () => run?.step("data") }), rest = loadRest(FP.sb, farm, user);
       pendingFor = farm.id; mapsPending = maps;
       pending = Promise.all([maps, rest]).then(([m, r]) => assemble(FP.sb, farm, user, m, r));
       pending.catch(() => {});   // the failure is shown by whichever await meets it first
@@ -1401,11 +1407,19 @@
     $("#map-msg").hidden = false; $("#map-msg").textContent = "Loading the farm…";
     try {
       header(farm, route); reserveHeader();
+      // TIM1: the map (its WebGL context and style) is made now, beside the farm's reads, not after farm_map is back; inside
+      // the try, so a browser that can't make one gets "Couldn't load the farm", not a blank screen
+      if (reading) { const run = timing; Promise.resolve(FP.farmMap.loaded?.()).then(() => run?.step("style"), () => {}); }
       if (openedMap !== farm.id) {
+        const run = timing;
         const maps = context?.maps || await mapsPending;
         if (current !== token) return;
         // A sheet that opens with the view (Ask, Create, Documents) covers part of the map: the first fly lands clear of it.
         framedOverlap = measureSheet();
+        // TIM1 (#410): the farm's outline on screen now, on a map that has shown nothing yet, not a black map until the
+        // style, the tiles and the flight in have come; the `outline` step when it (or the map's own line) is first on screen
+        FP.farmMap.sketch?.(maps.extent);
+        FP.farmMap.outlineShown?.().then((at) => run?.step("outline", at));
         // The Map scene block draws the farm on the space's one map (FP.farmMap), so the NZ -> farm zoom carries on.
         unmount(scene);
         scene = FP.blocks.render($("#farm-scene"), { block: "map-scene", owner: { farm: farm.id } }, { read: () => context?.maps || maps, surface: FP.farmMap, level: 2 });
@@ -1415,7 +1429,7 @@
         sceneEntries = drawn.entries; openedMap = farm.id;
         startParts(farm.id, maps);   // CAP1b: a deferred layer the map opens with is read for the view (nothing, with none)
         // the farm is on the map: the message goes now, not when the standing answers have been read (PERF1b)
-        $("#map-msg").hidden = true; farmDrawn(farm.id);
+        $("#map-msg").hidden = true; farmDrawn(run);
         addLayersControl(); commandBar();
       }
       const loaded = context || await pending;
@@ -1460,27 +1474,18 @@
       $("#map-msg").hidden = true;
     } catch (e) {
       if (!context && pendingFor === farm.id) forget();   // a farm that couldn't be read is read again when next opened
-      if (current === token) { $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); }
+      if (current === token) { FP.farmMap.unsketch?.(); $("#map-msg").hidden = false; $("#map-msg").textContent = "Couldn't load the farm: " + (e.message || e); }
     }
   }
-  // PERF1b (4): measured, not guessed. The first farm drawn on this page (its boundary on the map, "Loading the farm…"
-  // gone) is marked, and the measure from the page's start (guard.js marks it, the first script in the page) kept for this
-  // browser's tab, so Operations can show it to staff beside the build version. Never throws: a browser without the
-  // performance or storage APIs just has no figure.
-  const DRAWN_KEY = "fp-farm-drawn";
-  function farmDrawn(farm) {
-    try {
-      if (performance.getEntriesByName("fp-farm-drawn", "mark").length) return;   // a returning visit is the page's first farm
-      performance.mark("fp-farm-drawn");
-      const start = performance.getEntriesByName("fp-page-start", "mark").length ? "fp-page-start" : undefined;
-      const m = performance.measure("farm-drawn", start, "fp-farm-drawn");
-      const ms = Math.round(m?.duration ?? performance.getEntriesByName("farm-drawn", "measure").pop()?.duration);
-      if (Number.isFinite(ms)) sessionStorage.setItem(DRAWN_KEY, JSON.stringify({ ms, farm, at: new Date().toISOString() }));
-    } catch { /* no figure on this browser */ }
+  // PERF1b (4), TIM1 (#409, #410): measured, not guessed. A farm drawn from its reads (its boundary on the map, "Loading the
+  // farm…" gone) is the run's `drawn` step, timed from when the farm's route began loading (route-timing.js: never the
+  // page's start or the sign-in screen, and dropped if the person left the farm first); then the map at rest is its `idle`.
+  // The figure is kept for this browser's tab, so Operations can show it to staff with its steps beside the build version.
+  function farmDrawn(run) {
+    if (!run?.step("drawn")) return;
+    Promise.resolve(FP.farmMap.whenIdle?.()).then(() => run.step("idle"), () => {});
   }
-  // The last figure for this browser's tab: { ms, farm, at }, or null.
-  function lastDrawn() {
-    try { const v = JSON.parse(sessionStorage.getItem(DRAWN_KEY) || "null"); return v && Number.isFinite(v.ms) ? v : null; } catch { return null; }
-  }
+  // The last figure for this browser's tab: { ms, farm, from, steps, at }, or null.
+  const lastDrawn = () => T?.last("farm") ?? null;
   return { load, loadMap, loadRest, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock, lastDrawn, GOVERNS, ASK_SETS };
 });

@@ -100,14 +100,28 @@
         : { text: "The app's version isn't available", because: "it is read from the published files" },
       links: [["Pull requests", links.pulls], ["Actions", links.actions], ["Data job issues", links.issues], ["The queue", links.queue]] };
   }
-  // PERF1b: how long this browser took to draw the last farm it opened, from the page's start (the `farm-drawn` measure,
-  // farm-space.js; kept for the tab). Null when there is no figure. Seconds to one place; the farm is not named.
-  // PERF3b: what = "Group" for the `group-drawn` measure (group-space.js: the group's area and member blocks on the map),
-  // from the page's start, or from opening the group when the page started elsewhere (from: "open").
+  // PERF1b: how long this browser took to draw the last farm it opened (the `farm-drawn` measure, farm-space.js; kept for
+  // the tab). Null when there is no figure. Seconds to one place; the farm is not named. PERF3b: what = "Group" for the
+  // `group-drawn` measure (group-space.js: the group's area and member blocks on the map). TIM1 (#409): measured from when
+  // the farm's or group's route began loading (route-timing.js, from: "route"); a figure kept by an older version of the
+  // app in this tab says what it was measured from (the page's start, or opening the group: from "open").
   function drawnLine(v, what = "Farm") {
     const ms = v && v.ms != null ? Number(v.ms) : NaN;
     if (!Number.isFinite(ms) || ms < 0) return null;
-    return what + " drawn in " + (ms / 1000).toFixed(1) + " s on this browser's last open, from " + (v.from === "open" ? "opening it" : "the page's start");
+    return what + " drawn in " + (ms / 1000).toFixed(1) + " s on this browser's last open, from " + (v.from === "open" || v.from === "route" ? "opening it" : "the page's start");
+  }
+  // TIM1 (#410): the steps of that open, each from when its route began loading, in the order they are reached: the map's
+  // read back (farm_map or group_map), the map's style loaded, the outline first on screen, drawn, and the map at rest.
+  // Null for a figure with no steps (an older version's). No target is stated: the figures are for measuring.
+  const STEP_WORDS = [["data", (what) => (what === "Group" ? "group_map" : "farm_map") + " back"], ["style", () => "style loaded"],
+    ["outline", () => "outline on screen"], ["drawn", () => "drawn"], ["idle", () => "map at rest"]];
+  function stepsLine(v, what = "Farm") {
+    const steps = v?.steps && typeof v.steps === "object" ? v.steps : null;
+    if (!steps) return null;
+    const parts = STEP_WORDS.filter(([k]) => steps[k] != null && Number.isFinite(Number(steps[k]))).map(([k, word]) => word(what) + " " + (Number(steps[k]) / 1000).toFixed(1) + " s");
+    if (!parts.length) return null;
+    if (steps.idle == null) parts.push("map at rest: not reached before it was left");
+    return what + " steps from opening it: " + parts.join(" · ");
   }
 
   // AI recipes (AI1): how-to recipes the AI keeps, one row per version (ai_recipes). Drafts wait for a platform advisor; the
@@ -334,5 +348,5 @@
     };
   }
 
-  return { REPO, links, day, time, jobs, references, build, drawnLine, recipes, needsAttention, runUrl, loadGaps, ratchet, ratchetPeriod, onboarding };
+  return { REPO, links, day, time, jobs, references, build, drawnLine, stepsLine, recipes, needsAttention, runUrl, loadGaps, ratchet, ratchetPeriod, onboarding };
 });

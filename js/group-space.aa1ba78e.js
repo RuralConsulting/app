@@ -22,6 +22,9 @@
   // PERF3b: the group map's deferred layers (group-layers.js), its reference sources (farm-reference.js) with the rows of
   // those not read yet, and the map's moveend hook: all for the map drawn now, and dropped with it.
   let parts = null, refs = null, placeholders = new Map(), offMove = null, countsFailed = false;
+  // TIM1 (#409, #410): the route timing run for the group map being drawn (route-timing.js), from when its route began loading.
+  let timing = null;
+  const T = () => FP.routeTiming || null;
   const featureCount = (n) => Number(n).toLocaleString("en-NZ") + (Number(n) === 1 ? " feature" : " features");
 
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
@@ -89,7 +92,7 @@
   // The map's parts go with the map (put away, drawn again, or the group left).
   function dropParts() { parts?.destroy(); parts = null; refs?.destroy(); refs = null; placeholders = new Map(); offMove?.(); offMove = null; countsFailed = false; }
   function close() {
-    token++; dropParts();
+    token++; dropParts(); timing = null; T()?.cancel("group");
     wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
     mapHandle?.destroy(); mapHandle = null; surface = null; entries = [];
     ctx = null; draft = null;
@@ -108,7 +111,6 @@
   }
   async function open(group, route) {
     const current = ++token;
-    try { performance.mark("fp-group-open"); } catch { /* no performance API: no figure */ }
     document.body.classList.add("group-space-active");
     FP.show("screen-group");
     header(group, route);
@@ -117,11 +119,14 @@
     if (route.view === "manage" && (lastView !== "manage" || ctx?.group.id !== group.id)) FP.groupManage?.forget(group.id);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); }
+    if (route.view === "manage") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
     }
+    // TIM1 (#409): a view that draws the map, with no map drawn or being drawn, starts the drawn-time clock here (after
+    // sign-in, whatever screen came before); a second route while it is still drawing keeps the same clock
+    if (route.view !== "manage" && !mapHandle) timing = T()?.begin("group", group.id) || null;
     const panel = $("#group-panel");
     panel.replaceChildren(el("p", { class: "group-status", role: "status" }, "Loading the group…"));
     const home = !["documents", "create", "manage"].includes(route.view), thisCtx = ctx;
@@ -137,6 +142,7 @@
       // the map arrives (or says it could not). Documents and Create need only the base reads; the Map view's cards need the extras too.
       const mapAsked = ensureMap(thisCtx), homeAsked = ensureHome(thisCtx);
       mapAsked.catch(() => {}); homeAsked.catch(() => {});
+      const run = timing; mapAsked.then(() => run?.step("data"), () => {});   // TIM1: group_map back
       const data = await (home ? homeAsked : ensureBase(thisCtx));
       if (current !== token) return;
       panel.replaceChildren();
@@ -161,12 +167,13 @@
 
   // The map: its own surface in the space (the group is never drawn on a farm's map).
   async function drawMap(data, current, asked, extras) {
-    const host = $("#group-map");
+    const host = $("#group-map"), run = timing;
     if (!mapHandle) host.replaceChildren(el("p", { class: "group-status", role: "status" }, "Loading the map…"));
     try { data.map = await asked; }
     catch {
       // HOT1: a map that failed or took too long is the map area's failure alone; the standing answers are already on the page
       if (current !== token) return;
+      mapSettled(data, true);   // the water-quality answer waits for nothing more
       mapHandle?.destroy(); mapHandle = null; mapReady = null;
       host.replaceChildren(el("div", { class: "group-map-empty", "data-state": "failed", role: "alert" }, el("p", {}, "The group's map couldn't load just now. Reload the page to try again.")));
       return;
@@ -176,6 +183,7 @@
     if (current !== token) return;
     if (data.map) data.map.sources = data.sources;
     if (!data.map?.extent) {
+      mapSettled(data, true);
       mapHandle?.destroy(); mapHandle = null;
       host.replaceChildren(el("div", { class: "group-map-empty" }, el("p", {}, "Nothing is mapped for this group yet. Its own layers and the member farms it may show appear here once they are added.")));
       return;
@@ -190,9 +198,12 @@
     mapReady = handle.ready.catch(() => null);
     const drawn = await mapReady;
     // the map belongs to the group, not the view: kept for later views unless the group itself changed meanwhile
-    if (mapHandle !== handle || !drawn) return;
+    if (mapHandle !== handle || !drawn) { if (!drawn) mapSettled(data, true); return; }
     surface = drawn.surface || null; entries = drawn.entries || [];
     startParts(data, show, counts);
+    // TIM1 (#410): the map's style loaded and the group's outline first on screen, as steps of the route's run
+    run?.step("style", surface?.styleLoadedAt?.() ?? undefined);
+    surface?.outlineShown?.().then((at) => run?.step("outline", at));
     if (!wq && FP.wq && surface) {
       // one read of the group's sites, for the line and the answer alike (the answer then keeps to the group's own and ECan's)
       const sites = sitesFor(data);
@@ -228,12 +239,27 @@
   }
   // MC1: the group's standing water-quality answer, as the Answer block (its loading state while the analysis function works).
   // Every figure is the analysis library's, computed now as this person (preview, nothing stored); the words are code's.
+  // TIM1 (#410): the answer's analysis calls (four for HDLG) wait until the group's map is drawn, or can't be, so they never
+  // share the database with the map's own reads and are not in `group-drawn`; the presets, sites and picks are read at once.
+  // The wait is bounded (MAP_SETTLE_MS): a map that never settles never holds the answer back for longer.
+  const MAP_SETTLE_MS = 15000;
+  function mapSettled(data, now = false) {
+    if (!data.mapSettled) {
+      let open; data.mapSettled = new Promise((res) => { open = res; }); data.settleMap = open;
+      const timer = setTimeout(open, MAP_SETTLE_MS); timer?.unref?.();
+    }
+    if (now) data.settleMap();
+    return data.mapSettled;
+  }
+  // Each answer waits on the gate of the map draw it belongs to (taken when the answer is made). Manage puts the map and its
+  // answer away and drops the gate: an answer put away never asks (its timer still fires once, and does nothing).
+  const afterMap = (data) => { const gate = mapSettled(data); return (sb, body) => gate.then(() => (data.mapSettled === gate ? FP.wqAnalysis.request(sb, body) : new Promise(() => {}))); };
   function answerCard(data, sites) {
     if (!FP.groupWqAnswer || !FP.blocks) return null;
     const host = el("div", { class: "block-host group-wq-answer", "data-card": "wq-answer" });
-    const A = FP.groupWqAnswer;
+    const A = FP.groupWqAnswer, request = afterMap(data);
     const handle = FP.blocks.render(host, { block: "answer", owner: { org: data.group.id }, options: { summary: true } },
-      { read: () => sites.then((rows) => A.build({ sb: FP.sb, group: data.group, sites: rows })).then(A.answer), level: 3, nested: true, href: FP.href });
+      { read: () => sites.then((rows) => A.build({ sb: FP.sb, group: data.group, sites: rows, request })).then(A.answer), level: 3, nested: true, href: FP.href });
     handle.ready?.catch?.(() => {});
     return { node: host, destroy: () => handle.destroy() };
   }
@@ -408,6 +434,7 @@
   // on), the read again on each rest of the map, the reference rows from the counts, and the idle read ahead.
   function startParts(data, show, counts) {
     dropParts();
+    const run = timing;   // TIM1: the run this map's drawing belongs to (drawMap has just checked it is still the map shown)
     const cfg = root.FP_CONFIG?.groupView || {}, group = data.group.id, rows = (id) => entries.filter((e) => e.deferred && String(e.layerId) === id);
     const mine = parts = FP.groupLayers.create({ sb: FP.sb, group, layers: data.map.layers, max: cfg.maxFeatures || FP.groupLayers.MAX_FEATURES,
       onData: (id, features) => { if (parts === mine) for (const e of rows(id)) surface?.layerData?.(e, features); },
@@ -427,8 +454,8 @@
     // map frames (the group's area: where the map is flying to). Never whole (#375); truncated says to zoom in.
     const frame = FP.groupLayers.frameOf(data.map.extent);
     Promise.all(mine.opening(show).map((id) => mine.show(id, frame))).then((reads) => {
-      if (parts === mine && reads.every((r) => r && !r.truncated)) groupDrawn(group);
-    });
+      if (parts === mine && reads.every((r) => r && !r.truncated)) groupDrawn(run);
+    }).finally(() => { if (parts === mine) mapSettled(data, true); });
     counts.then((r) => {
       if (parts !== mine) return;
       countsFailed = r.failed;
@@ -471,25 +498,16 @@
     const idle = () => (typeof requestIdleCallback === "function" ? requestIdleCallback(go, { timeout: 4000 }) : setTimeout(go, 500));
     Promise.resolve(surface?.atRest?.()).then(idle, idle);
   }
-  // PERF3b (4): measured, not guessed. The first group drawn on this page (its area and member blocks on the map) is
-  // marked, and the measure kept for this tab (sessionStorage) for staff on Operations, beside `farm-drawn`: from the page's
-  // start when the group was the first thing this page opened, else from when the group was opened. A browser without the
-  // performance or storage APIs just has no figure.
-  const DRAWN_KEY = "fp-group-drawn", startedOnGroup = /^#\/(?:group\/|demo\/group(?!\/farms)(?:\/|\?|$))/.test(String(root.location?.hash || ""));
-  function groupDrawn(group) {
-    try {
-      if (performance.getEntriesByName("fp-group-drawn", "mark").length) return;   // a returning visit is the page's first group
-      performance.mark("fp-group-drawn");
-      const first = startedOnGroup && performance.getEntriesByName("fp-group-open", "mark").length <= 1;
-      const start = first && performance.getEntriesByName("fp-page-start", "mark").length ? "fp-page-start" : performance.getEntriesByName("fp-group-open", "mark").length ? "fp-group-open" : undefined;
-      const m = performance.measure("group-drawn", start, "fp-group-drawn");
-      const ms = Math.round(m?.duration ?? performance.getEntriesByName("group-drawn", "measure").pop()?.duration);
-      if (Number.isFinite(ms)) sessionStorage.setItem(DRAWN_KEY, JSON.stringify({ ms, group, from: start === "fp-group-open" ? "open" : "page", at: new Date().toISOString() }));
-    } catch { /* no figure */ }
+  // PERF3b (4), TIM1 (#409, #410): measured, not guessed. The group's area and member blocks on the map are the run's
+  // `drawn` step, timed from when the group's route began loading (route-timing.js: never the page's start or the sign-in
+  // screen, and dropped if the person left the group or went to Manage first); then the map at rest is its `idle`. Kept for
+  // this tab for staff on Operations, with its steps, beside `farm-drawn`. A browser without the performance or storage
+  // APIs just has no figure.
+  function groupDrawn(run) {
+    if (!run?.step("drawn")) return;
+    Promise.resolve(surface?.whenIdle?.()).then(() => run.step("idle"), () => {});
   }
-  function lastDrawn() {
-    try { const v = JSON.parse(sessionStorage.getItem(DRAWN_KEY) || "null"); return v && Number.isFinite(v.ms) ? v : null; } catch { return null; }
-  }
+  const lastDrawn = () => T()?.last("group") ?? null;
   // The Sources entry (PROV1): the same call the farm's drawer makes. A results dataset is judged by the results the group's water-quality
   // line holds (heldBy), so the entry is drawn again once those sites are known. PERF3b: with the sources counted in the
   // group's context, read or not, so a line reads the same as when group_map carried every source; one that couldn't be

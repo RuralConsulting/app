@@ -76,6 +76,10 @@
   function route() {
     if (!readyToRoute) return;
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
+    // TIM1 (#409): Operations, Layers, the plan screens and the gallery don't close the group space; the group's drawn-time run
+    // is dropped all the same, so a figure never takes in the time spent there
+    const toGroup = !!FP.groupModel.match(hash) || (!farms.length && groups.length === 1 && !FP.farmModel.match(hash));
+    if (!toGroup) FP.routeTiming?.cancel("group");
     // The Farm Environment Plan and Freshwater Farm Plan documents, on the invented farm: only in the demo.
     if (FP.demo?.active && /^#\/plans(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.close(); FP.farmPlansDemo.open(hash); return; }
     FP.farmPlansDemo.close();
@@ -179,7 +183,7 @@
   }
 
   window.addEventListener("hashchange", () => { if (farms.length || groups.length) route(); });
-  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.farmSpace.close(); show("screen-signin"); } });
+  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.routeTiming?.cancel(); FP.farmSpace.close(); show("screen-signin"); } });
 
   // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts
   if (!FP.demo?.active && "serviceWorker" in navigator && location.protocol === "https:") {
