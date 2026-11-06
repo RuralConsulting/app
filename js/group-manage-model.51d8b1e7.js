@@ -144,10 +144,14 @@
       return "Member number " + e.number + (e.from ? " (" + e.from + ")" : "");
     }
     if (e.signal === "business_name") {
+      // RCN1: a file named for the person, the business written as initials and a surname
+      if (e.surname) return "The file name has the surname " + q(e.surname) + ", as in " + q(e.name) + (e.name_from ? " (" + String(e.name_from).replace(/, by surname$/, "") + ")" : "");
       const mine = e.file_words != null ? "The file name's words " + q(e.file_words) : "Field " + e.field + " " + q(e.value);
       return mine + (e.file_words != null ? " are like " : " is like ") + q(e.name) + (e.name_from ? " (" + e.name_from + ")" : "") + (e.similarity != null ? ", similarity " + e.similarity : "");
     }
     if (e.signal === "fep_title") {
+      // RCN1: a labelled field on the plan's cover ("Farm Name"), its value like the member's name
+      if (e.field && e.text) return "The plan's cover gives " + q(e.text) + ", like " + q(e.name) + (e.name_from ? " (" + e.name_from + ")" : "");
       return "The plan's title names the " + (e.found === "business name" ? "business" : e.found || "member") + " " + q(e.number || e.name) + (e.text ? ": " + q(e.text) : "");
     }
     return Object.entries(e).filter(([k]) => k !== "confidence").map(([k, v]) => k + " " + v).join(", ");
@@ -177,7 +181,7 @@
     const note = p.decision?.note || null, by = p.decided_at ? day(p.decided_at) : null;
     let state, text;
     if (p.status === "proposed") { state = "proposed"; text = "Proposed: " + (cands[0]?.label || "no member"); }
-    else if (p.status === "ambiguous") { state = "ambiguous"; text = "Pick one of these members, or Not this"; }
+    else if (p.status === "ambiguous") { state = "ambiguous"; text = cands.length === 1 ? "One possible member: pick it, or Not this" : "Pick one of these members, or Not this"; }
     else if (waitingForLoad(p, ctx)) { state = "accepted"; text = "Accepted" + (chosen ? " (" + chosen.label + ")" : "") + ", placed on the next group load"; }
     else if (p.status === "rejected") { state = "rejected"; text = "Not this: it stays set aside"; }
     else { state = "done"; text = p.status === "applied" ? "Placed" : "No longer open"; }
@@ -188,7 +192,9 @@
         : p.kind === "site_succession" && typeof evidence.note === "string" && evidence.note ? "Why: " + evidence.note : null,
       replaces: evidence.replaces_stale_match?.member ? "Replaces a match to member " + evidence.replaces_stale_match.member + " the load no longer uses" : null,
       lines: (Array.isArray(evidence.lines) ? evidence.lines : []).filter((l) => typeof l === "string"),
-      open: OPEN.includes(p.status), canPick: OPEN.includes(p.status) && cands.length > 1 };
+      // a pick is offered where there is a choice, and for an ambiguous row whatever its candidates: with one candidate (RCN1,
+      // a surname alone) nothing is pre-filled, so picking it is the only way to accept it
+      open: OPEN.includes(p.status), canPick: OPEN.includes(p.status) && (cands.length > 1 || p.status === "ambiguous") };
   }
   // The arguments of public.proposals_decide for a person's choice: accept (the proposed member, or the one picked), or not this.
   function decision(p, action, { member = null, note = "" } = {}) {
@@ -212,12 +218,13 @@
     for (const l of lines) {
       // under the member proposed (or the one accepted); a row just turned down stays where it was proposed
       const who = l.state === "ambiguous" ? null : l.proposed || l.chosen || (l.state === "rejected" && l.candidates.length === 1 ? l.candidates[0] : null);
-      const key = l.kind === "document_tier" ? "other" : l.state === "ambiguous" ? "ambiguous" : who?.member != null ? "member:" + who.member : "other";
+      // RCN1: a row with one candidate and nothing chosen (a surname alone) is weak evidence, not a choice between members
+      const key = l.kind === "document_tier" ? "other" : l.state === "ambiguous" ? (l.candidates.length === 1 ? "weak" : "ambiguous") : who?.member != null ? "member:" + who.member : "other";
       if (!groups.has(key)) groups.set(key, { key, member: who?.member ?? null,
-        title: key === "ambiguous" ? "More than one member could fit" : key === "other" ? "Other questions" : who.label, lines: [] });
+        title: key === "ambiguous" ? "More than one member could fit" : key === "weak" ? "One possible member, not certain" : key === "other" ? "Other questions" : who.label, lines: [] });
       groups.get(key).lines.push(l);
     }
-    const order = (g) => (g.key === "ambiguous" ? -1 : g.key === "other" ? 1e9 : Number(g.member) || 1e8);
+    const order = (g) => (g.key === "ambiguous" ? -1 : g.key === "weak" ? -0.5 : g.key === "other" ? 1e9 : Number(g.member) || 1e8);
     const list = [...groups.values()].sort((a, b) => order(a) - order(b) || String(a.member).localeCompare(String(b.member)));
     for (const g of list) {
       g.lines.sort((a, b) => (a.open ? 0 : 1) - (b.open ? 0 : 1) || String(a.item.title).localeCompare(String(b.item.title)) || a.id - b.id);
