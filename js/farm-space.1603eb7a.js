@@ -1136,7 +1136,8 @@
         if (kind === "whats_due") location.hash = FP.href(M.href(farm.id, "map"));
       },
       onSaved: async () => { if (context?.farm.id === farm.id) context.documents = await readDocuments(FP.sb, context.farm); } });
-    return { destroy: () => { gone = true; node.onclick = node.onsubmit = null; } };
+    // DEC2: a file opened from a finding is framed as an object URL: leaving Onboarding gives each one back
+    return { destroy: () => { gone = true; node.onclick = node.onsubmit = null; FP.decisionCard?.sweep(true); } };
   }
   function documentsView(host, item) {
     const sentence = el("div", { class: "block-host" }), list = el("div", { class: "block-host documents-host" });

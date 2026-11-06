@@ -210,7 +210,9 @@
   const MAX_MAPS = 6;
   const WAITING = "Press “Frame it again” to show it on the map (a few maps are open on this screen already).";
   const drop = (m) => { try { m.parts?.destroy(); m.off?.(); m.surface.remove(); } catch { /* already gone */ } live.delete(m); };
+  let epoch = 0;                // counts the full sweeps: a file still being fetched when its screen was left is not framed afterwards
   function sweep(all = false) {
+    if (all) epoch++;
     for (const m of [...live]) if (all || !m.box.isConnected) drop(m);
     for (const w of [...watching]) if (all || !w.box.isConnected) { try { w.io?.disconnect(); } catch { /* gone */ } w.stop = true; watching.delete(w); }
     for (const b of [...blobs]) if (all || !b.viewer?.isConnected) { try { root.URL?.revokeObjectURL?.(b.url); } catch { /* gone */ } blobs.delete(b); }
@@ -321,11 +323,20 @@
   // a Word file, and never a page or an SVG from client storage, which could script or navigate the app) opens in a new tab.
   const FRAMED = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", txt: "text/plain" };
   const frameType = (path) => FRAMED[(/\.([a-z0-9]+)$/i.exec(String(path || "")) || [])[1]?.toLowerCase()] || null;
+  // DEC2: the most a file may be to be fetched and framed: 50 MB, by the stored size (documents.size_bytes) when it is known before
+  // fetching, else by the response's Content-Length, else (neither given) by what was read. The fetch reads the whole file into
+  // memory to make its object URL, so above the cap nothing is fetched: the card says why and offers the new-tab link, where the
+  // browser's own viewer streams it.
+  const MAX_FRAME_BYTES = 50 * 1024 * 1024;
+  const bytesOf = (v) => { const n = typeof v === "string" && v.trim() === "" ? NaN : Number(v); return Number.isFinite(n) && n >= 0 ? n : null; };
+  const sizeText = (n) => (n >= 1024 * 1024 * 1024 ? (n / 1024 / 1024 / 1024).toFixed(1) + " GB" : Math.max(1, Math.round(n / 1024 / 1024)) + " MB");
   // The file itself, beside the question: the document row the person may read (row-level security decides), signed from the owner's
   // storage for an hour. A kind the browser draws is fetched (the app's connect-src allows the storage origin) and framed as an object
   // URL of its own type (the app's child-src allows blob:, never the storage origin); any other kind opens in a new tab.
   async function openDocument(node, card, env, button) {
     const M = model(), t = card.thing, viewer = node.querySelector("[data-card-viewer]"), el = root.FP.el;
+    sweep();   // DEC2: a file opened earlier on a screen that has been redrawn (the onboarding view) gives its object URL back first
+    const born = epoch;
     const failed = (text) => { if (viewer) { viewer.hidden = false; viewer.replaceChildren(el("p", { role: "alert" }, text)); } };
     button.disabled = true;
     const was = button.textContent;
@@ -333,26 +344,36 @@
     const done = () => { button.disabled = false; button.textContent = was; };
     let doc = list(env.docs).find((d) => String(d.id) === String(t.documentId)) || null;
     if (!doc?.storage_path && env.sb) {
-      try { const { data } = await env.sb.from("documents").select("id,title,storage_path").eq("id", t.documentId); doc = list(data)[0] || null; } catch { doc = null; }
+      try { const { data } = await env.sb.from("documents").select("id,title,storage_path,size_bytes").eq("id", t.documentId); doc = list(data)[0] || null; } catch { doc = null; }
     }
     const signed = doc?.storage_path && env.sb ? await Promise.resolve(env.sb.storage.from("documents").createSignedUrl(doc.storage_path, 3600)).catch(() => ({ error: true })) : { error: true };
     if (signed?.error || !signed?.data?.signedUrl) { done(); failed("Couldn't open the file: it may not be yours to read, or it is no longer held."); return; }
     const url = signed.data.signedUrl, title = doc.title || t.title || "the file", type = frameType(doc.storage_path);
-    let framed = null;
-    if (type && viewer) {
+    let framed = null, tooBig = null;
+    const stored = bytesOf(doc.size_bytes);
+    if (type && viewer && stored != null && stored > MAX_FRAME_BYTES) tooBig = stored;   // known before fetching: nothing is fetched
+    else if (type && viewer) {
       try {
         const r = await root.fetch(url);
         if (!r.ok) throw new Error("HTTP " + r.status);
-        framed = root.URL.createObjectURL(new root.Blob([await r.blob()], { type }));
+        const told = bytesOf(r.headers?.get?.("content-length"));
+        if (told != null && told > MAX_FRAME_BYTES) { tooBig = told; try { r.body?.cancel?.(); } catch { /* nothing to stop */ } }
+        else {
+          const blob = await r.blob();
+          if (blob.size > MAX_FRAME_BYTES) tooBig = blob.size;   // no size given anywhere: judged by what was read
+          else framed = root.URL.createObjectURL(new root.Blob([blob], { type }));
+        }
       } catch { framed = null; }
     }
+    // the screen was left (or redrawn from top) while the file was coming: its object URL is not kept
+    if (framed && (epoch !== born || !viewer?.isConnected)) { try { root.URL.revokeObjectURL(framed); } catch { /* gone */ } framed = null; }
     done();
     if (viewer) {
       for (const b of [...blobs]) if (b.viewer === viewer) { try { root.URL.revokeObjectURL(b.url); } catch { /* gone */ } blobs.delete(b); }
       if (framed) blobs.add({ url: framed, viewer });
       viewer.hidden = false;
       viewer.replaceChildren(...(framed ? [el("iframe", { class: "card-viewer-frame", src: framed, title: "The file: " + title })] : []),
-        el("p", { class: "card-fine" }, framed ? "" : type ? "It couldn't be shown here. " : "This kind of file opens in a new tab. ", el("a", { href: url, target: "_blank", rel: "noopener" }, "Open " + title + " in a new tab")));
+        el("p", { class: "card-fine" }, framed ? "" : tooBig != null ? "This file is " + sizeText(tooBig) + ", too large to show beside the question (the limit is " + sizeText(MAX_FRAME_BYTES) + "). " : type ? "It couldn't be shown here. " : "This kind of file opens in a new tab. ", el("a", { href: url, target: "_blank", rel: "noopener" }, "Open " + title + " in a new tab")));
       node.querySelector(".card-body")?.classList?.add("card-viewing");
     }
     if (!type) root.open?.(url, "_blank", "noopener");
@@ -368,5 +389,5 @@
     return openDocument(node, { id: node.dataset.proposal, thing: { type: "document", documentId: id, title: doc?.title || null } }, env, button);
   }
 
-  return { NS, render, html, thingNode, answerNode, mount, openFrom, openDocument, seen, note, forget, sweep, neighbourLayers, frameType, sel, MAX_MAPS, live: () => live.size };
+  return { NS, render, html, thingNode, answerNode, mount, openFrom, openDocument, seen, note, forget, sweep, neighbourLayers, frameType, MAX_FRAME_BYTES, sel, MAX_MAPS, live: () => live.size };
 });
