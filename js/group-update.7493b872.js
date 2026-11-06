@@ -25,7 +25,8 @@
     const p = i.period, typeLabel = i.typeLabel || ((k) => k), members = i.members || [];
     const own = (i.ownEntries || []).filter((e) => e.visibility !== "private" && G.within(e.captured_at, p));
     const shared = (i.sharedEntries || []).filter((e) => G.within(e.captured_at, p));
-    const docs = (i.ownDocuments || []).filter((d) => d.visibility !== "private" && d.doc_type !== "group_update" && G.within(d.created_at, p));
+    // the update goes to every member: never a private document, nor one held for a member business (VIS1: a member's plan)
+    const docs = (i.ownDocuments || []).filter((d) => d.visibility !== "private" && d.visibility !== "held" && d.doc_type !== "group_update" && G.within(d.created_at, p));
     const sharedDocs = (i.sharedDocuments || []).filter((d) => G.within(d.created_at, p));
     const results = (i.results || []).filter((r) => G.within(r.sampled_at, p));
     const s = i.summary || {};
