@@ -21,10 +21,10 @@
 // nothing (the line stays open). app.farm_onboarding_checks lists at most CHECK_CAP subjects of each rule; a line past them, or one
 // that rests on a private document, has no row (`unlisted`).
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === "object" && module.exports ? require("./consent-no.js") : root.FP.consentNo);
   if (typeof module === "object" && module.exports) module.exports = api;
   else { root.FP = root.FP || {}; root.FP.onboardingModel = api; }
-})(typeof window === "undefined" ? globalThis : window, function () {
+})(typeof window === "undefined" ? globalThis : window, function (CONSENT_NO) {
   const SCHEMA = "onboarding-report/1";
   const RULES_VERSION = "on1-rules/1";
   // area.mismatch: a document's stated area and the held land differ by more than both of these.
@@ -120,6 +120,38 @@
   }
 
   // ---- 2. public context --------------------------------------------------------------------------------------------
+  // ONB2: names without repeats (case and spacing ignored), in first-seen order, blanks dropped.
+  function distinctNames(names) {
+    const seen = new Set(), out = [];
+    for (const n of names) {
+      const text = String(n ?? "").trim().replace(/\s+/g, " "), k = text.toLowerCase();
+      if (text && !seen.has(k)) { seen.add(k); out.push(text); }
+    }
+    return out;
+  }
+  // ONB2: the one route the "Drains to" line names, from what onboarding_report_inputs carries under context.downstream:
+  //   {starts, reaches: [{name, cum_km}], max_km, end_reasons}  (today) and, when the report carries it,
+  //   chains: [{start?, catchment_area, reaches: [{name, cum_km}]}]  one per starting reach: its names with the distance along it.
+  // With chains, the main stem is the chain with the largest catchment area (the longer one if they tie); its names are listed in
+  // downstream order, once each, and the other chains' extra names go in the detail, not the sentence. Without them, `reaches` is
+  // every start's names merged and ordered by the nearest distance: it is one route in downstream order only when there is one start,
+  // so with several the sentence names them without "then" and says it is not one route. Never a guess: no catchment area, no main stem.
+  function downstreamRoute(d) {
+    const MAX = 4, clip = (names) => names.length > MAX ? names.slice(0, MAX).join(", then ") + ", and " + (names.length - MAX) + " more further down" : names.join(", then ");
+    const along = (rs) => { const r = list(rs).filter((x) => x && typeof x === "object"); return r.every((x) => num(x.cum_km) != null) ? [...r].sort((a, b) => num(a.cum_km) - num(b.cum_km)) : r; };
+    const chains = list(d?.chains).filter((c) => c && typeof c === "object" && num(c.catchment_area) != null && distinctNames(list(c.reaches).map((r) => r?.name)).length);
+    if (chains.length) {
+      const reach = (c) => Math.max(0, ...list(c.reaches).map((r) => num(r?.cum_km) ?? 0));
+      const main = chains.reduce((a, b) => num(b.catchment_area) > num(a.catchment_area) || (num(b.catchment_area) === num(a.catchment_area) && reach(b) > reach(a)) ? b : a);
+      const names = distinctNames(along(main.reaches).map((r) => r?.name));
+      const others = distinctNames(chains.filter((c) => c !== main).flatMap((c) => along(c.reaches).map((r) => r?.name))).filter((n) => !names.some((m) => m.toLowerCase() === n.toLowerCase()));
+      return { names, sentence: "Drains to " + clip(names), detail: others.length ? "Other starting reaches also reach " + others.slice(0, 6).join(", ") + (others.length > 6 ? " and " + (others.length - 6) + " more" : "") : null };
+    }
+    const names = distinctNames(list(d?.reaches).map((r) => r?.name));
+    if (names.length < 2 || !(num(d?.starts) > 1)) return { names, sentence: "Drains to " + clip(names), detail: null };
+    return { names, sentence: "Drains to " + names.slice(0, MAX).join(", ") + (names.length > MAX ? " and " + (names.length - MAX) + " more" : "") + " from " + plural(num(d.starts), "starting reach", "starting reaches") + " (nearest first, not one route)",
+      detail: "The report doesn't yet say which starting reach is the main route, so these are not listed as one chain" };
+  }
   function contextItems(inputs, src) {
     const ctx = inputs.context || {}, errors = inputs.errors || {}, out = [];
     const hasExtent = num(inputs.holding?.extent_area_ha) > 0;
@@ -138,10 +170,10 @@
       const found = (text, detail, evidence) => out.push(item("context", "context.found", "found", key, text, { detail, sources, source_line: lines, evidence }));
       const none = (text) => out.push(item("context", "context.none", "found", key, text, { sources, source_line: lines, evidence: "none" }));
       if (key === "downstream") {
-        const d = ctx.downstream, names = list(d?.reaches).map((r) => r.name).filter(Boolean);
+        const d = ctx.downstream, route = downstreamRoute(d), names = route.names;
         if (!d || !num(d.starts)) none(label + ": no REC2 river reach found from the farm");
-        else found(names.length ? "Drains to " + names.slice(0, 4).join(", then ") : label + ": " + plural(num(d.starts), "starting reach", "starting reaches") + ", unnamed",
-          num(d.max_km) != null ? "Followed " + Math.round(num(d.max_km)) + " km down the REC2 network" : null, names);
+        else found(names.length ? route.sentence : label + ": " + plural(num(d.starts), "starting reach", "starting reaches") + ", unnamed",
+          [num(d.max_km) != null ? "Followed " + Math.round(num(d.max_km)) + " km down the REC2 network" : null, route.detail].filter(Boolean).join(". ") || null, names);
       } else if (key === "sites") {
         const s = list(ctx.sites);
         if (!s.length) none(label + ": none within 25 km downstream");
@@ -153,7 +185,8 @@
         else found(plural(num(w.count), "reach", "reaches") + " within 2 km" + (num(w.on_farm) ? ", " + num(w.on_farm) + " on the farm" : ""),
           list(w.named).slice(0, 8).map((n) => n.name + (n.on_farm ? " (on the farm)" : "")).join("; ") || null, [w.count, w.on_farm]);
       } else if (key === "groundwater") {
-        const g = ctx.groundwater, zones = [...list(g?.allocation_zone?.groundwater), ...list(g?.allocation_zone?.surface_water)].map((z) => z.name).filter(Boolean);
+        // ONB2: a zone in both the groundwater and the surface-water layer (or in two sources' copies of one layer) is named once
+        const g = ctx.groundwater, zones = distinctNames([...list(g?.allocation_zone?.groundwater), ...list(g?.allocation_zone?.surface_water)].map((z) => z?.name));
         const wells = list(g?.wells);
         if (!g || (!zones.length && !wells.length)) none(label + ": none found");
         else found([zones.length ? "In " + zones.join(", ") : null, wells.length ? plural(wells.length, "well", "wells") + " nearby" + (wells.some((w) => w.on_farm) ? " (" + wells.filter((w) => w.on_farm).length + " on the farm)" : "") : null].filter(Boolean).join("; "),
@@ -257,15 +290,19 @@
 
   // ---- 5. gaps, duplicates and mismatches ----------------------------------------------------------------------------
   const normTitle = (t) => String(t || "").toLowerCase().replace(/\.[a-z0-9]{1,5}$/, "").replace(/\b(final|issued|signed|copy|draft|v\d+)\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
+  const titleSansNo = (t) => normTitle(String(t || "").replace(CONSENT_NO.IN_TEXT, " "));
   function duplicates(docs) {
     const live = listed(docs).filter((d) => d.tier !== "archive"), pairs = new Map();
     const add = (a, b, why) => { const ids = [a.id, b.id].sort(), k = ids.join("|"); if (!pairs.has(k)) pairs.set(k, { a, b, why }); };
     for (let i = 0; i < live.length; i++) for (let j = i + 1; j < live.length; j++) {
       const a = live[i], b = live[j];
-      const sameCrc = a.tier === "primary" && b.tier === "primary" && docType(a) === docType(b) && list(a.crcs).some((x) => list(b.crcs).includes(x));
+      // ONB2: a shared consent number is not enough (two letters about one consent are not copies of each other): the titles must
+      // also agree once the number is taken out
+      const sameCrc = a.tier === "primary" && b.tier === "primary" && docType(a) === docType(b) && list(a.crcs).some((x) => list(b.crcs).includes(x)) &&
+        titleSansNo(a.title) === titleSansNo(b.title);
       const sameTitle = normTitle(a.title) && normTitle(a.title) === normTitle(b.title) && (day(a.date_prepared) || null) === (day(b.date_prepared) || null);
       const sameName = a.original_name && String(a.original_name).toLowerCase() === String(b.original_name || "").toLowerCase();
-      if (sameCrc) add(a, b, "same kind and consent number " + list(a.crcs).find((x) => list(b.crcs).includes(x)));
+      if (sameCrc) add(a, b, "same kind, same title and consent number " +list(a.crcs).find((x) => list(b.crcs).includes(x)));
       else if (sameName) add(a, b, "same file name, different contents");
       else if (sameTitle) add(a, b, "same title" + (day(a.date_prepared) ? " and date" : ""));
     }

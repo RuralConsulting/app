@@ -89,6 +89,25 @@
     return '<li class="onboarding-item" data-item-key="' + esc(i.key) + '" data-state="' + esc(i.state) + '"' + (c ? " data-checked" : "") + ">" +
       (body ? '<details class="onboarding-fold"' + (o.open === i.key ? " open" : "") + '><summary class="onboarding-line">' + line + '</summary><div class="onboarding-body">' + body + "</div></details>" : '<p class="onboarding-line">' + line + "</p>") + "</li>";
   }
+  // ONB2: documents whose kind and tier come from their name only are one line, "28 documents are classified from their name only",
+  // with the documents behind it (each with its own decision, as before); one such document keeps its own line. The report's items,
+  // counts and keys are untouched: this is how they are drawn.
+  const NAME_ONLY = "document.tier_unconfirmed", GROUP_AT = 2;
+  function nameOnlyGroupHtml(members, o) {
+    const decided = members.filter((m) => m.checked).length, inside = members.map((m) => ({ ...m, text: m.source?.title || m.text }));
+    const line = '<span class="onboarding-state" data-state="verify">' + esc(LABELS.verify) + '</span> <span class="onboarding-text">' + members.length +
+      " documents are classified from their name only</span>" + (decided ? ' <span class="onboarding-tickmark">· ' + decided + " decided</span>" : "");
+    return '<li class="onboarding-item onboarding-group" data-group="' + NAME_ONLY + '" data-state="verify" data-count="' + members.length + '"><details class="onboarding-fold"' +
+      (members.some((m) => o.open === m.key) ? " open" : "") + '><summary class="onboarding-line">' + line + '</summary><div class="onboarding-body">' +
+      '<p class="onboarding-detail">Their kind and tier were guessed from the file name, and no one has confirmed them. Open each to confirm it in Documents or to record that you have seen it.</p>' +
+      '<ul class="onboarding-list onboarding-group-list">' + inside.map((m) => itemHtml(m, o)).join("") + "</ul></div></details></li>";
+  }
+  function itemsHtml(items, o) {
+    const all = list(items), members = all.filter((i) => i.rule === NAME_ONLY);
+    if (members.length < GROUP_AT) return all.map((i) => itemHtml(i, o)).join("");
+    const first = members[0];
+    return all.map((i) => i === first ? nameOnlyGroupHtml(members, o) : i.rule === NAME_ONLY ? "" : itemHtml(i, o)).join("");
+  }
   // report: FP.onboardingModel.build() or fromDocument(); o: { farmName, canDecide, userId, listed (false: the farm's rows could not be brought up), open (an item key to leave open), canSave, saved, message, minutes }
   function html(report, o = {}) {
     if (!report) return '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2><p>' + esc(o.message || "This farm's onboarding checklist isn't available to you.") + "</p></section>";
@@ -96,7 +115,7 @@
     const status = o.saved ? "Saved " + (when(report.saved?.at) || "") + (report.saved?.by?.name ? " by " + report.saved.by.name : "") + ", as it was then."
       : (parts.join(" · ") || "Nothing found yet") + (n.checked ? " · " + n.checked + " checked or decided" : "");
     const sections = list(report.sections).filter((s) => list(s.items).length).map((s) => '<section class="onboarding-section" data-section="' + esc(s.key) + '"><h3>' + esc(s.title) +
-      '</h3><ul class="onboarding-list">' + list(s.items).map((i) => itemHtml(i, o)).join("") + "</ul></section>").join("");
+      '</h3><ul class="onboarding-list">' + itemsHtml(s.items, o) + "</ul></section>").join("");
     const effort = model().effortLines(report.effort);
     const save = o.canSave && !o.saved ? '<form class="onboarding-save" data-onboarding-save><label for="ob-minutes">Minutes spent on this farm\'s onboarding by hand (optional)</label>' +
       '<input id="ob-minutes" name="minutes" type="number" inputmode="numeric" min="0" max="100000" step="1"' + (o.minutes != null ? ' value="' + esc(o.minutes) + '"' : "") + ">" +
