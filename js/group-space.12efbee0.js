@@ -208,6 +208,11 @@
     if (mapHandle !== handle || !drawn) { if (!drawn && current === token) mapSettled(data, true); return; }
     surface = drawn.surface || null; entries = drawn.entries || [];
     startParts(data, show, counts);
+    // GE1b: Edit shape in a feature's popup (FP.shapeEditor; only with its trial switched on, so by default nothing changes).
+    // The boundary to snap to: the group's area and the member farms' outlines as the map drew them.
+    const own = surface;
+    surface?.featureTools?.((hit, at) => (FP.shapeEditor ? FP.shapeEditor.tools(hit, at, { space: "group", owner: data.group.id, role: data.group.role, surface: own,
+      boundary: () => [data.map?.extent, ...(data.map?.layers || []).filter((l) => l?.theme === "member_farms").flatMap((l) => l.features?.features || [])].filter(Boolean) }) : null));
     // TIM1 (#410): the map's style loaded and the group's outline first on screen, as steps of the route's run
     run?.step("style", surface?.styleLoadedAt?.() ?? undefined);
     surface?.outlineShown?.().then((at) => run?.step("outline", at));
@@ -679,5 +684,6 @@
     return form;
   }
 
-  FP.groupSpace = { setGroups, find, open, close, load, lastDrawn, groups: () => groups, hasPortfolio: null, mapTimeoutMs: MAP_TIMEOUT_MS };
+  FP.groupSpace = { setGroups, find, open, close, load, lastDrawn, groups: () => groups, hasPortfolio: null, mapTimeoutMs: MAP_TIMEOUT_MS,
+    surface: () => surface };   // GE1b: the group map's surface (the browser walk projects a block's corners with it)
 })(typeof window === "undefined" ? globalThis : window);

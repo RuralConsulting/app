@@ -324,6 +324,31 @@ body.block-flow-active .command-bar, body.block-flow-active #overview-rail, body
 }
 @media print { .block-flow { display: none !important; } }
 
+/* GE1b the shape editor (wide screens only: the tools are never offered on a phone): a panel over the map's top-left corner,
+   in the add-block panel's type and buttons; the popup's Edit shape button and the quiet line saying why a shape can't be. */
+.pop-edit-tools { margin-top: 8px; }
+.pop-edit { min-height: 36px; padding: 0 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: 600 var(--text-small) var(--f-ui); }
+.pop-edit[disabled] { opacity: .6; cursor: default; }
+.shape-editor { position: absolute; z-index: 3; top: 12px; left: 12px; width: min(340px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow: auto; box-sizing: border-box;
+  padding: 16px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow); font-family: var(--f-ui); }
+.se-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.se-head h2 { margin: 0; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.se-layer { color: var(--ink-3); font-size: var(--text-small); text-align: right; overflow-wrap: anywhere; }
+.se-lead { margin: 8px 0 10px; font: 600 var(--text-body)/1.35 var(--f-ui); }
+.se-lead:focus { outline: none; }
+.se-body p { margin: 0 0 10px; line-height: 1.4; }
+.se-hint, .se-total { color: var(--ink-2); font-size: var(--text-small); }
+.se-snap { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; color: var(--ink-2); font-size: var(--text-small); line-height: 1.4; }
+.se-snap input { margin-top: 3px; }
+.se-msg:not(:empty) { margin: 0 0 10px; font-size: var(--text-small); }
+.se-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.se-actions button { min-height: 40px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); }
+.se-actions button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.se-actions button.link { border: 0; background: none; padding: 0 8px; text-decoration: underline; font-weight: 400; }
+.se-actions button[disabled] { opacity: .5; cursor: default; }
+@media (max-width: 800px) { .shape-editor, .pop-edit-tools { display: none; } }
+@media print { .shape-editor { display: none !important; } }
+
 /* Water quality nearby (M1b, wq.js): a card after the standing answers; its sites are on the map only while it is open. */
 .wq-line { background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0 16px; }
 .wq-line[hidden] { display: none; }

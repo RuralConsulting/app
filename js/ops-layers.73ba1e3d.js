@@ -142,6 +142,8 @@
       });
       $("#ln-editor").addEventListener("submit", save);
       $("#ln-editor").addEventListener("click", (e) => { if (e.target.id === "ln-clear") clear(); });
+      // GE1b: RCL staff's trials (the Shape editor's switch), below the layer notes; kept in this browser only
+      if (staff && FP.shapeEditor && box.insertAdjacentHTML) { box.insertAdjacentHTML("beforeend", FP.shapeEditor.trialsPanel()); FP.shapeEditor.wireTrials(box); }
     } catch (e) {
       if (current === token) box.innerHTML = '<p class="msg" role="alert">Couldn\'t read the layers: ' + esc(e.message || e) + "</p>";
     }

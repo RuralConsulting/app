@@ -206,7 +206,7 @@
       if (kind === "source" && map.getSource(id)) map.removeSource(id);
     }
     added = [];
-    interactive.clear(); unitHits.clear();
+    interactive.clear(); unitHits.clear(); sourceData.clear(); saved.clear(); refKeys.clear();
     drawn = null; farmZoom = null; masked = false; photoEntries.length = 0; rivers = null; refDrawn = [];
   }
 
@@ -230,8 +230,29 @@
   }
 
   function source(id, data) {
-    map.addSource(id, { type: "geojson", data });
+    map.addSource(id, { type: "geojson", data: withEdits(id, data) });
     added.push({ kind: "source", id });
+    sourceData.set(id, data);
+  }
+  // GE1b: what each source was given (so the shape editor can find a feature's box), and the shapes a person saved this
+  // session, drawn in place of the read ones: a viewport read kept from before the save (group-layers.js) draws the new shape.
+  const sourceData = new Map(), saved = new Map();   // source id -> data; source id + "|" + feature id -> geometry
+  function withEdits(id, data) {
+    if (!saved.size || !Array.isArray(data?.features)) return data;
+    let hit = false;
+    const features = data.features.map((f) => { const g = f?.id != null && saved.get(id + "|" + f.id); if (!g) return f; hit = true; return { ...f, geometry: g }; });
+    return hit ? { ...data, features } : data;
+  }
+  function featureData(layerIndex, id) {
+    const data = sourceData.get("fl-" + layerIndex), f = data?.features?.find?.((x) => x?.id != null && String(x.id) === String(id));
+    return f ? { ...f, geometry: saved.get("fl-" + layerIndex + "|" + f.id) || f.geometry } : null;
+  }
+  function patchFeature(layerIndex, id, geometry) {
+    const sid = "fl-" + layerIndex, src = map?.getSource(sid);
+    if (!src || id == null || !geometry) return false;
+    saved.set(sid + "|" + id, geometry);
+    src.setData(withEdits(sid, sourceData.get(sid) || NONE));
+    return true;
   }
   function layer(spec, describe, before) {
     if (before && map.getLayer(before)) map.addLayer(spec, before); else map.addLayer(spec);
@@ -252,6 +273,7 @@
   const AREA = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]], LINE = ["in", ["geometry-type"], ["literal", ["LineString", "MultiLineString"]]],
     POINT = ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]];
   let refDrawn = [], refAdded = 0;   // the reference sources on the map, in drawing order ({key, name, first layer id}); sources added since
+  const refKeys = new Map();   // GE1b: reference source id -> its key
   function referenceLayers(r, sid, key, before) {
     const consents = r.theme === "consents" || r.key === "ecan-consents";
     const features = consents ? { ...r.features, features: (r.features?.features || []).map((f) => ({ ...f, properties: { ...f.properties, fp_past: FP.farmModel.pastConsent(f.properties) } })) } : r.features;
@@ -285,6 +307,7 @@
     const past = consents ? [layer({ id: sid + "-past", type: "circle", source: sid, filter: ["all", POINT, ["==", ["get", "fp_past"], true]], paint: {
       "circle-color": "#78909c", "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } }, describe, before)] : null;
     refDrawn.push({ key, name: String(r.name || key), first: ids[0] });
+    refKeys.set(sid, r.key || key);   // GE1b: a tap on it is on a shared reference layer (the shape editor says it isn't edited)
     const purpose = record ? FP.layerStyle.purpose(record) : null;   // LK1: the Layers list's sentence, when the record has one
     return { key, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}), ...(purpose ? { purpose } : {}) };
   }
@@ -899,6 +922,7 @@
     if (!target) return false;
     let data = features?.features ? features : NONE;
     if (!src && entry.past) data = { ...data, features: data.features.map((f) => ({ ...f, properties: { ...f.properties, fp_past: FP.farmModel.pastConsent(f.properties) } })) };
+    if (src) { sourceData.set("fl-" + entry.layerIndex, data); data = withEdits("fl-" + entry.layerIndex, data); }
     target.setData(data);
     return true;
   }
@@ -933,6 +957,18 @@
 
   // FB1: while a flow has the map (choosing parcels, drawing a boundary) its taps are its own: no feature popups.
   let captured = null;
+  // GE1b: a host's tools for a tapped feature (the shape editor's Edit shape, or why it can't be): tools(hit, {lngLat, close})
+  // returns a node to add under the popup's details, or null. No host tools, or null: the popup is exactly as before.
+  let tools = null;
+  // What a tapped feature is to the shape editor: a farm or group layer's feature ({layer, layerIndex, id}), the farm's register
+  // land units ({units}), a shared reference source ({reference}), or nothing it is about (titles, actions, rivers).
+  function editTarget(f) {
+    const id = f?.layer?.id || "", src = f?.layer?.source || "", m = /^fl-(\d+)$/.exec(src);
+    if (id === "land-units-hit") return { units: true };
+    if (m && drawn?.layers?.[Number(m[1])]) return { layer: drawn.layers[Number(m[1])], layerIndex: Number(m[1]), id: f.id ?? null };
+    if (refKeys.has(src)) return { reference: refKeys.get(src) };
+    return null;
+  }
   function onClick(e) {
     if (captured) { captured(e); return; }
     if (e.originalEvent?.target?.closest?.(".photo-pin")) return;   // a camera marker opens its photo itself
@@ -951,7 +987,12 @@
     const hit = interactive.get(f.layer.id)({ ...f, properties: props });
     if (props.authorisations && !hit.permits) hit.permits = props.authorisations;
     closePhoto();
-    const popup = new maplibregl.Popup({ maxWidth: Math.min(320, map.getContainer().clientWidth - 24) + "px" }).setLngLat(e.lngLat).setDOMContent(FP.popup.content(hit)).addTo(map);
+    const content = FP.popup.content(hit);
+    let popup = null;
+    // (and what else is under the tap that a layer holds: a member block under the member farms' outline can still be edited)
+    const extra = tools ? tools({ ...hit, edit: editTarget(f), under: hits.slice(1).map(editTarget).filter((t) => t?.layer) }, { lngLat: e.lngLat.toArray(), close: () => popup?.remove() }) : null;
+    if (extra) content.append(extra);
+    popup = new maplibregl.Popup({ maxWidth: Math.min(320, map.getContainer().clientWidth - 24) + "px" }).setLngLat(e.lngLat).setDOMContent(content).addTo(map);
     featurePopup = popup; popup.on("close", () => { if (featurePopup === popup) featurePopup = null; });
     keepInside(popup);
     // Opening the layer's Advisor note (LN1) makes the popup taller: keep it inside the map again.
@@ -1012,6 +1053,9 @@
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.
     // TIM1 (#410): the outline at once on a fresh map; when the style loaded and the outline was first on screen (route timing)
     sketch, unsketch: removeSketch, outlineShown, styleLoadedAt: () => styleAt,
+    // GE1b: the shape editor's hooks: a host's popup tools, a feature as its layer's source holds it, a saved shape drawn in
+    // place (kept over later viewport reads until the scene is drawn again), and the scene drawn (its boundary, to snap to)
+    featureTools: (fn) => { tools = typeof fn === "function" ? fn : null; }, featureData, patchFeature, scene: () => drawn,
     addReference, readRiversAhead: () => readRivers(true) };
   }
 

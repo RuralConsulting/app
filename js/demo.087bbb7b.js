@@ -796,6 +796,58 @@
     Object.assign(row, { status: args.status, decision: { candidate: chosen, note: String(args.note || "").trim() || null }, decided_by: d.user.id, decided_at: new Date().toISOString() });
     return [row];
   }
+  // GE1b, as public.feature_edit_shape and public.feature_restore_version (GE1a) over the demo's features that carry ids (the
+  // group's layers read in parts, the farm's paddock grid): the checks on the feature first (who may edit the layer, the version
+  // opened), then the shape; a save keeps the replaced shape as an earlier version (map_feature_versions) and changes the
+  // feature in memory, so every later read draws it. d.shapes.refuse (one save) and d.shapes.refuseProbe (until cleared) let
+  // the screenshots show a refusal. map_features and map_feature_versions are read as the editor reads them (id, version_no).
+  const shapeState = (d) => d.shapes || (d.shapes = { version: new Map(), kept: [], next: 1, refuse: null, refuseProbe: null });
+  function shapeFeatures(d) {
+    const out = [];
+    if (d.group?.parts) for (const l of groupPartsLayers(d)) for (const f of l.all) out.push({ f, layer: l.id, owner: "group" });
+    if (d.farmParts) for (const f of farmPartsData(d).paddocks) out.push({ f, layer: FARM_PADDOCKS, owner: "farm" });
+    return out;
+  }
+  function shapeRows(d, table) {
+    const st = shapeState(d);
+    if (table === "map_feature_versions") return st.kept;
+    return shapeFeatures(d).map(({ f, layer }) => ({ id: f.id, layer_id: layer, version_no: st.version.get(f.id) || 1 }));
+  }
+  function shapeEdit(d, name, args) {
+    const B = typeof module === "object" && module.exports ? require("./block-model.js") : globalThis.FP.blockModel;
+    const st = shapeState(d), id = Number(args.feature);
+    if (args.layer == null || args.feature == null) return [null, { code: "22023", message: "Name the layer and the feature to edit" }];
+    const t = shapeFeatures(d).find((x) => x.layer === args.layer && x.f.id === id);
+    if (!t) return [null, { code: "P0002", message: "No such feature in this layer" }];
+    const role = t.owner === "group" ? d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role : d.tables.farm_members.find((m) => m.farm_id === FARM && m.user_id === USER)?.role;
+    if (!(t.owner === "group" ? ["admin", "advisor"] : ["owner", "admin", "edit"]).includes(role))
+      return [null, { code: "42501", message: t.owner === "group" ? "Only the group's admins and advisors edit the group's layers" : "Only the farm's editors edit the farm's layers" }];
+    if (st.refuseProbe) return [null, copy(st.refuseProbe)];
+    const v = st.version.get(id) || 1;
+    if (args.base_version !== v) return [null, { code: "40001", message: "This feature has changed since it was opened (it is now version " + v + "): open it again and redo the edit" }];
+    let geom;
+    if (name === "feature_edit_shape") {
+      const g = args.shape;
+      if (!g || typeof g !== "object" || !["Polygon", "MultiPolygon", "LineString", "MultiLineString", "Point", "MultiPoint"].includes(g.type))
+        return [null, { code: "22023", message: "The shape must be a GeoJSON geometry (a polygon, line or point)" }];
+      if (st.refuse) { const r = st.refuse; st.refuse = null; return [null, r]; }
+      geom = copy(g);
+    } else {
+      const k = st.kept.find((x) => x.id === Number(args.version_id) && x.feature_id === id);
+      if (!k) return [null, { code: "P0002", message: "No such earlier version of this feature" }];
+      geom = copy(k.geometry);
+    }
+    const corners = JSON.stringify(geom.coordinates).split("],[").length;
+    if (corners > 25000) return [null, { code: "54000", message: "The shape has " + corners + " corners; at most 25000 can be saved" }];
+    if (JSON.stringify(geom) === JSON.stringify(t.f.geometry)) return [{ feature: id, layer: args.layer, version: v, previous_version: v, unchanged: true, geometry: copy(t.f.geometry) }];
+    st.kept.push({ id: st.next++, feature_id: id, layer_id: args.layer, version_no: v, geometry: copy(t.f.geometry), superseded_at: new Date(Date.now() + st.next).toISOString() });
+    t.f.geometry = geom; st.version.set(id, v + 1);
+    const area = B.areaHa(geom);
+    if (t.f.properties && "area_ha" in t.f.properties) t.f.properties.area_ha = area;
+    return [{ feature: id, layer: args.layer, version: v + 1, previous_version: v, edit_kind: name === "feature_edit_shape" ? "shape" : "restore", edited_by: USER, edited_at: new Date().toISOString(),
+      vertices: B.shapeOf(geom).flat(2).length + B.shapeOf(geom).flat().length, area_ha: area, length_m: null, trim_cleared: false, unchanged: false, repaired: false, geometry: copy(geom),
+      ...(name === "feature_restore_version" ? { restored_from: Number(args.version_id) } : {}) }];
+  }
   function holding(d, name, args) {
     const B = typeof module === "object" && module.exports ? require("./block-model.js") : globalThis.FP.blockModel;
     const mine = args.f === FARM, held = (p) => p.on_farm || d.tables.farm_parcels.some((h) => h.farm_id === args.f && h.external_id === p.external_id);
@@ -1036,7 +1088,7 @@
         then(resolve, reject) { return execute().then(resolve, reject); },
       };
       async function execute() {
-        const d = await ready, rows = d.tables[table];
+        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : d.tables[table];
         if (write && adding && KEPT.includes(table)) {
           const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
             ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));
@@ -1112,6 +1164,7 @@
         }
         // FB1, as the database's parcels_in_view, parcel_union, add_block and farm_holding, over the invented parcels.
         if (["parcels_in_view", "parcel_union", "add_block", "farm_holding"].includes(name)) return result(...holding(d, name, args || {}));
+        if (name === "feature_edit_shape" || name === "feature_restore_version") return result(...shapeEdit(d, name, args || {}));
         // M1b, as the database's wq_sites_near, wq_site_latest and measurement_series, over the invented sites (wqDemo).
         if (name === "wq_sites_near") {
           if (args.farm_id !== FARM) return result([]);

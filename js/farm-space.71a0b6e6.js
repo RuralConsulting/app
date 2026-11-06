@@ -713,6 +713,9 @@
     const box = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group layers-ctrl" }, button, blockButton);
     FP.farmMap.addControl({ onAdd: () => box, onRemove: () => box.remove() }, "top-right");
     layersButton = button;
+    // GE1b: Edit shape in a feature's popup (FP.shapeEditor; only with its trial switched on, so by default nothing changes)
+    FP.farmMap.featureTools?.((hit, at) => (FP.shapeEditor && context ? FP.shapeEditor.tools(hit, at, { space: "farm", owner: context.farm.id, role: context.role,
+      surface: FP.farmMap, boundary: () => [context?.maps?.extent].filter(Boolean) }) : null));
   }
   // The drawer's Farm and Reference lists: a plain name (with its area for the boundary and titles) and a switch;
   // where a layer came from is in its features' popups. Layers made for a job sit together under one heading.
@@ -1396,6 +1399,7 @@
     $("#space-handle-label").textContent = M.viewLabel(route.view) || "";
     setSheet("due", "peek", false); setSheet("space", "open", false);
     FP.farmMap.closePopup?.();   // UI1: a feature popup belongs to the view it was opened in
+    FP.shapeEditor?.close();      // GE1b: and so does a shape being edited (nothing unsaved is written)
     // (a farm whose read is still on its way is not read again: a second route to it waits for the same reads)
     const reading = context?.farm.id !== farm.id && pendingFor !== farm.id;
     if (reading) {
