@@ -571,8 +571,11 @@
   // How far an open bottom sheet (phone) covers the map canvas: farm-space measures it into --sheet-overlap.
   const inset = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue("--sheet-overlap")) || 0;
   // Frame a farm extent in the part of the map the sheet leaves visible (or the whole map when no sheet covers it).
-  function reframe(geom) {
+  // keepIfMoved (APP2b): a caller that is not the person (the water-quality line, opening or closing) leaves the camera where the
+  // person has put it, as the re-ground and the settle do (#407): once the person has taken the camera, nothing takes it back.
+  function reframe(geom, { keepIfMoved = false } = {}) {
     if (!map || !geom?.coordinates) return;
+    if (keepIfMoved && touched) return;
     closePhoto();   // the farm is framed again: an open photo gives way
     flightKey = null;
     fit(bbox(geom), FP.farmModel.framePadding(inset(), wide()), geom, reduced() ? 0 : 500);

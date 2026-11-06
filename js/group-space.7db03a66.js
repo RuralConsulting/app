@@ -215,7 +215,7 @@
       // one read of the group's sites, for the line and the answer alike (the answer then keeps to the group's own and ECan's)
       const sites = sitesFor(data);
       wq = FP.wq.create({ sb: FP.sb, farm: { id: data.group.id }, extent: data.map.extent, map: surface, provenance: (key, at) => FP.provenance.lineFor(data.map.sources, key, null, at),
-        sitesRead: () => sites });
+        sitesRead: () => sites, keepView: true });   // APP2b: opening or closing the line never takes the camera from a person who moved it
       if (!wqAnswer) wqAnswer = answerCard(data, sites);
       // B8's line joins the water-quality card already on the page (the Map view), under the group's answer
       document.querySelector("#group-panel .group-wq-line")?.replaceChildren(wq.node);

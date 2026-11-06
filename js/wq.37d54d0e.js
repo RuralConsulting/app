@@ -28,7 +28,9 @@
   // sb: the Supabase client (or the demo's); farm: the farm row; extent: the farm's boundary (GeoJSON); map: FP.farmMap.
   // sitesRead: how the sites are read, when not wq_sites_near for the farm (the group space reads group_wq_sites, S5).
   // provenance: (source key) -> the provenance line of that reference source (FP.provenance.lineFor), or null (PROV1).
-  function create({ sb, farm, extent, map = FP.farmMap, sitesRead = null, provenance = () => null }) {
+  // keepView (APP2b, the group map): opening or closing the line frames the sites only while the person has not moved the map;
+  // once they have, the sites appear where the map is and nothing flies. The farm's map keeps its framing (keepView off).
+  function create({ sb, farm, extent, map = FP.farmMap, sitesRead = null, provenance = () => null, keepView = false }) {
     let sites = [], opened = false, selected = null, destroyed = false, markers = [];
     const panels = new Map();   // site id -> { panel, latest, chart, handle, parameter }
     const node = el("details", { class: "wq-line", "data-wq": "", hidden: true });
@@ -77,12 +79,13 @@
         markers.push({ id: s.id, pin, marker: new gl.Marker({ element: pin, anchor: "center" }).setLngLat(s.lngLat).addTo(map.glMap()) });
       }
       markSelected();
-      map.reframe?.(bbox(extent, points.map((s) => s.lngLat)));
+      reframe(bbox(extent, points.map((s) => s.lngLat)));
     }
-    function hideFromMap(reframe = false) {
+    const reframe = (geom) => (keepView ? map.reframe?.(geom, { keepIfMoved: true }) : map.reframe?.(geom));
+    function hideFromMap(back = false) {
       const had = markers.length > 0;
       for (const m of markers.splice(0)) m.marker.remove();
-      if (reframe && had && extent) map.reframe?.(extent);
+      if (back && had && extent) reframe(extent);
     }
     function markSelected() { for (const m of markers) m.pin.classList.toggle("selected", m.id === selected); }
 
