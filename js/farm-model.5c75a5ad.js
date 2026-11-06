@@ -226,8 +226,10 @@
       const when = day(a.valid_to), code = a.consent_no || ruleRef(a);
       // A consent with none of its conditions recorded says so: on its expiry line, or on a line of its own.
       const bare = a.kind === "consent" && !obligations.some((o) => o.authorisation_id === a.id), unrecorded = "Its conditions aren't recorded yet.";
-      // A consent with none of its conditions recorded can fetch them from ECan (CC1): on its own line, or its expiry line.
-      const fetch = bare && /^CRC[0-9]{6}(\.[0-9]{1,2})?$/.test(String(a.consent_no || "").trim().toUpperCase()) ? { fetch_consent: String(a.consent_no).trim().toUpperCase() } : {};
+      // A consent with none of its conditions recorded can fetch them from ECan (CC1): on its own line, or its expiry line. FC1: any
+      // form ECAN1's pattern recognises (consent-no.js), which ECan's portal answers; the number as the functions key the farm's
+      // consents (trimmed, upper case), so a fetched proposal is for this very consent.
+      const fetch = bare && CN.CONSENT_NO.test(String(a.consent_no || "").trim().toUpperCase()) ? { fetch_consent: String(a.consent_no).trim().toUpperCase() } : {};
       if (when) checklist.push({ id: "expiry-" + a.id, consent: code || null, text: name(a), reason: farmer && code ? "the expiry date of " + code : "the consent's expiry date", due: when, verb: "expires",
         note: bare ? unrecorded : null, ...fetch, detail: (when < today ? "expired " : "expires ") + date(when) });
       else if (bare) checklist.push({ id: "conditions-" + a.id, text: "Conditions of " + (farmer ? lower(name(a)) : name(a)), reason: "the consent is recorded, its conditions aren't yet", state: "unknown",

@@ -4,13 +4,17 @@
 // states outright (limits, timeframes) and where it came from (CC BY 4.0, Environment Canterbury). Nothing is recorded
 // until an advisor of the farm taps Accept: that calls public.accept_consent_conditions as them (an advisor's own
 // write, under the obligations policies); Discard puts it away. Pure, apart from request() and accept().
+// FC1 (#400): the consent number is any form ECAN1's shared pattern recognises (consent-no.js: CRC, NCY, SCY, WTK, MLB, with a
+// letter and a .n version); ECan's portal answers every one of them. An answer with no conditions says which it is (`held`):
+// ECan holds none for the number (the header alone), or ECan's record says the consent has none ("No conditions.").
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === "object" && module.exports ? require("./consent-no.js") : root.FP.consentNo);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.consentConditions = api;
-})(typeof window === "undefined" ? globalThis : window, function () {
+})(typeof window === "undefined" ? globalThis : window, function (CN) {
   const UNAVAILABLE = "Fetching conditions from ECan isn't available yet.";
   const KINDS = ["limit", "date", "reporting", "practice"];
-  const CRC = /^CRC[0-9]{6}(\.[0-9]{1,2})?$/;
+  const HELD = ["conditions", "none_held", "none_stated", "none_listed"];
+  const CRC = CN.CONSENT_NO;
   const ECAN = "https://data.ecan.govt.nz/";
   const list = (v) => (Array.isArray(v) ? v : []);
   const str = (v) => typeof v === "string" && v.trim() !== "";
@@ -26,7 +30,9 @@
       code: c.code, heading: str(c.heading) ? c.heading : null, text: c.text, summary: c.summary, kind: c.kind,
       limits: list(c.limits).filter((l) => l && Number.isFinite(l.value) && str(l.unit)).map((l) => ({ value: l.value, unit: l.unit, text: str(l.text) ? l.text : String(l.value) + " " + l.unit })),
       dates: list(c.dates).filter(str), timeframes: list(c.timeframes).filter(str) }));
-    return { verb: p.verb, authorisation_id: p.authorisation_id, consent_no: p.consent_no, label: str(p.label) ? p.label : "Conditions of " + p.consent_no,
+    // what ECan's answer says when it lists no conditions; a function from before FC1 sent no `held`: its header-only answer read as "lists none"
+    const held = conditions.length ? "conditions" : HELD.includes(p.held) && p.held !== "conditions" ? p.held : "none_listed";
+    return { verb: p.verb, authorisation_id: p.authorisation_id, consent_no: p.consent_no, label: str(p.label) ? p.label : "Conditions of " + p.consent_no, held,
       source: { consent_no: p.consent_no, url: s.url, retrieved_at: s.retrieved_at, publisher: str(s.publisher) ? s.publisher : "Environment Canterbury",
         licence: str(s.licence) ? s.licence : "CC BY 4.0", attribution: str(s.attribution) ? s.attribution : "Conditions from Environment Canterbury's Open Data Portal, licensed CC BY 4.0." },
       conditions, skipped: list(p.skipped).filter((x) => x && str(x.code)).map((x) => ({ code: x.code, reason: str(x.reason) ? x.reason : "not a condition" })) };
@@ -57,6 +63,8 @@
   function html(p, o = {}) {
     const n = p.conditions.length, key = esc(p.consent_no);
     const head = n ? "ECan lists " + n + " condition" + (n === 1 ? "" : "s") + " for " + p.consent_no + ". Check them; accepting records them as the consent's conditions."
+      : p.held === "none_held" ? "ECan holds no conditions for " + p.consent_no + ". If the consent has conditions, record them from its decision document."
+      : p.held === "none_stated" ? "ECan's record says " + p.consent_no + " has no conditions."
       : "ECan lists no conditions for " + p.consent_no + ".";
     const items = p.conditions.map((c) => '<li class="cc-condition" data-cc-code="' + esc(c.code) + '"><p class="cc-line"><span class="cc-code">Condition ' + esc(c.code) + "</span>" +
       (c.heading ? ' <span class="cc-heading">' + esc(c.heading) + "</span>" : "") + "</p>" +

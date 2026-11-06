@@ -9,13 +9,15 @@
 // with dates as YYYY-MM-DD. A state is never taken on trust for a date: due and passed are worked out from `due` and
 // `today`, so nothing reads as late that the dates don't say is. Done and Add the record are buttons the host wires
 // ([data-check-done], [data-check-file]; with inline_done the Done is on the line itself); the block only draws them. A consent
-// whose conditions aren't recorded (fetch_consent: its CRC number) offers "Fetch conditions from ECan" ([data-fetch-conditions],
+// whose conditions aren't recorded (fetch_consent: its consent number) offers "Fetch conditions from ECan" ([data-fetch-conditions],
 // CC1) when the host allows (can_fetch), with a place under it for the proposal the host shows. Pure: data in, HTML out (docs/BUILDING-BLOCKS.md §2).
+// FC1: fetch_consent is any consent number ECAN1's pattern recognises (consent-no.js), not only CRC.
 (function (root, factory) {
-  const blocks = typeof module === "object" && module.exports ? require("./registry.js") : root.FP.blocks;
-  const api = factory(blocks);
-  if (typeof module === "object" && module.exports) module.exports = api;
-})(typeof window === "undefined" ? globalThis : window, function (blocks) {
+  const node = typeof module === "object" && module.exports;
+  const blocks = node ? require("./registry.js") : root.FP.blocks;
+  const api = factory(blocks, node ? require("../consent-no.js") : root.FP.consentNo);
+  if (node) module.exports = api;
+})(typeof window === "undefined" ? globalThis : window, function (blocks, CN) {
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const list = (v) => Array.isArray(v) ? v : [];
   const text = (v) => typeof v === "string" && v.trim();
@@ -104,7 +106,7 @@
         '</div><div class="checklist-upload" hidden></div><p class="checklist-msg" role="status" aria-live="polite"></p>';
     };
     // Fetch conditions from ECan (CC1): on a consent with none recorded, for someone who may edit the farm.
-    const fetchControl = (item) => o.can_fetch && /^CRC[0-9]{6}/.test(String(item.fetch_consent || "")) ?
+    const fetchControl = (item) => o.can_fetch && CN.CONSENT_NO.test(String(item.fetch_consent || "")) ?
       '<div class="checklist-fetch"><button type="button" data-fetch-conditions="' + esc(item.fetch_consent) + '" aria-label="Fetch conditions from ECan: ' + esc(item.fetch_consent) + '">Fetch conditions from ECan</button>' +
       '<p class="checklist-msg" role="status" aria-live="polite"></p><div class="checklist-proposal" hidden></div></div>' : "";
     const li = ({ item, state: s }) => {

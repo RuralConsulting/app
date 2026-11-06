@@ -16,9 +16,9 @@
 //                   MLB only count when no letter comes before them ("Tenancy 202401" is not NCY202401; CRC has no such rule)
 //   CONSENT_NO      the normalised form as a RegExp; IN_TEXT the in-text form (global, case-insensitive: use through find())
 //
-// Not used for "Fetch conditions from ECan" (consent-conditions.js, farm-model.js, checklist.js and the consent-conditions and
-// ask functions keep their own, older form, CRC only): that path sends the number to ECan's open data portal, and a letter-suffixed
-// or legacy-prefix number has not been confirmed to be accepted there.
+// "Fetch conditions from ECan" uses it too (FC1, #400: ECan's open data portal answers every form here, checked 6 Nov 2026):
+// consent-conditions.js, farm-model.js and blocks/checklist.js use CONSENT_NO, and the edge functions'
+// supabase/functions/_shared/ecan_conditions.ts holds the database's anchored form exactly (tests/app/consent-no.test.cjs pins it).
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;

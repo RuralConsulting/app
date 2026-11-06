@@ -69,6 +69,10 @@
   const ha = (v) => (Math.round(Number(v) * 10) / 10).toLocaleString("en-NZ") + " ha";
   const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
   const crcOf = (s) => String(s || "").toUpperCase().replace(/\s/g, "");
+  // FC1: a consent number "Fetch conditions from ECan" can send (farm-model.js offers the fetch on exactly these)
+  const fetchable = (s) => CONSENT_NO.CONSENT_NO.test(String(s || "").trim().toUpperCase());
+  const NOT_FETCHABLE = "ECan's Open Data Portal is looked up by an ECan consent number (CRC, NCY, SCY, WTK or MLB and six digits, e.g. CRC000369A.1), and this isn't one, " +
+    "so the conditions can't be fetched from ECan. An advisor records them by hand or reads them from the consent document.";
   const docTitle = (d) => String(d?.title || d?.original_name || "a document").trim();
   const docType = (d) => String(d?.doc_type || "").toLowerCase();
   const stable = (v) => JSON.stringify(v, (k, x) => x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x);
@@ -281,10 +285,15 @@
       out.push(item("proposals", "consent.candidates_more", "unavailable", "ecan", "ECan lists more than 300 consents on this farm: only 300 of them are checked here",
         { detail: "The rest are not listed or checked against the register in this report. An advisor checks the farm's consents in ECan's own records.",
           source: { kind: "reference", key: "ecan-consents", name: "Resource consents (ECan)", as_at: day(c.ecan_as_at) }, evidence: [300, true] }));
+    // FC1 (#400): "fetch them from ECan" only where the fetch can work, a number ECAN1's pattern recognises as What's due offers the
+    // fetch for (trimmed, upper case); for any other number the conditions are recorded by hand or read from the consent document
     for (const a of list(c.register).filter((x) => !x.has_conditions && x.consent_no))
-      out.push(item("proposals", "consent.no_conditions", "propose", crcOf(a.consent_no), "Conditions of " + crcOf(a.consent_no) + " aren't recorded: fetch them from ECan",
-        { detail: "An advisor fetches the conditions from ECan's Open Data Portal and accepts them; nothing is recorded until then.", action: { kind: "whats_due", label: "Open What's due" },
-          source: { kind: "reference", key: "ecan-consent-conditions", name: "Consent conditions (ECan Open Data Portal)", licence: "CC BY 4.0" }, evidence: a.id }));
+      out.push(fetchable(a.consent_no)
+        ? item("proposals", "consent.no_conditions", "propose", crcOf(a.consent_no), "Conditions of " + crcOf(a.consent_no) + " aren't recorded: fetch them from ECan",
+          { detail: "An advisor fetches the conditions from ECan's Open Data Portal and accepts them; nothing is recorded until then.", action: { kind: "whats_due", label: "Open What's due" },
+            source: { kind: "reference", key: "ecan-consent-conditions", name: "Consent conditions (ECan Open Data Portal)", licence: "CC BY 4.0" }, evidence: a.id })
+        : item("proposals", "consent.no_conditions", "propose", crcOf(a.consent_no), "Conditions of " + crcOf(a.consent_no) + " aren't recorded: record them by hand or read them from the consent document",
+          { detail: NOT_FETCHABLE, action: { kind: "whats_due", label: "Open What's due" }, evidence: a.id }));
     return out;
   }
 
@@ -418,7 +427,8 @@
     const no = c?.consent_no ? String(c.consent_no) : null;
     switch (c?.action) {
       case "add_to_register": return "Add " + (no || "this consent") + " to the farm's consent register";
-      case "fetch_conditions": return "Fetch the conditions of " + (no || "this consent") + " from ECan";
+      case "fetch_conditions": return no && !fetchable(no) ? "Record the conditions of " + no + " by hand or read them from the consent document"
+        : "Fetch the conditions of " + (no || "this consent") + " from ECan";
       case "read_plan_in": return "An advisor reads this plan in";
       case "confirm_report": return "An advisor confirms the import from this report";
       case "acknowledge": return "Seen, correct";
