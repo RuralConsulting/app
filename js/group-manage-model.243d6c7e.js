@@ -323,7 +323,8 @@
   // site_succession proposals). Read only: a location is a reviewed manifest entry RCL loads, never edited here.
   // WQ9: `also`, one line per other dataset a location's members hold beside its current site's ("Also measured by Earth Sciences New
   // Zealand (NIWA), 1989 to 2024."), from the members' records that monitoring_location already returns: no other read. No count (PM
-  // ruling, 6 Nov 2026): the tab is about no one parameter; the chart gives the count of the parameter it draws.
+  // ruling, 6 Nov 2026): the tab is about no one parameter; the chart gives the count of the parameter it draws. WQ10: the span is each
+  // member's record within its dates at the place (otherDatasets clips the summary's first and last to valid_from / valid_to).
   function memberSite(m) {
     const id = m.external_id || (m.monitoring_site_id != null ? "site " + m.monitoring_site_id : "an agency id");
     const from = day(m.valid_from), to = day(m.valid_to);

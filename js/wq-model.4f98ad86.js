@@ -183,11 +183,27 @@
   // ---- WQ9: a location's other datasets, from the read already made ----------------------------------------------------------
   // public.monitoring_location gives each member its own record per parameter family (`records`: WQ1's summary, {family, datasets, n,
   // first_sampled, last_sampled}). The location answers in its current member's dataset (WQ8); a member's record in any other dataset
-  // is "also measured", one entry per dataset: its members, their sampling times summed (each member's own whole record, as the
-  // summary counts it; a member's longest family when `family` is null) and the years from the first to the last.
+  // is "also measured", one entry per dataset: its members, their sampling times summed (as the summary counts them; a member's longest
+  // family when `family` is null; null when it can't be counted within the members' dates, below) and the years from the first to the last.
   // The current member's datasets are those of its records of the family, else of all its records; with none, nothing is "other".
-  const nzYear = (t) => { const d = new Date(t); return Number.isFinite(d.getTime()) ? Number(nzDay.format(d).slice(0, 4)) : null; };
-  function otherDatasets(loc, family = null) {
+  // WQ10: each member's record counts only within its dates at this place (its valid_from / valid_to in the location), as the combined
+  // record reads it: the span is the summary's first and last clipped to those dates, and a record wholly outside them says nothing.
+  // The count is the summary's only where the member's dates leave its record whole (the summary cannot be clipped); else it is null
+  // and no count is said. `rows`, when given, are the combined record of the parameter drawn, read whole (no window, not capped: the
+  // chart's read, already within each member's dates): each other dataset's count and span are then that dataset's own sampling times
+  // in those rows, one per member and time; a dataset with none of them there keeps the clipped span and gives no count.
+  const nzDateOf = (t) => { const d = new Date(t); return t != null && Number.isFinite(d.getTime()) ? nzDay.format(d) : null; };
+  const yearOf = (d) => (d ? Number(d.slice(0, 4)) : null);
+  const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(text(d));
+  // A member's record within its dates: { first, last } NZ dates (null when the summary's are not understood), and whether the dates
+  // leave it whole; null when it lies wholly outside them.
+  function withinMember(m, r) {
+    const a = nzDateOf(r.first_sampled), b = nzDateOf(r.last_sampled), from = isDay(m.valid_from) ? m.valid_from : null, to = isDay(m.valid_to) ? m.valid_to : null;
+    if (!a || !b) return { first: null, last: null, whole: !from && !to };
+    const first = from && from > a ? from : a, last = to && to < b ? to : b;
+    return first <= last ? { first, last, whole: first === a && last === b } : null;
+  }
+  function otherDatasets(loc, family = null, rows = null) {
     const members = list(loc?.members).filter((m) => m && m.monitoring_site_id != null);
     const cur = loc?.current || members.find((m) => m.role === "current") || members[0];
     if (!cur) return [];
@@ -199,28 +215,48 @@
     for (const m of members) {
       if (m.monitoring_site_id === cur.monitoring_site_id) continue;
       const byDs = new Map();
-      for (const r of recs(m)) for (const ds of list(r.datasets).map(text).filter((k) => k && !own.has(k))) {
-        const was = byDs.get(ds) || { n: 0, first: null, last: null }, y1 = nzYear(r.first_sampled), y2 = nzYear(r.last_sampled);
-        byDs.set(ds, { n: Math.max(was.n, Number(r.n)), first: was.first == null || (y1 != null && y1 < was.first) ? y1 : was.first,
-          last: was.last == null || (y2 != null && y2 > was.last) ? y2 : was.last });
+      for (const r of recs(m)) {
+        const span = withinMember(m, r);
+        if (!span) continue;
+        for (const ds of list(r.datasets).map(text).filter((k) => k && !own.has(k))) {
+          const was = byDs.get(ds) || { n: 0, first: null, last: null };
+          byDs.set(ds, { n: was.n == null || !span.whole ? null : Math.max(was.n, Number(r.n)),
+            first: was.first == null || (span.first != null && span.first < was.first) ? span.first : was.first,
+            last: was.last == null || (span.last != null && span.last > was.last) ? span.last : was.last });
+        }
       }
       for (const [ds, v] of byDs) {
-        const o = out.get(ds) || { dataset: ds, n: 0, first: null, last: null, members: [] };
-        o.n += v.n; o.members.push(text(m.external_id) || String(m.monitoring_site_id));
+        const o = out.get(ds) || { dataset: ds, n: 0, first: null, last: null, members: [], ids: [] };
+        o.n = o.n == null || v.n == null ? null : o.n + v.n; o.members.push(text(m.external_id) || String(m.monitoring_site_id)); o.ids.push(m.monitoring_site_id);
         if (v.first != null && (o.first == null || v.first < o.first)) o.first = v.first;
         if (v.last != null && (o.last == null || v.last > o.last)) o.last = v.last;
         out.set(ds, o);
       }
     }
-    return [...out.values()].sort((a, b) => b.n - a.n || a.dataset.localeCompare(b.dataset));
+    const found = [...out.values()].map(({ ids, ...o }) => {
+      if (Array.isArray(rows)) {
+        const times = new Set(), days = [];
+        for (const r of rows) {
+          if (!r || text(r.source_key) !== o.dataset || !ids.includes(r.site_id)) continue;
+          const d = nzDateOf(r.sampled_at);
+          if (d) { times.add(r.site_id + "|" + r.sampled_at); days.push(d); }
+        }
+        days.sort();
+        if (times.size) return { ...o, n: times.size, first: yearOf(days[0]), last: yearOf(days[days.length - 1]) };
+        return { ...o, n: null, first: yearOf(o.first), last: yearOf(o.last) };
+      }
+      return { ...o, first: yearOf(o.first), last: yearOf(o.last) };
+    });
+    return found.sort((a, b) => (b.n ?? -1) - (a.n ?? -1) || a.dataset.localeCompare(b.dataset));
   }
   // "Also measured by Earth Sciences New Zealand (NIWA): 415 results, 1989 to 2024." One line per other dataset; `name` names its agency.
   // PM ruling (6 Nov 2026): the count belongs to one parameter, so only the chart (the parameter drawn) gives it; the Sites tab, about no
   // one parameter, passes { count: false }: "Also measured by Earth Sciences New Zealand (NIWA), 1989 to 2024." The two never disagree.
+  // WQ10: a count that could not be counted within the members' dates (n null) is not said: the line gives the agency and the span.
   function alsoMeasured(others, name = sourceName, { count = true } = {}) {
     const span = (o) => (o.first != null && o.last != null ? (o.first === o.last ? String(o.first) : o.first + " to " + o.last) : "");
     return list(others).map((o) => "Also measured by " + (name(o.dataset) || o.dataset) +
-      (count ? ": " + Number(o.n).toLocaleString("en-NZ") + (Number(o.n) === 1 ? " result" : " results") + (span(o) ? ", " + span(o) : "") : span(o) ? ", " + span(o) : "") + ".");
+      (count && o.n != null ? ": " + Number(o.n).toLocaleString("en-NZ") + (Number(o.n) === 1 ? " result" : " results") + (span(o) ? ", " + span(o) : "") : span(o) ? ", " + span(o) : "") + ".");
   }
   // The windows a location's whole-record chart tries, in order: the whole record first when another dataset holds this parameter's
   // family there (so that dataset's line is drawn in full), then FU2's narrowing windows. null = the whole record.
@@ -269,8 +305,9 @@
     const split = groups.length > 1;
     if (split) noteLines.unshift("Results from more than one dataset, each drawn as its own line, never joined or pooled: " +
       groups.map((g) => agency(g.key) + " (" + (g.key || "dataset not recorded") + "; " + g.ids.join(", ") + ")").join("; ") + ".");
-    // WQ9: another dataset's record of this family at the location, from the location read (its members' records)
-    if (loc) noteLines.push(...alsoMeasured(otherDatasets(loc, familyOf(parameter)), agency));
+    // WQ9: another dataset's record of this family at the location, from the location read (its members' records). WQ10: within each
+    // member's dates; counted from the rows drawn when the read holds the whole record (no window, not capped)
+    if (loc) noteLines.push(...alsoMeasured(otherDatasets(loc, familyOf(parameter), win && !win.from && !win.capped ? list(series) : null), agency));
     const lines = loc ? [locationLine(loc), ...(win ? [windowLine(win)] : []), ...noteLines, ...list(typeof provenance === "string" ? [provenance] : provenance)].filter(Boolean) : provenance;
     const second = drawn ? [{ id: "member-" + drawn.member.monitoring_site_id + "-" + drawn.parameter, label: otherLabel(drawn) + ": " + (drawn.name || drawn.parameter), owner: "", note: "another member's key",
       points: points(list(drawn.rows).filter((r) => r?.site_id == null || r.site_id === drawn.member.monitoring_site_id)) }]
