@@ -129,7 +129,8 @@
       try { const { data, error } = await sb.rpc("monitoring_location", { p_site: id }); return error ? null : M().location(data); } catch { return null; }
     }
     // The latest rows of each readable member site (wq_site_latest of each, in parallel; this site's own are already read), by site id.
-    // A member that can't be read has none: the chart then simply has less to say about it.
+    // A member that can't be read has none: the chart then simply has less to say about it. WQ8: each row keeps its dataset's
+    // attribution (latest()), which credits that dataset's line in the chart.
     async function membersLatest(site, entry) {
       const ids = [...new Set(list_(entry.location.members).map((m) => m.monitoring_site_id).filter((x) => x != null && x !== site.id))];
       const out = { [site.id]: entry.latest.rows };
@@ -156,7 +157,9 @@
           for (const years of M().LOCATION_WINDOW_YEARS) {
             const from = M().locationWindowStart(latestAt, years), last = years === M().LOCATION_WINDOW_YEARS.at(-1);
             const rows = await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: plan.main, ...(from ? { p_from: from } : {}) });
-            read = { parameter: row.parameter, rows, from, years, capped: rows.length >= M().READ_CAP, mainRow: plan.main === row.parameter ? null : mainRow, others: [] };
+            // WQ8: each member's credit by dataset (its latest rows carry its attribution), so every dataset drawn names its agency
+            read = { parameter: row.parameter, rows, from, years, capped: rows.length >= M().READ_CAP, mainRow: plan.main === row.parameter ? null : mainRow, others: [],
+              credits: M().credits(...Object.values(latest)) };
             if (!read.capped || last || !from) break;
           }
           for (const o of plan.others) {
@@ -209,7 +212,7 @@
       entry.chart.replaceChildren(bar, host);
       const shownRow = lines?.mainRow || row;   // WQ6: the current site's own key, when the one opened is another member's
       const data = M().chartData({ site, parameter: shownRow.parameter, name: shownRow.name, unit: shownRow.unit, series: whole ? entry.locationSeries.rows : entry.series, attribution: entry.latest.attribution || (entry.latest.source ? "Source: " + entry.latest.source + "." : ""),
-        provisional: shownRow.provisional, compare: entry.compare, provenance: lineOf(entry.latest), ...(whole ? { location: entry.location, window: entry.locationSeries, others: lines.others } : {}) });
+        provisional: shownRow.provisional, compare: entry.compare, provenance: lineOf(entry.latest), ...(whole ? { location: entry.location, window: entry.locationSeries, others: lines.others, credits: lines.credits } : {}) });
       entry.handle = FP.blocks.render(host, { block: "chart", owner: { farm: farm.id } }, { read: () => data, level: 4, href: FP.href });
     }
 

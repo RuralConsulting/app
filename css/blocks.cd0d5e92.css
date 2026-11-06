@@ -193,12 +193,18 @@
 .chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .chart-line.chart-s0 { stroke: var(--accent); }
 .chart-line.chart-s1 { stroke: var(--ink); stroke-dasharray: 7 4; }
+.chart-line.chart-s2 { stroke: var(--accent); stroke-dasharray: 3 3; }
+.chart-line.chart-s3 { stroke: var(--ink-2); stroke-dasharray: 10 3 2 3; }
 .chart-line.chart-line-censored { stroke-dasharray: 1 5; stroke-linecap: round; }
 .chart-mark.chart-s0 { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
 .chart-mark.chart-s1 { fill: var(--ink); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s2 { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s3 { fill: var(--ink-2); stroke: var(--panel); stroke-width: 1.5; }
 .chart-mark.chart-censored { fill: var(--panel); stroke-width: 2; }
 .chart-mark.chart-censored.chart-s0 { stroke: var(--accent); }
 .chart-mark.chart-censored.chart-s1 { stroke: var(--ink); }
+.chart-mark.chart-censored.chart-s2 { stroke: var(--accent); }
+.chart-mark.chart-censored.chart-s3 { stroke: var(--ink-2); }
 .chart-legend { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font: 400 var(--text-small)/1.35 var(--f-ui); }
 .chart-key { display: flex; gap: 8px; align-items: center; }
 .chart-key > span { min-width: 0; overflow-wrap: anywhere; }

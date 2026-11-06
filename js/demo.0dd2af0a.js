@@ -769,6 +769,8 @@
     "ecan-wq": { name: "Environment Canterbury", attribution: "Source: Environment Canterbury (invented demo values). Results are provisional until reviewed by ECan.", provisional: true },
     "demo-farm-wq": { name: "Example farm's own sampling (synthetic)", attribution: "Source: the farm's own sampling (invented demo values).", provisional: false },
     "demo-hdlg-wq": { name: "HDLG (example) group sampling (synthetic)", attribution: "Source: the group's own sampling (invented demo values).", provisional: false },
+    // WQ8: another agency's dataset at a demo location (NRWQN-like; invented values), credited as the NRWQN migration credits it
+    "niwa-nrwqn": { name: "Earth Sciences New Zealand (NIWA)", attribution: "Earth Sciences New Zealand (NIWA) (invented demo values).", provisional: true },
   };
   function wqDemo(extent) {
     const M = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel;
@@ -790,13 +792,21 @@
       { id: 9107, external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", lng: 172.0322, lat: -42.9882, type: "river", params: ["nitrate-nitrite-n", "drp"], from: [2016, 6], to: [2020, 5], base: 1.9, retired: true },
       // WQ6 (Q18): a recorder beside the farm bridge site (co-located), the only one with nitrate-N; its different key is its own line
       { id: 9108, external_id: "DEMO-01R", name: "Demo Creek recorder at the farm bridge (synthetic)", lng: 172.0318, lat: -42.9888, type: "river", params: ["nitrate-n"], from: [2023, 0], base: 1.2, retired: true },
+      // WQ8: another agency's long record at the gorge (NRWQN-like, its own dataset niwa-nrwqn), to Dec 2022, before DEMO-03 began: read
+      // only through the invented location at the gorge below, drawn as its own line beside ECan's
+      { id: 9109, external_id: "DEMO-03N", name: "Demo River at the gorge, national network (synthetic)", lng: 172.0624, lat: -42.9683, type: "river", params: ["nitrate-nitrite-n", "drp"], from: [2016, 6], to: [2022, 11], base: 0.9, retired: true, nrwqn: true },
     ];
     // WQ2: an invented monitoring location (as public.monitoring_location returns it): the farm bridge site and its predecessor.
     const locations = [{ id: 9301, key: "demo-creek-at-the-farm-bridge", name: "Demo Creek at the farm bridge, synthetic location", note: "Invented for the demo.",
       members: [
         { monitoring_site_id: 9101, source_key: "ecan-wq-sites", external_id: "DEMO-01", name: "Demo Creek at the farm bridge (synthetic)", site_type: "river", role: "current", valid_from: "2020-07-01", valid_to: null, note: null },
         { monitoring_site_id: 9107, source_key: "ecan-wq-sites", external_id: "DEMO-01A", name: "Demo Creek above the old farm bridge (synthetic)", site_type: "river", role: "predecessor", valid_from: "2016-07-01", valid_to: "2020-06-30", note: null },
-        { monitoring_site_id: 9108, source_key: "ecan-wq-sites", external_id: "DEMO-01R", name: "Demo Creek recorder at the farm bridge (synthetic)", site_type: "river", role: "co_located", valid_from: "2023-01-01", valid_to: null, note: null }] }];
+        { monitoring_site_id: 9108, source_key: "ecan-wq-sites", external_id: "DEMO-01R", name: "Demo Creek recorder at the farm bridge (synthetic)", site_type: "river", role: "co_located", valid_from: "2023-01-01", valid_to: null, note: null }] },
+      // WQ8: the gorge site (ECan, from Jan 2023) and another agency's site beside it (NRWQN-like, to Dec 2022): two datasets, one line each
+      { id: 9302, key: "demo-river-at-the-gorge", name: "Demo River at the gorge, synthetic location", note: "Invented for the demo.",
+        members: [
+          { monitoring_site_id: 9103, source_key: "ecan-wq-sites", external_id: "DEMO-03", name: "Demo River at the gorge (synthetic)", site_type: "river", role: "current", valid_from: "2023-01-01", valid_to: null, note: null },
+          { monitoring_site_id: 9109, source_key: "niwa-nrwqn-sites", external_id: "DEMO-03N", name: "Demo River at the gorge, national network (synthetic)", site_type: "river", role: "co_located", valid_from: "2016-07-01", valid_to: "2022-12-31", note: null }] }];
     const sites = defs.filter((d) => !d.retired).map((d) => ({ site_id: d.id, external_id: d.external_id, name: d.name, site_type: d.type, distance_m: toBox(d.lng, d.lat), geom: place(d.lng, d.lat),
       source_key: d.own ? "demo-farm-wq" : d.group ? "demo-hdlg-wq" : "ecan-wq-sites", owner_farm_id: d.own ? FARM : null, owner_org_id: d.group ? GROUP : null }));
     const series = {};
@@ -816,7 +826,7 @@
           else value = Math.max(0.3, 2.6 * d.base * (1 + 0.8 * wave(i, k + 4)));
           if (key !== "e-coli") value = Number(value.toPrecision(3));
           return { sampled_at, value, qualifier, value_text: (qualifier || "") + String(value), unit: WQ_PARAMS[key][1], sample_id: d.external_id + "-" + (i + 1), series: "", replicate_no: 1,
-            datetime_flag: null, source_key: d.own ? "demo-farm-wq" : d.group ? "demo-hdlg-wq" : "ecan-wq", superseded_at: null, aggregate: "", n_values: null };
+            datetime_flag: null, source_key: d.own ? "demo-farm-wq" : d.group ? "demo-hdlg-wq" : d.nrwqn ? "niwa-nrwqn" : "ecan-wq", superseded_at: null, aggregate: "", n_values: null };
         });
       });
     }

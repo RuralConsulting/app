@@ -8,6 +8,8 @@
 // Data: { title?, parameter: { name, unit }, attribution?, provenance? (a line or lines naming a reference source, its as-at date and licence), provisional?,
 //         series: [{ id?, label, owner?, note?, points: [{ t, value, qualifier?, text? }] }],     // first = the site, second = comparison
 //         (a second series may carry a `note`, which the key shows in place of "comparison": WQ6, another member's different key)
+//         (WQ8: up to four series, each its own line, never joined to another; a series with `part: true` is the first's place in
+//         another dataset, kept when the comparison is turned off)
 //         bands?: { label, demo?, ranges: [{ label, from, to }] } }                         // from/to numbers, null = open ended
 // t is an ISO time or epoch ms; value is the number (the limit, for a censored result); qualifier is "<", ">", "≤" or "≥";
 // text is the value as reported ("<0.002"), shown where given.
@@ -41,10 +43,21 @@
   // Only results with a real time and a real number are drawn; the rest are left out (never turned into zeros).
   function clean(series) {
     return list(series).map((s, i) => ({
-      id: text(s?.id) || "series-" + i, label: text(s?.label) || (i ? "Comparison site" : "This site"), owner: text(s?.owner), note: text(s?.note),
+      id: text(s?.id) || "series-" + i, label: text(s?.label) || (i ? "Comparison site" : "This site"), owner: text(s?.owner), note: text(s?.note), part: i > 0 && s?.part === true,
       points: list(s?.points).map((p) => ({ ...p, ms: ms(p?.t), value: p?.value === null || p?.value === "" ? NaN : Number(p?.value) }))
         .filter((p) => Number.isFinite(p.ms) && Number.isFinite(p.value)).sort((a, b) => a.ms - b.ms),
     }));
+  }
+
+  // The series drawn: at most MAX_SERIES. Without the comparison (compare: false), the first and the `part` series right after it
+  // (WQ8: the same place's record in another dataset), never a comparison.
+  const MAX_SERIES = 4;
+  function shownSeries(data, o = {}) {
+    const all = clean(data?.series);
+    if (o.compare !== false) return all.slice(0, MAX_SERIES);
+    const out = all.slice(0, 1);
+    for (const s of all.slice(1)) { if (!s.part || out.length >= MAX_SERIES) break; out.push(s); }
+    return out;
   }
 
   // "Nice" axis values: about n steps of 1, 2 or 5 times a power of ten, covering [lo, hi].
@@ -125,7 +138,7 @@
 
   // The chart's geometry and everything drawn, as numbers, in a box of width x height. Pure, so the tests check scaling.
   function layout(data, o = {}, width = 560, height = 300) {
-    const series = clean(data?.series).slice(0, o.compare === false ? 1 : 2);
+    const series = shownSeries(data, o);
     const all = series.flatMap((s) => s.points);
     const m = { l: 46, r: 12, t: 26, b: 28 }, w = Math.max(width, 240) - m.l - m.r, h = height - m.t - m.b;
     // Plain loops: spreading tens of thousands of values into the Math min or max functions throws in Safari.
@@ -153,13 +166,15 @@
   }
 
   let seq = 0;   // ids for the picture's title and description, so two charts on a page never share them
-  const MARK = ["circle", "square"];
+  const MARK = ["circle", "square", "diamond", "circle"];
+  const tagOf = (kind) => kind === "square" ? "rect" : kind === "diamond" ? "path" : "circle";
   function marker(kind, c, p) {
     const cx = p.cx.toFixed(1), cy = p.cy.toFixed(1), cls = "chart-mark chart-s" + c;
     if (p.censored) {   // an open triangle at the limit: pointing down for "less than", up for "more than"
       const d = BELOW.includes(p.qualifier) ? 1 : -1, a = 5.5;
       return '<path class="' + cls + ' chart-censored" d="M' + cx + " " + (p.cy + d * a).toFixed(1) + " l" + (-a) + " " + (-d * a * 1.7).toFixed(1) + " h" + 2 * a + ' z" data-qualifier="' + esc(p.qualifier) + '"/>';
     }
+    if (kind === "diamond") return '<path class="' + cls + '" d="M' + cx + " " + (p.cy - 4.5).toFixed(1) + ' l4.5 4.5 l-4.5 4.5 l-4.5 -4.5 z"/>';
     return kind === "square" ? '<rect class="' + cls + '" x="' + (p.cx - 3.5).toFixed(1) + '" y="' + (p.cy - 3.5).toFixed(1) + '" width="7" height="7"/>' : '<circle class="' + cls + '" cx="' + cx + '" cy="' + cy + '" r="3.8"/>';
   }
 
@@ -178,7 +193,7 @@
         const a = s.points[i - 1], b = s.points[i];
         parts.push('<line class="chart-line chart-s' + c + (a.censored || b.censored ? " chart-line-censored" : "") + '" x1="' + a.cx.toFixed(1) + '" y1="' + a.cy.toFixed(1) + '" x2="' + b.cx.toFixed(1) + '" y2="' + b.cy.toFixed(1) + '"/>');
       }
-      for (const p of s.points) parts.push(marker(MARK[c], c, p).replace("/>", "><title>" + esc(s.label + ", " + when(p.ms) + ": " + shown(p) + (unit ? " " + unit : "")) + "</title></" + (p.censored ? "path" : MARK[c] === "square" ? "rect" : "circle") + ">"));
+      for (const p of s.points) parts.push(marker(MARK[c], c, p).replace("/>", "><title>" + esc(s.label + ", " + when(p.ms) + ": " + shown(p) + (unit ? " " + unit : "")) + "</title></" + (p.censored ? "path" : tagOf(MARK[c])) + ">"));
     });
     // Band labels last, so they sit above the lines and markers (a halo in the panel colour keeps them readable), at a corner the data does not cross.
     for (const b of g.bands) if (b.labelAt) parts.push('<text class="chart-band-label" x="' + b.labelAt.x.toFixed(1) + '" y="' + b.labelAt.y.toFixed(1) + '" text-anchor="' + b.labelAt.anchor + '">' + esc(b.label) + "</text>");
@@ -188,7 +203,7 @@
 
   // The sentence the picture is read from: how many results, the period, the latest (and the comparison's, the same way).
   function describe(data, o = {}) {
-    const series = clean(data?.series).slice(0, o.compare === false ? 1 : 2), unit = text(data?.parameter?.unit);
+    const series = shownSeries(data, o), unit = text(data?.parameter?.unit);
     return series.map((s) => {
       if (!s.points.length) return s.label + ": no results.";
       const first = s.points[0], last = s.points[s.points.length - 1], n = s.points.length;
@@ -205,7 +220,7 @@
 
   function legend(series, any, o, data) {
     const items = series.map((s, c) => '<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><line class="chart-line chart-s' + c + '" x1="1" x2="27" y1="6" y2="6"/>' +
-      (MARK[c] === "square" ? '<rect class="chart-mark chart-s' + c + '" x="10.5" y="2.5" width="7" height="7"/>' : '<circle class="chart-mark chart-s' + c + '" cx="14" cy="6" r="3.8"/>') + "</svg>" +
+      (MARK[c] === "square" ? '<rect class="chart-mark chart-s' + c + '" x="10.5" y="2.5" width="7" height="7"/>' : MARK[c] === "diamond" ? '<path class="chart-mark chart-s' + c + '" d="M14 1.5 l4.5 4.5 l-4.5 4.5 l-4.5 -4.5 z"/>' : '<circle class="chart-mark chart-s' + c + '" cx="14" cy="6" r="3.8"/>') + "</svg>" +
       "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c ? " (" + (s.note || "comparison") + ")" : "") + "</span></li>");
     if (any) items.push('<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><path class="chart-mark chart-s0 chart-censored" d="M14 9.5 l-5.5 -9.4 h11 z"/></svg><span>Open triangle: below (&lt;) or above (&gt;) a detection limit, so not an exact value</span></li>');
     return '<ul class="chart-legend" aria-label="Key">' + items.join("") + "</ul>";
@@ -217,7 +232,7 @@
     .map((l) => '<p class="chart-provenance prov-line">' + esc(l) + "</p>").join("");
 
   function render(data, o, ctx, width = 560) {
-    const series = clean(data?.series).slice(0, o.compare === false ? 1 : 2);
+    const series = shownSeries(data, o);
     if (!series[0]?.points.length) return "";
     const h = ctx.level, id = "chart-" + ++seq;
     const unit = text(data?.parameter?.unit), height = width < 480 ? 250 : 300;
@@ -268,5 +283,5 @@
     },
     state, render, mounted,
   });
-  return { block, state, layout, thin, DRAW_MAX, niceScale, timeTicks, describe, clean, shown, svg, SPARSE_BELOW };
+  return { block, state, layout, thin, DRAW_MAX, MAX_SERIES, shownSeries, niceScale, timeTicks, describe, clean, shown, svg, SPARSE_BELOW };
 });

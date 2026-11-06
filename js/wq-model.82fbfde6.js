@@ -10,7 +10,9 @@
   const NOT_ASSESSED = "not assessed";
   const RADIUS_KM = 10;
   // The monitoring sites' own source rows name who runs them; the results' rows carry the exact attribution statement.
-  const SOURCE_NAMES = { "ecan-wq-sites": "Environment Canterbury", "ecan-wq": "Environment Canterbury", "niwa-hydro-sites": "NIWA", "niwa-hydro": "NIWA" };
+  // WQ8: the NRWQN dataset is credited as its migration's attribution says (supabase/migrations/20261106034000_niwa_nrwqn.sql).
+  const SOURCE_NAMES = { "ecan-wq-sites": "Environment Canterbury", "ecan-wq": "Environment Canterbury", "niwa-hydro-sites": "NIWA", "niwa-hydro": "NIWA",
+    "niwa-nrwqn-sites": "Earth Sciences New Zealand (NIWA)", "niwa-nrwqn": "Earth Sciences New Zealand (NIWA)" };
   const sourceName = (key) => SOURCE_NAMES[key] || null;
 
   // ---- NZTM2000 <-> WGS84 (the sites' geometry is stored in NZTM, EPSG:2193; the map is longitude and latitude) -----
@@ -55,9 +57,18 @@
   // A site in the Compare picker: its name and how far it is; the farm's own site is "on this farm", never "(0 m)".
   const compareLabel = (s) => s.name + (Number(s.distance_m) === 0 ? " (on this farm)" : s.distance ? " (" + s.distance + ")" : "");
   const CENSORED = ["<", ">", "≤", "≥"];
+  // The text as reported, when it says the same number as the value (in the row's unit); null when there is none, or when it says a
+  // different number (text kept in another unit than the value's: it would be printed beside the wrong unit). A text that is not a
+  // number ("ND") is kept as it is.
+  function reportedText(row) {
+    const t = text(row?.value_text);
+    if (!t) return null;
+    const n = Number(t.replace(/^[<>≤≥]\s*/, "").replace(/,/g, "")), v = row?.value === null || row?.value === undefined || row?.value === "" ? NaN : Number(row.value);
+    return !Number.isFinite(n) || !Number.isFinite(v) || Math.abs(n - v) <= 1e-9 * Math.max(1, Math.abs(v)) ? t : null;
+  }
   // A result as the source reported it: "<0.002" stays "<0.002". The qualifier is never dropped, the limit never shown as exact.
   function valueText(row) {
-    const reported = text(row?.value_text);
+    const reported = reportedText(row);
     if (reported) return reported;
     const v = row?.value === null || row?.value === undefined ? NaN : Number(row.value);
     return Number.isFinite(v) ? (CENSORED.includes(row?.qualifier) ? row.qualifier : "") + String(Number(v.toPrecision(4))) : "no value";
@@ -94,7 +105,7 @@
   function latest(rows) {
     const out = list(rows).filter((r) => r && r.parameter).map((r) => ({
       parameter: r.parameter, name: text(r.parameter_name) || r.parameter, value: valueText(r), censored: isCensored(r), unit: text(r.unit), sampled_at: r.sampled_at, date: date(r.sampled_at),
-      provisional: !!r.provisional, source_key: r.source_key || null, assessment: NOT_ASSESSED,
+      provisional: !!r.provisional, source_key: r.source_key || null, assessment: NOT_ASSESSED, attribution: text(r.attribution) || text(r.source_name),
     }));
     out.sort((a, b) => a.name.localeCompare(b.name));
     const first = list(rows).find((r) => r && (text(r.source_name) || text(r.attribution)));
@@ -174,9 +185,21 @@
   // first provenance line lists its members and their dates.
   // WQ6: `others` are other members' results on a different key of the family ({ parameter, name, member, rows }): the first with
   // results is drawn as its own labelled line in the second place (it takes the comparison's), named in the provenance, never pooled.
-  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance, location: loc, window: win, others }) {
+  // WQ8: each dataset's credit, from rows that carry one (latest()'s rows, from wq_site_latest): {dataset key: attribution}. The first
+  // credit seen for a key is kept.
+  function credits(...rowLists) {
+    const out = {};
+    for (const r of rowLists.flatMap(list)) if (r && text(r.source_key) && text(r.attribution) && !out[r.source_key]) out[r.source_key] = text(r.attribution);
+    return out;
+  }
+  // WQ8: `credits` ({dataset key: attribution}) names each dataset's agency. A location's record that holds rows of more than one dataset
+  // is drawn as one labelled line per dataset (never joined, never pooled), each named in the key with its agency; the chart's credit
+  // adds every dataset drawn that the opened site's attribution does not already name.
+  function chartData({ site, parameter, name, unit, series, attribution, provisional, compare, bands, provenance, location: loc, window: win, others, credits: credit_ }) {
     const points = (rows) => list(rows).filter((r) => r && r.value !== null && r.value !== undefined).map((r) => ({
-      t: r.sampled_at, value: Number(r.value), qualifier: CENSORED.includes(r.qualifier) ? r.qualifier : null, text: text(r.value_text) || null }));
+      t: r.sampled_at, value: Number(r.value), qualifier: CENSORED.includes(r.qualifier) ? r.qualifier : null, text: reportedText(r) }));
+    const agency = (k) => sourceName(k) || text(credit_?.[k]).replace(/^Source:\s*/i, "").replace(/\.$/, "") || k;
+    const memberIds = (rows) => [...new Set(list(rows).map((r) => r?.site_id).filter((x) => x != null))].map((id) => loc?.members.find((m) => m.monitoring_site_id === id)?.external_id || String(id));
     // The location's label (its name and current site's id) goes on a line only when the current site gave it results; when the
     // results are all another member's, the line is labelled with that member, never with the current site's id.
     const ids = loc ? [...new Set(list(series).map((r) => r?.site_id).filter((x) => x != null))] : [];
@@ -190,17 +213,39 @@
       noteLines.push(otherLabel(o) + " has " + (o.name || o.parameter) + " results on a different key (" + o.parameter + ")" + (o === drawn ? ": drawn as its own line" : ": not drawn here") +
         ", never pooled with " + (name || parameter) + " and not used for a band" + (o.source ? " (" + o.source + ")" : "") + ".");
     }
+    // WQ8: the location's record by dataset (source_key), the current site's dataset first, then the one with the newer results.
+    const byKey = new Map();
+    if (loc) for (const r of list(series)) { const k = text(r?.source_key); byKey.set(k, [...(byKey.get(k) || []), r]); }
+    const cur = loc?.current.monitoring_site_id, newest = (rows) => rows.map((r) => String(r?.sampled_at || "")).sort().pop() || "";
+    const groups = [...byKey.entries()].map(([key, rows]) => ({ key, rows, ids: memberIds(rows), own: rows.some((r) => r?.site_id === cur) }))
+      .sort((a, b) => Number(b.own) - Number(a.own) || newest(b.rows).localeCompare(newest(a.rows)));
+    const split = groups.length > 1;
+    if (split) noteLines.unshift("Results from more than one dataset, each drawn as its own line, never joined or pooled: " +
+      groups.map((g) => agency(g.key) + " (" + (g.key || "dataset not recorded") + "; " + g.ids.join(", ") + ")").join("; ") + ".");
     const lines = loc ? [locationLine(loc), ...(win ? [windowLine(win)] : []), ...noteLines, ...list(typeof provenance === "string" ? [provenance] : provenance)].filter(Boolean) : provenance;
     const second = drawn ? [{ id: "member-" + drawn.member.monitoring_site_id + "-" + drawn.parameter, label: otherLabel(drawn) + ": " + (drawn.name || drawn.parameter), owner: "", note: "another member's key",
       points: points(list(drawn.rows).filter((r) => r?.site_id == null || r.site_id === drawn.member.monitoring_site_id)) }]
       : compare?.site ? [{ id: "site-" + compare.site.id, label: compare.site.name, owner: compare.site.owner || "", points: points(compare.series) }] : [];
+    const main = !split ? [{ id: loc ? "location-" + loc.id : "site-" + site?.id, label: lineLabel, owner: site?.owner || "", points: points(series) }]
+      : groups.map((g, i) => ({ id: "location-" + loc.id + (i ? "-" + (g.key || "unknown") : ""), label: g.own ? locationLabel(loc) : loc.name + " (" + g.ids.join(", ") + ")",
+        owner: agency(g.key) || site?.owner || "", ...(i ? { note: "another dataset", part: true } : {}), points: points(g.rows) }));
+    // WQ8 (NRW1 review item 2): every dataset drawn at a location is credited, not only the opened site's.
+    let credit = attribution || "";
+    if (loc) {
+      const drawnRows = [...list(series), ...(drawn ? list(drawn.rows) : [])], seen = new Map();
+      for (const r of drawnRows) { const k = text(r?.source_key); if (k) seen.set(k, [...(seen.get(k) || []), r]); }
+      if (credit || seen.size > 1) for (const [k, rows] of seen) {
+        const c = (text(credit_?.[k]) || sourceName(k) || k).replace(/^Source:\s*/i, "").replace(/\.$/, "");
+        if (!credit.includes(c)) credit = credit ? credit + " Also " + c + ", for " + memberIds(rows).join(", ") + "'s results." : "Source: " + c + ".";
+      }
+    }
     return {
       title: (name || parameter) + " at " + (loc ? (foreign ? lineLabel : locationLabel(loc)) : site?.name || "this site"),
       parameter: { key: parameter, name: name || parameter, unit: unit || text(list(series)[0]?.unit) },
-      attribution: attribution || "", provisional: !!provisional, ...(bands ? { bands } : {}), ...(lines ? { provenance: lines } : {}),
-      series: [{ id: loc ? "location-" + loc.id : "site-" + site?.id, label: lineLabel, owner: site?.owner || "", points: points(series) }, ...second],
+      attribution: credit, provisional: !!provisional, ...(bands ? { bands } : {}), ...(lines ? { provenance: lines } : {}),
+      series: [...main, ...second],
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP };
+  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP };
 });
