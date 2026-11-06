@@ -85,7 +85,11 @@
   }
   function ensureMap(c) {
     // (a failed or slow answer is kept too: the heavy read is not repeated on every view; leaving the group space asks again)
-    return c.mapPending || (c.mapPending = withTimeout(read(FP.sb.rpc("group_map", { g: c.group.id })), FP.groupSpace.mapTimeoutMs || MAP_TIMEOUT_MS));
+    // LK1 (#416): beside it, the reviewed looks of the group's layers and of the shared sources and themes. Optional: without
+    // them every layer is drawn as it was (its QGIS style, then today's rule); never waited for past the map's own time limit.
+    const ms = FP.groupSpace.mapTimeoutMs || MAP_TIMEOUT_MS;
+    return c.mapPending || (c.mapPending = Promise.all([withTimeout(read(FP.sb.rpc("group_map", { g: c.group.id })), ms),
+      optional(withTimeout(FP.sb.rpc("layer_styles_for_map", { g: c.group.id }), ms))]).then(([map, styles]) => { if (map && typeof map === "object") map.styles = list(styles); return map; }));
   }
 
   // ---- the screen ----------------------------------------------------------------------------------------------------------
@@ -341,8 +345,9 @@
     e.input = el("input", { type: "checkbox", role: "switch", ...(e.on ? { checked: true } : {}), onchange: (ev) => setRow(e, ev.target.checked) });
     const what = e.key === "member_farms" ? "shared by each farm, at the level both allow" : e.section === "farm" && own.has(e.key) ? "the group's own map" : e.section === "reference" ? "shared reference" : null;
     const sub = [what, e.deferred && e.count != null ? featureCount(e.count) : null].filter(Boolean).join(" · ");
+    // LK1: what the layer is for, when its reviewed look says (a row with no record reads as before)
     const li = el("li", { "data-layer": e.deferred ? "deferred" : e.pending ? "pending" : e.section }, el("label", {}, e.input, el("span", {}, e.name), sub ? el("small", {}, sub) : null,
-      from ? el("small", { class: "layer-from" }, from) : null));
+      from ? el("small", { class: "layer-from" }, from) : null, e.purpose ? el("small", { class: "layer-purpose" }, e.purpose) : null));
     rowState(e);
     return li;
   }
@@ -367,7 +372,11 @@
   // A reference source's row before its features are read: kept, so its switch and state last across the card's redraws.
   // (The group's sources are zones, catchments and monitoring sites: no consents, so no "Past consents" switch.)
   function placeholder(s) {
-    if (!placeholders.has(s.key)) placeholders.set(s.key, { key: s.key, name: FP.farmModel.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true });
+    if (!placeholders.has(s.key)) {
+      // LK1: the source's sentence before it is read, from the reviewed look of the source or its theme
+      const rec = FP.layerStyle?.pick(ctx?.data?.map?.styles, { sourceKey: s.key, theme: s.theme }), purpose = rec ? FP.layerStyle.purpose(rec) : null;
+      placeholders.set(s.key, { key: s.key, name: FP.farmModel.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true, ...(purpose ? { purpose } : {}) });
+    }
     return placeholders.get(s.key);
   }
   // The Sources entry drawn again in place (kept open if it was open).

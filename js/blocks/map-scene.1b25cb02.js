@@ -268,18 +268,25 @@
       return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
         qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution, note: noteFor("source:" + r.key), provenance };
     };
+    // LK1: today's look (#243), unless a reviewed record (or a preview's) gives this source, or its theme, another
+    const { record, look } = refLookFor(r), z = zoomsOf(record);
+    const A = look?.area || { fill: "#bfe8ff", fillOpacity: 0.25, line: "#bfe8ff", lineWidth: 1.5 }, L = look?.line || { line: "#bfe8ff", lineWidth: 2.5 },
+      P = look?.point || { fill: "#1e88e5", radius: 7, line: "#ffffff" };
+    const op = (s) => (s.lineOpacity !== undefined ? { "line-opacity": s.lineOpacity } : {});
     const ids = [
-      layer({ id: sid + "-fill", type: "fill", source: sid, filter: AREA, paint: { "fill-color": "#bfe8ff", "fill-opacity": 0.25 } }, describe, before),
-      layer({ id: sid + "-outline", type: "line", source: sid, filter: AREA, paint: { "line-color": "#bfe8ff", "line-width": 1.5 } }, null, before),
-      layer({ id: sid + "-casing", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#000000", "line-opacity": 0.5, "line-width": 5 } }, null, before),
-      layer({ id: sid + "-line", type: "line", source: sid, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bfe8ff", "line-width": 2.5 } }, describe, before),
-      layer({ id: sid + "-pt", type: "circle", source: sid, filter: consents ? ["all", POINT, ["!=", ["get", "fp_past"], true]] : POINT, paint: {
-        "circle-color": "#1e88e5", "circle-radius": 7, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } }, describe, before),
+      layer({ id: sid + "-fill", type: "fill", source: sid, ...z, filter: AREA, paint: { "fill-color": A.fill, "fill-opacity": A.fillOpacity } }, describe, before),
+      layer({ id: sid + "-outline", type: "line", source: sid, ...z, filter: AREA, paint: { "line-color": A.line, "line-width": A.lineWidth, ...op(A) } }, null, before),
+      layer({ id: sid + "-casing", type: "line", source: sid, ...z, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#000000", "line-opacity": 0.5, "line-width": record ? plus(L.lineWidth, 2.5) : 5 } }, null, before),
+      layer({ id: sid + "-line", type: "line", source: sid, ...z, filter: LINE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": L.line, "line-width": L.lineWidth, ...op(L), ...(L.dash ? { "line-dasharray": L.dash } : {}) } }, describe, before),
+      layer({ id: sid + "-pt", type: "circle", source: sid, ...z, filter: consents ? ["all", POINT, ["!=", ["get", "fp_past"], true]] : POINT, paint: {
+        "circle-color": P.fill, "circle-radius": P.radius, "circle-stroke-color": P.line, "circle-stroke-width": 2 } }, describe, before),
+      ...labelLayer(record, sid, before),
     ];
     const past = consents ? [layer({ id: sid + "-past", type: "circle", source: sid, filter: ["all", POINT, ["==", ["get", "fp_past"], true]], paint: {
       "circle-color": "#78909c", "circle-radius": 6, "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } }, describe, before)] : null;
     refDrawn.push({ key, name: String(r.name || key), first: ids[0] });
-    return { key, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}) };
+    const purpose = record ? FP.layerStyle.purpose(record) : null;   // LK1: the Layers list's sentence, when the record has one
+    return { key, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}), ...(purpose ? { purpose } : {}) };
   }
   // PERF1b: one reference source's entry (farm_reference_context's shape, as farm_map gave it) joins the scene on the map
   // now, without drawing it again: under the reference sources after it by name, Rivers and the focus mark, so the order
@@ -298,34 +305,56 @@
     return row;
   }
 
+  // LK1 (#416): the looks this scene draws with (layer-style.js): the reviewed records the payload carries (`styles`, from
+  // public.layer_styles_for_map), and the records a preview shows (open's stylePreview; nothing else ever passes one).
+  // With no record a layer is drawn exactly as before: its QGIS style, then today's rule.
+  let looks = { styles: [], preview: null };
+  const lookFor = (l) => (FP.layerStyle ? FP.layerStyle.forLayer(l, looks.styles, looks) : { record: null, look: FP.qml.style(l) });
+  const refLookFor = (r) => (FP.layerStyle ? FP.layerStyle.forReference(r, looks.styles, looks) : { record: null, look: null });
+  const zoomsOf = (record) => (record && FP.layerStyle ? FP.layerStyle.range(record) : {});
+  // A record's labels, as a symbol layer over the rest (only with the basemap's glyphs, as the river names).
+  function labelLayer(record, sid, before) {
+    const lab = record && FP.layerStyle?.label(record);
+    if (!lab || !map.getStyle()?.glyphs) return [];
+    const z = zoomsOf(record), minzoom = lab.minzoom ?? z.minzoom;
+    return [layer({ id: sid + "-label", type: "symbol", source: sid, ...z, ...(minzoom != null ? { minzoom } : {}),
+      layout: { "text-field": ["to-string", ["get", lab.field]], "text-font": ["Open Sans Regular"], "text-size": 12, "text-padding": 4, "text-allow-overlap": false },
+      paint: { "text-color": "#ffffff", "text-halo-color": "rgba(0, 0, 0, 0.6)", "text-halo-width": 1.2 } }, null, before)];
+  }
+  const plus = (v, n) => (typeof v === "number" ? v + n : ["+", v, n]);
+  const atMost = (v, n) => (typeof v === "number" ? Math.min(v, n) : ["min", v, n]);
+
   // the layers of one farm layer, by geometry: [polygonIds, lineIds, pointIds] filled in by pass
   function farmLayer(l, i, pass) {
     const sid = `fl-${i}`;
-    const st = FP.qml.style(l);
+    const { look: st, record } = lookFor(l), z = zoomsOf(record);
     const describe = (f) => ({
       title: f.properties.name || f.properties.Name || f.properties.type || f.properties.label || l.name,
       layerName: l.name, qualifier: FP.farmModel.sourceLine(l), props: f.properties,
       resolution: FP.farmModel.resolutionLine(f.properties), note: l.id ? noteFor("layer:" + String(l.id).toLowerCase()) : null,
     });
     const ids = [];
+    const lineOpacity = st.lineOpacity !== undefined ? { "line-opacity": st.lineOpacity } : {};   // only a record sets it
     if (pass === "polygon" && l.geometry_type === "polygon") {
       // land units are described by their place (code, name, area) and one plain source line, not the source file's fields
-      ids.push(layer({ id: sid + "-fill", type: "fill", source: sid, paint: { "fill-color": st.fill, "fill-opacity": st.fillOpacity } },
+      ids.push(layer({ id: sid + "-fill", type: "fill", source: sid, ...z, paint: { "fill-color": st.fill, "fill-opacity": st.fillOpacity } },
         l.theme === "land_units" ? null : describe));
-      ids.push(layer({ id: sid + "-line", type: "line", source: sid, paint: { "line-color": st.line, "line-width": st.lineWidth } }));
+      ids.push(layer({ id: sid + "-line", type: "line", source: sid, ...z, paint: { "line-color": st.line, "line-width": st.lineWidth, ...lineOpacity } }));
     }
     if (pass === "line" && l.geometry_type === "line") {
-      const paint = { "line-color": st.line, "line-width": st.lineWidth };
+      const paint = { "line-color": st.line, "line-width": st.lineWidth, ...lineOpacity };
       if (st.dash) paint["line-dasharray"] = st.dash;
-      ids.push(layer({ id: sid + "-casing", type: "line", source: sid, paint: { "line-color": "#000", "line-opacity": 0.35, "line-width": st.lineWidth + 2 } }));
-      ids.push(layer({ id: sid + "-line", type: "line", source: sid, paint }, describe));
+      ids.push(layer({ id: sid + "-casing", type: "line", source: sid, ...z, paint: { "line-color": "#000", "line-opacity": 0.35, "line-width": plus(st.lineWidth, 2) } }));
+      ids.push(layer({ id: sid + "-line", type: "line", source: sid, ...z, paint }, describe));
     }
     // photo points are camera markers (photoPins), not circles
     if (pass === "point" && l.geometry_type === "point" && l.theme !== "photos") {
-      ids.push(layer({ id: sid + "-pt", type: "circle", source: sid, paint: {
-        "circle-color": st.fill, "circle-radius": Math.min(st.radius, 9),
+      ids.push(layer({ id: sid + "-pt", type: "circle", source: sid, ...z, paint: {
+        "circle-color": st.fill, "circle-radius": atMost(st.radius, 9),
         "circle-stroke-color": st.line, "circle-stroke-width": 1.5 } }, describe));
     }
+    // a record's labels, over everything the layer draws (last pass)
+    if (pass === "point" && l.theme !== "photos") ids.push(...labelLayer(record, sid));
     return ids;
   }
 
@@ -658,7 +687,8 @@
     return [[w, s], [e, n]];
   }
 
-  async function open(farmId, supplied = null, { show = null, photo: wanted = null } = {}) {
+  // stylePreview (LK1): proposed style records to draw as if accepted, for a preview only; no other open passes it.
+  async function open(farmId, supplied = null, { show = null, photo: wanted = null, stylePreview = null } = {}) {
     const request = ++opening;
     init();
     const { data, error } = supplied ? { data: supplied, error: null } : await FP.sb.rpc("farm_map", { f: farmId });
@@ -667,6 +697,7 @@
     await loaded();
     if (request !== opening) return null;
     clear(); framed = null;
+    looks = { styles: Array.isArray(data.styles) ? data.styles : [], preview: Array.isArray(stylePreview) ? stylePreview : null };
     // TIM1: a sketch of this farm's outline stays on screen until the extent layer is painted; anything else starts unseen
     const key = data.extent ? JSON.stringify(bbox(data.extent)) : null, kept = !!sketchNode && sketched === key;
     if (!kept) { removeSketch(); outlineAt = null; }
@@ -710,6 +741,9 @@
         // PERF3b: which layer it is (a group's deferred layer is read by its id, its features set on source fl-<i>)
         layerId: l.id ?? null, layerIndex: i, ...(l.deferred === true ? { deferred: true, count: l.feature_count ?? null } : {}),
         ...(l.truncated === true ? { truncated: true, count: l.feature_count ?? null } : {}) };
+      // LK1: the sentence the Layers list shows under the name, when the layer's record (or its theme's) has one
+      const rec = FP.layerStyle ? lookFor(l).record : null, purpose = rec ? FP.layerStyle.purpose(rec) : null;
+      if (purpose) e.purpose = purpose;
       if (l.theme === "land_units") {
         // #411: a scene may hold more than one land-units layer (HDLG's group map holds two). The register's land units
         // (data.land_units: a farm's own, with their codes and label points) are labelled and made clickable once, on the

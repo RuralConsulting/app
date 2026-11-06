@@ -47,7 +47,7 @@
   // space draws the farm as soon as the map's half is back and fills in the rest when it comes.
   // onMap (TIM1): called when farm_map itself is back, whatever the three reads beside it are doing (the route's `data` step).
   async function loadMap(sb, farm, user, { onMap } = {}) {
-    const [maps, notes, holding, sources] = await Promise.all([
+    const [maps, notes, holding, sources, styles] = await Promise.all([
       read(sb.rpc("farm_map", { f: farm.id })).then((v) => { onMap?.(); return v; }),
       // The advisor notes on the map's layers (LN1): the narrowest shows in a layer's info panel. Optional: without
       // them the map is as it was.
@@ -58,8 +58,12 @@
       // Where the reference layers came from (PROV1): each served source's provider, licence, as-at date and summary. Optional:
       // without them a popup still names its layer's source, and the Layers drawer has no Sources entry.
       optional(sb.from("reference_sources").select(SOURCE_COLUMNS).eq("serve_to_customers", true)),
+      // The reviewed looks of the farm's layers and of the shared sources and themes (LK1, #416). Optional: without them
+      // every layer is drawn as it was (its QGIS style, then today's rule).
+      optional(sb.rpc("layer_styles_for_map", { f: farm.id })),
     ]);
     if (!maps) throw Error("This farm isn't shared with your login.");
+    maps.styles = Array.isArray(styles) ? styles : [];
     // CAP1b: a layer farm_map defers (CAP1a: too large to come inline) may come with no features at all: an empty
     // collection, so the Map scene draws its row and the features read for the map in view fill it
     for (const l of maps.layers || []) if (l && !Array.isArray(l.features?.features)) l.features = { type: "FeatureCollection", features: [] };
@@ -543,7 +547,12 @@
   // The Layers rows of the reference sources this farm's context holds, before their features are read: a row with no
   // map layers yet (pending), filled in when the source arrives. Consents keep their "Past consents" switch.
   const placeholder = (s) => ({ key: s.key, name: M.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true,
-    ...(s.theme === "consents" || s.key === "ecan-consents" ? { past: { ids: [], on: false } } : {}) });
+    ...(s.theme === "consents" || s.key === "ecan-consents" ? { past: { ids: [], on: false } } : {}), ...purposeOf(s) });
+  // LK1: a source's sentence before it is read, from the reviewed look of the source or its theme ({} when there is none)
+  const purposeOf = (s) => {
+    const rec = FP.layerStyle?.pick(context?.maps?.styles, { sourceKey: s.key, theme: s.theme }), p = rec ? FP.layerStyle.purpose(rec) : null;
+    return p ? { purpose: p } : {};
+  };
   // The drawer's rows: the farm's own, then a row per reference source by name (drawn already, or to be read), then Rivers.
   function layerRows(entries) {
     const drawnRefs = new Map(entries.filter((e) => e.section === "reference" && !e.rivers).map((e) => [e.key, e]));
@@ -715,7 +724,9 @@
       const past = e.past ? el("label", { class: "layer-past", ...(e.on ? {} : { hidden: true }) }, e.pastInput, el("span", {}, "Past consents")) : null;
       // CAP1b: a deferred layer (read for the map in view) says how many features it holds, as the group's rows do
       const sub = e.sub || (e.deferred && e.count != null ? FP.groupLayers.featureCount(e.count) : null);
-      return el("li", e.deferred ? { "data-layer": "deferred" } : {}, el("label", {}, e.input, el("span", {}, el("b", {}, e.name), sub ? el("small", {}, sub) : null)), past);
+      // LK1: what the layer is for, when its reviewed look says (a row with no record reads as before)
+      const purpose = e.purpose ? el("small", { class: "layer-purpose" }, e.purpose) : null;
+      return el("li", e.deferred ? { "data-layer": "deferred" } : {}, el("label", {}, e.input, el("span", {}, el("b", {}, e.name), sub ? el("small", {}, sub) : null, purpose)), past);
     };
     const children = [];
     for (const [section, heading] of [["farm", "Farm"], ["reference", "Reference"]]) {

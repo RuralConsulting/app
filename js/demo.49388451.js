@@ -1074,6 +1074,8 @@
             replaces_in_extent: [], features: collection([]) }));
         }
         if (name === "farm_people") return result(d.people[args.f] || []);
+        // LK1, as public.layer_styles_for_map: the reviewed looks in force (the demo has none, so every layer is drawn as before)
+        if (name === "layer_styles_for_map") return result((d.tables.layer_styles || []).filter((s) => s.status === "reviewed" && !s.superseded_at));
         // As public.layer_notes_for_farm: the global notes, the advisor's organisation's, and the farm's own.
         if (name === "layer_notes_for_farm") return result((d.tables.layer_notes || []).filter((n) => n.scope === "global" || (n.scope === "group" && n.org_id === ORG) || (n.scope === "farm" && n.farm_id === args.f)));
         // As public.accept_consent_conditions (CC1): the proposal's conditions become the consent's, once.
