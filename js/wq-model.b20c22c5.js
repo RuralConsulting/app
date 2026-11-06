@@ -175,9 +175,56 @@
     return best;
   }
   // The line under the chart saying which window is drawn, and when a read still filled the cap, that it may be cut short.
+  // WQ9: years null is the whole record, read first when the location holds a second dataset (locationWindows).
   const windowLine = ({ from, years, capped }) => from
     ? "Showing the last " + (years === 1 ? "year" : years + " years") + " of the combined record, from " + day(from) + "." + (capped ? " This window is large and may be cut short." : "")
-    : "";
+    : years === null ? "Showing the whole combined record." : "";
+
+  // ---- WQ9: a location's other datasets, from the read already made ----------------------------------------------------------
+  // public.monitoring_location gives each member its own record per parameter family (`records`: WQ1's summary, {family, datasets, n,
+  // first_sampled, last_sampled}). The location answers in its current member's dataset (WQ8); a member's record in any other dataset
+  // is "also measured", one entry per dataset: its members, their sampling times summed (each member's own whole record, as the
+  // summary counts it; a member's longest family when `family` is null) and the years from the first to the last.
+  // The current member's datasets are those of its records of the family, else of all its records; with none, nothing is "other".
+  const nzYear = (t) => { const d = new Date(t); return Number.isFinite(d.getTime()) ? Number(nzDay.format(d).slice(0, 4)) : null; };
+  function otherDatasets(loc, family = null) {
+    const members = list(loc?.members).filter((m) => m && m.monitoring_site_id != null);
+    const cur = loc?.current || members.find((m) => m.role === "current") || members[0];
+    if (!cur) return [];
+    const recs = (m) => list(m?.records).filter((r) => r && Number(r.n) > 0 && (family == null || r.family === family));
+    const curAll = list(cur.records).filter((r) => r && Number(r.n) > 0);
+    const own = new Set((recs(cur).length ? recs(cur) : curAll).flatMap((r) => list(r.datasets).map(text).filter(Boolean)));
+    if (!own.size) return [];
+    const out = new Map();
+    for (const m of members) {
+      if (m.monitoring_site_id === cur.monitoring_site_id) continue;
+      const byDs = new Map();
+      for (const r of recs(m)) for (const ds of list(r.datasets).map(text).filter((k) => k && !own.has(k))) {
+        const was = byDs.get(ds) || { n: 0, first: null, last: null }, y1 = nzYear(r.first_sampled), y2 = nzYear(r.last_sampled);
+        byDs.set(ds, { n: Math.max(was.n, Number(r.n)), first: was.first == null || (y1 != null && y1 < was.first) ? y1 : was.first,
+          last: was.last == null || (y2 != null && y2 > was.last) ? y2 : was.last });
+      }
+      for (const [ds, v] of byDs) {
+        const o = out.get(ds) || { dataset: ds, n: 0, first: null, last: null, members: [] };
+        o.n += v.n; o.members.push(text(m.external_id) || String(m.monitoring_site_id));
+        if (v.first != null && (o.first == null || v.first < o.first)) o.first = v.first;
+        if (v.last != null && (o.last == null || v.last > o.last)) o.last = v.last;
+        out.set(ds, o);
+      }
+    }
+    return [...out.values()].sort((a, b) => b.n - a.n || a.dataset.localeCompare(b.dataset));
+  }
+  // "Also measured by Earth Sciences New Zealand (NIWA): 415 results, 1989 to 2024." One line per other dataset; `name` names its agency.
+  // PM ruling (6 Nov 2026): the count belongs to one parameter, so only the chart (the parameter drawn) gives it; the Sites tab, about no
+  // one parameter, passes { count: false }: "Also measured by Earth Sciences New Zealand (NIWA), 1989 to 2024." The two never disagree.
+  function alsoMeasured(others, name = sourceName, { count = true } = {}) {
+    const span = (o) => (o.first != null && o.last != null ? (o.first === o.last ? String(o.first) : o.first + " to " + o.last) : "");
+    return list(others).map((o) => "Also measured by " + (name(o.dataset) || o.dataset) +
+      (count ? ": " + Number(o.n).toLocaleString("en-NZ") + (Number(o.n) === 1 ? " result" : " results") + (span(o) ? ", " + span(o) : "") : span(o) ? ", " + span(o) : "") + ".");
+  }
+  // The windows a location's whole-record chart tries, in order: the whole record first when another dataset holds this parameter's
+  // family there (so that dataset's line is drawn in full), then FU2's narrowing windows. null = the whole record.
+  const locationWindows = (loc, parameter) => (otherDatasets(loc, familyOf(parameter)).length ? [null, ...LOCATION_WINDOW_YEARS] : LOCATION_WINDOW_YEARS);
 
   // The Chart block's data for a site and parameter: the series read, the unit, the source's attribution and the provisional
   // flag from the latest row. No bands (none are passed), so the chart says "not assessed". A comparison site is a second series.
@@ -222,6 +269,8 @@
     const split = groups.length > 1;
     if (split) noteLines.unshift("Results from more than one dataset, each drawn as its own line, never joined or pooled: " +
       groups.map((g) => agency(g.key) + " (" + (g.key || "dataset not recorded") + "; " + g.ids.join(", ") + ")").join("; ") + ".");
+    // WQ9: another dataset's record of this family at the location, from the location read (its members' records)
+    if (loc) noteLines.push(...alsoMeasured(otherDatasets(loc, familyOf(parameter)), agency));
     const lines = loc ? [locationLine(loc), ...(win ? [windowLine(win)] : []), ...noteLines, ...list(typeof provenance === "string" ? [provenance] : provenance)].filter(Boolean) : provenance;
     const second = drawn ? [{ id: "member-" + drawn.member.monitoring_site_id + "-" + drawn.parameter, label: otherLabel(drawn) + ": " + (drawn.name || drawn.parameter), owner: "", note: "another member's key",
       points: points(list(drawn.rows).filter((r) => r?.site_id == null || r.site_id === drawn.member.monitoring_site_id)) }]
@@ -247,5 +296,5 @@
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP };
+  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP, otherDatasets, alsoMeasured, locationWindows };
 });

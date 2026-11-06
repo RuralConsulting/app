@@ -154,13 +154,16 @@
           const mainRow = plan.main === row.parameter ? row : rowOf(entry.location.current.monitoring_site_id, plan.main) || row;
           const latestAt = M().latestInstant([plan.main === row.parameter ? row.sampled_at : null, ...Object.values(latest).map((rows) => list_(rows).find((r) => r.parameter === plan.main)?.sampled_at)]) || row.sampled_at;
           let read = null;
-          for (const years of M().LOCATION_WINDOW_YEARS) {
-            const from = M().locationWindowStart(latestAt, years), last = years === M().LOCATION_WINDOW_YEARS.at(-1);
+          // WQ9: where another dataset holds this family at the location (its members' records), the whole record is tried first, so
+          // that dataset's line is drawn in full; a read that fills the cap narrows to FU2's windows as before
+          const windows = M().locationWindows(entry.location, plan.main);
+          for (const years of windows) {
+            const from = years === null ? null : M().locationWindowStart(latestAt, years), last = years === windows.at(-1);
             const rows = await rpc(sb, "monitoring_location_series", { p_location: entry.location.id, p_parameter: plan.main, ...(from ? { p_from: from } : {}) });
             // WQ8: each member's credit by dataset (its latest rows carry its attribution), so every dataset drawn names its agency
             read = { parameter: row.parameter, rows, from, years, capped: rows.length >= M().READ_CAP, mainRow: plan.main === row.parameter ? null : mainRow, others: [],
               credits: M().credits(...Object.values(latest)) };
-            if (!read.capped || last || !from) break;
+            if (!read.capped || last || (years !== null && !from)) break;
           }
           for (const o of plan.others) {
             try {

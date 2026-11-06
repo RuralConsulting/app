@@ -327,7 +327,9 @@
     // the gap rows the group admin reads: the applied paddock (106) is still open, so it is still to be placed; 107's is resolved
     t.group_load_gaps.push({ org_id: GROUP, kind: "paddock_held", item_key: PADDOCKS + "#7", resolved_at: null },
       { org_id: GROUP, kind: "fep_unmatched", item_key: "FarmData/HDLG member 2 plan (synthetic).pdf", resolved_at: "2026-10-21T02:00:00Z" });
-    t.monitoring_location_sites.push({ location_id: 9301, site_id: 9101 }, { location_id: 9301, site_id: 9107 });
+    t.monitoring_location_sites.push({ location_id: 9301, site_id: 9101 }, { location_id: 9301, site_id: 9107 },
+      // WQ9: the gorge location (ECan's DEMO-03 and the NRWQN-like DEMO-03N): the Sites tab says what the second dataset holds
+      { location_id: 9302, site_id: 9103 }, { location_id: 9302, site_id: 9109 });
     data.loadGaps = [...(data.loadGaps || []), { group_id: GROUP, group_name: "HDLG (example)", detail: true, checked_at: "2026-11-04T08:00:00Z",
       counts: { fep_unmatched: 5, fep_not_in_register: 1, paddock_held: 38, member_no_extent: 2 }, open_proposals: { fep_unmatched: 3, paddock_held: 1 },
       items: [
@@ -887,6 +889,22 @@
     for (const site of sites) {   // the last sample date is read off the series (null: no results yet)
       const all = Object.entries(series).filter(([k]) => k.startsWith(site.site_id + "|")).flatMap(([, rows]) => rows);
       site.last_sampled = all.length ? all.map((r) => r.sampled_at).sort().pop() : null;
+    }
+    // WQ9: each location member's own record per parameter family, as public.monitoring_location returns it (WQ1's summary over the
+    // site's whole series: distinct sampling times, the datasets counted, the first and last), by family
+    for (const l of locations) for (const m of l.members) {
+      const fams = new Map();
+      for (const [k, rows] of Object.entries(series)) {
+        const [id, key] = k.split("|");
+        if (Number(id) !== m.monitoring_site_id || !rows.length) continue;
+        const f = M.familyOf(key), v = fams.get(f) || { times: new Set(), datasets: new Set() };
+        for (const r of rows) { v.times.add(r.sampled_at); v.datasets.add(r.source_key); }
+        fams.set(f, v);
+      }
+      m.records = [...fams.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([family, v]) => {
+        const t = [...v.times].sort();
+        return { family, datasets: [...v.datasets].sort(), n: t.length, first_sampled: t[0], last_sampled: t[t.length - 1] };
+      });
     }
     return { sites, series, params: WQ_PARAMS, sources: WQ_SOURCES, locations };
   }

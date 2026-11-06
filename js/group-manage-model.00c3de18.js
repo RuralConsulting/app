@@ -4,10 +4,12 @@
 // monitoring locations near the group (Sites). No DOM, no reads, no AI: group-manage.js reads as the person and hands the rows
 // here; people decide only through public.proposals_decide (`decision` below builds its arguments).
 (function (root, factory) {
-  const api = factory();
-  if (typeof module === "object" && module.exports) module.exports = api;
+  const node = typeof module === "object" && module.exports;
+  // WQ9: a location's other datasets are worded as the water-quality chart words them (wq-model.js, loaded before this file)
+  const api = factory(node ? require("./wq-model.js") : root.FP && root.FP.wqModel);
+  if (node) module.exports = api;
   else { root.FP = root.FP || {}; root.FP.groupManageModel = api; }
-})(typeof window === "undefined" ? globalThis : window, function () {
+})(typeof window === "undefined" ? globalThis : window, function (W) {
   // ---- who sees what ------------------------------------------------------------------------------------------------------
   // The group's admins, advisors and facilitators read and decide its proposals (app.is_org_advisor, ON3a's RLS); a plain
   // member or editor gets the counts only (public.proposals_open_counts), so the space offers them the count line and Members,
@@ -319,6 +321,9 @@
   // WQ2's monitoring locations among the sites near the group (public.group_wq_sites: the sites its water-quality card lists), each
   // with its member sites, roles and dates (public.monitoring_location); the group's own sites; and the site questions (open
   // site_succession proposals). Read only: a location is a reviewed manifest entry RCL loads, never edited here.
+  // WQ9: `also`, one line per other dataset a location's members hold beside its current site's ("Also measured by Earth Sciences New
+  // Zealand (NIWA), 1989 to 2024."), from the members' records that monitoring_location already returns: no other read. No count (PM
+  // ruling, 6 Nov 2026): the tab is about no one parameter; the chart gives the count of the parameter it draws.
   function memberSite(m) {
     const id = m.external_id || (m.monitoring_site_id != null ? "site " + m.monitoring_site_id : "an agency id");
     const from = day(m.valid_from), to = day(m.valid_to);
@@ -329,7 +334,8 @@
     const list = (Array.isArray(sites) ? sites : []).filter(Boolean);
     const near = new Set(list.map((s) => s.site_id));
     const locs = (Array.isArray(locations) ? locations : []).filter((l) => l && Array.isArray(l.members) && l.members.some((m) => near.has(m.monitoring_site_id)))
-      .sort((a, b) => String(a.name).localeCompare(String(b.name))).map((l) => ({ id: l.id, key: l.key, name: l.name, note: l.note || null, members: l.members.map(memberSite) }));
+      .sort((a, b) => String(a.name).localeCompare(String(b.name))).map((l) => ({ id: l.id, key: l.key, name: l.name, note: l.note || null, members: l.members.map(memberSite),
+        also: W ? W.alsoMeasured(W.otherDatasets(l), undefined, { count: false }) : [] }));
     const inLoc = new Set(locs.flatMap((l) => (locations.find((x) => x.id === l.id)?.members || []).map((m) => m.monitoring_site_id)));
     const own = list.filter((s) => groupId && s.owner_org_id === groupId).sort((a, b) => String(a.external_id).localeCompare(String(b.external_id)))
       .map((s) => ({ id: s.external_id, name: s.name, last: s.last_sampled ? "last sampled " + day(s.last_sampled) : "no results yet" }));

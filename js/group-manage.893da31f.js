@@ -303,7 +303,9 @@
       el("ul", { class: "manage-lines" }, ...v.questions.map((l) => proposalItem(l, group, d, () => drawSites(body, group, d, wrap), wrap)))));
     if (v.locations.length) body.append(el("h3", {}, "Monitoring locations"), el("ul", { class: "manage-locations" }, ...v.locations.map((l) => el("li", { "data-location": l.key },
       el("b", {}, l.name), l.note ? el("small", {}, l.note) : null,
-      el("ul", { class: "group-lines" }, ...l.members.map((m) => el("li", { "data-role": m.role }, el("span", {}, m.id + (m.name ? " · " + m.name : "")), el("small", {}, m.role + " · " + m.dates + (m.note ? " · " + m.note : "")))))))));
+      el("ul", { class: "group-lines" }, ...l.members.map((m) => el("li", { "data-role": m.role }, el("span", {}, m.id + (m.name ? " · " + m.name : "")), el("small", {}, m.role + " · " + m.dates + (m.note ? " · " + m.note : ""))))),
+      // WQ9: another dataset's record at the location, one line each, from the members' records already read
+      ...(l.also || []).map((t) => el("p", { class: "group-fine manage-also" }, t))))));
     if (v.noLocations) body.append(el("p", {}, v.noLocations));
     if (v.own.length) body.append(el("h3", {}, "The group's own sites"), el("ul", { class: "group-lines" }, ...v.own.map((s) => el("li", {}, el("span", {}, s.id + " · " + s.name), el("small", {}, s.last)))));
     if (v.othersText) body.append(el("p", { class: "group-fine" }, v.othersText));
