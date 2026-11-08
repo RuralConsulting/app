@@ -167,12 +167,12 @@
       const data = await (home ? homeAsked : ensureBase(thisCtx));
       if (current !== token) return;
       panel.replaceChildren();
-      if (route.view === "documents") panel.append(documentsView(data));
-      else if (route.view === "create") panel.append(createView(data));
-      else panel.append(...mapView(data));
       // PM (5 Nov, PERF3b): the water-quality card loads on its own. Its sites read starts now, beside the map, and the card (the
       // group's answer, then B8's line once the map is drawn) is on the page at once; the map panel never waits on it.
-      if (home) panel.append(waterCard(data));
+      // GWQ1 (#457): it is the Map view's first card, above the standing answers, so a reader finds the sites and charts at once.
+      if (route.view === "documents") panel.append(documentsView(data));
+      else if (route.view === "create") panel.append(createView(data));
+      else panel.append(waterCard(data), ...mapView(data));
       panel.scrollTop = 0;
       const mapped = drawMap(data, current, mapAsked, homeAsked).catch(() => null);
       if (!home) return;   // Documents and Create: the map is drawn beside them when it arrives; nothing more of theirs depends on it
