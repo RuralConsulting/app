@@ -2,9 +2,10 @@
 // (owners and admins add, change and remove people; the farm_members policies decide what is allowed).
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
-  const api = factory(node ? require("./farm-model.js") : root.FP.farmModel, node ? require("./farm-reference.js") : root.FP.farmReference, node ? require("./route-timing.js") : root.FP.routeTiming);
+  const api = factory(node ? require("./farm-model.js") : root.FP.farmModel, node ? require("./farm-reference.js") : root.FP.farmReference, node ? require("./route-timing.js") : root.FP.routeTiming,
+    node ? require("./layer-kinds.js") : root.FP.kinds);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
-})(typeof window === "undefined" ? globalThis : window, function (M, R, T) {
+})(typeof window === "undefined" ? globalThis : window, function (M, R, T, K) {
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   // Tiers (F1e) and who chose one (B3's tiered_at) are read when the database has them. relates_to is read through
   // document_relations, which withholds a relationship whose other end the reader can't see. context.documentTiers
@@ -129,6 +130,7 @@
   // What the map shows (E5, #244): the layer rows drawn for this farm, the route it is showing, the place a chosen
   // What's due line brings, whether a photo has been opened in this view, and the layers the person set by hand.
   let layerEntries = [], shownRoute = null, focusPlace = null, photoShown = false, handSet = new Map(), layersButton = null;
+  let stackOk = new Set(), offZoom = null;   // LK4: context fills the person chose to show together ("a|b"); the zoom rules' hook
   // Ask (the farm's Ask function): the layer set its answer brought up (until the view changes), and the last answer on
   // this farm, kept so the Ask tab shows it again after a source or the plan was opened.
   let askSet = null, lastAsk = null, askToken = 0;
@@ -158,7 +160,7 @@
     $("#portfolio")?.setAttribute("hidden", ""); token++; context = null; forget(); openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
     wq?.destroy(); wq = null;
-    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); askSet = null; lastAsk = null; pendingAsk = null; proposals.clear();
+    layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); stackOk = new Set(); askSet = null; lastAsk = null; pendingAsk = null; proposals.clear();
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
   }
@@ -506,32 +508,59 @@
   // a What's due line brings what its place needs, an opened photo brings Photos, the plan selected in Documents brings
   // the FEP's layers; Ask, Create and People keep the quiet map. A layer the person sets by hand in Layers stays as they
   // set it. Pure: view is the route ({ view, item }), focus { place, photo }, context the farm's documents.
-  const QUIET = ["extent", "photos"];   // the boundary; photo pins curated by zoom (photo-model.js pinsShown)
-  const FEP_LAYERS = ["extent", "land_units", "contaminant_sources", "plantings", "proposed_actions", "line_features"];
-  // The reference row that governs a place's theme: Rivers (the shared waterways layer, DM2) for waterways, bores for
-  // wells; wetlands has none yet.
-  const GOVERNS = { waterways: ["rivers"], wells: ["ecan-wells"] };
-  // The layer sets an answer in Ask can bring up (the action list's map.layers): water is the rivers and bores.
-  const ASK_SETS = { quiet: [], fep: FEP_LAYERS, photos: ["photos"], water: ["waterways", ...GOVERNS.waterways, ...GOVERNS.wells], consents: ["consents", "ecan-consents"] };
-  // Every row the farm's map has: its own layers, the reference sources counted in its context (PERF1b: listed before
-  // they are read) and those farm_map carried itself, and Rivers.
-  const mapKeys = (m, counts) => ["extent", "titles", ...(m?.layers || []).map((l) => l.theme), ...(m?.reference || []).map((r, i) => r.key || "reference-" + i),
-    ...Object.entries(counts || {}).filter(([, n]) => Number(n) > 0 || n?.by_viewport === true).map(([k]) => k), "rivers"];   // (CAP1a: a dense source, {by_viewport: true})
-  function sceneFor(view, focus, context) {
-    const on = new Set(globalThis.FP_CONFIG?.farmView?.defaultOn || QUIET), f = focus || {}, v = view || {};
+  // LK4: what each context brings is a view of the kind registry (app/layer-kinds.json, FP.kinds), never a list kept here.
+  // The opening view (config.js farmView.view, "quiet": the boundary, and photos by zoom) and every kind whose default rule
+  // has it on (quiet; zoom:<z> once the map's zoom reaches z); a plan selected in Documents brings the fep view, an opened
+  // photo the photos view, an answer in Ask the view its set names (fep, photos, water, consents, soils_landform,
+  // infrastructure, catchment); a What's due line's place brings its land units and the rows of its themes' kinds (the
+  // rows that hold the kind: waterways brings the farm's own waterways and Rivers, wells the bores).
+  // Every row the farm's map has, with its kind: its own layers, the reference sources counted in its context (PERF1b: listed
+  // before they are read) and those farm_map carried itself, and Rivers.
+  function rowKinds(m, counts, sources) {
+    const out = new Map([["extent", "extent"], ["titles", "titles"], ["actions", "actions"]]);
+    for (const l of m?.layers || []) if (K.isData(l)) out.set(l.theme, K.kindOf(l.theme, l.geometry_type));
+    const themeOf = new Map([...(sources || m?.sources || []), ...(m?.reference || [])].map((s) => [s.key, s.theme]));
+    // (the sources Rivers is drawn from are behind it: Rivers is their kind's row, DM2)
+    const kindOfSource = (key, theme) => (M.behindRivers(key) ? null : K.refKindOf(theme));
+    for (const [i, r] of (m?.reference || []).entries()) out.set(r.key || "reference-" + i, kindOfSource(r.key, r.theme));
+    for (const [k, n] of Object.entries(counts || {})) if (Number(n) > 0 || n?.by_viewport === true) out.set(k, kindOfSource(k, themeOf.get(k)));   // (CAP1a: a dense source, {by_viewport: true})
+    out.set("rivers", "waterways");
+    return out;
+  }
+  const mapKeys = (m, counts) => [...rowKinds(m, counts).keys()].filter((k) => k !== "actions");
+  // The views in force for a route and its focus, in the order they were brought.
+  function viewsIn(view, focus, context) {
+    const f = focus || {}, v = view || {}, out = [globalThis.FP_CONFIG?.farmView?.view || "quiet"];
     if (v.view === "documents" && v.item) {
       const doc = (context?.documents || []).find((d) => String(d.id) === String(v.item));
-      if (doc && M.isPlan(doc)) for (const k of FEP_LAYERS) on.add(k);
+      if (doc && M.isPlan(doc)) out.push("fep");
     }
+    if (f.photo) out.push("photos");
+    if (f.set && f.set !== "all" && K.view(f.set)) out.push(f.set);
+    return [...new Set(out.filter((k) => K.view(k)))];
+  }
+  // Which rows hold a theme's kind (a place's theme): a reference row that governs it is any row of that kind.
+  function governs(theme, context, index = null) {
+    const kind = K.kindOf(theme), rows = rowKinds(context?.maps, context?.referenceCounts, index || context?.maps?.sources);
+    for (const s of index || []) if (!rows.has(s.key)) rows.set(s.key, M.behindRivers(s.key) ? null : K.refKindOf(s.theme));
+    return kind ? [...rows].filter(([, k]) => k === kind).map(([key]) => key) : [];
+  }
+  // For farm-reference.js placeKeys: each theme -> the rows of its kind (Rivers and the sources of that kind).
+  const governsMap = (place, context, index) => Object.fromEntries((place?.themes || []).map((t) => [t, governs(t, context, index)]));
+  function sceneFor(view, focus, context) {
+    const f = focus || {}, vs = viewsIn(view, focus, context), rows = rowKinds(context?.maps, context?.referenceCounts);
+    const kinds = K.kindsOn(vs, f.zoom), on = [];
+    // each kind on: its own key (a farm layer's row is its theme), and every row of that kind
+    for (const k of kinds) { if ((K.registry().kinds.find((x) => x.key === k)?.owner || []).includes("farm")) on.push(k); for (const [key, rk] of rows) if (rk === k) on.push(key); }
     if (f.place) {
-      if ((f.place.land_units || []).length) on.add("land_units");
-      for (const theme of f.place.themes || []) { on.add(theme); for (const k of GOVERNS[theme] || []) on.add(k); }
-      for (const k of f.place.layers || []) on.add(k);
+      if ((f.place.land_units || []).length) on.push("land_units");
+      for (const theme of f.place.themes || []) { on.push(theme); on.push(...governs(theme, context)); }
+      for (const k of f.place.layers || []) on.push(k);
     }
-    if (f.photo) on.add("photos");
-    // an answer in Ask brings the set it names (all: every layer the farm's map has)
-    for (const k of f.set === "all" ? mapKeys(context?.maps, context?.referenceCounts) : ASK_SETS[f.set] || []) on.add(k);
-    return on;
+    // an answer in Ask that asks for every layer: every row the farm's map has
+    if (f.set === "all") on.push(...mapKeys(context?.maps, context?.referenceCounts));
+    const rowList = [...rows].map(([key, kind]) => ({ key, kind }));
+    return new Set(K.resolveExclusive([...new Set(on)], rowList, vs));
   }
   // A row turned on or off (PERF1b): a reference source not read yet is read now, its switch busy (on, not off) until it
   // has come; the map draws it then (arrive). Turning a row off never reads anything.
@@ -546,19 +575,28 @@
   // Every row as the scene says, unless the person set it by hand; the drawer's switches follow.
   function applyScene() {
     if (!context || !layerEntries.length) return;
-    const want = sceneFor(shownRoute, { place: focusPlace, photo: photoShown, set: askSet }, context);
+    const want = sceneFor(shownRoute, { place: focusPlace, photo: photoShown, set: askSet, zoom: FP.farmMap.camera?.()?.zoom }, context);
     for (const e of layerEntries) {
       const on = handSet.has(e.key) ? handSet.get(e.key) : want.has(e.key);
       if (e.on !== on) show(e, on);
-      if (e.input) e.input.checked = on;
+      checkRow(e, on);
       if (e.pastInput) e.pastInput.closest("label").hidden = !on;
     }
+    restack();
+  }
+  // A row's switches (its view's, and All layers' while that is open) say what the row is.
+  function checkRow(e, on) { for (const i of e.inputs || (e.input ? [e.input] : [])) i.checked = on; }
+  // LK4: two shared context fills on at once (stacked by hand, or a view that allows the pair): the one drawn second is drawn
+  // as an outline and hatch, so the overlap reads.
+  function restack() {
+    const second = K.stackedKeys(layerEntries);
+    for (const e of layerEntries) if (K.isContextFill(e.kind, e.geometry || "polygon") && !e.rivers) FP.farmMap.setStacked?.(e, second.has(e.key));
   }
   // ---- Reference sources read on demand (PERF1b, farm-reference.js) ----------------------------------------------------
   // The Layers rows of the reference sources this farm's context holds, before their features are read: a row with no
   // map layers yet (pending), filled in when the source arrives. Consents keep their "Past consents" switch.
-  const placeholder = (s) => ({ key: s.key, name: M.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true,
-    ...(s.theme === "consents" || s.key === "ecan-consents" ? { past: { ids: [], on: false } } : {}), ...purposeOf(s) });
+  const placeholder = (s) => ({ key: s.key, name: M.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true, theme: s.theme ?? null, kind: K.refKindOf(s.theme),
+    ...(K.refKindOf(s.theme) === "consents" || s.key === "ecan-consents" ? { past: { ids: [], on: false } } : {}), ...purposeOf(s) });
   // LK1: a source's sentence before it is read, from the reviewed look of the source or its theme ({} when there is none)
   const purposeOf = (s) => {
     const rec = FP.layerStyle?.pick(context?.maps?.styles, { sourceKey: s.key, theme: s.theme }), p = rec ? FP.layerStyle.purpose(rec) : null;
@@ -569,6 +607,7 @@
     const drawnRefs = new Map(entries.filter((e) => e.section === "reference" && !e.rivers).map((e) => [e.key, e]));
     const refRows = (refs?.index || []).map((s) => drawnRefs.get(s.key) || placeholder(s));
     for (const [key, e] of drawnRefs) if (!refs?.has(key)) refRows.push(e);
+    for (const e of refRows) if (M.behindRivers(e.key)) e.kind = null;   // LK4: behind Rivers (DM2): listed under All layers only
     return [...entries.filter((e) => e.section !== "reference"), ...refRows, ...entries.filter((e) => e.rivers)];
   }
   function startReference() {
@@ -583,11 +622,12 @@
     const drawn = FP.farmMap.addReference(entry);
     if (!drawn) return;
     for (const e of rows) {
-      e.ids = drawn.ids; e.pending = false;
+      e.ids = drawn.ids; e.pending = false; e.order = drawn.order; e.geometry = drawn.geometry;
       if (e.past && drawn.past) e.past.ids = drawn.past.ids;
       FP.farmMap.setVisible(e, e.on);
       if (e.past) FP.farmMap.setPast(e, e.past.on);
     }
+    restack();   // LK4: a context fill that came while another is on is drawn as outline and hatch
     // CAP1b: too many in the farm's context to come at once (truncated, no features): never drawn in part; its row says
     // so, and it is read for the map in view while it is on
     if (R.truncated(entry)) {
@@ -596,7 +636,7 @@
       for (const e of rows) { if (e.on) p.show(id, viewNow()); rowState(e); }
     }
     // a chosen line (or an answer's frame) waiting on this source is framed again, now that its features are on the map
-    if (focusPlace && FP.farmReference.placeKeys(focusPlace, [refs.index.find((s) => s.key === entry.key)].filter(Boolean), GOVERNS).length) FP.farmMap.focus(focusPlace);
+    if (focusPlace && FP.farmReference.placeKeys(focusPlace, [refs.index.find((s) => s.key === entry.key)].filter(Boolean), governsMap(focusPlace, context, refs.index)).length) FP.farmMap.focus(focusPlace);
   }
   // A source's state changed (reading, read, couldn't be read): its switch, and the Sources list.
   function changed(key) {
@@ -604,7 +644,7 @@
       if (refs.state(key) === "failed" && e.pending) {
         // nothing was drawn: the switch reads off, and the next switch (or the next line that needs it) reads it again
         handSet.delete(key); FP.farmMap.setVisible(e, false);
-        if (e.input) e.input.checked = false;
+        checkRow(e, false);
         if (e.pastInput) e.pastInput.closest("label").hidden = true;
       }
       rowState(e);
@@ -659,7 +699,7 @@
         for (const e of rowsOf(id)) {
           // one failed read never fails the farm: nothing of it on the map, its switch reads off and its row says so;
           // the next switch reads it again
-          if (mine.state(id) === "failed" && !mine.drawn(id) && e.on) { handSet.delete(e.key); FP.farmMap.setVisible(e, false); if (e.input) e.input.checked = false; }
+          if (mine.state(id) === "failed" && !mine.drawn(id) && e.on) { handSet.delete(e.key); FP.farmMap.setVisible(e, false); checkRow(e, false); }
           rowState(e);
         }
       } });
@@ -677,7 +717,7 @@
   // The sources a place needs before it can be framed (its themes, the rows that govern them, the layers it names), not
   // tried yet; read, then `then` runs (once: a source that still can't be read doesn't loop).
   function whenRead(place, then) {
-    const keys = refs ? FP.farmReference.placeKeys(place, refs.index, GOVERNS).filter((k) => refs.state(k) === "pending") : [];
+    const keys = refs ? FP.farmReference.placeKeys(place, refs.index, governsMap(place, context, refs.index)).filter((k) => refs.state(k) === "pending") : [];
     if (!keys.length) return false;
     const mine = token;
     refs.want(keys).then(() => { if (mine === token) then(); });
@@ -728,32 +768,36 @@
     FP.farmMap.featureTools?.((hit, at) => (FP.shapeEditor && context ? FP.shapeEditor.tools(hit, at, { space: "farm", owner: context.farm.id, role: context.role,
       surface: FP.farmMap, boundary: () => [context?.maps?.extent].filter(Boolean) }) : null));
   }
-  // The drawer's Farm and Reference lists: a plain name (with its area for the boundary and titles) and a switch;
-  // where a layer came from is in its features' popups. Layers made for a job sit together under one heading.
+  // The drawer (LK4): the rows grouped by view (the registry's views: Farm, Farm plan, Water, Consents, Soils and landform …),
+  // each row once under its kind's view, then All layers, folded, with every row (FP.kinds.drawer). A plain name (with its
+  // area for the boundary and titles), the layer's sentence (LK1) and a switch; where a layer came from is in its features'
+  // popups. In All layers, layers made for a job sit together under one heading. Working and annotation layers are never listed.
   function renderLayers(entries) {
     layerEntries = entries;
-    const row = (e) => {
-      e.input = el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => setLayer(e.key, ev.target.checked) });
-      e.pastInput = e.past ? el("input", { type: "checkbox", role: "switch", checked: e.past.on, onchange: (ev) => FP.farmMap.setPast(e, ev.target.checked) }) : null;
-      const past = e.past ? el("label", { class: "layer-past", ...(e.on ? {} : { hidden: true }) }, e.pastInput, el("span", {}, "Past consents")) : null;
+    for (const e of entries) e.inputs = [];
+    const row = (e, secondary = false) => {
+      const input = el("input", { type: "checkbox", role: "switch", checked: e.on, onchange: (ev) => setLayer(e.key, ev.target.checked) });
+      e.inputs = [...(e.inputs || []).filter((i) => i.isConnected !== false), input];
+      if (!secondary) e.input = input;
+      const pastInput = e.past ? el("input", { type: "checkbox", role: "switch", checked: e.past.on, onchange: (ev) => FP.farmMap.setPast(e, ev.target.checked) }) : null;
+      if (!secondary) e.pastInput = pastInput;
+      const past = e.past ? el("label", { class: "layer-past", ...(e.on ? {} : { hidden: true }) }, pastInput, el("span", {}, "Past consents")) : null;
       // CAP1b: a deferred layer (read for the map in view) says how many features it holds, as the group's rows do
       const sub = e.sub || (e.deferred && e.count != null ? FP.groupLayers.featureCount(e.count) : null);
       // LK1: what the layer is for, when its reviewed look says (a row with no record reads as before)
       const purpose = e.purpose ? el("small", { class: "layer-purpose" }, e.purpose) : null;
-      return el("li", e.deferred ? { "data-layer": "deferred" } : {}, el("label", {}, e.input, el("span", {}, el("b", {}, e.name), sub ? el("small", {}, sub) : null, purpose)), past);
+      return el("li", e.deferred ? { "data-layer": "deferred" } : {}, el("label", {}, input, el("span", {}, el("b", {}, e.name), sub ? el("small", {}, sub) : null, purpose)), past);
     };
-    const children = [];
-    for (const [section, heading] of [["farm", "Farm"], ["reference", "Reference"]]) {
-      const own = entries.filter((e) => e.section === section);
-      // FU2: the counts couldn't be read (not: this farm has none), so the Reference list says so and offers to read again
-      const failed = section === "reference" && context?.referenceCountsFailed;
-      if (!own.length && !failed) continue;
-      children.push(el("li", { class: "group", "data-layer-section": section }, heading), ...(failed ? [countsError()] : []), ...own.filter((e) => !e.job).map(row));
-      const jobs = new Map();
-      for (const e of own.filter((e) => e.job)) { if (!jobs.has(e.job.id)) jobs.set(e.job.id, { job: e.job, entries: [] }); jobs.get(e.job.id).entries.push(e); }
-      for (const { job, entries: es } of jobs.values()) children.push(el("li", { class: "group job" }, M.jobHeading(job)), ...es.map(row));
-    }
-    $("#layer-list").replaceChildren(...children);
+    // FU2: the counts couldn't be read (not: this farm has none), so a Reference line says so and offers to read again
+    const tail = context?.referenceCountsFailed ? [el("li", { class: "group", "data-layer-section": "reference" }, "Reference"), countsError()] : [];
+    const jobs = (rows) => {
+      const out = rows.filter((e) => !e.job).map((e) => row(e, !!K.primaryView(e.kind)));
+      const by = new Map();
+      for (const e of rows.filter((e) => e.job)) { if (!by.has(e.job.id)) by.set(e.job.id, { job: e.job, entries: [] }); by.get(e.job.id).entries.push(e); }
+      for (const { job, entries: es } of by.values()) out.push(el("li", { class: "group job" }, M.jobHeading(job)), ...es.map((e) => row(e, !!K.primaryView(e.kind))));
+      return out;
+    };
+    $("#layer-list").replaceChildren(...K.drawer(entries, { el, row: (e) => row(e), all: jobs, tail, onFold: () => { for (const e of entries) rowState(e); } }));
     for (const e of entries) rowState(e);
   }
   // FU2: the reference sources could not be counted just now. One line in the Reference list, with a way to read again.
@@ -788,13 +832,31 @@
     slot.replaceChildren(...(node ? [node] : []));
   }
   // A layer set by hand (its switch in the drawer, or "Show <layer>" from the command bar): it stays as set (E5).
-  function setLayer(key, on) {
+  // LK4: a shared context fill switched on switches the other one off (one at a time, by default); its row then says what it
+  // replaced, with Show both to stack them (kept for the farm's session).
+  function setLayer(key, on, { stack = false } = {}) {
+    const off = on && !stack ? K.exclusiveOff(key, layerEntries, { views: viewsIn(shownRoute, { photo: photoShown, set: askSet }, context), stacked: stackOk }) : [];
+    for (const k of off) setLayer(k, false);
     handSet.set(key, on);
     for (const x of layerEntries.filter((x) => x.key === key)) {
       show(x, on);
-      if (x.input) x.input.checked = on;
+      checkRow(x, on);
+      replacedNote(x, on ? layerEntries.filter((o) => off.includes(o.key)) : []);
       if (x.pastInput) x.pastInput.closest("label").hidden = !on;
     }
+    restack();
+  }
+  // Under a context fill that replaced another: "Replaced Soils" and Show both (both on; the second drawn as outline and hatch).
+  function replacedNote(e, gone) {
+    const label = e.input?.closest("label"), was = label?.querySelector(".layer-replaced");
+    was?.remove();
+    if (!label || !gone.length) return;
+    const both = el("button", { type: "button", class: "link", onclick: (ev) => {
+      ev.preventDefault();
+      for (const o of gone) { stackOk.add(e.key + "|" + o.key); setLayer(o.key, true, { stack: true }); }
+      label.querySelector(".layer-replaced")?.remove();
+    } }, "Show both");
+    label.querySelector("span")?.append(el("small", { class: "layer-replaced" }, K.replacedLine([...new Set(gone.map((o) => o.name))]) + " · ", both));
   }
   // ---- The command bar (E4): one line for what the person wants. A phrase that names layers (the Layers drawer's own
   // rows) offers "Show <layer>" as they type; anything else goes to Ask on Enter (the Ask view, filled in and asked).
@@ -1417,7 +1479,7 @@
       context = null; openedMap = null; forget();
       unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
       wq?.destroy(); wq = null;
-      layerEntries = []; handSet = new Map();
+      layerEntries = []; handSet = new Map(); stackOk = new Set();
       $("#space-body").replaceChildren(); $("#overview-cards").replaceChildren(); $("#overview-peek").textContent = "";
       // TIM1 (#409): the drawn-time clock starts here, as the farm's reads start (after sign-in, whatever screen came before)
       const run = timing = T?.begin("farm", farm.id) || null;
@@ -1457,6 +1519,8 @@
         // LK2: looks that were not back when the farm was drawn are applied to its map when they come (none: nothing changes)
         // (and the Layers drawer's rows, once drawn, take the looks' sentences)
         maps.lateStyles?.then((styles) => { if (openedMap === farm.id && styles.length) { maps.styles = styles; FP.farmMap.restyle?.(styles); if (refs) renderLayers(layerRows(sceneEntries)); } });
+        // LK4: a kind on from a zoom (paddocks, tracks, drone imagery) comes and goes as the map's zoom crosses it
+        offZoom?.(); offZoom = FP.farmMap.onMoveEnd?.(() => { if (openedMap === farm.id) applyScene(); }) || null;
         startParts(farm.id, maps);   // CAP1b: a deferred layer the map opens with is read for the view (nothing, with none)
         // the farm is on the map: the message goes now, not when the standing answers have been read (PERF1b)
         $("#map-msg").hidden = true; farmDrawn(run);
@@ -1517,5 +1581,5 @@
   }
   // The last figure for this browser's tab: { ms, farm, from, steps, at }, or null.
   const lastDrawn = () => T?.last("farm") ?? null;
-  return { load, loadMap, loadRest, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock, lastDrawn, GOVERNS, ASK_SETS, looksTimeoutMs: LOOKS_TIMEOUT_MS };
+  return { load, loadMap, loadRest, summaries, setPortfolio, showPortfolio, close, open, sceneFor, askPlace, openBlock, lastDrawn, viewsIn, governs, governsMap, looksTimeoutMs: LOOKS_TIMEOUT_MS };
 });

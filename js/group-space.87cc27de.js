@@ -22,6 +22,7 @@
   // PERF3b: the group map's deferred layers (group-layers.js), its reference sources (farm-reference.js) with the rows of
   // those not read yet, and the map's moveend hook: all for the map drawn now, and dropped with it.
   let parts = null, refs = null, placeholders = new Map(), offMove = null, countsFailed = false;
+  let stackOk = new Set();   // LK4: context fills the person chose to show together ("a|b"), for the map drawn now
   // TIM1 (#409, #410): the route timing run for the group map being drawn (route-timing.js), from when its route began loading.
   let timing = null;
   const T = () => FP.routeTiming || null;
@@ -109,7 +110,7 @@
 
   // ---- the screen ----------------------------------------------------------------------------------------------------------
   // The map's parts go with the map (put away, drawn again, or the group left).
-  function dropParts() { parts?.destroy(); parts = null; refs?.destroy(); refs = null; placeholders = new Map(); offMove?.(); offMove = null; countsFailed = false; }
+  function dropParts() { parts?.destroy(); parts = null; refs?.destroy(); refs = null; placeholders = new Map(); offMove?.(); offMove = null; countsFailed = false; stackOk = new Set(); }
   function close() {
     token++; dropParts(); timing = null; T()?.cancel("group");
     wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
@@ -201,6 +202,7 @@
     }
     if (current !== token) return;
     await extras.catch(() => null);   // the reference sources (the map's popups); the map is drawn without them if they could not be read
+    await FP.kinds?.ready;   // LK4: the kind registry (read once per page) orders and opens the map
     if (current !== token) return;
     if (data.map) data.map.sources = data.sources;
     if (!data.map?.extent) {
@@ -211,7 +213,7 @@
     }
     if (mapHandle) return mapReady;   // already drawn, or being drawn: wait for it
     host.replaceChildren();
-    // PERF3b: before PERF3a every layer is inline and on, as it was; with a deferred layer, the quiet opening (group-layers.js)
+    // LK4: the group opens quiet, from the kind registry (group-layers.js defaultShow)
     const show = FP.groupLayers.defaultShow(data.map, root.FP_CONFIG?.groupView);
     // the reference sources counted beside the draw (no geometry), for the Layers rows once the map is drawn
     const counts = readCounts(data.group);
@@ -239,7 +241,7 @@
     // The boundary to snap to: the group's area and the member farms' outlines as the map drew them.
     const own = surface;
     surface?.featureTools?.((hit, at) => (FP.shapeEditor ? FP.shapeEditor.tools(hit, at, { space: "group", owner: data.group.id, role: data.group.role, surface: own,
-      boundary: () => [data.map?.extent, ...(data.map?.layers || []).filter((l) => l?.theme === "member_farms").flatMap((l) => l.features?.features || [])].filter(Boolean) }) : null));
+      boundary: () => [data.map?.extent, ...(data.map?.layers || []).filter((l) => l?.theme === "member_farms" || l?.id === "member-farms").flatMap((l) => l.features?.features || [])].filter(Boolean) }) : null));
     // TIM1 (#410): the map's style loaded and the group's outline first on screen, as steps of the route's run
     run?.step("style", surface?.styleLoadedAt?.() ?? undefined);
     surface?.outlineShown?.().then((at) => run?.step("outline", at));
@@ -368,14 +370,27 @@
       return { from: s?.name ? "From " + s.name : null, full: s?.name || null };
     };
     const lines = FP.groupLayers.sameNameLines(rows.map((e) => (e.countsError ? { name: null } : { name: e.name, ...origin(e) })));
-    return rows.map((e, n) => layerRow(e, lines[n]));
+    const fromOf = new Map(rows.map((e, n) => [e, lines[n]]));
+    // LK4: grouped by view (the registry's), each row once under its kind's view, then All layers, folded (FP.kinds.drawer);
+    // the counts error under a Reference heading of its own
+    const real = rows.filter((e) => !e.countsError), K = FP.kinds;
+    if (!K?.drawer) return rows.map((e, n) => layerRow(e, lines[n]));
+    for (const e of real) e.inputs = [];
+    const tail = rows.some((e) => e.countsError) ? [el("li", { class: "group", "data-layer-section": "reference" }, "Reference"), countsError()] : [];
+    return K.drawer(real, { el, row: (e) => layerRow(e, fromOf.get(e)), all: (every) => every.map((e) => layerRow(e, fromOf.get(e), !!K.primaryView(e.kind ?? K.kindOf(e.theme ?? e.key)))), tail });
   }
   // One row: a switch, the layer's name and what it is. PERF3b: a deferred layer says how many features it holds, and a row
   // has a line under it while it is read, when it couldn't be, or when too many are in view to draw ("Zoom in to see …").
-  function layerRow(e, from = null) {
+  function layerRow(e, from = null, secondary = false) {
     if (e.countsError) return countsError();
     const own = new Set(list(ctx?.data?.map?.layers).filter((l) => l.group_own).map((l) => l.theme));
-    e.input = el("input", { type: "checkbox", role: "switch", ...(e.on ? { checked: true } : {}), onchange: (ev) => setRow(e, ev.target.checked) });
+    const input = el("input", { type: "checkbox", role: "switch", ...(e.on ? { checked: true } : {}), onchange: (ev) => setRow(e, ev.target.checked) });
+    e.inputs = [...(e.inputs || []).filter((i) => i.isConnected !== false), input];
+    if (secondary) {
+      const li = el("li", { "data-layer": e.deferred ? "deferred" : e.pending ? "pending" : e.section }, el("label", {}, input, el("span", {}, e.name)));
+      return li;
+    }
+    e.input = input;
     const what = e.key === "member_farms" ? "shared by each farm, at the level both allow" : e.section === "farm" && own.has(e.key) ? "the group's own map" : e.section === "reference" ? "shared reference" : null;
     const sub = [what, e.deferred && e.count != null ? featureCount(e.count) : null].filter(Boolean).join(" · ");
     // LK1: what the layer is for, when its reviewed look says (a row with no record reads as before)
@@ -390,6 +405,7 @@
     const drawnRefs = new Map(entries.filter((e) => e.section === "reference" && !e.rivers).map((e) => [e.key, e]));
     const refRows = (refs?.index || []).map((s) => drawnRefs.get(s.key) || placeholder(s));
     for (const [key, e] of drawnRefs) if (!refs?.has(key)) refRows.push(e);
+    for (const e of refRows) if (FP.farmModel.behindRivers?.(e.key)) e.kind = null;   // LK4: behind Rivers (DM2): under All layers only
     return [...entries.filter((e) => e.section !== "reference" && e.key !== "titles"), ...(countsFailed ? [{ countsError: true }] : []), ...refRows, ...entries.filter((e) => e.rivers)];
   }
   // The reference sources could not be counted just now (not: the group has none): one line, with a way to read again.
@@ -408,7 +424,8 @@
     if (!placeholders.has(s.key)) {
       // LK1: the source's sentence before it is read, from the reviewed look of the source or its theme
       const rec = FP.layerStyle?.pick(ctx?.data?.map?.styles, { sourceKey: s.key, theme: s.theme }), purpose = rec ? FP.layerStyle.purpose(rec) : null;
-      placeholders.set(s.key, { key: s.key, name: FP.farmModel.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true, theme: s.theme ?? null, ...(purpose ? { purpose } : {}) });
+      placeholders.set(s.key, { key: s.key, name: FP.farmModel.layerName(s), sub: null, section: "reference", ids: [], on: false, pending: true, theme: s.theme ?? null,
+        kind: FP.kinds?.refKindOf(s.theme) ?? null, ...(purpose ? { purpose } : {}) });
     }
     return placeholders.get(s.key);
   }
@@ -428,13 +445,39 @@
   }
   // A switch. PERF3b: a deferred layer is read for the map in view, a reference source not read yet is read now (its
   // switch busy, on, until it has come); turning a row off never reads anything.
-  function setRow(e, on) {
+  function setRow(e, on, { stack = false } = {}) {
     if (!surface) return;
+    // LK4: a shared context fill switched on switches the other off (one at a time by default); its row says what it replaced,
+    // with Show both to stack them
+    const all = layerRows().filter((x) => !x.countsError), off = on && !stack && FP.kinds ? FP.kinds.exclusiveOff(e.key, all, { stacked: stackOk }) : [];
+    for (const o of all.filter((x) => off.includes(x.key))) setRow(o, false);
     surface.setVisible(e, on);
+    checkRow(e, on);
+    replacedNote(e, on ? all.filter((x) => off.includes(x.key)) : []);
     if (e.deferred && parts?.has(e.layerId)) { if (on) parts.show(e.layerId, surface.view?.() || null); else parts.hide(e.layerId); }
     else if (on && e.pending && refs) refs.want([e.key]);
     offIfTooMany(e);
     rowState(e);
+    restack();
+  }
+  // LK4: every switch of a row (its view's, and All layers' while that is open) says what the row is
+  function checkRow(e, on) { for (const i of e.inputs || (e.input ? [e.input] : [])) i.checked = on; }
+  // Two shared context fills on at once: the one drawn second as outline and hatch, so the overlap reads.
+  function restack() {
+    if (!FP.kinds || !surface?.setStacked) return;
+    const rows = layerRows().filter((x) => !x.countsError), second = FP.kinds.stackedKeys(rows);
+    for (const x of rows) if (!x.rivers && FP.kinds.isContextFill(x.kind ?? FP.kinds.kindOf(x.theme), x.geometry || "polygon")) surface.setStacked(x, second.has(x.key));
+  }
+  function replacedNote(e, gone) {
+    const label = e.input?.closest?.("label");
+    label?.querySelector(".layer-replaced")?.remove();
+    if (!label || !gone.length) return;
+    const both = el("button", { type: "button", class: "link", onclick: (ev) => {
+      ev.preventDefault?.();
+      for (const o of gone) { stackOk.add(e.key + "|" + o.key); setRow(o, true, { stack: true }); }
+      label.querySelector(".layer-replaced")?.remove();
+    } }, "Show both");
+    label.append(el("small", { class: "layer-replaced" }, FP.kinds.replacedLine([...new Set(gone.map((o) => o.name))]) + " · ", both));
   }
   // The row's line: "Loading…" (the switch busy), "Couldn't load just now", the zoom-in line, or "Too many to show here"
   // (a layer or source PERF3a could not bound: never drawn in part); nothing once drawn.
@@ -464,7 +507,7 @@
   function offIfTooMany(e) {
     if (tooManyOf(e) === undefined) return;
     if (e.on) surface?.setVisible(e, false);
-    if (e.input) e.input.checked = false;
+    checkRow(e, false);
   }
 
   // ---- The map's parts (PERF3b) ---------------------------------------------------------------------------------------------
@@ -487,7 +530,7 @@
         for (const e of rows(id)) {
           // one failed layer never fails the group: nothing of it on the map, its switch reads off and its row says so;
           // the next switch reads it again
-          if (mine.state(id) === "failed" && !mine.drawn(id) && e.on) { surface?.setVisible(e, false); if (e.input) e.input.checked = false; }
+          if (mine.state(id) === "failed" && !mine.drawn(id) && e.on) { surface?.setVisible(e, false); checkRow(e, false); }
           rowState(e);
         }
       } });
@@ -522,14 +565,15 @@
     if (FP.groupLayers.tooMany(entry)) { offIfTooMany(e); return; }   // PERF3a: over its caps, never a partial draw
     const drawn = surface.addReference(entry);
     if (!drawn) return;
-    e.ids = drawn.ids; e.pending = false;
+    e.ids = drawn.ids; e.pending = false; e.order = drawn.order; e.geometry = drawn.geometry;
     surface.setVisible(e, e.on);
+    restack();
   }
   // A source's state changed (reading, read, couldn't be read): its switch, its row and the Sources list.
   function changed(key) {
     const e = placeholders.get(key) || entries.find((x) => x.key === key && x.section === "reference");
     // nothing was drawn: the switch reads off, and the next switch reads it again
-    if (e && refs.state(key) === "failed" && e.pending) { surface?.setVisible(e, false); if (e.input) e.input.checked = false; }
+    if (e && refs.state(key) === "failed" && e.pending) { surface?.setVisible(e, false); checkRow(e, false); }
     if (e) { offIfTooMany(e); rowState(e); }
     renderSourcesSlot();
   }

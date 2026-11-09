@@ -1,0 +1,70 @@
+{
+  "_about": "The layer kind registry (docs/LAYER-KINDS.md). Source of truth for map_layers.theme / reference_sources.theme, draw order, default rules, views and loader aliases. Loaded into app.layer_kinds / app.layer_views by migration (LK3a) and imported by the app (LK4). Change it by PR only.",
+  "tiers": {
+    "0": "basemap", "1": "terrain", "2": "rasters", "3": "shared context fills (one on at a time by default)",
+    "4": "owned area fills (fill <= 0.35)", "5": "boundaries (no fill)", "6": "lines", "7": "points", "8": "photos",
+    "9": "labels", "10": "annotations (only with their figure)"
+  },
+  "default_rules": "quiet | zoom:<z> | context | off | never",
+  "kinds": [
+    {"key":"terrain","label":"Terrain","geometry":["raster"],"tier":1,"owner":["shared"],"default_rule":"off","views":["soils_landform"],"fill_class":null,"aliases":["terrain-rgb","hillshade","1m terrain","dem_8m","dem"]},
+    {"key":"drone_ortho","label":"Drone imagery","geometry":["raster"],"tier":2,"owner":["farm"],"default_rule":"zoom:15","views":["all"],"fill_class":null,"aliases":["drone survey","ortho","orthomosaic"]},
+    {"key":"plan_image","label":"Plan image","geometry":["raster"],"tier":2,"owner":["farm","group"],"default_rule":"context","views":["plantings","fep"],"fill_class":null,"aliases":["cpp planting plan","georeferenced"]},
+    {"key":"catchments","label":"Catchments","geometry":["polygon"],"tier":3,"owner":["shared"],"default_rule":"off","views":["catchment"],"fill_class":"context","aliases":["rec2 watershed","major catchment","catchment"]},
+    {"key":"zones","label":"Zones","geometry":["polygon"],"tier":3,"owner":["shared"],"default_rule":"context","views":["consents","catchment"],"fill_class":"context","aliases":["cwms","n allocation","nutrient allocation","irrigation scheme","planning zone","drinking water protection","dwpz","zone"]},
+    {"key":"luc","label":"Land use capability","geometry":["polygon"],"tier":3,"owner":["shared"],"default_rule":"context","views":["soils_landform"],"fill_class":"context","aliases":["nzlri","luc"]},
+    {"key":"soils","label":"Soils","geometry":["polygon"],"tier":3,"owner":["shared","farm"],"default_rule":"context","views":["soils_landform"],"fill_class":"context","aliases":["s-map","smap","smapsoils","fsl","fundamental soil","soil"]},
+    {"key":"geology","label":"Geology","geometry":["polygon"],"tier":3,"owner":["shared"],"default_rule":"off","views":["soils_landform"],"fill_class":"context","aliases":["qmap","geology"]},
+    {"key":"land_use","label":"Land use","geometry":["polygon"],"tier":3,"owner":["shared","group"],"default_rule":"off","views":["catchment"],"fill_class":"context","aliases":["lucas","lcdb","landuse","land use"]},
+    {"key":"groundwater","label":"Groundwater","geometry":["polygon","line"],"tier":3,"owner":["shared"],"default_rule":"context","views":["water"],"fill_class":"context","aliases":["piezometric","depth to groundwater","groundwater"]},
+    {"key":"member_blocks","label":"Member blocks","geometry":["polygon"],"tier":4,"owner":["group"],"default_rule":"quiet","views":["catchment"],"fill_class":"area","aliases":["hdlg members","member block","members"]},
+    {"key":"farmed_area","label":"Farmed area","geometry":["polygon"],"tier":4,"owner":["farm"],"default_rule":"context","views":["consents"],"fill_class":"area","aliases":["farmed area"]},
+    {"key":"land_units","label":"Land units","geometry":["polygon"],"tier":4,"owner":["farm"],"default_rule":"context","views":["fep"],"fill_class":"area","aliases":["lmu","land unit","land management unit","land_units"]},
+    {"key":"paddocks","label":"Paddocks","geometry":["polygon"],"tier":4,"owner":["farm"],"default_rule":"zoom:14","views":["fep","infrastructure"],"fill_class":"area","aliases":["paddock","pdk"]},
+    {"key":"irrigation","label":"Irrigation","geometry":["polygon","line"],"tier":4,"owner":["farm"],"default_rule":"context","views":["water","infrastructure"],"fill_class":"area","aliases":["irrigation","pivot","irrigated"]},
+    {"key":"effluent_area","label":"Effluent area","geometry":["polygon"],"tier":4,"owner":["farm"],"default_rule":"context","views":["fep","consents","water"],"fill_class":"area","aliases":["effluent area","effluent block","spread area"]},
+    {"key":"plantings","label":"Plantings","geometry":["polygon","point"],"tier":4,"owner":["farm","group"],"default_rule":"context","views":["fep","plantings"],"fill_class":"area","aliases":["planting","riparian planting","catchment planting"]},
+    {"key":"wetlands","label":"Wetlands","geometry":["polygon"],"tier":4,"owner":["farm","shared"],"default_rule":"context","views":["water","fep"],"fill_class":"area","aliases":["wetland","swamp"]},
+    {"key":"csa","label":"Critical source areas","geometry":["polygon","point"],"tier":4,"owner":["farm"],"default_rule":"context","views":["water","fep"],"fill_class":"area","aliases":["critical source","csa"]},
+    {"key":"holding_areas","label":"Holding areas","geometry":["polygon"],"tier":4,"owner":["farm"],"default_rule":"context","views":["fep","consents"],"fill_class":"area","aliases":["stock holding","feed pad","standoff","wintering pad"]},
+    {"key":"titles","label":"Titles","geometry":["polygon"],"tier":5,"owner":["farm","shared"],"default_rule":"off","views":["all"],"fill_class":"boundary","aliases":["title","property_boundaries","parcel"]},
+    {"key":"extent","label":"Farm boundary","geometry":["polygon"],"tier":5,"owner":["farm"],"default_rule":"quiet","views":["all"],"fill_class":"boundary","aliases":["farm boundary","farmboundary","farm_boundaries","boundary","extent"]},
+    {"key":"waterways","label":"Waterways","geometry":["line","polygon"],"tier":6,"owner":["shared","farm"],"default_rule":"context","views":["water","fep"],"fill_class":null,"aliases":["river","stream","waterway","creek","drain network","rec2","rivers"]},
+    {"key":"drains","label":"Drains","geometry":["line"],"tier":6,"owner":["farm"],"default_rule":"context","views":["water"],"fill_class":null,"aliases":["drain","tile drain"]},
+    {"key":"fences","label":"Fences","geometry":["line"],"tier":6,"owner":["farm"],"default_rule":"context","views":["infrastructure","fep"],"fill_class":null,"aliases":["fence"]},
+    {"key":"proposed_fences","label":"Proposed fences","geometry":["line"],"tier":6,"owner":["farm"],"default_rule":"context","views":["fep"],"fill_class":null,"aliases":["proposed fence"]},
+    {"key":"tracks","label":"Tracks","geometry":["line"],"tier":6,"owner":["farm"],"default_rule":"zoom:15","views":["infrastructure"],"fill_class":null,"aliases":["track","race","lane","farm road"]},
+    {"key":"stock_access","label":"Stock access","geometry":["line"],"tier":6,"owner":["farm"],"default_rule":"context","views":["water","fep"],"fill_class":null,"aliases":["stock access","waterway stock access"]},
+    {"key":"shelterbelts","label":"Shelterbelts","geometry":["line","polygon"],"tier":6,"owner":["farm"],"default_rule":"off","views":["infrastructure"],"fill_class":null,"aliases":["shelterbelt","shelter belt","windbreak"]},
+    {"key":"line_features","label":"Other lines","geometry":["line"],"tier":6,"owner":["farm"],"default_rule":"context","views":["infrastructure"],"fill_class":null,"aliases":["features lines","line features","lines","farm lines"]},
+    {"key":"wells","label":"Wells","geometry":["point"],"tier":7,"owner":["shared","farm"],"default_rule":"context","views":["water","consents"],"fill_class":null,"aliases":["well","bore"]},
+    {"key":"monitoring_sites","label":"Monitoring sites","geometry":["point"],"tier":7,"owner":["shared","group"],"default_rule":"context","views":["water","catchment"],"fill_class":null,"aliases":["wq site","monitoring site","flow site","streamwalk","climate station","monitoring"]},
+    {"key":"consents","label":"Consents","geometry":["point","polygon"],"tier":7,"owner":["shared"],"default_rule":"context","views":["consents"],"fill_class":null,"aliases":["consent"]},
+    {"key":"contaminant_sources","label":"Contaminant sources","geometry":["point"],"tier":7,"owner":["farm"],"default_rule":"context","views":["fep","water"],"fill_class":null,"aliases":["contaminant"]},
+    {"key":"point_features","label":"Farm features","geometry":["point"],"tier":7,"owner":["farm"],"default_rule":"context","views":["infrastructure","fep"],"fill_class":null,"aliases":["point feature","structure","farm feature","culvert","bridge","crossing","spring","trough","effluent pond","silage pit","offal pit"]},
+    {"key":"actions","label":"Actions","geometry":["point","polygon"],"tier":7,"owner":["farm"],"default_rule":"context","views":["fep"],"fill_class":null,"aliases":["action","proposed action","proposed_actions"]},
+    {"key":"photos","label":"Photos","geometry":["point"],"tier":8,"owner":["farm","group"],"default_rule":"zoom:15","views":["all"],"fill_class":null,"aliases":["photo","gps photo","drone picture"]},
+    {"key":"annotation","label":"Annotation","geometry":["any"],"tier":10,"owner":["farm","group"],"default_rule":"never","views":[],"fill_class":null,"aliases":["distance","buffer","measured","callout","measurements"]}
+  ],
+  "reference_theme_map": {
+    "_about": "existing reference_sources.theme values (app.reference_themes()) -> kind key",
+    "catchments":"catchments","consents":"consents","measurements":"monitoring_sites","monitoring_sites":"monitoring_sites","soils":"soils","waterways":"waterways","wells":"wells","zones":"zones",
+    "biodiversity":"zones","drainage":"drains","geology":"geology","groundwater":"groundwater","hazards":"zones","hydrology":"waterways","irrigation":"irrigation","land-use":"land_use","luc":"luc",
+    "monitoring":"monitoring_sites","parcels":"titles","planning-zones":"zones","surface-water":"waterways","wetlands":"wetlands"
+  },
+  "owned_theme_map": {
+    "_about": "drifted owned-layer themes -> kind key; 'by_geometry' means polygon->holding_areas (flag for a person), line->line_features, point->point_features",
+    "farm_boundaries":"extent","farm_features":"by_geometry","lines":"line_features","measurements":"annotation","proposed_actions":"actions","member_farms":"member_blocks"
+  },
+  "views": [
+    {"key":"quiet","label":"Farm","kinds":["extent","photos"],"extent":"farm","stack_allowed":[]},
+    {"key":"fep","label":"Farm plan","kinds":["extent","land_units","contaminant_sources","plantings","actions","line_features","csa","effluent_area","holding_areas","stock_access","proposed_fences","wetlands"],"extent":"farm","stack_allowed":[]},
+    {"key":"photos","label":"Photos","kinds":["extent","photos"],"extent":"farm","stack_allowed":[]},
+    {"key":"water","label":"Water","kinds":["extent","waterways","drains","wetlands","csa","stock_access","wells","groundwater","monitoring_sites","irrigation","effluent_area","contaminant_sources"],"extent":"farm+context","stack_allowed":[]},
+    {"key":"consents","label":"Consents","kinds":["extent","consents","farmed_area","wells","zones","effluent_area","holding_areas"],"extent":"farm","stack_allowed":[]},
+    {"key":"soils_landform","label":"Soils and landform","kinds":["extent","soils","luc","terrain"],"extent":"farm","stack_allowed":[["soils","luc"]]},
+    {"key":"infrastructure","label":"Infrastructure","kinds":["extent","tracks","fences","paddocks","point_features","irrigation","shelterbelts","line_features"],"extent":"farm","stack_allowed":[]},
+    {"key":"catchment","label":"Catchment","kinds":["member_blocks","waterways","zones","monitoring_sites"],"extent":"group","stack_allowed":[]}
+  ],
+  "roles": ["data","annotation","working"]
+}

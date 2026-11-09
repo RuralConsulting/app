@@ -2,10 +2,14 @@
 // Handles what farm layers use: single symbol and categorised renderers with simple fill, line and marker
 // symbol layers. Anything else (SVG markers, patterns, rule-based) falls back to a colour per theme.
 (function (root) {
+  // The fallback colour per kind (LK4: keyed by the registry's kind, app/layer-kinds.json; an old theme is read through
+  // FP.kinds.kindOf: lines -> line_features, measurements -> annotation). A reviewed look (LK1) or the layer's QGIS style comes first.
   const THEME_COLOURS = {
     land_units: "#f2b33d", contaminant_sources: "#d9472b", point_features: "#2f7fd8", plantings: "#3fa34d",
-    lines: "#7a5cc7", fences: "#ff8c1a", photos: "#ffffff", measurements: "#ffd84d",
+    line_features: "#7a5cc7", fences: "#ff8c1a", photos: "#ffffff", annotation: "#ffd84d",
   };
+  const kinds = () => (typeof module !== "undefined" && module.exports ? require("./layer-kinds.js") : root.FP?.kinds);
+  const colourOf = (theme, geometry) => THEME_COLOURS[kinds()?.kindOf(theme, geometry)] || FALLBACK;
   const FALLBACK = "#ff8c1a";
   const MM_TO_PX = 3.78;
 
@@ -88,7 +92,7 @@
 
   // A layer's look for the map: per geometry kind, a colour expression and widths.
   function style(layer) {
-    const fallback = THEME_COLOURS[layer.theme] || FALLBACK;
+    const fallback = colourOf(layer.theme, layer.geometry_type);
     const p = parse(layer.qml);
     const base = p?.symbol || {};
     const pick = (k, dflt) => {
@@ -115,7 +119,7 @@
     return { fill: pick("fill", fallback), line: base.line || "#ffffff", radius: base.radius || 6 };
   }
 
-  const api = { parse, style, colour };
+  const api = { parse, style, colour, colourOf, THEME_COLOURS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else (root.FP = root.FP || {}).qml = api;
 })(typeof window !== "undefined" ? window : globalThis);

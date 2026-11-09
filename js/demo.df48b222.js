@@ -593,7 +593,7 @@
     }
     if (g.parts) return [groupPartsMap(d, shown, level)];
     const layers = [
-      { id: "demo-g-l1", name: "Catchment boundary (synthetic)", theme: "catchment", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own map", features: fc([feature(g.area, { name: "HDLG catchment (synthetic)" })]) },
+      { id: "demo-g-l1", name: "Catchment boundary (synthetic)", theme: "catchments", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own map", features: fc([feature(g.area, { name: "HDLG catchment (synthetic)" })]) },
       { id: "demo-g-l2", name: "Member blocks (synthetic)", theme: "member_blocks", geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own members layer",
         features: fc(MEMBERS.map((m, i) => feature(polygon(...m.box), { member_number: "00" + (i + 1) }))) },
     ];
@@ -622,10 +622,10 @@
     const layer = (id, name, theme, features, extra = {}) => ({ id, name, theme, geometry_type: "polygon", group_own: true, epistemic_class: "observation", source: "the group's own map",
       feature_count: features.length, bbox: bboxOf(features), all: features, ...extra });
     g.partsLayers = [
-      layer("demo-g-l1", "Catchment boundary (synthetic)", "catchment", [f(g.area, { name: "HDLG catchment (synthetic)" }, 39999)]),
+      layer("demo-g-l1", "Catchment boundary (synthetic)", "catchments", [f(g.area, { name: "HDLG catchment (synthetic)" }, 39999)]),
       layer("demo-g-l2", "Member blocks (synthetic)", "member_blocks", blocks, { deferred: true }),
       layer("demo-g-l3", "Paddocks (synthetic)", "paddocks", paddocks, { deferred: true }),
-      layer("demo-g-l4", "Farm plan: land management units (synthetic)", "land_management_units", lmu, { deferred: true }),
+      layer("demo-g-l4", "Farm plan: land management units (synthetic)", "land_units", lmu, { deferred: true }),
     ];
     g.failOnce = new Set(["demo-g-l4"]);
     const ref = (key, name, theme, features) => ({ key, name, theme, attribution: "Invented for the demo.", replaces_in_extent: null, features: collection(features) });

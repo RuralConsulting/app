@@ -19,6 +19,8 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else { root.FP.mapScene = api; root.FP.farmMap = api.engine("map"); }
 })(typeof window === "undefined" ? globalThis : window, function (blocks) {
+  // LK4: the kind registry (app/layer-kinds.json via layer-kinds.js): draw order, default rules and kinds come from it.
+  const K = () => (typeof module === "object" && module.exports ? require("../layer-kinds.js") : window.FP.kinds);
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const count = (fc) => (Array.isArray(fc?.features) ? fc.features.length : 0);
   // empty: no boundary to frame; sparse: the boundary and nothing drawn inside it; full: anything more.
@@ -205,7 +207,7 @@
       if (kind === "layer" && map.getLayer(id)) map.removeLayer(id);
       if (kind === "source" && map.getSource(id)) map.removeSource(id);
     }
-    added = []; drawnSpecs.clear();
+    added = []; drawnSpecs.clear(); slots = [];
     interactive.clear(); unitHits.clear(); sourceData.clear(); saved.clear(); refKeys.clear();
     drawn = null; farmZoom = null; masked = false; photoEntries.length = 0; rivers = null; refDrawn = [];
   }
@@ -255,13 +257,60 @@
     return true;
   }
   function layer(spec, describe, before) {
-    if (before && map.getLayer(before)) map.addLayer(spec, before); else map.addLayer(spec);
+    // LK4: labels go after all geometry (under the photo cone and the focus mark); geometry where its group is being drawn
+    const at = spec.type === "symbol" && map.getLayer("z-top") ? "z-top" : before ?? insertAt;
+    if (at && map.getLayer(at)) map.addLayer(spec, at); else map.addLayer(spec);
     added.push({ kind: "layer", id: spec.id });
     drawnSpecs.set(spec.id, spec);   // LK2: as drawn, so a restyle can unset what a new look no longer sets
     if (describe) interactive.set(spec.id, describe);
     return spec.id;
   }
   const drawnSpecs = new Map();
+  // ---- Draw order (LK4) --------------------------------------------------------------------------------------------------------------
+  // Every map layer is inserted by its kind's tier (0 basemap … 10 annotations): within a tier, owned above shared, newer as_at
+  // above older, then sort_order (FP.kinds.orderKey). Labels go after all geometry. Two hidden anchors mark the bands: data
+  // under "z-labels", labels under "z-top"; the photo cone and the focus mark are drawn over "z-top", on top of the data.
+  let slots = [], insertAt;   // what is drawn ({order, first: its lowest layer id}); the layer the group being drawn goes under
+  function drawGroup(order, fn) {
+    const before = K().insertBefore(slots, order, (id) => !!map.getLayer(id)) || (map.getLayer("z-labels") ? "z-labels" : undefined);
+    const was = insertAt, n = added.length;
+    insertAt = before;
+    let out;
+    try { out = fn(); } finally { insertAt = was; }
+    const first = added.slice(n).find((a) => a.kind === "layer" && drawnSpecs.get(a.id)?.type !== "symbol")?.id;
+    if (first && !restyling) slots.push({ order, first });
+    return out;
+  }
+  function anchors() {
+    for (const id of ["z-labels", "z-top"]) layer({ id, type: "background", layout: { visibility: "none" }, paint: {} });
+  }
+  // A drawn thing's order: a farm (or group) layer, a reference source (its as-at date from reference_sources), or a kind.
+  const shownLayer = (l) => K().isData(l) && K().defaultRule(l.theme, l.geometry_type) !== "never";
+  const layerOrder = (l, i) => K().orderKey({ theme: l.theme, geometry: l.geometry_type, owned: true, as_at: l.as_at, sort_order: l.sort_order ?? i });
+  const refOrder = (r, sources) => { const s = (sources || []).find((x) => x?.key === r.key); return K().orderKey({ kind: K().refKindOf(r.theme), owned: false, as_at: s?.refreshed_at || s?.effective_from || r.as_at || null }); };
+  // LK4: a second shared context fill on at once is drawn as an outline and hatch (no solid fill), so the overlap reads; and
+  // back to its own look when it is the only one again. Kept over a restyle.
+  function hatch() {
+    if (map.hasImage?.("fp-hatch")) return;
+    const n = 8, data = new Uint8Array(n * n * 4);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if ((x + y) % n === 0 || (x + y) % n === n - 1) data.set([255, 255, 255, 200], (y * n + x) * 4);
+    map.addImage?.("fp-hatch", { width: n, height: n, data });
+  }
+  function setStacked(entry, on) {
+    if (!map || !entry || (!on && !entry.stacked)) return;   // (most rows are never stacked: nothing to put back)
+    entry.stacked = !!on;
+    if (on) hatch();
+    for (const id of entry.ids || []) {
+      const spec = drawnSpecs.get(id);
+      if (!spec || !map.getLayer(id)) continue;
+      if (spec.type === "fill" && /-fill$/.test(id)) {
+        map.setPaintProperty(id, "fill-pattern", on && map.hasImage?.("fp-hatch") ? "fp-hatch" : undefined);
+        map.setPaintProperty(id, "fill-opacity", on ? 0.5 : spec.paint?.["fill-opacity"] ?? 0.25);
+      } else if (spec.type === "line" && /-(outline|line)$/.test(id)) {
+        map.setPaintProperty(id, "line-dasharray", on ? [2, 1.5] : spec.paint?.["line-dasharray"]);
+      }
+    }
+  }
 
   // The two sources behind the shared Rivers layer, with the name to use if their rows cannot be read (PROV1).
   const RIVER_SOURCES = [["niwa-rec2-rivers", "River network (REC2), NIWA"], ["linz-topo50-river-centrelines", "River lines (Topo50), LINZ"]];
@@ -277,7 +326,7 @@
   let refDrawn = [], refAdded = 0;   // the reference sources on the map, in drawing order ({key, name, first layer id}); sources added since
   const refKeys = new Map();   // GE1b: reference source id -> its key
   function referenceLayers(r, sid, key, before) {
-    const consents = r.theme === "consents" || r.key === "ecan-consents";
+    const consents = K().refKindOf(r.theme) === "consents" || r.key === "ecan-consents";
     const features = consents ? { ...r.features, features: (r.features?.features || []).map((f) => ({ ...f, properties: { ...f.properties, fp_past: FP.farmModel.pastConsent(f.properties) } })) } : r.features;
     source(sid, features);
     const describe = (f) => {
@@ -289,7 +338,7 @@
       const provenance = FP.provenance?.lineFor(drawn?.sources, r.key, r) || null;
       if (consents) return { ...FP.farmModel.consentPopup(props, r, where), note: noteFor("source:" + r.key), provenance };
       const named = props.name || props.Name || props.NAME;
-      return { title: named ? String(named) : `${r.theme === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
+      return { title: named ? String(named) : `${K().refKindOf(r.theme) === "wells" ? "Bore" : FP.farmModel.layerName(r)} ${props.external_id ?? ""}`.trim(), layerName: FP.farmModel.layerName(r),
         qualifier: where, props, permits: props.authorisations || [], attribution: r.attribution, note: noteFor("source:" + r.key), provenance };
     };
     // LK1: today's look (#243), unless a reviewed record (or a preview's) gives this source, or its theme, another
@@ -311,21 +360,22 @@
     if (!restyling) refDrawn.push({ key, name: String(r.name || key), first: ids[0], sid, r });   // (LK2: sid and r, for a restyle)
     refKeys.set(sid, r.key || key);   // GE1b: a tap on it is on a shared reference layer (the shape editor says it isn't edited)
     const purpose = record ? FP.layerStyle.purpose(record) : null;   // LK1: the Layers list's sentence, when the record has one
-    return { key, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, ...(past ? { past: { ids: past, on: false } } : {}), ...(purpose ? { purpose } : {}) };
+    return { key, name: FP.farmModel.layerName(r), sub: null, section: "reference", ids, kind: K().refKindOf(r.theme), theme: r.theme ?? null, geometry: geometryOf(r.features),
+      ...(past ? { past: { ids: past, on: false } } : {}), ...(purpose ? { purpose } : {}) };
   }
   // PERF1b: one reference source's entry (farm_reference_context's shape, as farm_map gave it) joins the scene on the map
-  // now, without drawing it again: under the reference sources after it by name, Rivers and the focus mark, so the order
-  // is the one farm_map gave. Drawn hidden: the host turns it on (setVisible) as its row says. Returns the row's layer ids
+  // now, without drawing it again: at its kind's tier among what is drawn (LK4), under the labels, the photo cone and the
+  // focus mark. Drawn hidden: the host turns it on (setVisible) as its row says. Returns the row's layer ids
   // ({key, name, ids, past?}), or null when no farm is drawn or the source is already on the map (nothing is added; the host keeps the row it has).
   function addReference(r) {
     if (!map || !drawn || !r?.key) return null;
     const had = refDrawn.find((x) => x.key === r.key);
     if (had) return null;
-    const next = refDrawn.filter((x) => x.name.localeCompare(String(r.name || r.key)) > 0).map((x) => x.first).find((id) => map.getLayer(id));
-    const before = next || (rivers?.ids || []).find((id) => map.getLayer(id)) || (map.getLayer("focus-dim") ? "focus-dim" : undefined);
-    const row = referenceLayers(r, "ref-on-" + ++refAdded, r.key, before);
+    // LK4: by its kind's tier among what is drawn (never by name)
+    const order = refOrder(r, drawn.sources);
+    const row = drawGroup(order, () => referenceLayers(r, "ref-on-" + ++refAdded, r.key));
+    Object.assign(row, { order });
     refDrawn.find((x) => x.key === r.key).row = row;   // LK2: the row the host switches, for a restyle
-    refDrawn.sort((a, b) => a.name.localeCompare(b.name));
     if (!(drawn.reference || []).some((x) => x.key === r.key)) drawn.reference = [...(drawn.reference || []), r];   // focus() and popups find it
     setVisible(row, false);
     return row;
@@ -367,7 +417,11 @@
     };
     const stand = new Proxy(real, { get(t, k) {
       if (k === "addSource") return () => {};
-      if (k === "addLayer") return (spec) => { if (t.getLayer(spec.id)) { restyleLayer(spec); place(spec.id); last = spec.id; } else { fresh.add(spec.id); pending.push(spec); } };
+      if (k === "addLayer") return (spec) => {
+        if (t.getLayer(spec.id)) { restyleLayer(spec); place(spec.id); last = spec.id; }
+        else if (spec.type === "symbol" && t.getLayer("z-top")) { fresh.add(spec.id); t.addLayer(spec, "z-top"); }   // LK4: labels after all geometry
+        else { fresh.add(spec.id); pending.push(spec); }
+      };
       const v = t[k];
       return typeof v === "function" ? v.bind(t) : v;
     } });
@@ -382,7 +436,7 @@
     restyling = true; map = stand;
     try {
       const layers = drawn.layers || [], byIndex = layers.map(() => []);
-      for (const pass of ["polygon", "line", "point"]) layers.forEach((l, i) => byIndex[i].push(...farmLayer(l, i, pass)));
+      for (const pass of ["polygon", "line", "point"]) layers.forEach((l, i) => { if (shownLayer(l)) byIndex[i].push(...farmLayer(l, i, pass)); });
       flush();
       const rows = refDrawn.map((d) => { last = null; const row = referenceLayers(d.r, d.sid, d.key); flush(); return [d, row]; });
       map = real;
@@ -392,6 +446,7 @@
       });
       for (const [d, row] of rows) join(d.row || drawnEntries.find((e) => e.section === "reference" && e.key === d.key), row.ids, row.purpose || null);
     } finally { restyling = false; map = real; }
+    for (const e of [...drawnEntries, ...refDrawn.map((d) => d.row)]) if (e?.stacked) setStacked(e, true);   // LK4: a stacked fill stays hatched
     // only the layers new to the map are kept as added (the rest were already: clear() removes each once)
     added = [...added.slice(0, before), ...added.slice(before).filter((a) => a.kind === "layer" && fresh.has(a.id))];
     return true;
@@ -408,6 +463,8 @@
       layout: { "text-field": FP.layerStyle.labelText ? FP.layerStyle.labelText(lab) : ["to-string", ["get", lab.field]], "text-font": ["Open Sans Regular"], "text-size": 12, "text-padding": 4, "text-allow-overlap": false },
       paint: { "text-color": "#ffffff", "text-halo-color": "rgba(0, 0, 0, 0.6)", "text-halo-width": 1.2 } }, null, before)];
   }
+  // a reference source's geometry, from its features (none read yet: polygon, so a zone's row is a fill)
+  const geometryOf = (fc) => { const t = (fc?.features || []).find((f) => f?.geometry)?.geometry?.type || ""; return /Polygon/.test(t) ? "polygon" : /Line/.test(t) ? "line" : /Point/.test(t) ? "point" : null; };
   const plus = (v, n) => (typeof v === "number" ? v + n : ["+", v, n]);
   const atMost = (v, n) => (typeof v === "number" ? Math.min(v, n) : ["min", v, n]);
 
@@ -425,7 +482,7 @@
     if (pass === "polygon" && l.geometry_type === "polygon") {
       // land units are described by their place (code, name, area) and one plain source line, not the source file's fields
       ids.push(layer({ id: sid + "-fill", type: "fill", source: sid, ...z, paint: { "fill-color": st.fill, "fill-opacity": st.fillOpacity } },
-        l.theme === "land_units" ? null : describe));
+        K().kindOf(l.theme, l.geometry_type) === "land_units" ? null : describe));
       ids.push(layer({ id: sid + "-line", type: "line", source: sid, ...z, paint: { "line-color": st.line, "line-width": st.lineWidth, ...lineOpacity } }));
     }
     if (pass === "line" && l.geometry_type === "line") {
@@ -435,13 +492,14 @@
       ids.push(layer({ id: sid + "-line", type: "line", source: sid, ...z, paint }, describe));
     }
     // photo points are camera markers (photoPins), not circles
-    if (pass === "point" && l.geometry_type === "point" && l.theme !== "photos") {
+    const photos = K().kindOf(l.theme, l.geometry_type) === "photos";
+    if (pass === "point" && l.geometry_type === "point" && !photos) {
       ids.push(layer({ id: sid + "-pt", type: "circle", source: sid, ...z, paint: {
         "circle-color": st.fill, "circle-radius": atMost(st.radius, 9),
         "circle-stroke-color": st.line, "circle-stroke-width": 1.5 } }, describe));
     }
     // a record's labels, over everything the layer draws (last pass)
-    if (pass === "point" && l.theme !== "photos") ids.push(...labelLayer(record, sid));
+    if (pass === "point" && !photos) ids.push(...labelLayer(record, sid));
     return ids;
   }
 
@@ -785,6 +843,7 @@
     if (error) throw error;
     if (!data) return null;
     await loaded();
+    await K()?.ready;   // LK4: the kind registry, read once per page (its fallback if it can't be)
     if (request !== opening) return null;
     clear(); framed = null;
     looks = { styles: Array.isArray(data.styles) ? data.styles : [], preview: Array.isArray(stylePreview) ? stylePreview : null };
@@ -805,36 +864,45 @@
           "fill-opacity-transition": { duration: FP.farmModel.maskFade(reduced()), delay: 0 } } });
       }
       masked = false;
-      entries.push({ key: "extent", name: data.extent_label || "Farm boundary", sub: FP.ha(data.extent_ha), section: "farm", on: true,
-        ids: [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": accent(), "line-width": 3 } })] });
+    }
+    // LK4: the bands every group is drawn into, by tier (the mask under them all)
+    anchors();
+    if (data.extent) {
+      // the farm boundary: a boundary (tier 5), over the farm's titles
+      const order = K().orderKey({ kind: "extent", owned: true, sort_order: 1e6 });
+      entries.push({ key: "extent", kind: "extent", order, name: data.extent_label || "Farm boundary", sub: FP.ha(data.extent_ha), section: "farm", on: true,
+        ids: drawGroup(order, () => [layer({ id: "extent-line", type: "line", source: "extent", paint: { "line-color": accent(), "line-width": 3 } })]) });
     }
     source("titles", data.titles);
-    const titleIds = [layer({ id: "titles-line", type: "line", source: "titles",
+    const titleOrder = K().orderKey({ kind: "titles", owned: true });
+    const titleIds = drawGroup(titleOrder, () => [layer({ id: "titles-line", type: "line", source: "titles",
       paint: { "line-color": "#ffffff", "line-width": 1.5, "line-dasharray": [2, 1.5] } }),
       layer({ id: "titles-hit", type: "fill", source: "titles", paint: { "fill-color": "#fff", "fill-opacity": 0 } },
         (f) => ({ title: `Title ${f.properties.title_no}`, layerName: "Record of title", qualifier: f.properties.source ? `Source: ${f.properties.source}` : null,
-                  props: { area_ha: f.properties.area_ha, estate: f.properties.estate } }))];
+                  props: { area_ha: f.properties.area_ha, estate: f.properties.estate } }))]);
     const titleHa = data.titles.features.reduce((a, f) => a + (Number(f.properties.area_ha) || 0), 0);
-    entries.push({ key: "titles", name: "Titles", sub: titleHa ? FP.ha(titleHa) : null, section: "farm", on: true, ids: titleIds });
+    entries.push({ key: "titles", kind: "titles", order: titleOrder, name: "Titles", sub: titleHa ? FP.ha(titleHa) : null, section: "farm", on: true, ids: titleIds });
 
     data.layers.forEach((l, i) => source(`fl-${i}`, l.features));
     source("land-units", data.land_units);
     units = data.land_units;
     const layerIds = data.layers.map(() => []);
     let registerRow = null;   // the land-units row that carries the register's labels (the first land-units layer)
-    for (const pass of ["polygon", "line", "point"]) {
-      data.layers.forEach((l, i) => layerIds[i].push(...farmLayer(l, i, pass)));
-    }
+    // LK4: a working or annotation layer (map_layers.role, or the annotation kind) is never drawn by default and never listed;
+    // every other layer is drawn as one group at its kind's tier
+    data.layers.forEach((l, i) => { if (shownLayer(l)) layerIds[i].push(...drawGroup(layerOrder(l, i), () => ["polygon", "line", "point"].flatMap((pass) => farmLayer(l, i, pass)))); });
     data.layers.forEach((l, i) => {
+      if (!shownLayer(l)) return;
+      const kind = K().kindOf(l.theme, l.geometry_type);
       // one plain name; where the layer came from is in each feature's popup, and how many features it holds is not for the reader
-      const e = { key: l.theme, name: FP.farmModel.layerName(l), sub: null, section: "farm", ids: layerIds[i], job: l.job || null,
+      const e = { key: l.theme, kind, theme: l.theme, geometry: l.geometry_type, order: layerOrder(l, i), name: FP.farmModel.layerName(l), sub: null, section: "farm", ids: layerIds[i], job: l.job || null,
         // PERF3b: which layer it is (a group's deferred layer is read by its id, its features set on source fl-<i>)
         layerId: l.id ?? null, layerIndex: i, ...(l.deferred === true ? { deferred: true, count: l.feature_count ?? null } : {}),
         ...(l.truncated === true ? { truncated: true, count: l.feature_count ?? null } : {}) };
       // LK1: the sentence the Layers list shows under the name, when the layer's record (or its theme's) has one
       const rec = FP.layerStyle ? lookFor(l).record : null, purpose = rec ? FP.layerStyle.purpose(rec) : null;
       if (purpose) e.purpose = purpose;
-      if (l.theme === "land_units") {
+      if (kind === "land_units") {
         // #411: a scene may hold more than one land-units layer (HDLG's group map holds two). The register's land units
         // (data.land_units: a farm's own, with their codes and label points) are labelled and made clickable once, on the
         // first such layer's row. Every other land-units layer, and each one when the scene has no register (a group's map),
@@ -844,17 +912,17 @@
         if (!registerRow) { e.markers = landUnitLabels(data.land_units, data.extent); registerRow = e; }
         const id = register ? "land-units-hit" : `fl-${i}-units-hit`, title = register ? (p) => `${p.code} ${p.name || ""}`.trim() : (p) => unitTitle(p, l);
         unitHits.add(id);
-        e.ids.push(layer({ id, type: "fill", source: register ? "land-units" : `fl-${i}`, paint: { "fill-color": "#000", "fill-opacity": 0 } },
-          (f) => ({ title: title(f.properties), qualifier: FP.farmModel.sourceLine(l), props: { area_ha: f.properties.area_ha } })));
+        e.ids.push(drawGroup(e.order, () => layer({ id, type: "fill", source: register ? "land-units" : `fl-${i}`, paint: { "fill-color": "#000", "fill-opacity": 0 } },
+          (f) => ({ title: title(f.properties), qualifier: FP.farmModel.sourceLine(l), props: { area_ha: f.properties.area_ha } }))));
       }
       // DM2: a farm's own waterways layer the shared network has set aside has nothing left to draw: not listed (it is
       // kept, and named under the network's `replaces`); Rivers below is the waterways layer
       // CAP1b: a deferred layer has no features here yet (it is read for the map in view): listed as it is, with no pins or
       // labels of its own made from features it doesn't have
       if (l.deferred === true) { entries.push(e); return; }
-      if (l.theme === "waterways" && !count(l.features)) return;
-      if (l.theme === "photos") { e.markers = photoPins(l, i); e.photoLayer = i; photoEntries.push(e); }
-      if (l.theme === "actions") {
+      if (kind === "waterways" && !count(l.features)) return;
+      if (kind === "photos") { e.markers = photoPins(l, i); e.photoLayer = i; photoEntries.push(e); }
+      if (kind === "actions") {
         e.markers = [];
         for (const f of l.features?.features || []) if (f.geometry?.type === "Point" && f.properties.map_code) {
           const label = FP.el("div", { class: "action-label" }, f.properties.map_code);
@@ -874,7 +942,7 @@
     // Reference layers (referenceLayers): those the payload carries (a group's map, or a database before PERF1a); a
     // farm's sources join later, one at a time (addReference).
     refDrawn = []; refAdded = 0;
-    for (const [i, r] of data.reference.entries()) entries.push(referenceLayers(r, `ref-${i}`, r.key || "reference-" + i));
+    for (const [i, r] of data.reference.entries()) { const order = refOrder(r, data.sources); entries.push({ ...drawGroup(order, () => referenceLayers(r, `ref-${i}`, r.key || "reference-" + i)), order }); }
 
     // Rivers (DM2): the shared waterways layer, merged by name and labelled once per run, read for the part of the map in
     // view as the person pans (waterways_in_view), not clipped to the farm. Labels need the basemap's glyphs (none in the demo).
@@ -882,8 +950,9 @@
       source("rivers", NONE);
       // PROV1: the shared waterways layer is drawn from two sources (the river network and the Topo50 centrelines)
       const describe = (f) => ({ ...FP.farmModel.riverPopup(f.properties), provenance: RIVER_SOURCES.map(([key, name]) => FP.provenance?.lineFor(drawn?.sources, key, { name })).filter(Boolean) });
-      const ids = FP.farmModel.riverLayers("rivers", { labels: !!map.getStyle()?.glyphs }).map((spec) => layer(spec, spec.type === "line" && /-line$/.test(spec.id) ? describe : null));
-      rivers = { key: "rivers", name: "Rivers", sub: null, section: "reference", ids, rivers: true, read: null, asked: 0 };
+      const order = K().orderKey({ kind: "waterways", owned: false });
+      const ids = drawGroup(order, () => FP.farmModel.riverLayers("rivers", { labels: !!map.getStyle()?.glyphs }).map((spec) => layer(spec, spec.type === "line" && /-line$/.test(spec.id) ? describe : null)));
+      rivers = { key: "rivers", kind: "waterways", order, geometry: "line", name: "Rivers", sub: null, section: "reference", ids, rivers: true, read: null, asked: 0 };
       entries.push(rivers);
     }
 
@@ -900,12 +969,13 @@
     layer({ id: "focus-point", type: "circle", source: "focus", filter: ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]], paint: { "circle-color": "#ffffff", "circle-radius": 8, "circle-stroke-color": "#000000", "circle-stroke-width": 2 } });
     drawn = data;
 
-    // what's on when the farm opens comes from config.js (farmView.defaultOn); the rest is a tick away
-    // (or from the block's show option, when its host chose)
-    const defaultOn = new Set(show || [...(FP_CONFIG.farmView?.defaultOn || []), ...(FP.demo?.active ? ["actions"] : [])]);
+    // what's on when the farm opens: the registry's opening view (config.js farmView.view, "quiet": the boundary and photos)
+    // and every kind whose default rule has it on (LK4); the rest is a tick away (or the block's show option, when its host chose)
+    const defaultOn = show ? new Set(show) : null, openingKinds = K().kindsOn([FP_CONFIG.farmView?.view || "quiet"]);
+    const isOn = (e) => (defaultOn ? defaultOn.has(e.key) || (e.section === "reference" && defaultOn.has("reference")) : openingKinds.has(e.kind));
     // a photo asked for by the host is on show, with its layer
     const asked = wanted == null ? null : [...photoSets].map(([i, s]) => [i, s.list.findIndex((f) => String(f.id) === String(wanted))]).find(([, k]) => k >= 0);
-    for (const e of entries) setVisible(e, defaultOn.has(e.key) || (e.section === "reference" && defaultOn.has("reference")) || (!!asked && e.photoLayer === asked[0]));
+    for (const e of entries) setVisible(e, isOn(e) || (!!asked && e.photoLayer === asked[0]));
 
     if (data.extent) {
       map.resize();
@@ -954,17 +1024,18 @@
     if (!features.length) return null;
     source("action-programme", { type: "FeatureCollection", features });
     const describe = (f) => ({ title: (f.properties.code || "") + " " + f.properties.name, props: f.properties, layerName: "Actions" });
-    const ids = [
+    const order = K().orderKey({ kind: "actions", owned: true });
+    const ids = drawGroup(order, () => [
       layer({ id: "action-programme-lines", source: "action-programme", type: "line", paint: { "line-color": accent(), "line-width": 3 }, filter: ["!=", ["geometry-type"], "Point"] }, describe),
       layer({ id: "action-programme-points", source: "action-programme", type: "circle", paint: { "circle-color": accent(), "circle-radius": 6, "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 }, filter: ["==", ["geometry-type"], "Point"] }, describe),
-    ];
+    ]);
     const actionMarkers = [];
     for (const { at, codes } of groups.values()) {
       const label = FP.el("div", { class: "action-label" }, codes.slice(0, 3).join(", ") + (codes.length > 3 ? " +" + (codes.length - 3) : ""));
       const marker = new maplibregl.Marker({ element: label }).setLngLat(at).addTo(map);
       markers.push(marker); actionMarkers.push(marker);
     }
-    return { key: "actions", name: "Actions", ids, on: true, markers: actionMarkers, sub: null, section: "farm" };
+    return { key: "actions", kind: "actions", order, name: "Actions", ids, on: true, markers: actionMarkers, sub: null, section: "farm" };
   }
 
   function setVisible(entry, on) {
@@ -1114,8 +1185,8 @@
     resize: () => map && map.resize(), closePopup, atRest, closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove,
     // PERF3b: a group's deferred layer drawn for the map in view
     layerData, view, onMoveEnd,
-    // LK2: looks that came after the scene was drawn, applied to it
-    restyle,
+    // LK2: looks that came after the scene was drawn, applied to it; LK4: a second context fill drawn as outline and hatch
+    restyle, setStacked,
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.
     // TIM1 (#410): the outline at once on a fresh map; when the style loaded and the outline was first on screen (route timing)
     sketch, unsketch: removeSketch, outlineShown, styleLoadedAt: () => styleAt,

@@ -3,7 +3,10 @@
   const api = factory(typeof module === "object" && module.exports ? require("./consent-no.js") : root.FP.consentNo);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmModel = api;
 })(typeof window === "undefined" ? globalThis : window, function (CN) {
+  const root = typeof window === "undefined" ? globalThis : window;
   const list = (v) => Array.isArray(v) ? v : [];
+  // LK4/LK3a: a theme read as its kind (layer-kinds.js), so an old name and its new one are the same thing during the rename
+  const kindOf = (t, g) => { const K = typeof module === "object" && module.exports ? require("./layer-kinds.js") : root.FP?.kinds; return (K && K.kindOf(t, g)) || t; };
   // A farm space is a map with three things you can do (docs/PRODUCT-BRIEF.md "AI is the interface").
   const views = [["ask", "Ask"], ["create", "Create"], ["documents", "Documents"]];
   const outputs = [["fep", "Farm Environment Plan"], ["fwfp", "Freshwater Farm Plan"], ["consent", "Consent summary"],
@@ -367,11 +370,11 @@
   // of its themes ("waterways", "wells"), and reference layers it names by key (an answer in Ask framing "Bores").
   // None on this map: an empty list, and the map stays where it is.
   function placeFeatures(scene, place) {
-    const s = scene || {}, p = place || {}, codes = new Set(list(p.land_units)), themes = new Set(list(p.themes)), keys = new Set(list(p.layers));
+    const s = scene || {}, p = place || {}, codes = new Set(list(p.land_units)), themes = new Set(list(p.themes).map((t) => kindOf(t))), keys = new Set(list(p.layers));
     const drawn = (fc) => list(fc?.features).filter((x) => x?.geometry?.coordinates);
     return [...drawn(s.land_units).filter((x) => codes.has(x.properties?.code)),
-      ...list(s.layers).filter((l) => l.theme !== "land_units" && themes.has(l.theme)).flatMap((l) => drawn(l.features)),
-      ...list(s.reference).filter((r) => themes.has(r.theme) || keys.has(r.key)).flatMap((r) => drawn(r.features))];
+      ...list(s.layers).filter((l) => kindOf(l.theme, l.geometry_type) !== "land_units" && themes.has(kindOf(l.theme, l.geometry_type))).flatMap((l) => drawn(l.features)),
+      ...list(s.reference).filter((r) => themes.has(kindOf(r.theme)) || keys.has(r.key)).flatMap((r) => drawn(r.features))];
   }
 
   // E4 farm display (Josh, 2 Nov 2026). The fly-in to a farm is a gentle eased flight a person can follow (about 3.6 s);
@@ -520,11 +523,15 @@
   // ---- The layers drawer: one plain name for each layer ------------------------------------------------
   // The drawer says what a layer shows ("Rivers"), not what it was called when it was loaded ("NZ River Centrelines
   // (Topo, 1:50k) (LINZ)"); the one line under it is sourceLine().
-  const THEME_NAMES = { land_units: "Land units", plantings: "Plantings", fences: "Fences", photos: "Photos", measurements: "Measured distances", contaminant_sources: "Contaminant sources",
+  const THEME_NAMES = { land_units: "Land units", plantings: "Plantings", fences: "Fences", photos: "Photos", measurements: "Measured distances", annotation: "Measured distances", contaminant_sources: "Contaminant sources",
     point_features: "Farm features", line_features: "Farm lines", proposed_actions: "Proposed fences", extent: "Farm boundary", titles: "Titles",
     wells: "Bores", consents: "Consents", wetlands: "Wetlands", soils: "Soils", luc: "Land use capability", parcels: "Titles", actions: "Actions", farmed_area: "Farmed area" };
   // Reference rows by their source. "Rivers" is the shared waterways display layer (DM2, riverLayers below), not a row of
   // farm_map; the source layers behind it (Topo50 lines and the two river networks) start off.
+  // DM2: the sources the shared Rivers row is drawn from. LK4: Rivers is their kind's row (waterways): a context brings Rivers,
+  // never these, and the Layers drawer lists them under All layers only.
+  const RIVER_SOURCES = ["niwa-rec2-rivers", "linz-topo50-river-centrelines", "ecan-rivers"];
+  const behindRivers = (key) => RIVER_SOURCES.includes(String(key || ""));
   const KEY_NAMES = { "ecan-wells": "Bores", "ecan-consents": "Consents", "linz-topo50-river-centrelines": "River lines (Topo50)", "niwa-rec2-rivers": "River network (REC2)", "ecan-rivers": "River network (ECan)" };
   const NAME_RULES = [[/river centrelines?|\bwaterways?\b/i, "Rivers"], [/river environment classification|\bREC\d?\b/i, "River classes"], [/resource consents?/i, "Consents"],
     [/\b(?:wells?|bores?)\b/i, "Bores"], [/\bwetlands?\b/i, "Wetlands"], [/\bs-?map\b|^soils?\b/i, "Soils"], [/land use capability|\bLUC\b/i, "Land use capability"]];
@@ -540,6 +547,7 @@
     const l = layer || {}, raw = String(l.name || "").trim();
     if (KEY_NAMES[l.key]) return KEY_NAMES[l.key];
     if (THEME_NAMES[l.theme]) return THEME_NAMES[l.theme];
+    if (l.theme && THEME_NAMES[kindOf(l.theme, l.geometry_type)]) return THEME_NAMES[kindOf(l.theme, l.geometry_type)];   // LK3a: a renamed theme keeps its name
     const hit = NAME_RULES.find(([re]) => re.test(raw));
     if (hit) return hit[1];
     // otherwise the title less its source in brackets, version and sub-title
@@ -780,5 +788,5 @@
       source: "the farm's own record", as_at: String(b.valid_from || "").slice(0, 10) || null, shown_as: null,
       features: { type: "FeatureCollection", features: [{ type: "Feature", geometry: b.geometry, properties: { name: "Farmed area", area_ha: b.area_ha ?? null } }] } };
   }
-  return { farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, tooManyToDraw, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, canEdit, people };
+  return { RIVER_SOURCES, behindRivers, farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, tooManyToDraw, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, canEdit, people };
 });

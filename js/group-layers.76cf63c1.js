@@ -25,14 +25,13 @@
 // already asked and the one for the latest view): a view that comes while both are out waits, and only the latest such
 // view is read when one of them lands.
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.groupLayers = api;
-})(typeof window === "undefined" ? globalThis : window, function () {
+})(typeof window === "undefined" ? globalThis : window, function (root) {
   const list = (v) => (Array.isArray(v) ? v : []);
   const NONE = { type: "FeatureCollection", features: [] };
-  // What the group opens with when any of its layers is deferred (config.js groupView.defaultOn overrides it): the group's
-  // area, the member farms, the member blocks layer (tools/load_group.py's theme) and Rivers.
-  const DEFAULT_ON = ["extent", "member_farms", "member_blocks", "rivers"];
+  // LK4: the kind registry (app/layer-kinds.json via layer-kinds.js) says what a group opens with.
+  const K = () => (typeof module === "object" && module.exports ? require("./layer-kinds.js") : root.FP.kinds);
   const MAX_FEATURES = 4000;      // as group_layer_features' default: more in the box than this and the person zooms in
   const DEBOUNCE_MS = 300;        // after the map has rested, before the layers on are read for the new view
   const KEPT = 16;                // reads kept per layer (the oldest goes first)
@@ -52,12 +51,17 @@
   const tooManyLine = (n) => "Too many to show here" + (Number.isFinite(Number(n)) && n != null ? " (" + Number(n).toLocaleString("en-NZ") + ")" : "");
   // A deferred layer this loader reads by viewport: one of the group's own (a layer id), not truncated.
   const readable = (l) => isDeferred(l) && !tooMany(l) && l.group_own !== false && !!l.id;
-  // The Map scene's `show` for the group: before PERF3a (nothing deferred) every layer is on, as it was; with a deferred
-  // layer the quiet opening (DEFAULT_ON), each inline layer outside it off until switched on.
+  // The Map scene's `show` for the group (LK4, Josh's ruling): the group opens with its member blocks and Rivers only, as a
+  // farm opens quiet, whatever was deferred. On: every row whose kind's default rule is quiet (the group's area, the member
+  // blocks and the member farms' outlines) and the kinds config.js groupView.open names (["waterways"]: Rivers and the
+  // group's own waterways). The rest of the catchment view (zones, monitoring sites) comes up by context or by hand; a
+  // working or annotation layer is never on.
+  const OPENING_KINDS = ["waterways"];
   function defaultShow(map, config = null) {
-    const all = ["extent", "member_farms", "rivers", ...list(map?.layers).map((l) => l.theme)];
-    if (!hasDeferred(map)) return all;
-    return list(config?.defaultOn).length ? [...config.defaultOn] : [...DEFAULT_ON];
+    const k = K(), on = k.kindsOn([], null), extra = new Set(list(config?.open).length ? config.open : OPENING_KINDS);
+    const rows = [["extent", "extent"], ["rivers", "waterways"], ["member_farms", "member_blocks"],
+      ...list(map?.layers).filter((l) => k.isData(l)).map((l) => [l.theme, k.kindOf(l.theme, l.geometry_type)])];
+    return [...new Set(rows.filter(([, kind]) => kind && (on.has(kind) || extra.has(kind))).map(([key]) => key))];
   }
   // Metres per screen pixel at a zoom (MapLibre's 512 px tiles) and latitude, to the simplification step at or below it.
   function tolerance(zoom, lat = -43) {
@@ -268,5 +272,5 @@
     };
   }
 
-  return { DEFAULT_ON, MAX_FEATURES, DEBOUNCE_MS, IN_FLIGHT, STEPS, NONE, isDeferred, hasDeferred, tooMany, tooManyLine, readable, defaultShow, tolerance, boxFor, want, frameOf, holds, missing, zoomLine, featureCount, fromLine, sameNameLines, create };
+  return { OPENING_KINDS, MAX_FEATURES, DEBOUNCE_MS, IN_FLIGHT, STEPS, NONE, isDeferred, hasDeferred, tooMany, tooManyLine, readable, defaultShow, tolerance, boxFor, want, frameOf, holds, missing, zoomLine, featureCount, fromLine, sameNameLines, create };
 });
