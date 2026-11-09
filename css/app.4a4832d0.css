@@ -37,6 +37,7 @@ button, input { font: inherit; color: inherit; }
 /* access keys for QGIS (QGIS1a): the person's own page, #/account/qgis */
 .card select { width: 100%; padding: 11px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); font-size: var(--text-body); color: inherit; }
 .card code { font-size: var(--text-small); overflow-wrap: anywhere; }
+.tf-qr { display: block; margin: 8px auto; padding: 8px; box-sizing: content-box; border-radius: 8px; background: var(--qr-ground); }
 .token-heading { font-family: var(--f-head); font-weight: 650; font-size: var(--text-heading); margin: 22px 0 8px; }
 .token-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .token-list li { border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; min-width: 0; }

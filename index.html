@@ -16,8 +16,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RCL Farms">
 <link rel="stylesheet" href="vendor/maplibre-gl.ab1e70d5.css">
-<link rel="stylesheet" href="css/tokens.65c47ff2.css">
-<link rel="stylesheet" href="css/app.b16745a3.css">
+<link rel="stylesheet" href="css/tokens.a8cbbc18.css">
+<link rel="stylesheet" href="css/app.4a4832d0.css">
 <link rel="stylesheet" href="css/demo.e75cefbe.css">
 <link rel="stylesheet" href="css/blocks.cd0d5e92.css">
 <link rel="stylesheet" href="css/farm-space.76b3e291.css">
@@ -88,6 +88,27 @@
       <button type="submit">Save and open the farm</button>
     </form>
     <p id="welcome-msg" class="msg" role="alert"></p>
+  </div>
+</main>
+
+<main id="screen-two-factor" class="screen" hidden>
+  <div class="card">
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <h1>Two-factor sign-in</h1>
+    <div id="tf-enrol" hidden>
+      <p class="help">RCL staff need a code from an authenticator app as well as a password. Scan this with an app such as Google Authenticator or Authy, then type the 6-digit code it shows.</p>
+      <img id="tf-qr" class="tf-qr" alt="Two-factor setup code" width="200" height="200">
+      <p class="fine">Can't scan it? Choose "enter a setup key" in the app and type: <code id="tf-secret"></code></p>
+    </div>
+    <p id="tf-ask" class="help" hidden>Type the 6-digit code from your authenticator app.</p>
+    <form id="f-two-factor" novalidate hidden>
+      <label for="tf-code">6-digit code</label>
+      <input id="tf-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+      <button type="submit">Confirm</button>
+    </form>
+    <p id="tf-msg" class="msg" role="alert"></p>
+    <form id="f-tf-continue" hidden><button type="submit">Continue</button></form>
+    <p class="fine"><span id="tf-lost" hidden>Lost your phone or changed apps? Ask an RCL admin to reset your two-factor. </span><button type="button" class="link b-signout">Sign out</button></p>
   </div>
 </main>
 
@@ -215,7 +236,8 @@
 <script src="js/ops-looks.d52bb32b.js"></script>
 <script src="js/tokens-model.c6a721ec.js"></script>
 <script src="js/tokens.368b3ae6.js"></script>
-<script src="js/main.0a9b9099.js"></script>
+<script src="js/two-factor.a22a65e5.js"></script>
+<script src="js/main.90c1ec91.js"></script>
 </body>
 </html>
 

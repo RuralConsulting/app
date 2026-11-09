@@ -64,6 +64,7 @@
   --panel: #fffdf7; --wash: #f3f0e7; --ink: #302f28; --ink-2: #615f52; --ink-3: #716d5d; --rule: #d7d0bf;
   --shadow: 0 6px 24px rgba(48, 47, 40, .16);
   --map-background: #e4e6da;
+  --qr-ground: #fff;   /* the same in both themes: a phone reads a QR code only on white */
   --map-icon-filter: none;
   color-scheme: light;
 }

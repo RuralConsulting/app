@@ -39,22 +39,23 @@
     $("#pw-email").value = user.email;
     // PERF1b: the farms, the person's memberships (then their organisations, only if there are any) and the staff flag
     // are read at once; a link straight to one of the person's farms is followed as soon as the farms are known, so
-    // the farm's own reads start before the group and staff reads finish.
+    // the farm's own reads start before the group and staff reads finish. V2: the staff read goes on to the two-factor step, for
+    // staff only; if that asks anything, nothing is routed until it is answered (a farm a link already opened is closed first).
     const farmsRead = Promise.resolve(sb.from("farms").select("id, name, region, org_id").order("name")).then((r) => r, (e) => ({ error: e }));
-    const groupsRead = readGroups(user), staffRead = Promise.resolve(FP.ops.checkStaff(user)).catch(() => false);
+    const groupsRead = readGroups(user), staffRead = Promise.resolve(FP.ops.checkStaff(user)).catch(() => false).then((isStaff) => FP.twoFactor?.gate(isStaff, () => FP.farmSpace.close()));
     const { data, error } = await farmsRead;
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     allFarms = data; farms = data;
     FP.farmSpace.setPortfolio(farms, user);
     FP.ops.showLinks?.();   // the farm space's header exists now: its Operations link as the staff read says (or will)
-    const early = farmLink();
+    const early = FP.twoFactor?.asking() ? null : farmLink();
     if (early) { readyToRoute = true; route(); }
     groups = await groupsRead;
     FP.groupSpace.setGroups(groups, user);
     FP.groupSpace.hasPortfolio = () => farms.length + groups.length > 1;
-    await staffRead;
+    const asked = await staffRead;
     readyToRoute = true;
-    if (early !== location.hash) route();   // the farm already open stays as it is; anything else is routed now
+    if (early !== location.hash || asked) route();   // the farm already open stays as it is; anything else is routed now
   }
   // The address names one of the person's farms (a view of it): followed before the groups and the staff flag are known.
   function farmLink() {
@@ -75,7 +76,7 @@
   }
 
   function route() {
-    if (!readyToRoute) return;
+    if (!readyToRoute || FP.twoFactor?.asking()) return;
     const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
     // TIM1 (#409): Operations, Layers, the plan screens and the gallery don't close the group space; the group's drawn-time run
     // is dropped all the same, so a figure never takes in the time spent there
