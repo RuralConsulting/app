@@ -34,6 +34,25 @@ button, input { font: inherit; color: inherit; }
 .msg { min-height: 1.4em; margin: 12px 0 0; color: var(--bad); font-size: var(--text-small); }
 .msg.ok { color: var(--good); }
 .fine { margin: 14px 0 0; font-size: var(--text-small); color: var(--ink-3); }
+/* access keys for QGIS (QGIS1a): the person's own page, #/account/qgis */
+.card select { width: 100%; padding: 11px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); font-size: var(--text-body); color: inherit; }
+.card code { font-size: var(--text-small); overflow-wrap: anywhere; }
+.token-heading { font-family: var(--f-head); font-weight: 650; font-size: var(--text-heading); margin: 22px 0 8px; }
+.token-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.token-list li { border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; min-width: 0; }
+.token-list li.token-wait { border: 0; padding: 0; color: var(--ink-2); font-size: var(--text-small); }
+.token-list li[data-state="revoked"], .token-list li[data-state="expired"] { color: var(--ink-2); }
+.token-list .tk-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.token-list .tk-state { font-size: var(--text-small); color: var(--ink-2); }
+.token-list small { color: var(--ink-2); font-size: var(--text-small); overflow-wrap: anywhere; }
+.token-list p { margin: 4px 0 0; font-size: var(--text-small); }
+.token-list .tk-revoke-yes { padding: 6px 10px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.token-new { margin-top: 14px; padding: 12px 14px; border: 2px solid var(--accent); border-radius: 10px; display: grid; gap: 8px; min-width: 0; }
+.token-new p { margin: 0; }
+.token-value { display: flex; gap: 8px; min-width: 0; }
+.token-value input { flex: 1; min-width: 0; width: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-small); }
+.token-value button { padding: 10px 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.token-steps { margin: 0; padding-left: 20px; font-size: var(--text-small); display: grid; gap: 4px; overflow-wrap: anywhere; }
 .farm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .farm-list button { width: 100%; text-align: left; border: 1px solid var(--rule); background: var(--panel); border-radius: 10px;
   padding: 14px 16px; cursor: pointer; display: grid; gap: 2px; }

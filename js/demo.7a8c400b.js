@@ -60,6 +60,7 @@
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
     if (suffix === "/layers") return "#/layers";                  // Layer notes (LN2): the same screen for advisors and farm editors
+    if (suffix === "/account/qgis" && !multi) return "#/account/qgis";   // the person's access keys for QGIS (QGIS1a)
     if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
     if (suffix === "/ops/layers" && !multi) return "#/ops/layers";   // and its Layers page (advisor notes)
     if (suffix === "/ops/looks" && !multi) return "#/ops/looks";     // and its Looks page (LK2)
@@ -80,6 +81,7 @@
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
+    if (hash === "#/account/qgis") return "#/demo/account/qgis";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
     if (hash === "#/ops/looks") return group ? "#/demo/group/ops/looks" + (queue ? "?queue=" + queue : "") : "#/demo/ops/looks";
     if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
@@ -178,6 +180,13 @@
     // LK2: the first batch, proposed (served to no map: layer_styles_for_map serves reviewed looks only), and the staff page's
     // invented reference for its pictures
     data.tables.layer_styles = looksRows(looks);
+    // QGIS1a: the demo person's access keys for QGIS (invented: one in use, one revoked); a key made here is the demo's own
+    data.tables.personal_access_tokens = [
+      { id: "de000000-0000-4000-8000-0000000000a1", user_id: USER, name: "QGIS on the office PC", token_hint: "fpat_3f9c", created_at: "2026-11-02T21:10:00Z",
+        expires_at: "2027-01-31T21:10:00Z", last_used_at: "2026-11-08T23:40:00Z", revoked_at: null },
+      { id: "de000000-0000-4000-8000-0000000000a2", user_id: USER, name: "Old laptop", token_hint: "fpat_71e0", created_at: "2026-10-20T02:00:00Z",
+        expires_at: "2026-11-19T02:00:00Z", last_used_at: "2026-10-28T04:15:00Z", revoked_at: "2026-11-01T19:30:00Z" },
+    ];
     data.looksReference = looksReference(extent);
     if (sparse) {
       farm.name = "Example farm — almost empty";
@@ -1213,6 +1222,24 @@
             Object.assign(s, { status: "reviewed", reviewed_by: USER, reviewed_at: now });
           }
           return result(s);
+        }
+        // QGIS1a, as public.personal_access_token_issue and _revoke: the demo person's own keys, in memory. The key shown is the demo's
+        // fixed stand-in, never a working key.
+        if (name === "personal_access_token_issue") {
+          const nm = String(args.key_name ?? "").trim(), days = Number(args.days);
+          if (!nm || nm.length > 80) return result(null, { code: "22023", message: "Give the key a name of 1 to 80 characters, such as \"QGIS on my laptop\"" });
+          if (!(days >= 1 && days <= 90)) return result(null, { code: "22023", message: "A key lasts from 1 to 90 days" });
+          const key = "fpat_demo_key_not_a_working_key_0000000000000000", now = new Date();
+          const row = { id: "demo-new-" + ++made, user_id: USER, name: nm, token_hint: key.slice(0, 9), created_at: now.toISOString(),
+            expires_at: new Date(now.getTime() + days * 86400000).toISOString(), last_used_at: null, revoked_at: null };
+          d.tables.personal_access_tokens.unshift(row);
+          return result({ ...row, token: key });
+        }
+        if (name === "personal_access_token_revoke") {
+          const t = (d.tables.personal_access_tokens || []).find((x) => x.id === args.token_id && x.user_id === USER);
+          if (!t) return result(null, { code: "P0002", message: "No such access key of yours" });
+          if (!t.revoked_at) t.revoked_at = new Date().toISOString();
+          return result(t);
         }
         // LK2: the staff page's invented reference entries (its pictures only; the demo farm and group hold none of these)
         if (name === "demo_looks_reference") return result(copy((d.looksReference || []).find((r) => r.key === args.source) || null));

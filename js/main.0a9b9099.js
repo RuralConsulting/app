@@ -1,6 +1,7 @@
 // Screens and routing: sign in -> the farm (or the portfolio if there are several) -> the farm space.
 // Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops, #/ops/layers and #/ops/looks (RCL staff);
-// #/group/<id> (a catchment group's space, S5) and its /documents, /create and /settings.
+// #/group/<id> (a catchment group's space, S5) and its /documents, /create and /settings; #/account/qgis (the person's access
+// keys for QGIS, QGIS1a).
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [], groups = [];
@@ -90,6 +91,9 @@
     // The block gallery: fixture data only, so only in the demo.
     if (FP.demo?.active && /^#\/blocks(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.open(hash); return; }
     FP.gallery.close();
+    // Access keys for QGIS (QGIS1a): anyone signed in, for their own keys. Any other route clears a key shown once.
+    if (hash === "#/account/qgis") { FP.farmSpace.close(); FP.ops.close(); FP.opsLayers.close(); FP.opsLooks?.close(); FP.tokens.open(); return; }
+    FP.tokens?.close();
     // Operations: RCL staff only. Anyone else asking for it is simply taken to their farms.
     // Operations → Looks (LK2): a proposed layer look judged on two pictures, accepted or sent back with a note; RCL staff only.
     // Any other route takes its two maps away.
