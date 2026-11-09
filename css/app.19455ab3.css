@@ -231,3 +231,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .card-evidence li { color: var(--ink-2); font-size: var(--text-small); }
 .card-evidence li::before { content: "· "; }
 .decision-card button.card-open, .decision-card button.card-frame { justify-self: start; }
+/* DEC3 (#455 A): an undecided card's question in words above its thing, and its map's legend. The swatches are drawn as the map
+   draws them, over an aerial-like ground (the map's own colours, not the theme's: they must match what the map shows). */
+.decision-card .card-ask { margin: 2px 0 0; font-weight: 700; font-size: var(--text-body); color: var(--ink); }
+.card-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--text-small); color: var(--ink-2); }
+.card-legend li { display: flex; align-items: center; gap: 6px; }
+.card-legend li[hidden] { display: none; }
+.card-swatch { display: inline-block; width: 20px; height: 14px; border-radius: 2px; background: var(--card-swatch-ground); flex: none; }
+.card-swatch[data-swatch="subject"] { background: linear-gradient(var(--card-subject-fill), var(--card-subject-fill)), var(--card-swatch-ground); box-shadow: inset 0 0 0 2px var(--card-subject); }
+.card-swatch[data-swatch="member"] { box-shadow: inset 0 0 0 2px var(--card-member-line); }
+.card-swatch[data-swatch="others"] { box-shadow: inset 0 0 0 1.5px var(--card-others-line); }
+/* DEC3 (#455 E): "Something else", folded under the answers */
+.card-other { border-top: 1px solid var(--rule); padding-top: 6px; }
+.card-other > summary { cursor: pointer; color: var(--ink); font-size: var(--text-body); min-height: 44px; display: flex; align-items: center; }   /* review F5: 44 px, body text */
+.card-other[open] { display: grid; gap: 6px; }
+.card-other fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.card-other legend { padding: 0; font-size: var(--text-body); font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.card-other-option { display: flex; gap: 10px; align-items: center; min-height: 44px; cursor: pointer; font-size: var(--text-body); }
+.card-other-option input[type="radio"] { min-height: 0; width: 22px; height: 22px; margin: 0; flex: none; }
+.card-other .manage-buttons button { min-height: 44px; }
+.card-other > p.card-fine { font-size: var(--text-body); }
+/* review F2: on the small card map a tapped paddock's popup sits over the map's own controls, never under them */
+.card-map .maplibregl-popup { z-index: 3; }

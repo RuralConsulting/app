@@ -19,6 +19,7 @@
   // proposals_decide takes a member from the register for these kinds only (DEC1a; DEC1c's grouped held paddocks too)
   const GROUP_KIND = "member_match_paddock_group";
   const REGISTER_KINDS = ["member_match_file", "member_match_paddock", GROUP_KIND];
+  const OPEN = ["proposed", "ambiguous"];
   // (a group's row: the manage space reads org_id; a farm's row has none)
   const registerAllowed = (p) => !!p && REGISTER_KINDS.includes(p.kind) && p.org_id != null;
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,7 +53,9 @@
       const paddocks = list(id.paddocks).filter((x) => x && typeof x === "object").map((x) => {
         const g = x.geometry && typeof x.geometry === "object" && /^(Multi)?Polygon$/.test(x.geometry.type) && Array.isArray(x.geometry.coordinates) ? x.geometry : null;
         return { itemKey: x.item_key ? str(x.item_key) : null, fid: x.fid != null ? str(x.fid) : null, idGiven: x.id_given != null && str(x.id_given) ? str(x.id_given) : null,
-          areaHa: num(x.area_ha), share: num(x.share), geometry: g };
+          areaHa: num(x.area_ha), share: num(x.share), geometry: g,
+          // DEC3: the paddock's own name fields (as a single paddock's), for its name on the map
+          names: x.names && typeof x.names === "object" ? Object.entries(x.names).filter(([, v]) => v != null && str(v).trim()).map(([k, v]) => ({ field: k, value: str(v).trim() })) : [] };
       });
       const shapes = paddocks.filter((x) => x.geometry);
       // one outline for all of them: a multipolygon of each paddock's polygons
@@ -173,11 +176,16 @@
   // The arguments of public.proposals_decide. action "accept" (with `pick`, or the candidate a proposed row names), "reject", or an
   // action key of mode "actions" ({ status, candidate }). pick: { from: "candidates", index } | { from: "register", member,
   // group_member_id }. null when nothing would be sent (an accept with nothing picked on a row that names no candidate).
-  function decide(p, action, { pick = null, note = "", viewed = null, mode = null } = {}) {
+  function decide(p, action, { pick = null, note = "", viewed = null, mode = null, other = null } = {}) {
     if (!p || !Number.isFinite(Number(p.id))) return null;
     const text = str(note).trim() || null, cands = list(p.candidates), seen = viewedList(viewed);
     const out = (o) => (seen.length ? { ...o, viewed: seen } : o);
     if (action === "reject") return out({ id: p.id, status: "rejected", candidate: null, note: text });
+    // DEC3: "something else": a rejection that says what the item is instead (null until the answer is whole: otherProblem says why)
+    if (action === "other") {
+      if (otherProblem(p, other, note)) return null;
+      return out({ id: p.id, status: "rejected", candidate: null, note: text, other: { reason: other.reason, ...(otherOf(p).outcomes.length ? { outcome: other.outcome } : {}) } });
+    }
     if (action && typeof action === "object") return out({ id: p.id, status: action.status === "rejected" ? "rejected" : "accepted", candidate: action.status === "rejected" ? null : action.candidate ?? null, note: text });
     if (action !== "accept") return null;
     if (pick?.from === "register") {
@@ -231,6 +239,112 @@
   const seenFeature = (thing, camera, at) => ({ kind: "feature", ...(thing?.itemKey ? { item_key: thing.itemKey } : {}), ...(thing?.featureId ? { feature_id: thing.featureId } : {}),
     ...(thing?.bbox ? { bbox: thing.bbox } : {}), ...(camera && Number.isFinite(camera.zoom) ? { zoom: Math.max(0, Math.min(24, camera.zoom)) } : {}), at: stamp(at) });
 
+  // ---- DEC3 (#455 A): what the card asks about, standing out --------------------------------------------------------------------
+  // An undecided card says its question in a sentence above the thing ("Are these 100 paddocks (681.7 ha) member 7's?"), and its map
+  // draws three things only, each its own look, with a legend of them: the paddocks asked about (filled, their own colour), the
+  // proposed member's blocks (a faint outline) and the other members' blocks (fainter still, grey). Tapping a paddock names it (its own
+  // name field, else its id) with its area and share inside the member's blocks; names are drawn on the shapes only zoomed in to
+  // paddock scale (from zoom 16), never on a group at its own frame. A decided card is drawn as it was (no subject): `subjectOf` is
+  // null for every row that is not proposed or ambiguous.
+  // The three looks (layer_styles records' shape, LK1), and the colours the legend's swatches repeat.
+  const LOOKS = {
+    subject: { fill: "#00c8ff", fill_opacity: 0.45, line: "#00c8ff", line_width: 2.5 },
+    member: { fill_opacity: 0, line: "#ffffff", line_width: 1.5, line_opacity: 0.85 },
+    others: { fill_opacity: 0, line: "#a8a8a8", line_width: 1, line_opacity: 0.6 },
+  };
+  const LABEL_FROM_ZOOM = 16;
+  const ha1 = (v) => (Math.round(v * 10) / 10).toLocaleString("en-NZ", { maximumFractionDigits: 1 }) + " ha";
+  const memberOf = (v) => { const s = str(v).trim(); return /^\d+$/.test(s) ? String(Number(s)) : s; };
+  // a paddock's name: its own name field (the first one held), else "Paddock <id>"
+  const nameOf = (names, fid, fallback) => (list(names)[0]?.value || (fid ? "Paddock " + fid : fallback));
+  function siteQuestion(s, cands) {
+    const sites = list(s?.sites).map(str).filter(Boolean);
+    if (sites.length >= 2) {
+      const named = sites.length === 2 ? sites.join(" and ") : sites.slice(0, -1).join(", ") + " and " + sites[sites.length - 1];
+      return s.relation === "co_located" ? "Are " + named + " two records of one place?"
+        : "Are " + named + " one site under successive ids" + (s.current ? ", now recorded as " + str(s.current) : "") + "?";
+    }
+    const c = cands[0], label = c ? str(c.label || c.name || "") : "";
+    return label ? "Is this right: " + label + "?" : null;
+  }
+  function subjectOf(p, thing = null) {
+    if (!p || !OPEN.includes(p.status)) return null;
+    const t = thing || thingOf(p), cands = list(p.candidates), s = p.subject || {};
+    // the member the question names: a proposed row's one candidate (a group's member)
+    const proposed = p.status === "proposed" && cands.length >= 1 && cands[0]?.member != null ? memberOf(cands[0].member) : null;
+    if (t.type === "place") {
+      const g = t.group ? t.identity : null, member = t.group ? (t.member != null ? memberOf(t.member) : proposed) : proposed;
+      const n = t.group ? Number(t.count) || 0 : 1, area = t.group ? g?.areaHa ?? null : t.identity?.areaHa ?? null;
+      const whose = member ? "member " + member + "'s" : null;
+      const question = t.group && n !== 1
+        ? (whose ? "Are these " + n.toLocaleString("en-NZ") + " paddocks" + (area != null ? " (" + ha1(area) + ")" : "") + " " + whose + "?"
+          : "Whose are these " + n.toLocaleString("en-NZ") + " paddocks" + (area != null ? " (" + ha1(area) + ")" : "") + "?")
+        : whose ? "Is this " + (area != null ? ha1(area) + " " : "") + "paddock " + whose + "?" : "Whose is this " + (area != null ? ha1(area) + " " : "") + "paddock?";
+      // the paddocks asked about, one feature each, with what a tap shows (the popup lists each property, its key capitalised:
+      // "In Member Blocks: 94%"; short, so it fits a phone's card map beside its controls: review F2); name_once: the popup names it once, by its title (popup.js)
+      const features = !t.geometry ? [] : t.group
+        ? list(g?.paddocks).filter((x) => x.geometry).map((x) => ({ type: "Feature", geometry: x.geometry, properties: {
+          name: nameOf(x.names, x.fid, "A paddock"), name_once: true, ...(x.areaHa != null ? { area_ha: x.areaHa } : {}), ...(x.share != null ? { in_member_blocks: Math.round(x.share * 100) + "%" } : {}),
+          ...(x.idGiven ? { "id given": x.idGiven } : {}) } }))
+        : [{ type: "Feature", geometry: t.geometry, properties: { name: nameOf(t.identity?.names, t.featureId, "The paddock"), name_once: true, ...(t.identity?.areaHa != null ? { area_ha: t.identity.areaHa } : {}),
+          ...(t.identity?.idGiven ? { "id given": t.identity.idGiven } : {}) } }];
+      const legend = !t.geometry ? [] : [
+        { key: "subject", label: t.group && n !== 1 ? "The " + n.toLocaleString("en-NZ") + " paddocks asked about" : "The paddock asked about" },
+        ...(member ? [{ key: "member", label: "Member " + member + "'s blocks" }] : []),
+        { key: "others", label: member ? "Other members' blocks" : "Members' blocks", whenShown: true }];
+      return { question, member, legend, features: { type: "FeatureCollection", features }, looks: LOOKS, labelFromZoom: LABEL_FROM_ZOOM };
+    }
+    if (p.kind === "member_match_file") {
+      return { question: proposed && cands.length === 1 ? "Is this file member " + proposed + "'s?" : proposed ? "Is this file member " + proposed + "'s, or another member's?"
+        : p.status === "ambiguous" && cands.length ? "Which member's file is this?" : "Whose file is this?", member: null, legend: [], features: null };
+    }
+    if (p.kind === "site_succession") {
+      const q = siteQuestion(s, cands);
+      return q ? { question: q, member: null, legend: [], features: null } : null;
+    }
+    return null;
+  }
+
+  // ---- DEC3 (#455 E): "Something else" ------------------------------------------------------------------------------------------
+  // Every card a group decides has a third answer besides a member and Not this: what the item is instead, from a short list, with the
+  // note. Recorded through proposals_decide as a rejection (the item stays set aside, no member named) with decision.other =
+  // {reason, outcome?} (migration 20261109020000, app.proposal_other_problem holds the same lists). "Not this" keeps its meaning,
+  // "none of these members". A decided row reads its answer in words (otherText).
+  const SAY = ["other", "Something else: say what in the note"];
+  const OTHER = {
+    file: { title: "Not a member's file", reasons: [["template", "A template"], ["duplicate", "A duplicate of another file"], ["not_a_farm_plan", "Not a farm plan"],
+      ["group_document", "The group's own document"], SAY], outcomeTitle: "What becomes of it",
+      outcomes: [["remove_from_group_files", "Remove it from the group's files"], ["keep_as_group_document", "Keep it as a group document"]] },
+    paddock: { title: "Not a paddock", reasons: [["sliver", "A sliver"], ["boundary_artefact", "A boundary artefact"], SAY], outcomes: [] },
+    any: { title: "Something else", reasons: [SAY], outcomes: [] },
+  };
+  const OTHER_OF = { member_match_file: "file", member_match_paddock: "paddock", [GROUP_KIND]: "paddock", member_extent: "any", document_tier: "any", site_succession: "any" };
+  // the "something else" a row offers, or null (a decided row, a feed row, a farm's row: none)
+  function otherOf(p) {
+    if (!p || !OPEN.includes(p.status) || p.org_id == null || !OTHER_OF[p.kind]) return null;
+    const o = OTHER[OTHER_OF[p.kind]];
+    return { kind: OTHER_OF[p.kind], title: o.title, reasons: o.reasons.map(([key, label]) => ({ key, label })), outcomeTitle: o.outcomeTitle || null,
+      outcomes: o.outcomes.map(([key, label]) => ({ key, label })) };
+  }
+  // why the answer can't be sent yet, in words, or null
+  function otherProblem(p, other, note = "") {
+    const spec = otherOf(p);
+    if (!spec) return "Something else can't be recorded for this row.";
+    if (!other?.reason || !spec.reasons.some((r) => r.key === other.reason)) return "Pick what it is first.";
+    if (spec.outcomes.length && !spec.outcomes.some((r) => r.key === other.outcome)) return "Pick what becomes of it first.";
+    if (other.reason === "other" && !str(note).trim()) return "Say what it is in the note.";
+    return null;
+  }
+  // a decided row's "something else" in words: "Not a member's file: a template · remove it from the group's files"
+  function otherText(kind, other) {
+    if (!other || typeof other !== "object" || !other.reason) return null;
+    const o = OTHER[OTHER_OF[kind] || "any"] || OTHER.any;
+    const low = (s) => s.charAt(0).toLowerCase() + s.slice(1);
+    const r = o.reasons.find(([k]) => k === other.reason), out = o.outcomes.find(([k]) => k === other.outcome);
+    const reason = other.reason === "other" ? "something else" : r ? low(r[1]) : str(other.reason);
+    return (OTHER_OF[kind] === "any" || other.reason === "other" ? "Something else" : o.title + ": " + reason) + (out ? " · " + low(out[1]) : other.outcome ? " · " + str(other.outcome) : "");
+  }
+
   return { GROUP_KIND, REGISTER_KINDS, registerAllowed, identityOf, bboxOf, polygonOf, thingOf, identityView, registerOf, searchRegister, answerOf, decide, viewedItem, viewedList,
-    seenIdentity, seenDocument, seenFeature, stamp };
+    seenIdentity, seenDocument, seenFeature, stamp, subjectOf, LOOKS, LABEL_FROM_ZOOM, otherOf, otherProblem, otherText, OTHER };
 });

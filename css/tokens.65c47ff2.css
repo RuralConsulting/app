@@ -49,6 +49,9 @@
   --map-label-shadow: 0 0 3px rgba(0, 0, 0, .85), 0 1px 2px rgba(0, 0, 0, .7);
   --map-pin-shadow: 0 0 3px rgba(0, 0, 0, .7);
   --map-icon-shadow: drop-shadow(0 0 2px rgba(0, 0, 0, .8)) drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
+  /* DEC3: the decision card map's three looks, as its legend draws them (the map's own colours, the same in both themes; decision-card-model.js LOOKS) */
+  --card-subject: #00c8ff; --card-subject-fill: rgba(0, 200, 255, .45); --card-member-line: rgba(255, 255, 255, .85); --card-others-line: rgba(168, 168, 168, .6);
+  --card-swatch-ground: #4b5843;
   --backdrop: rgba(21, 26, 20, .55);
   --banner-panel: #302f28; --banner-ink: #fffdf7;
   --print-panel: #ffffff; --print-ink: #000000;

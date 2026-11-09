@@ -180,10 +180,11 @@
   }
   function controls(l, group, d, redraw, wrap, card) {
     const row = card.p;
-    const go = async (action, { pick, say, buttons, note }) => {
-      const args = FP.decisionCardModel.decide(row, action === "pick" ? "accept" : action, { pick, note, viewed: DC().seen(l.id), mode: card.answer.mode });
-      // a row that names no member (ambiguous, or no candidate at all) sends nothing until one is picked
-      if (!args) { say(card.answer.mode === "member" ? "Pick a member first." : "Pick one first."); return; }
+    const go = async (action, { pick, say, buttons, note, other }) => {
+      const args = FP.decisionCardModel.decide(row, action === "pick" ? "accept" : action, { pick, note, viewed: DC().seen(l.id), mode: card.answer.mode, other });
+      // a row that names no member (ambiguous, or no candidate at all) sends nothing until one is picked; DEC3: "something else"
+      // sends nothing until it says what the item is (and, for a file, what becomes of it)
+      if (!args) { say(action === "other" ? FP.decisionCardModel.otherProblem(row, other, note) || "Pick what it is first." : card.answer.mode === "member" ? "Pick a member first." : "Pick one first."); return; }
       for (const b of buttons) b.disabled = true;
       say("Saving…");
       const { data: saved, error } = await decideRpc(args);

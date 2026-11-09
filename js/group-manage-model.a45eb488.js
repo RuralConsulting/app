@@ -208,6 +208,8 @@
     if (p.status === "proposed") { state = "proposed"; text = cands.length ? "Proposed: " + cands[0].label : "No suggestion: pick a member"; }
     else if (p.status === "ambiguous") { state = "ambiguous"; text = cands.length === 1 ? "One possible member: pick it, or Not this" : "Pick one of these members, or Not this"; }
     else if (waitingForLoad(p, ctx)) { state = "accepted"; text = "Accepted" + (chosen ? " (" + chosen.label + (chosen.register ? ", from the register" : "") + ")" : "") + ", placed on the next group load"; }
+    // DEC3: "something else" is a rejection that says what the item is instead (decision.other); a plain Not this has none
+    else if (p.status === "rejected" && p.decision?.other && typeof p.decision.other === "object") { state = "other"; text = DC().otherText(p.kind, p.decision.other) || "Something else"; }
     else if (p.status === "rejected") { state = "rejected"; text = "Not this: it stays set aside"; }
     else { state = "done"; text = p.status === "applied" ? "Placed" : "No longer open"; }
     if (p.kind === GROUP_KIND) {
@@ -251,8 +253,12 @@
     const chosen = l.chosen ? { ...candidateCard(l.chosen), detail: l.chosen.register ? "from the register" : candidateCard(l.chosen).detail } : null;
     // read only: the proposed (or chosen) member's evidence, or every candidate's when more than one could fit
     const readOnly = l.state === "ambiguous" ? l.candidates.map(candidateCard) : l.proposed ? [candidateCard(l.proposed)] : chosen ? [chosen] : [];
+    const thing = dc.thingOf(p);
+    // DEC3 (#455 A, E): an undecided row's question in words, its map's subject and legend, and its "something else" answer; a
+    // decided row has neither, and its card is drawn exactly as before
+    const subject = l.open ? dc.subjectOf(p, thing) : null, other = l.open ? dc.otherOf(p) : null;
     return { id: l.id, p, line: l, title: l.item.title, sub: [l.item.what, l.item.id, l.item.path && l.item.path !== l.item.title ? l.item.path : null].filter(Boolean).join(" · "),
-      state: l.state, stateText: l.text, lines: [l.because, l.replaces], thing: dc.thingOf(p),
+      state: l.state, stateText: l.text, lines: [l.because, l.replaces], thing, ...(subject ? { subject } : {}), ...(other ? { other } : {}),
       candidates: answering ? l.candidates.map(candidateCard) : readOnly, shown: answering ? [] : readOnly.map((_, i) => i),
       answer: dc.answerOf(p), register: dc.registerAllowed(p) ? register : null, canAnswer: false, decided: l.decided && !l.open ? l.decided : null,
       // DEC1c: accept all, pick another member (for all of them), or not this
@@ -277,11 +283,11 @@
   function gapsTab(rows, { gaps = null, open = null, decidedHere = new Set() } = {}) {
     const ctx = { open, checkedAt: gaps?.checked_at || null };
     const lines = (Array.isArray(rows) ? rows : []).filter((p) => p && DECIDE_KINDS.includes(p.kind))
-      .map((p) => line(p, ctx)).filter((l) => l.open || l.state === "accepted" || (l.state === "rejected" && decidedHere.has(l.id)));
+      .map((p) => line(p, ctx)).filter((l) => l.open || l.state === "accepted" || ((l.state === "rejected" || l.state === "other") && decidedHere.has(l.id)));
     const groups = new Map();
     for (const l of lines) {
       // under the member proposed (or the one accepted); a row just turned down stays where it was proposed
-      const who = l.state === "ambiguous" ? null : l.proposed || l.chosen || (l.state === "rejected" && l.candidates.length === 1 ? l.candidates[0] : null);
+      const who = l.state === "ambiguous" ? null : l.proposed || l.chosen || ((l.state === "rejected" || l.state === "other") && l.candidates.length === 1 ? l.candidates[0] : null);
       // RCN1: a row with one candidate and nothing chosen (a surname alone) is weak evidence, not a choice between members
       const key = l.kind === "document_tier" ? "other" : l.state === "ambiguous" ? (l.candidates.length === 1 ? "weak" : "ambiguous") : who?.member != null ? "member:" + who.member : "other";
       if (!groups.has(key)) groups.set(key, { key, member: who?.member ?? null,

@@ -2,7 +2,7 @@
 FP.popup = (() => {
   const HIDDEN = new Set(["storage_path", "photo_sha256", "fid", "source_fid", "ogc_fid", "label_at", "on_farm", "linked",
                           "authorisations", "external_id", "layer_ref", "resolution", "resolution_reason", "by_kind",
-                          "by_feature_id", "conflicts"]);
+                          "by_feature_id", "conflicts", "name_once"]);   // (DEC3: name_once marks a decision card's paddock)
   const photoCache = new Map();
 
   function rows(props) {
@@ -47,7 +47,10 @@ FP.popup = (() => {
     if (hit.permits?.length) {
       box.append(FP.el("p", { class: "pop-q" }, "Linked to " + hit.permits.map((a) => a.consent_no || a.title).join(", ")));
     }
-    const r = rows(hit.props);
+    // DEC3 (review F2, round 2): a decision card's paddock (its feature marked name_once) is named once, by its title; every other
+    // popup lists its name as before
+    const once = hit.props?.name_once === true || hit.props?.name_once === "true";
+    const r = once ? rows(hit.props).filter(([k, v]) => !(k === "name" && v === String(hit.title))) : rows(hit.props);
     if (r.length) {
       const dl = FP.el("dl");
       for (const [k, v] of r) dl.append(FP.el("dt", {}, k), FP.el("dd", {}, v));

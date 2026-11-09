@@ -65,6 +65,8 @@
       }
       return el("section", { class: "card-thing", "data-thing": "document" }, ...kids);
     }
+    // DEC3: an undecided place's subject, filled in its own colour with a legend
+    if (t.type === "place" && card.subject) return subjectPlaceNode(card, { el });
     if (t.type === "place" && t.group) {
       // DEC1c: the grouped paddocks outlined together, with the member's blocks; each paddock listed under the map
       const v = t.identity ? M.identityView(t.identity) : null, n = t.count || 0;
@@ -120,7 +122,7 @@
     const buttons = [];
     const button = (key, label, primary) => {
       const b = el("button", { type: "button", ...(primary ? { class: "primary" } : ns.secondary ? { class: ns.secondary } : {}), [ns.decide]: key, ...idOf(key),
-        onclick: (e) => o.onDecide?.(key, { pick: state.pick, button: e?.target || b, say, buttons, note: note.value }) }, el === sel ? { html: text(label) } : label);   // (a label's apostrophe as written)
+        onclick: (e) => o.onDecide?.(key, { pick: state.pick, ...(state.other ? { other: { ...state.other } } : {}), button: e?.target || b, say, buttons, note: note.value }) }, el === sel ? { html: text(label) } : label);   // (a label's apostrophe as written)
       buttons.push(b);
       return b;
     };
@@ -183,8 +185,60 @@
       if (a.several) button("pick", labels.pick || "Accept the one picked", false);
       parts.push(ns.idAttr ? el("label", { class: "visually-hidden", for: noteId }, "Note") : null, note, el("div", { class: ns.buttons }, ...buttons));
     }
+    // DEC3 (#455 E): "Something else", folded under the answers: what the item is instead (and, for a file, what becomes of it), with
+    // the note above; recorded as set aside with that answer. Only a card that offers it (an undecided group row) draws it.
+    if (card.other && a.mode !== "actions") parts.push(otherNode(card, o, state, button, say));
     parts.push(msg);
     return el("div", { class: ns.controls, "data-card-answer": a.mode }, ...parts);
+  }
+
+  // DEC3 (#455 E): card.other is decision-card-model.otherOf(): its title ("Not a member's file"), reasons and, for a file, outcomes.
+  // The choice is kept in state.other ({ reason, outcome }) and goes with the "other" button's press.
+  function otherNode(card, o, state, button, say) {
+    const el = o.el, ns = nsOf(o), sp = card.other, id = String(card.id);
+    state.other = { reason: null, outcome: null };
+    const radios = (name, items, key, attr) => items.map((r) => el("label", { class: "card-other-option" },
+      el("input", { type: "radio", name, value: r.key, [attr]: id, onchange: () => { state.other[key] = r.key; say(""); } }), el("span", {}, r.label)));
+    const reasons = el("fieldset", { class: "card-other-reasons" }, el("legend", {}, sp.title), ...radios(ns.idPrefix + "-other-" + id, sp.reasons, "reason", "data-card-other-reason"));
+    const outcomes = sp.outcomes.length ? el("fieldset", { class: "card-other-outcomes" }, el("legend", {}, sp.outcomeTitle || "What becomes of it"),
+      ...radios(ns.idPrefix + "-outcome-" + id, sp.outcomes, "outcome", "data-card-other-outcome")) : null;
+    const record = button("other", "Record: " + sp.title.charAt(0).toLowerCase() + sp.title.slice(1), false);
+    return el("details", { class: "card-other", "data-card-other": id }, el("summary", {}, "Something else"),
+      el("p", { class: "card-fine" }, "When it is none of the members: say what it is instead. It stays set aside, with your answer recorded (Not this means none of these members)."),
+      reasons, outcomes, el("div", { class: ns.buttons }, record));
+  }
+
+  // ---- DEC3 (#455 A): the subject, standing out ---------------------------------------------------------------------------------------
+  // card.subject is decision-card-model.subjectOf(): the question in words, and for a place its map's legend, the paddocks as features
+  // and their looks. Drawn on an undecided card only; a decided card has no subject and is drawn as before.
+  function legendNode(subject, { el }) {
+    return el("ul", { class: "card-legend", "data-card-legend": "" }, ...subject.legend.map((e) => el("li", { "data-legend": e.key, ...(e.whenShown ? { hidden: "" } : {}) },
+      el("span", { class: "card-swatch", "data-swatch": e.key, "aria-hidden": "true" }), el("span", {}, e.label))));
+  }
+  function subjectPlaceNode(card, { el }) {
+    const M = model(), t = card.thing, s = card.subject, v = t.identity ? M.identityView(t.identity) : null;
+    const n = t.group ? t.count || 0 : 1, many = t.group && n !== 1;
+    const facts = v?.facts?.length ? v.facts.join(" · ") : null;
+    const list0 = t.group && v?.rows?.length ? el("details", { class: "card-more card-paddocks" }, el("summary", {}, "The " + (n === 1 ? "paddock" : n + " paddocks")),
+      el("ul", { class: "card-fine" }, ...v.rows.map((r) => el("li", {}, r.label + (r.detail ? " · " + r.detail : ""))))) : null;
+    const where = t.group ? "Where they are" : "Where it is";
+    if (!t.geometry) {
+      return el("section", { class: "card-thing", "data-thing": "place", "data-map": "none", ...(t.group ? { "data-group": String(n) } : {}) }, el("h4", { class: "card-thing-title" }, where),
+        el("p", { class: "card-fine" }, t.group ? "Their shapes aren't held yet, so they can't be shown on the map: the next proposal run adds them."
+          : t.identity ? v.text || "Its shape isn't held." : "Its shape isn't held yet, so it can't be shown on the map: the next proposal run adds it."),
+        facts ? el("p", { class: "card-fine" }, facts) : null, list0);
+    }
+    const shape = v?.kind === "paddock" && v.text ? v.text : t.group ? "Each shape simplified to draw." : null;
+    const tap = many ? "Tap a paddock for its name, area and share inside the member's blocks; names show when zoomed in." : "Tap the paddock for its name and area.";
+    const label = "Map: " + (many ? "the " + n + " paddocks" : "the paddock") + " asked about, filled in blue" + (s.member ? ", member " + s.member + "'s blocks outlined in white" : "")
+      + ", other members' blocks in grey";
+    return el("section", { class: "card-thing", "data-thing": "place", "data-map": "pending", "data-subject": "", ...(t.group ? { "data-group": String(n) } : {}) },
+      el("h4", { class: "card-thing-title" }, where),
+      el("div", { class: "card-map", "data-card-map": String(card.id), role: "img", "aria-label": label }),
+      legendNode(s, { el }),
+      el("p", { class: "card-fine card-map-note", "data-card-map-note": "" }, [facts ? facts + "." : null, shape, tap].filter(Boolean).join(" ")),
+      list0,
+      el("button", { type: "button", class: "secondary card-frame", "data-card-frame": String(card.id) }, many ? "Frame them again" : "Frame it again"));
   }
 
   // ---- the whole card ------------------------------------------------------------------------------------------------------------------
@@ -195,6 +249,8 @@
     const head = card.title ? [el("div", { class: "manage-item card-head" }, el("b", {}, card.title), card.sub ? el("small", {}, card.sub) : null),
       el("p", { class: "manage-state card-state", tabindex: "-1" }, card.stateText || "")] : [];
     const lines = list(card.lines).filter(Boolean).map((t) => el("small", { class: "card-line" }, t));
+    // DEC3 (#455 A): an undecided card's question in a sentence, above the thing it is about
+    if (card.subject?.question) lines.push(el("p", { class: "card-ask", "data-card-ask": "" }, card.subject.question));
     const thing = thingNode(card, o);
     const question = [];
     if (card.canAnswer) question.push(answerNode(card, o));
@@ -296,6 +352,26 @@
     const want = memberNo(member);
     return { type: "FeatureCollection", features: list(features?.features).filter((f) => memberNo(f?.properties?.member_number) === want) };
   }
+  // DEC3 (#455 A): an undecided card's map. The group's member-blocks layers only (the paddock grid and the source file's layer are
+  // not drawn: "nothing else on that map"), read for the box as before; the proposed member's blocks over them; the paddocks asked
+  // about over everything, as features of the card's own (never read), each named with its area and share for a tap. Each is drawn
+  // with a look of the card's own (records in the shape LK1's layer_styles rows have, handed to this scene only): the subject filled,
+  // labelled from LABEL_FROM_ZOOM; the member's blocks a faint white outline; the others fainter, grey.
+  function subjectNeighbours(rows) {
+    return list(rows).filter((l) => l && l.id && l.geometry_type === "polygon" && l.theme === "member_blocks").slice(0, 4)
+      .map((l) => ({ id: l.id, name: l.name, theme: "member_blocks", geometry_type: "polygon", group_own: true, style: l.style || {}, source: l.source || "the group's own map",
+        deferred: true, feature_count: null, features: EMPTY }));
+  }
+  function subjectScene(card, layers, own) {
+    const M = model(), s = card.subject;
+    // (no layer name: the popup's title is the paddock's own name, and on a phone's card map every line counts: review F2)
+    const subject = { id: "card-subject-" + card.id, name: "", theme: "card_subject", geometry_type: "polygon",
+      group_own: true, style: {}, source: "", features: s.features || EMPTY };   // (no source line in its popup)
+    const look = (id, symbol, extra = {}) => ({ status: "reviewed", superseded_at: null, layer_id: id, symbol: { ...symbol }, ...extra });
+    const styles = [...layers.map((l) => look(l.id, M.LOOKS.others)), ...(own ? [look(own.id, M.LOOKS.member)] : []),
+      look(subject.id, M.LOOKS.subject, { label_field: "name", label_min_zoom: M.LABEL_FROM_ZOOM })];
+    return { layers: [...layers, ...(own ? [own] : []), subject], styles };
+  }
   // With MAX_MAPS open and the person asking for another: the map framed longest ago gives way (one off the screen first). Its card
   // goes back to waiting, and its own "Frame it again" brings it back the same way.
   function evict() {
@@ -322,20 +398,26 @@
     try { rows = list(await layersOf(env)); } catch { rows = []; }
     if (gone()) return;
     if (!box.isConnected) { drop(entry); return; }
-    const layers = neighbourLayers(rows, t);
+    // DEC3: an undecided card's map draws its subject and the members' blocks only (subjectScene); a decided card's is as it was
+    const subj = card.subject || null;
+    const layers = subj ? subjectNeighbours(rows) : neighbourLayers(rows, t);
     // DEC1c: a group's member's own blocks drawn over the rest, from the member-blocks layer's features as they are read
-    const own = t.group && t.member ? memberBlocksLayer(t.member) : null;
+    const own = subj ? (subj.member ? memberBlocksLayer(subj.member) : null) : t.group && t.member ? memberBlocksLayer(t.member) : null;
     const scene = { farm: { id: null, name: t.layerFile || "The paddock" }, extent: t.geometry,
       extent_label: t.group ? "The " + (t.count === 1 ? "paddock" : (t.count || "") + " paddocks") + " asked about" : "The paddock asked about", extent_ha: t.identity?.areaHa ?? null,
       titles: EMPTY, land_units: EMPTY, layers: own ? [...layers, own] : layers, reference: [] };
+    if (subj) Object.assign(scene, subjectScene(card, layers, own));
     let view = null;
-    try { view = await entry.surface.open(null, scene, { show: ["extent", ...scene.layers.map((l) => l.theme)] }); } catch { view = null; }
+    // (a subject's map shows its three layers, not the outline of the frame: the subject is drawn filled instead)
+    try { view = await entry.surface.open(null, scene, { show: subj ? scene.layers.map((l) => l.theme) : ["extent", ...scene.layers.map((l) => l.theme)] }); } catch { view = null; }
     if (gone()) return;
     // a map that did not open gives its place back at once (its WebGL context with it)
     if (!view || !box.isConnected) { drop(entry); if (!view) say("failed", "The map couldn't be drawn just now."); return; }
     entry.surface.frame(t.geometry); entry.at = Date.now();
     note(card.id, M.seenFeature(t, entry.surface.camera?.()));
     say("drawn");
+    // DEC3: the legend's third line ("Other members' blocks") once the group has a member-blocks layer to draw them from
+    if (subj && layers.some((l) => l.theme === "member_blocks")) { const li = node.querySelector('[data-legend="others"]'); if (li) li.hidden = false; }
     if (!layers.length || !root.FP.groupLayers || !env.sb || !env.groupId) return;
     const entries = list(view.entries);
     entry.parts = root.FP.groupLayers.create({ sb: env.sb, group: env.groupId, layers, max: 1500,
@@ -424,5 +506,7 @@
     return openDocument(node, { id: node.dataset.proposal, thing: { type: "document", documentId: id, title: doc?.title || null } }, env, button);
   }
 
-  return { NS, render, html, thingNode, answerNode, mount, openFrom, openDocument, seen, note, forget, sweep, neighbourLayers, memberBlocksLayer, ownBlocks, frameType, MAX_FRAME_BYTES, sel, MAX_MAPS, live: () => live.size };
+  return { NS, render, html, thingNode, answerNode, mount, openFrom, openDocument, seen, note, forget, sweep, neighbourLayers, memberBlocksLayer, ownBlocks, frameType, MAX_FRAME_BYTES, sel, MAX_MAPS, live: () => live.size,
+    // DEC3: the map engine drawn in a card's map box, or null (the gallery taps a paddock on it)
+    surfaceOf: (box) => [...live].find((m) => m.box === box)?.surface || null };
 });

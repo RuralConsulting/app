@@ -517,8 +517,17 @@
       }
     } else if (args.candidate != null) return [null, { message: "a rejection names no candidate" }];
     const note = String(args.note || "").trim() || null;
-    Object.assign(p, { status: args.status, decision: { candidate: copy(chosen), note, ...(from ? { chosen_from: from } : {}), ...(Array.isArray(args.viewed) && args.viewed.length ? { viewed: copy(args.viewed) } : {}) },
-      decided_by: USER, decided_at: new Date().toISOString() });
+    // DEC3, as migration 20261109020000: "something else" on a rejection only, of the row's kind's shape (app.proposal_other_problem)
+    let other = null;
+    if (args.other != null) {
+      if (args.status !== "rejected") return [null, { message: "something else is recorded as set aside (rejected), naming no member" }];
+      const DC = typeof module === "object" && module.exports ? require("./decision-card-model.js") : globalThis.FP.decisionCardModel;
+      const why = DC.otherProblem(p, args.other, note || "");
+      if (why) return [null, { message: "something else: " + why }];
+      other = { reason: args.other.reason, ...(args.other.outcome ? { outcome: args.other.outcome } : {}) };
+    }
+    Object.assign(p, { status: args.status, decision: { candidate: copy(chosen), note, ...(from ? { chosen_from: from } : {}), ...(Array.isArray(args.viewed) && args.viewed.length ? { viewed: copy(args.viewed) } : {}),
+      ...(other ? { other } : {}) }, decided_by: USER, decided_at: new Date().toISOString() });
     return [p];
   }
   function groupRpc(d, name, args) {

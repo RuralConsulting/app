@@ -76,7 +76,7 @@
 .manage-lines, .manage-members, .manage-locations, .manage-evidence { list-style: none; margin: 0; padding: 0; }
 .manage-lines { display: grid; gap: 12px; }
 .manage-line { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); overflow-wrap: anywhere; }
-.manage-line[data-state="accepted"], .manage-line[data-state="rejected"] { background: var(--wash); }
+.manage-line[data-state="accepted"], .manage-line[data-state="rejected"], .manage-line[data-state="other"] { background: var(--wash); }   /* DEC3: other */
 .manage-item { display: grid; gap: 2px; }
 .manage-item small, .manage-line > small, .manage-members small, .manage-locations small, .manage-candidate small { color: var(--ink-2); font-size: var(--text-small); }
 .manage-state { margin: 0; font-weight: 700; }
