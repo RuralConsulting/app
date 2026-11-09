@@ -7,7 +7,7 @@
 // page, the kind registry LK4 reads, the demo's two files) and are fetched afresh by every version.
 // APP names this app's caches: only caches that start with it are cleared on activate. The capture queue (capture-queue.js)
 // is the page's IndexedDB, not a cache: a new version activating never touches it, so what waits to upload survives it.
-const VERSION = "202611092254-bf0c704";
+const VERSION = "202611092308-fe60c94";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
 const FLOATING = ["./", "index.html", "layer-kinds.json", "demo/demo-farm.json", "demo/source.html"];
