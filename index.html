@@ -16,12 +16,15 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RCL Farms">
 <link rel="stylesheet" href="vendor/maplibre-gl.ab1e70d5.css">
+<!-- V4: the map viewer's stylesheet sets page-wide rules, so it is on only while a map is shown (js/maps-view.js); before tokens.css, so the app's colours and type win -->
+<link rel="stylesheet" href="vendor/viewer.8211825c.css" media="not all" data-viewer-styles>
 <link rel="stylesheet" href="css/tokens.a8cbbc18.css">
 <link rel="stylesheet" href="css/app.4a4832d0.css">
 <link rel="stylesheet" href="css/demo.e75cefbe.css">
 <link rel="stylesheet" href="css/blocks.6669e69b.css">
 <link rel="stylesheet" href="css/farm-space.76b3e291.css">
 <link rel="stylesheet" href="css/group-space.576575f1.css">
+<link rel="stylesheet" href="css/maps.6ac78773.css">
 <link rel="stylesheet" href="css/ops.7e44c4d5.css">
 <link rel="stylesheet" href="css/gallery.e67863d6.css">
 <link rel="stylesheet" href="css/plan-print.2d04ac8e.css">
@@ -141,7 +144,10 @@
     <div id="group-map" class="group-map" aria-label="Group map"></div>
     <section id="group-panel" class="group-panel" aria-live="polite"></section>
   </div>
+  <div id="group-maps" class="group-maps"></div>
 </main>
+
+<main id="screen-maps" hidden></main>
 
 <div id="screen-map" class="map-screen" hidden>
   <div id="map" aria-label="Farm map"></div>
@@ -172,11 +178,12 @@
 
 <script src="vendor/supabase.d6a5c441.js"></script>
 <script src="vendor/maplibre-gl-csp.a1f1847b.js"></script>
+<script src="vendor/pmtiles.caf981bc.js"></script>
 <script src="js/config.a14912fe.js"></script>
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
 <script src="js/brand.80965af9.js"></script>
 <script src="js/consent-no.711a9161.js"></script>
-<script src="js/demo.df48b222.js"></script>
+<script src="js/demo.d57dac2b.js"></script>
 <script src="js/util.1d5eb095.js"></script>
 <script src="js/layer-kinds.f0f86f81.js"></script>
 <script src="js/route-timing.eb451185.js"></script>
@@ -194,7 +201,7 @@
 <script src="js/blocks/list.ecfce221.js"></script>
 <script src="js/blocks/timeline.d3df4ebf.js"></script>
 <script src="js/blocks/checklist.956251f9.js"></script>
-<script src="js/farm-model.a5fc5ec9.js"></script>
+<script src="js/farm-model.b12b751b.js"></script>
 <script src="js/classify.c416566e.js"></script>
 <script src="js/blocks/documents.e35b8451.js"></script>
 <script src="js/document-files.c4ac637b.js"></script>
@@ -219,16 +226,18 @@
 <script src="js/farm-reference.44ef4bd8.js"></script>
 <script src="js/block-model.9536f147.js"></script>
 <script src="js/add-block.b10a1af6.js"></script>
-<script src="js/farm-space.8ef27e00.js"></script>
-<script src="js/group-model.973b37ed.js"></script>
+<script src="js/farm-space.bf3539ee.js"></script>
+<script src="js/group-model.1628c85c.js"></script>
 <script src="js/group-update.7493b872.js"></script>
 <script src="js/group-wq-answer.7133bd52.js"></script>
 <script src="js/group-manage-model.a45eb488.js"></script>
 <script src="js/group-manage.18bd7abb.js"></script>
 <script src="js/group-layers.76cf63c1.js"></script>
-<script src="js/group-space.30d02f71.js"></script>
+<script src="js/group-space.3bac8044.js"></script>
 <script src="js/shape-edit-model.ae81c31a.js"></script>
 <script src="js/shape-editor.0ee097ec.js"></script>
+<script src="js/viewer.42520c00.js"></script>
+<script src="js/maps-view.dbf48f89.js"></script>
 <script src="js/ops-model.53057a2f.js"></script>
 <script src="js/ops.8ea9178f.js"></script>
 <script src="js/layer-notes-model.37f62a4d.js"></script>

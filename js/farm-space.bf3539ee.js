@@ -154,6 +154,7 @@
   }
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
   function close() {
+    FP.mapsView?.close();
     FP.addBlock?.close(false);
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
@@ -372,6 +373,7 @@
   }
   // Portfolio: every farm with its one sentence, and a map of them all (the NZ -> farm zoom starts here).
   async function showPortfolio() {
+    FP.mapsView?.close();
     const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
     flushDone();
     context = null; forget(); openedMap = null;
@@ -1448,8 +1450,22 @@
     }
     return view;
   }
+  // V4: Maps is its own screen under the farm's header (js/maps-view.js): no farm map and none of the farm's reads.
+  function openMaps(farm, route) {
+    if (context && context.farm.id !== farm.id) close();   // another farm's reads and map go first
+    token++;
+    document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
+    document.body.classList.add("farm-space-active");
+    setDrawer(false); FP.farmMap.closePopup?.(); FP.shapeEditor?.close();
+    FP.show("screen-maps");
+    header(farm, route); reserveHeader();
+    document.title = farm.name + " · " + M.viewLabel("maps") + " | " + FP.brand?.product;
+    return FP.mapsView.open($("#screen-maps"), { owner: { farm: farm.id }, name: farm.name, item: route.item || null, href: (id) => FP.href(M.href(farm.id, "maps", id)) });
+  }
   async function open(farm, route) {
     flushDone();   // going to another view (or farm) writes any Done still inside its Undo window (#258)
+    if (route.view === "maps") return openMaps(farm, route);
+    FP.mapsView?.close();
     const current = ++token;
     document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
     document.body.classList.add("farm-space-active");

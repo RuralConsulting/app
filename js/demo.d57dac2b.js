@@ -30,7 +30,7 @@
   const FARM2 = "de000000-0000-4000-8000-000000000005";
   const GROUP = "de000000-0000-4000-8000-000000000006";   // the catchment group (S5): "HDLG (example)", invented members
   const PHOTO = "demo/photo-synthetic.svg";   // a drawn stand-in: no real photo is in the demo
-  const VIEWS = /^$|^\/(ask|create|documents|people|onboarding)$/;
+  const VIEWS = /^$|^\/(maps|ask|create|documents|people|onboarding)$/;
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|\?|$)/.test(hash);
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|\?|$)/.test(hash);
@@ -53,6 +53,7 @@
       // LK2: the staff page for layer looks, with the group's map at group scale
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
+      if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
       return /^(?:\/(?:documents|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
@@ -129,6 +130,14 @@
       entry("ecan-nutrient-zones", "LWRP nutrient allocation zones (ECan)", "zones", [f(71061, polygon(171.9, -43.1, 172.2, -42.9), { ZONE_NAME: "Invented nutrient zone (synthetic)", ZONE_CLASS: "Green" })]),
     ];
   }
+  // V4: invented published maps: two for the farm (the list; none on the almost-empty farm, the message) and one for the group (opens at once)
+  function demoMaps(data, sparse) {
+    const row = (id, owner, slug, title, kind) => ({ id: "de000000-0000-4000-8000-00000000d00" + id, farm_id: null, org_id: null, ...owner, slug, title, description: "An invented map for the demo.", kind, archived_at: null });
+    const maps = [...(sparse ? [] : [row(1, { farm_id: FARM }, "farm-map", "Farm map (synthetic)", "Farm plan"), row(2, { farm_id: FARM }, "soils", "Soils (synthetic)", "Land")]), row(3, { org_id: GROUP }, "catchment", "Catchment map (synthetic)", "Catchment")];
+    const manifest = { bounds: [172, -43, 172.025, -42.98], boundary: "boundary.geojson", files: ["boundary.geojson"], layers: [] };
+    data.tables.published_maps = maps;
+    data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
+  }
   function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
@@ -197,6 +206,7 @@
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
     if (group) groupDemo(data, queue);
+    demoMaps(data, sparse);
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
       data.user.email = "farmer@example.test";
@@ -1355,7 +1365,8 @@
       } },
       // Every document opens the one stand-in page (DEC1b: a file the group holds, under demo/held/, the stand-in PDF a card frames);
       // the demo's photo points name the one stand-in picture.
-      storage: { from: () => ({ createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : String(path).startsWith("demo/held/") && String(path).endsWith(".pdf") ? "demo/source.pdf" : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
+      storage: { from: () => ({ createSignedUrls: async (paths) => result(paths.map((path) => ({ path, error: null, signedUrl: new URL("demo/map-boundary.geojson", typeof location === "undefined" ? "http://localhost/" : location.href).href }))),   // V4: the one invented outline
+        createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : String(path).startsWith("demo/held/") && String(path).endsWith(".pdf") ? "demo/source.pdf" : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
         upload: async (path) => result({ path }) }) },
     };
   }

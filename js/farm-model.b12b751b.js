@@ -8,7 +8,7 @@
   // LK4/LK3a: a theme read as its kind (layer-kinds.js), so an old name and its new one are the same thing during the rename
   const kindOf = (t, g) => { const K = typeof module === "object" && module.exports ? require("./layer-kinds.js") : root.FP?.kinds; return (K && K.kindOf(t, g)) || t; };
   // A farm space is a map with three things you can do (docs/PRODUCT-BRIEF.md "AI is the interface").
-  const views = [["ask", "Ask"], ["create", "Create"], ["documents", "Documents"]];
+  const views = [["maps", "Maps"], ["ask", "Ask"], ["create", "Create"], ["documents", "Documents"]];
   const outputs = [["fep", "Farm Environment Plan"], ["fwfp", "Freshwater Farm Plan"], ["consent", "Consent summary"],
     ["nzfap", "NZFAP+ walkthrough"], ["catchment", "Catchment story"]];
   const isDate = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d) && Number.isFinite(Date.parse(d.slice(0, 10)));
@@ -21,7 +21,7 @@
   const viewLabel = (key) => [...views, ...otherViews].find(([k]) => k === key)?.[1] || null;
   const href = (f, view, id) => "#/farm/" + f + (view && view !== "map" ? "/" + view : "") + (id ? "?item=" + encodeURIComponent(id) : "");
   function match(hash) {
-    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(ask|create|documents|people|onboarding))?(?:\?item=([^&#]+))?$/);
+    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(maps|ask|create|documents|people|onboarding))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[2] || "map", item: m[3] ? decodeURIComponent(m[3]) : null } : null; } catch { return null; }
   }
   // A consent's or document's title as the app quotes it in a sentence or a line: without the full stop its record may

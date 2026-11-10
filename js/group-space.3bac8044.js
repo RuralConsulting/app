@@ -115,6 +115,7 @@
   function dropParts() { parts?.destroy(); parts = null; refs?.destroy(); refs = null; placeholders = new Map(); offMove?.(); offMove = null; countsFailed = false; stackOk = new Set(); }
   function close() {
     token++; dropParts(); timing = null; T()?.cancel("group");
+    FP.mapsView?.close();
     wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
     mapHandle?.destroy(); mapHandle = null; surface = null; entries = [];
     ctx = null; draft = null;
@@ -143,11 +144,17 @@
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
     }
+    // V4: Maps fills the space under the header (js/maps-view.js) and asks for none of the group's reads
+    if (route.view === "maps") {
+      document.title = group.name + " · " + G().viewLabel("maps") + " | " + (FP.brand?.product || "");
+      return FP.mapsView.open($("#group-maps"), { owner: { org: group.id }, name: group.name, item: route.item || null, href: (id) => FP.href(G().href(group.id, "maps", id)) });
+    }
+    FP.mapsView?.close();
     // TIM1 (#409): a view that draws the map, with no map drawn or being drawn, starts the drawn-time clock here (after
     // sign-in, whatever screen came before); a second route while it is still drawing keeps the same clock
     if (route.view !== "manage" && !mapHandle) timing = T()?.begin("group", group.id) || null;
