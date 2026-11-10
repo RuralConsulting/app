@@ -11,6 +11,7 @@
   // Whether this sign-in is RCL staff (profiles.is_staff, readable by its owner). Anything unexpected means not staff.
   async function checkStaff(user) {
     me = user || null;
+    staff = false;   // V6: not known yet is not staff, so a later sign-in on this page never inherits the last person's flag
     try {
       const { data, error } = await sb.from("profiles").select("is_staff").eq("user_id", user.id).maybeSingle();
       staff = !error && data?.is_staff === true;

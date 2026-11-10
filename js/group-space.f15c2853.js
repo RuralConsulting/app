@@ -127,7 +127,8 @@
     $("#group-kind").textContent = "Catchment group" + (group.role ? " · you are " + (/^[aeiou]/.test(group.role) ? "an " : "a ") + group.role : "");
     const nav = $("#group-nav");
     // ON3b: the manage space is linked for the group's admins, advisors and facilitators only (a plain member never sees the link)
-    nav.replaceChildren(...G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role)).map(([key, label]) =>
+    // V6: a client's tabs are the allow-list (simple-view.js)
+    nav.replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).map(([key, label]) =>
       el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#group-back").hidden = !(FP.groupSpace.hasPortfolio?.());
     $("#group-back").setAttribute("href", FP.href("") || "#/");
@@ -617,7 +618,7 @@
 
   // ---- Documents ---------------------------------------------------------------------------------------------------------------
   function documentsView(data) {
-    const wrap = el("section", { class: "group-documents", "data-view": "documents" }, el("h2", {}, "Documents"));
+    const wrap = el("section", { class: "group-documents", "data-view": "documents" }, el("h2", {}, FP.simpleView?.on() ? "Files" : "Documents"));
     const own = el("div", { class: "block-host documents-host" });
     wrap.append(el("h3", {}, "The group's documents"), own);
     // V5: the group's editors add files (the database's rule is the same: any role but plain member); staff who can edit mark a new issue as superseding an old one.

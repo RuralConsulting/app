@@ -2,6 +2,7 @@
 // Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops, #/ops/layers and #/ops/looks (RCL staff);
 // #/group/<id> (a catchment group's space, S5) and its /documents, /create and /settings; #/account/qgis (the person's access
 // keys for QGIS, QGIS1a).
+// V6: a client gets the simple view (simple-view.js, the allow-list): every route is checked against it first.
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [], groups = [];
@@ -49,6 +50,10 @@
     FP.farmSpace.setPortfolio(farms, user);
     FP.ops.showLinks?.();   // the farm space's header exists now: its Operations link as the staff read says (or will)
     const early = FP.twoFactor?.asking() ? null : farmLink();
+    // V6: a link the simple view would not open as it stands waits for the staff flag (a staff sign-in is never sent away from
+    // it); a link to a client's own Files or Maps opens at once, and is drawn again below if the person turns out to be staff.
+    if (early && FP.simpleView.on() && FP.simpleView.gate(routed()).action !== "open") await staffRead;
+    const earlySimple = FP.simpleView.on();
     if (early) { readyToRoute = true; route(); }
     groups = await groupsRead;
     FP.groupSpace.setGroups(groups, user);
@@ -56,10 +61,12 @@
     const asked = await staffRead;
     readyToRoute = true;
     if (early !== location.hash || asked) route();   // the farm already open stays as it is; anything else is routed now
+    else if (earlySimple !== FP.simpleView.on()) route();   // V6: opened as the simple view, and the person turned out to be staff
   }
   // The address names one of the person's farms (a view of it): followed before the groups and the staff flag are known.
+  const routed = () => (FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash);
   function farmLink() {
-    const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash, r = hash && FP.farmModel.match(hash);
+    const hash = routed(), r = hash && FP.farmModel.match(hash);
     return r && allFarms.some((f) => f.id === r.farm) ? location.hash : null;
   }
 
@@ -75,9 +82,31 @@
     } catch { return []; }
   }
 
+  // Every screen put away, for the "not available" page.
+  function closeAll() {
+    FP.routeTiming?.cancel();
+    FP.farmPlansDemo.close(); FP.farmPlanDraft.close(); FP.gallery.close(); FP.tokens?.close();
+    FP.ops.close(); FP.opsLayers.close(); FP.opsLooks?.close(); FP.groupSpace.close(); FP.farmSpace.close();
+  }
+  // The view a person's one farm or group opens on: the first of the allow-list for a client, the map for staff.
+  const homeView = (space) => (FP.simpleView.on() ? FP.simpleView.landing(space) : "map");
+  // V6: a client's Files is a plain list, with no farm or group map beside it.
+  const markFiles = (view) => $("body").classList.toggle("simple-files", FP.simpleView.on() && view === "documents");
+
   function route() {
     if (!readyToRoute || FP.twoFactor?.asking()) return;
-    const hash = FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash;
+    const hash = routed();
+    // V6: the simple view. Nothing below this runs for a route a client may not open.
+    const simple = FP.simpleView.on();
+    $("body").classList.toggle("simple-view", simple);
+    $("body").classList.remove("simple-files");
+    if (simple) {
+      const gate = FP.simpleView.gate(hash);
+      // (only into the person's own farm or group: anyone else's address falls through to their farms below, and a person with
+      // none gets no hashchange routing, so a redirect would leave them on the screen they were on)
+      if (gate.action === "go" && (gate.space === "farm" ? allFarms : groups).some((p) => p.id === gate.id)) { location.replace(FP.href(gate.href)); return; }
+      if (gate.action === "hidden") { closeAll(); FP.simpleView.notAvailable(gate, { farms: allFarms, groups }); return; }
+    }
     // TIM1 (#409): Operations, Layers, the plan screens and the gallery don't close the group space; the group's drawn-time run
     // is dropped all the same, so a figure never takes in the time spent there
     const toGroup = !!FP.groupModel.match(hash) || (!farms.length && groups.length === 1 && !FP.farmModel.match(hash));
@@ -108,13 +137,13 @@
     FP.ops.close(); FP.opsLayers.close();
     // A catchment group's space (S5); a person whose only place is one group goes straight to it.
     const groupRoute = FP.groupModel.match(hash), group = groupRoute && FP.groupSpace.find(groupRoute.group);
-    if (group) { FP.farmSpace.close(); FP.groupSpace.open(group, groupRoute); return; }
-    if (!farms.length && groups.length === 1 && !FP.farmModel.match(hash)) { FP.farmSpace.close(); FP.groupSpace.open(groups[0], { group: groups[0].id, view: "map" }); return; }
+    if (group) { FP.farmSpace.close(); markFiles(groupRoute.view); FP.groupSpace.open(group, groupRoute); return; }
+    if (!farms.length && groups.length === 1 && !FP.farmModel.match(hash)) { const view = homeView("group"); FP.farmSpace.close(); markFiles(view); FP.groupSpace.open(groups[0], { group: groups[0].id, view }); return; }
     FP.groupSpace.close();
     const route = FP.farmModel.match(hash);
     // one farm and no group: straight to it; with a group too, the portfolio lists both
     const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 && !groups.length ? farms[0] : null);
-    if (farm) FP.farmSpace.open(farm, route?.farm === farm.id ? route : { farm: farm.id, view: "map" });
+    if (farm) { const shown = route?.farm === farm.id ? route : { farm: farm.id, view: homeView("farm") }; markFiles(shown.view); FP.farmSpace.open(farm, shown); }
     else listFarms();
   }
 

@@ -259,3 +259,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .card-other > p.card-fine { font-size: var(--text-body); }
 /* review F2: on the small card map a tapped paddock's popup sits over the map's own controls, never under them */
 .card-map .maplibregl-popup { z-index: 3; }
+
+/* V6, the simple view (simple-view.js): what a client's screens leave out. The routes themselves are refused in the router;
+   this hides the chrome around them. Display only: the database's policies decide what anyone can read. */
+body.simple-view #space-people, body.simple-view #space-layers, body.simple-view #command-bar, body.simple-view .layers-ctrl,
+body.simple-view #overview-rail, body.simple-view #layers-drawer, body.simple-view .documents-onboarding,
+body.simple-view #pw-qgis-line, body.simple-view #portfolio-list li > button > span { display: none !important; }
+body.simple-files #map, body.simple-files #farm-scene { visibility: hidden; }
+body.simple-files #space-content { inset: 0; width: auto; height: auto; border-radius: 0; }
+body.simple-files #space-content > .sheet-head { display: none; }
+body.simple-files #space-body { width: 100%; max-width: 860px; margin: 0 auto; }
+body.simple-files #group-map { display: none; }
+body.simple-files .group-body { grid-template-columns: minmax(0, 1fr); }

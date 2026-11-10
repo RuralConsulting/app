@@ -419,7 +419,8 @@
     select.value = farm.id;
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
     // The home view is the first tab, so from Ask, Create or Documents the way back is a tab, not a guess at the title.
-    $("#farm-actions").replaceChildren(...[["map", "What's due"], ...M.views].map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
+    // V6: a client's tabs are the allow-list (simple-view.js)
+    $("#farm-actions").replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("farm") : [["map", "What's due"], ...M.views]).map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
     const people = $("#space-people");
     people.hidden = !M.canManage(context?.role); people.href = FP.href(M.href(farm.id, "people"));
@@ -1224,7 +1225,7 @@
     const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, onboarding, list);
     host.append(wrap);
     const farm = context.farm.id, handles = [];
-    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.href(M.href(farm, "onboarding")),
+    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.simpleView?.on() ? null : FP.href(M.href(farm, "onboarding")),
       requests: context.planRequests || [], userId: user?.id || null });
     handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => M.documents(context, FP.documentsBlock.arrange(context.documents)), level: 2, href: FP.href }));
     if (context.documents.length || editor())
