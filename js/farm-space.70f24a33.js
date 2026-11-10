@@ -1227,7 +1227,7 @@
     const farm = context.farm.id, handles = [];
     const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.simpleView?.on() ? null : FP.href(M.href(farm, "onboarding")),
       requests: context.planRequests || [], userId: user?.id || null });
-    handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => M.documents(context, FP.documentsBlock.arrange(context.documents)), level: 2, href: FP.href }));
+    handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => { const sentenceData = M.documents(context, FP.documentsBlock.arrange(context.documents)); return FP.simpleView?.on() ? { ...sentenceData, title: "Files" } : sentenceData; }, level: 2, href: FP.href }));
     if (context.documents.length || editor())
       handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null } },
         { read: () => { const d = data(); documentsNotice = null; documentsOffer = []; return d; }, level: 3, nested: true, href: FP.href, store: documentStore(farm, () => handles) }));

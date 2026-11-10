@@ -53,7 +53,9 @@
     const model = decision.space ? browserModels()[decision.space] : null;
     const links = mine ? tabs(decision.space).map(([key, label]) => FP.el("a", { href: FP.href(model.href(decision.id, key)) }, label))
       : [FP.el("a", { href: FP.href("") || "#/" }, "Your maps and files")];
-    FP.$("#unavailable-links").replaceChildren(...links.flatMap((a, n) => (n ? [" · ", a] : [a])));
+    // A person with no farm and no group has nowhere to be sent: the same plain note the farms screen gives them, no link.
+    const nowhere = !mine && !places.farms?.length && !places.groups?.length;
+    FP.$("#unavailable-links").replaceChildren(...(nowhere ? [FP.brand?.no_farms_note || ""] : links.flatMap((a, n) => (n ? [" · ", a] : [a]))));
     document.title = "Not available | " + (FP.brand?.product || "");
     FP.show("screen-unavailable");
   }
