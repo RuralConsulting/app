@@ -13,7 +13,11 @@
 // plan in" with who asked and when (ON1; PL11's confirm reads it in and marks the request). Nothing is imported from here.
 // Data: { documents: [documents rows + relates_to], canEdit?, canAdd?, notice?, offer?: [{ id, title }], readInHref?, requests?: [open
 // plan_import_requests rows], userId?, title? }. render is pure; mounted wires search, upload and moves to ctx.store
-// ({ add(item) -> id, move(id, change), changed(), requestReadIn(id) }) when the host has one.
+// ({ add(item) -> id, move(id, change), changed(), requestReadIn(id), supersede(id, by), download(doc) -> { url, name } }) when the host has one.
+// V5 (files that work): each file says its type and issue date, and "Superseded" where it is; a superseded file stays readable, in its
+// own fold (status superseded, tier not archive); the Download button saves a file under its original name (downloadName); data.canSupersede
+// (RCL staff who can edit) offers "Superseded by ..." in the move menu, and the database enforces it (guard_document_supersession).
+// The block calls nothing itself: the host's store does (app/js/document-files.js holds the reads and writes both hosts use).
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./registry.js") : root.FP.blocks, node ? require("../farm-model.js") : root.FP.farmModel,
@@ -29,16 +33,23 @@
     String(day(b.created_at) || "").localeCompare(String(day(a.created_at) || "")) || String(a.title || "").localeCompare(String(b.title || "")) || String(a.id).localeCompare(String(b.id));
   const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
   const MAX_RESULTS = 30, MAX_BYTES = 100 * 1024 * 1024;   // the bucket's own limit (storage migration)
+  const isSuperseded = (d) => String(d?.status || "").toLowerCase() === "superseded";
+  // Where a document is shown. A superseded file a person can still use (its tier is not archive) has its own place; a row from before
+  // tiers goes by docTier (archived).
+  function placeOf(doc, hasChildren, planExists) {
+    const t = M.docTier(doc, hasChildren, planExists);
+    return isSuperseded(doc) && ["primary", "supporting"].includes(String(doc.tier || "").toLowerCase()) ? { ...t, tier: "superseded" } : t;
+  }
 
   // ---- what goes where (pure) ---------------------------------------------------------------------------------
-  // { primaries: [{ doc, tier, children }], more: [...], loose: [...], archive: [...], all: [...] } in display order.
+  // { primaries: [{ doc, tier, children }], more: [...], loose: [...], superseded: [...], archive: [...], all: [...] } in display order.
   function arrange(docs, o = {}) {
     const kinds = list(o.kinds).map((k) => k.toLowerCase());
     const rows = list(docs).filter((d) => d && d.id != null && (!kinds.length || kinds.includes(String(d.doc_type || "").toLowerCase())));
     const ids = new Set(rows.map((d) => d.id)), parents = new Set(rows.map((d) => d.relates_to).filter((p) => ids.has(p)));
     // whether the farm has a plan decides where a digitising record sits (with it, supporting; without, it may be the map)
     const plan = list(docs).some((d) => d && M.isPlan(d));
-    const placed = rows.map((doc) => ({ doc, tier: M.docTier(doc, parents.has(doc.id), plan) }));
+    const placed = rows.map((doc) => ({ doc, tier: placeOf(doc, parents.has(doc.id), plan) }));
     const primary = placed.filter((p) => p.tier.tier === "primary"), primaryIds = new Set(primary.map((p) => p.doc.id));
     const under = new Map(primary.map((p) => [p.doc.id, []])), loose = [], archive = [];
     for (const p of placed) {
@@ -49,7 +60,8 @@
     primary.sort((a, b) => a.tier.weight - b.tier.weight || byDate(a, b));
     const primaries = primary.map((p) => ({ ...p, children: under.get(p.doc.id).sort(byDate) }));
     const shown = o.limit ? primaries.slice(0, o.limit) : primaries;
-    return { primaries: shown, more: primaries.slice(shown.length), loose: loose.sort(byDate), archive: archive.sort(byDate), all: placed };
+    const superseded = placed.filter((p) => p.tier.tier === "superseded").sort(byDate);
+    return { primaries: shown, more: primaries.slice(shown.length), loose: loose.sort(byDate), superseded, archive: archive.sort(byDate), all: placed };
   }
 
   // The one plain line under a title: what it is (when the title doesn't say, or when nothing else would), who prepared
@@ -63,11 +75,16 @@
     // An onboarding report (ON1): when it was saved; it opens in the checklist view.
     if (String(d.doc_type || "").toLowerCase() === "onboarding_report")
       return ["Onboarding report", day(d.created_at) ? "saved " + M.date(day(d.created_at)) : null, "opens as a checklist"].filter(Boolean).join(" · ");
-    const kind = M.docKind(d.doc_type), title = String(M.docTitle(d)).toLowerCase();
-    const who = d.author_org || d.author, when = day(d.date_prepared) || day(d.period_end);
-    const parts = [kind && kind !== "Other" && (!title.includes(kind.toLowerCase()) || (!who && !when)) ? kind : null, who || null, when ? M.date(when) : null];
-    if (!who && !when && day(d.created_at)) parts.push("added " + M.date(day(d.created_at)));
-    return parts.filter(Boolean).join(" · ") || "Nothing more recorded";
+    // V5: every file says what it is and when it was issued. No date prepared: the end of the period it covers, else when it was added, each said as that.
+    const kind = M.docKind(d.doc_type), who = d.author_org || d.author, issued = day(d.date_prepared), period = day(d.period_end), added = day(d.created_at);
+    return [!kind || kind === "Other" ? "Other document" : kind, who || null,
+      issued ? "Issued " + M.date(issued) : period ? "Period to " + M.date(period) : added ? "Added " + M.date(added) : "No issue date"].filter(Boolean).join(" · ");
+  }
+  // "Superseded by <the issue that replaced it>", or plain "Superseded" when that issue is not recorded or can't be read here.
+  function supersededMark(d, docs) {
+    if (!isSuperseded(d)) return null;
+    const by = d.superseded_by != null ? list(docs).find((x) => x && x.id === d.superseded_by) : null;
+    return by ? "Superseded by " + M.docTitle(by) : "Superseded";
   }
   // Runs of one kind folded to one line ("6 S-map soil fact sheets"), where the first of them stands.
   function runs(items) {
@@ -95,10 +112,12 @@
     const d = p.doc, title = M.docTitle(d), mine = o.selected != null && String(o.selected) === String(d.id);
     const name = d.storage_path ? '<button type="button" class="doc-open" data-open-document="' + esc(d.id) + '">' + esc(title) + "</button>" : "<span>" + esc(title) + "</span>";
     const move = data.canEdit ? '<button type="button" class="doc-move" data-doc-move="' + esc(d.id) + '" aria-expanded="false" aria-label="Change where ' + esc(title) + ' sits"><span aria-hidden="true">•••</span></button>' : "";
+    const save = canDownload(d) ? '<button type="button" class="doc-download" data-download-document="' + esc(d.id) + '" aria-label="Download ' + esc(title) + '">Download</button>' : "";
     return '<li class="doc' + (mine ? " selected-record" : "") + '" data-item-id="' + esc(d.id) + '" data-doc-tier="' + esc(p.tier.tier) + '" tabindex="-1">' +
-      '<div class="doc-head"><p class="doc-title">' + name + "</p>" + move + "</div>" +
-      '<p class="doc-source">' + esc((note ? note + " · " : "") + sourceLine(d)) + "</p>" + requestedHtml(data, d);
+      '<div class="doc-head"><p class="doc-title">' + name + "</p>" + save + move + "</div>" +
+      '<p class="doc-source">' + esc([note, supersededMark(d, data.documents), sourceLine(d)].filter(Boolean).join(" · ")) + "</p>" + requestedHtml(data, d);
   }
+  const canDownload = (d) => !!d.storage_path && String(d.doc_type || "").toLowerCase() !== "onboarding_report";   // an onboarding report opens as a checklist
   // FU4: a plan with an open "Read this plan in" request says so wherever it is listed, not only on the line after it was filed.
   function requestedHtml(data, d) {
     const ask = openRequest(data.requests, d.id);
@@ -134,7 +153,7 @@
     return arrange(docs).all.filter(({ doc: d }) => {
       const hay = squash([M.docTitle(d), d.title, M.docKind(d.doc_type), d.author, d.author_org, d.original_name].filter(Boolean).join(" "));
       return words.every((w) => hay.includes(w)) || hay.includes(whole);
-    }).sort((a, b) => (a.tier.tier === "archive") - (b.tier.tier === "archive") || newest(a.doc, b.doc));
+    }).sort((a, b) => ["archive", "superseded"].includes(a.tier.tier) - ["archive", "superseded"].includes(b.tier.tier) || newest(a.doc, b.doc));
   }
   function resultsHtml(data, o, q) {
     if (!text(q)) return "";
@@ -174,15 +193,16 @@
     const more = a.more.length ? '<details class="doc-fold doc-more"' + (holds(a.more.concat(a.more.flatMap((p) => p.children)), o) ? " open" : "") + "><summary><span>" +
       esc(plural(a.more.length, "more main document", "more main documents")) + '</span></summary><ul class="doc-list">' + a.more.map((p) => primaryHtml(p, o, d)).join("") + "</ul></details>" : "";
     const loose = foldHtml(a.loose, o, d, a.primaries.length ? plural(a.loose.length, "other supporting document", "other supporting documents") : plural(a.loose.length, "supporting document", "supporting documents"), "doc-loose");
+    const replaced = foldHtml(a.superseded, o, d, plural(a.superseded.length, "superseded document", "superseded documents"), "doc-replaced");
     const archived = o.show_archive ? foldHtml(a.archive, o, d, plural(a.archive.length, "archived document", "archived documents"), "doc-archive") : "";
     // The archive is found by search. A route that names an archived document opens with it found.
     const picked = !o.show_archive && o.selected != null ? a.archive.find((p) => String(p.doc.id) === String(o.selected)) : null;
     const searchable = docs.length > 6 || a.archive.length > 0;
     const notice = text(d.notice) ? '<p class="doc-notice" role="status">' + esc(d.notice) + "</p>" : "";
     const offered = text(d.readInHref) ? offerHtml(d.offer, d.readInHref, d.requests, d.userId) : "";
-    const none = !docs.length ? (ctx.nested ? "" : '<p class="doc-none">No documents yet.</p>') : !a.primaries.length && !a.loose.length && !archived ? '<p class="doc-none">' +
+    const none = !docs.length ? (ctx.nested ? "" : '<p class="doc-none">No documents yet.</p>') : !a.primaries.length && !a.loose.length && !a.superseded.length && !archived ? '<p class="doc-none">' +
       (o.kinds.length ? "None of these kinds is recorded." : "Every document here is archived; search to find one.") + "</p>" : "";
-    return '<section class="documents-block" data-documents="' + docs.length + '">' + heading + notice + offered + none + main + more + loose + archived +
+    return '<section class="documents-block" data-documents="' + docs.length + '">' + heading + notice + offered + none + main + more + loose + replaced + archived +
       (searchable ? searchHtml(picked ? M.docTitle(picked.doc) : "", picked ? resultsHtml(d, o, M.docTitle(picked.doc)) : "") : "") +
       (d.canAdd ? addHtml() : "") + "</section>";
   }
@@ -219,6 +239,7 @@
         (it.tooBig ? '<p class="doc-none">Too large to add here (over 100 MB).</p>' :
         '<label class="doc-field"><span>Title</span><input name="title-' + i + '" value="' + esc(g.title) + '" required></label>' +
         '<label class="doc-field"><span>Kind</span><select name="kind-' + i + '">' + C.KINDS.map(([k, label]) => '<option value="' + k + '"' + (k === g.doc_type ? " selected" : "") + ">" + esc(label) + "</option>").join("") + "</select></label>" +
+        '<label class="doc-field"><span>Issue date</span><input type="date" name="issued-' + i + '"></label>' +
         (g.generation ? '<p class="doc-detected">It reads as ' + esc(C.GENERATIONS.find((x) => x[0] === g.generation)?.[1] || "a Farm Environment Plan") + ", so it is offered as the farm's main plan.</p>" : "") +
         '<div class="doc-tiers" role="radiogroup" aria-label="Where it sits">' + radio("primary", "Main") + radio("supporting", "Supporting") + radio("archive", "Archive") + "</div>" +
         (held ? '<p class="doc-plan-note"' + (g.tier === "primary" && planKind(g.doc_type) ? "" : " hidden") + ">This farm already has a main plan: " + esc(M.docTitle(held)) +
@@ -253,19 +274,22 @@
   function confirmed(items, value) {
     return items.map((it, i) => it.tooBig ? null : (() => {
       const tier = value("tier-" + i) || it.guess.tier, under = tier === "supporting" ? value("under-" + i) || null : null;
-      return { key: it.key, file: it.file, title: String(value("title-" + i) || it.guess.title).trim() || it.guess.title, doc_type: value("kind-" + i) || it.guess.doc_type, tier, relates_to: under };
+      return { key: it.key, file: it.file, title: String(value("title-" + i) || it.guess.title).trim() || it.guess.title, doc_type: value("kind-" + i) || it.guess.doc_type, tier, relates_to: under, date_prepared: day(value("issued-" + i)) };
     })()).filter(Boolean);
   }
   // Primaries first, so a file can sit under a main document added in the same batch.
   const saveOrder = (choices) => [...choices].sort((a, b) => (a.tier !== "primary") - (b.tier !== "primary"));
   function moveHtml(doc, data) {
-    const docs = list(data?.documents), a = arrange(docs), here = M.docTier(doc, docs.some((x) => x.relates_to === doc.id)).tier;
+    const docs = list(data?.documents), a = arrange(docs), here = placeOf(doc, docs.some((x) => x.relates_to === doc.id)).tier;
     const others = [...a.primaries, ...a.more].filter((p) => p.doc.id !== doc.id);
     const opt = (attrs, label, current) => '<li><button type="button" ' + attrs + (current ? ' aria-current="true"' : "") + ">" + esc(label) + "</button></li>";
     return '<ul class="doc-menu" data-doc-menu="' + esc(doc.id) + '">' + opt('data-doc-set="primary"', "Main document", here === "primary") +
       others.map((p) => opt('data-doc-set="supporting" data-doc-under="' + esc(p.doc.id) + '"', "With " + M.docTitle(p.doc), here === "supporting" && doc.relates_to === p.doc.id)).join("") +
-      opt('data-doc-set="archive"', "Archive", here === "archive") + "</ul>";
+      opt('data-doc-set="archive"', "Archive", here === "archive") + (data?.canSupersede ? supersedeOptions(doc, others, opt) : "") + "</ul>";
   }
+  // V5: staff only (the database refuses anyone else). A superseded file can be brought back; a current one names the issue that replaces it.
+  const supersedeOptions = (doc, others, opt) => isSuperseded(doc) ? opt('data-doc-supersede=""', "Not superseded")
+    : others.map((p) => opt('data-doc-supersede="' + esc(p.doc.id) + '"', "Superseded by " + M.docTitle(p.doc))).join("");
   // The update a menu choice sends: a primary or an archived document sits under nothing (F1e's constraint).
   const change = (tier, under) => ({ tier, relates_to: tier === "supporting" ? under || null : null });
 
@@ -275,6 +299,26 @@
     const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   }
+
+  // ---- the file's name (V5) ------------------------------------------------------------------------------------
+  // The name a file is saved under: its original name, made safe to pass on. Path parts, control and invisible characters and the
+  // characters Windows refuses go; a name left empty falls back to the title, with the stored file's extension; the extension survives the
+  // length limit. Everything else (spaces, &, #, %, +, accents) is kept: downloadHref encodes it for the query string, and Storage encodes it again
+  // for the Content-Disposition header it writes from that query value.
+  function downloadName(doc) {
+    const clean = (v) => String(v ?? "").normalize("NFC").split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "")
+      .replace(/[<>:"|?*]/g, "_").replace(/^[\s.]+|[\s.]+$/g, "");
+    const ext = (/\.[a-z0-9]{1,10}$/i.exec(String(doc?.storage_path || "")) || [""])[0];
+    let name = clean(doc?.original_name);
+    if (!name) { const t = clean(M.docTitle(doc || {})); name = (t || "document") + (t.toLowerCase().endsWith(ext.toLowerCase()) ? "" : ext); }
+    const chars = [...name], LIMIT = 180;
+    if (chars.length <= LIMIT) return name;
+    const dot = name.lastIndexOf("."), tail = dot > 0 && name.length - dot <= 11 ? name.slice(dot) : "";
+    return chars.slice(0, LIMIT - [...tail].length).join("") + tail;
+  }
+  // The signed URL with the file's name as its download parameter (Storage answers with Content-Disposition: attachment and that name). Added here,
+  // encoded, rather than through createSignedUrl's download option: that option does not encode "&" or "#", which would cut the name short.
+  const downloadHref = (signedUrl, name) => signedUrl + (String(signedUrl).includes("?") ? "&" : "?") + "download=" + encodeURIComponent(name);
 
   // ---- the live part (browser) -------------------------------------------------------------------------------
   function mounted(host, data, o, ctx) {
@@ -341,6 +385,21 @@
         }
         return;
       }
+      // V5: a file saved under its own name. The link is made on the tap, so it is never stale.
+      const save = e.target.closest("[data-download-document]");
+      if (save) {
+        const doc = list(d.documents).find((x) => String(x.id) === save.dataset.downloadDocument);
+        if (!doc || !store?.download || save.disabled) return;
+        save.disabled = true;
+        try {
+          const { url, name } = await store.download(doc);
+          const link = Object.assign(document.createElement("a"), { href: url, download: name, rel: "noopener" });
+          document.body.append(link); link.click(); link.remove();
+          save.textContent = "Download";
+        } catch { save.textContent = "Couldn't download it"; }
+        save.disabled = false;
+        return;
+      }
       const toggle = e.target.closest("[data-doc-move]");
       if (toggle) {
         const open = rootEl.querySelector('[data-doc-menu="' + CSS.escape(toggle.dataset.docMove) + '"]');
@@ -352,12 +411,16 @@
         toggle.setAttribute("aria-expanded", "true");
         return;
       }
-      const set = e.target.closest("[data-doc-set]");
-      if (!set) return;
-      const menu = set.closest(".doc-menu"), id = menu.dataset.docMenu;
+      const set = e.target.closest("[data-doc-set]"), mark = e.target.closest("[data-doc-supersede]");
+      if (!set && !mark) return;
+      const menu = (set || mark).closest(".doc-menu"), id = menu.dataset.docMenu;
       if (!store) { menu.insertAdjacentHTML("afterend", '<p class="doc-msg" role="status">Not changed: nothing here saves documents.</p>'); menu.remove(); return; }
       for (const b of menu.querySelectorAll("button")) b.disabled = true;
-      try { await store.move(id, change(set.dataset.docSet, set.dataset.docUnder)); if (!ctx.stale()) await store.changed(null); }
+      try {
+        if (set) await store.move(id, change(set.dataset.docSet, set.dataset.docUnder));
+        else await store.supersede(id, mark.dataset.docSupersede || null);
+        if (!ctx.stale()) await store.changed(null);
+      }
       catch (err) {
         if (ctx.stale()) return;
         menu.insertAdjacentHTML("afterend", '<p class="doc-msg" role="status">' + esc(err?.message || "That change wasn't allowed.") + "</p>"); menu.remove();
@@ -376,5 +439,6 @@
     },
     state, render, mounted,
   });
-  return { block, arrange, sourceLine, search, resultsHtml, guessBatch, readDrop, saveChoices, offerHtml, openRequest, askedLine, heldPlan, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES };
+  return { block, arrange, sourceLine, search, resultsHtml, guessBatch, readDrop, saveChoices, offerHtml, openRequest, askedLine, heldPlan, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES,
+    downloadName, downloadHref };
 });

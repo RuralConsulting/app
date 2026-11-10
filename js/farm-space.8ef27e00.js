@@ -3,9 +3,9 @@
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./farm-model.js") : root.FP.farmModel, node ? require("./farm-reference.js") : root.FP.farmReference, node ? require("./route-timing.js") : root.FP.routeTiming,
-    node ? require("./layer-kinds.js") : root.FP.kinds);
+    node ? require("./layer-kinds.js") : root.FP.kinds, node ? require("./document-files.js") : root.FP.documentFiles);
   if (typeof module === "object" && module.exports) module.exports = api; else root.FP.farmSpace = api;
-})(typeof window === "undefined" ? globalThis : window, function (M, R, T, K) {
+})(typeof window === "undefined" ? globalThis : window, function (M, R, T, K, Files) {
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   // Tiers (F1e) and who chose one (B3's tiered_at) are read when the database has them. relates_to is read through
   // document_relations, which withholds a relationship whose other end the reader can't see. context.documentTiers
@@ -17,7 +17,9 @@
   const TIER_COLUMNS = { chosen: ",tier,tiered_at", tiers: ",tier", none: "" };
   const missingColumn = (e) => e && (e.code === "42703" || e.code === "PGRST204" || /column|tier/i.test(e.message || ""));
   async function readDocuments(sb, farm) {
-    const query = (columns) => sb.from("documents").select(DOCUMENT_COLUMNS + columns).eq("farm_id", farm.id).order("title");
+    // V5: bounded: count first, then fetch at most that many.
+    const n = await Files.countRows(sb, { farm_id: farm.id });
+    const query = (columns) => sb.from("documents").select(DOCUMENT_COLUMNS + columns).eq("farm_id", farm.id).order("title").limit(n);
     let rows = null;
     for (const level of learnt.has(sb) ? [learnt.get(sb)] : ["chosen", "tiers", "none"]) {
       const { data, error } = await query(TIER_COLUMNS[level]);
@@ -25,9 +27,7 @@
       if (!missingColumn(error) || level === "none") throw error;
     }
     if (learnt.get(sb) === "none" || !rows.length) return rows;
-    const { data: relations, error } = await sb.from("document_relations").select("id,relates_to").in("id", rows.map((d) => d.id));
-    const parent = new Map((error ? [] : relations || []).map((r) => [r.id, r.relates_to]));
-    return rows.map((d) => ({ ...d, relates_to: parent.get(d.id) ?? null }));
+    return Files.withRelations(sb, rows);
   }
   // FU4: the farm's open read-it-in requests (public.plan_import_requests), for the Documents lines. Optional: a database without the
   // table, or a refused read, reads as no requests.
@@ -1222,7 +1222,7 @@
     const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, onboarding, list);
     host.append(wrap);
     const farm = context.farm.id, handles = [];
-    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.href(M.href(farm, "onboarding")),
+    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.href(M.href(farm, "onboarding")),
       requests: context.planRequests || [], userId: user?.id || null });
     handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => M.documents(context, FP.documentsBlock.arrange(context.documents)), level: 2, href: FP.href }));
     if (context.documents.length || editor())
@@ -1241,25 +1241,10 @@
   function documentStore(farm, handles) {
     const D = FP.documentsBlock;
     return {
-      async add({ file, title, doc_type, tier, relates_to, visibility }) {
-        const bytes = await file.arrayBuffer(), sha = await D.sha256Hex(bytes);
-        const same = context.documents.find((d) => d.sha256 === sha);
-        if (same) throw Error("already here as " + M.docTitle(same));
-        const path = D.storagePath(farm, sha, file.name), mime = file.type || "application/octet-stream";
-        const up = await FP.sb.storage.from("documents").upload(path, file, { contentType: mime, upsert: false });
-        // The same bytes uploaded before but never described: describe them now (the database checks they are yours).
-        if (up.error && !/exist|duplicate|409/i.test(String(up.error.message || "") + (up.error.statusCode || ""))) throw up.error;
-        const { data, error } = await FP.sb.from("documents").insert({ farm_id: farm, title, doc_type, original_name: file.name, mime_type: mime,
-          sha256: sha, size_bytes: file.size, storage_path: path, tier, relates_to: relates_to || null, tiered_at: new Date().toISOString(),
-          ...(visibility === "private" ? { visibility } : {}) }).select("id").single();
-        if (error) throw error;
-        return data.id;
-      },
-      async move(id, change) {
-        const { data, error } = await FP.sb.from("documents").update({ ...change, tiered_at: new Date().toISOString() }).eq("id", id).select("id");
-        if (error) throw error;
-        if (!data?.length) throw Error("That change wasn't allowed.");
-      },
+      add: (item) => Files.addFile(FP.sb, { farm_id: farm }, item, context.documents),
+      move: (id, change) => Files.moveFile(FP.sb, id, change),
+      supersede: (id, by) => Files.supersedeFile(FP.sb, id, by),
+      download: (doc) => Files.downloadLink(FP.sb, doc),
       // FU4: The read-it-in button asks for the plan to be read in: one row in plan_import_requests (public.request_plan_import), the same row
       // again if the plan already has an open request. Nothing is imported: an advisor confirms PL11's import, which marks the request.
       async requestReadIn(id) {

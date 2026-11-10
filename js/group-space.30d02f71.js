@@ -31,6 +31,8 @@
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
   const optional = (query) => Promise.resolve(query).then((r) => (r.error ? null : r.data), () => null);
   const list = (v) => (Array.isArray(v) ? v : []);
+  // V5: the group's documents: bounded (count first, then at most that many), with what each relates to and what replaced it.
+  const groupDocuments = async (sb, id) => FP.documentFiles.withRelations(sb, await FP.documentFiles.readRows(sb, { org_id: id }, DOC_COLUMNS));
 
   function setGroups(rows, user) { groups = rows || []; person = user; }
   const find = (id) => groups.find((g) => g.id === id) || null;
@@ -49,7 +51,7 @@
       optional(sb.rpc("group_member_summary", { g: group.id })),
       optional(sb.rpc("group_member_farms", { g: group.id })),
       optional(sb.from("entries").select("id,type_id,body,captured_at,visibility").eq("org_id", group.id).order("captured_at", { ascending: false })),
-      optional(sb.from("documents").select(DOC_COLUMNS).eq("org_id", group.id).order("title")),
+      optional(groupDocuments(sb, group.id).then((data) => ({ data }))),
       optional(sb.rpc("group_shared_entries", { group_id: group.id })),
       optional(sb.rpc("group_shared_documents", { group_id: group.id })),
       optional(sb.from("obligations").select("id,code,summary,kind,due_date,recurrence").eq("org_id", group.id)),
@@ -611,7 +613,17 @@
     const wrap = el("section", { class: "group-documents", "data-view": "documents" }, el("h2", {}, "Documents"));
     const own = el("div", { class: "block-host documents-host" });
     wrap.append(el("h3", {}, "The group's documents"), own);
-    FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: {} }, { read: () => ({ documents: data.documents, canEdit: false, canAdd: false, notice }), level: 3, nested: true, href: FP.href });
+    // V5: the group's editors add files (the database's rule is the same: any role but plain member); staff who can edit mark a new issue as superseding an old one.
+    const editable = G().canWrite(data.group.role), Files = FP.documentFiles, owner = { org_id: data.group.id };
+    let handle = null;
+    const store = {
+      add: (item) => Files.addFile(FP.sb, owner, item, data.documents),
+      move: (id, change) => Files.moveFile(FP.sb, id, change),
+      supersede: (id, by) => Files.supersedeFile(FP.sb, id, by),
+      download: (doc) => Files.downloadLink(FP.sb, doc),
+      async changed(message) { data.documents = await groupDocuments(FP.sb, data.group.id); notice = message || null; handle?.refresh(); notice = null; },
+    };
+    handle = FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: {} }, { read: () => ({ documents: data.documents, canEdit: editable, canAdd: editable, canSupersede: editable && !!FP.ops?.isStaff?.(), notice }), level: 3, nested: true, href: FP.href, store });
     notice = null;
     wrap.append(el("h3", {}, "Shared by member farms"));
     if (data.sharedDocuments.length) {
