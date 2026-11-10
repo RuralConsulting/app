@@ -205,6 +205,13 @@
       detail: AREA_NOTES[a.method] || (a.description ? String(a.description) : "Area recorded."), action: null };
   }
 
+  // V8: a group's own logo in its header, keyed by the organisation's slug. To add a group: one line here, its file in brand/, and
+  // that file in sw.js's list. A group not listed (and any farm) has none.
+  const GROUP_LOGOS = new Map([
+    ["mccc", { src: "brand/mccc-logo.e9d6f07b.png", alt: "Mid Canterbury Catchment Collective" }],
+  ]);
+  const groupLogo = (group) => GROUP_LOGOS.get(group?.slug) || null;
+
   return { match, href, views, viewLabel, LEVELS, LEVEL_TEXT, K, level, canManage, canWrite, memberLines, contributing, attribution,
-    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED, READINESS, NOT_ASSESSED, FINDINGS, readiness, groupArea };
+    nzMidnight, monthPeriod, lastMonth, within, isoDay, shortDate, due, changed, firstSentence, SUPPRESSED, READINESS, NOT_ASSESSED, FINDINGS, readiness, groupArea, GROUP_LOGOS, groupLogo };
 });

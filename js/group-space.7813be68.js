@@ -122,7 +122,16 @@
     FP.groupManage?.forget(); lastView = null;   // ON3b: leaving the group space drops the manage space's reads
     document.body.classList.remove("group-space-active");
   }
+  // V8: the group's own logo, for a group listed in GROUP_LOGOS; every other group's header stays without one.
+  function showLogo(group) {
+    const img = $("#group-logo");
+    if (!img) return;
+    const logo = G().groupLogo(group);
+    img.hidden = !logo;
+    if (logo) { img.src = logo.src; img.alt = logo.alt; } else { img.removeAttribute("src"); img.alt = ""; }
+  }
   function header(group, route) {
+    showLogo(group);
     $("#group-name").textContent = group.name;
     $("#group-kind").textContent = "Catchment group" + (group.role ? " · you are " + (/^[aeiou]/.test(group.role) ? "an " : "a ") + group.role : "");
     const nav = $("#group-nav");
@@ -775,6 +784,6 @@
     return form;
   }
 
-  FP.groupSpace = { setGroups, find, open, close, load, lastDrawn, groups: () => groups, hasPortfolio: null, mapTimeoutMs: MAP_TIMEOUT_MS, looksTimeoutMs: LOOKS_TIMEOUT_MS,
+  FP.groupSpace = { setGroups, find, open, close, load, lastDrawn, showLogo, groups: () => groups, hasPortfolio: null, mapTimeoutMs: MAP_TIMEOUT_MS, looksTimeoutMs: LOOKS_TIMEOUT_MS,
     surface: () => surface };   // GE1b: the group map's surface (the browser walk projects a block's corners with it)
 })(typeof window === "undefined" ? globalThis : window);

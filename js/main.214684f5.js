@@ -75,7 +75,7 @@
     try {
       const { data: mine, error } = await sb.from("org_members").select("org_id, role").eq("user_id", user.id);
       if (error || !mine?.length) return [];
-      const { data: orgs, error: e2 } = await sb.from("organisations").select("id, name, kind").in("id", mine.map((m) => m.org_id));
+      const { data: orgs, error: e2 } = await sb.from("organisations").select("id, name, slug, kind").in("id", mine.map((m) => m.org_id));
       if (e2) return [];
       return (orgs || []).filter((o) => o.kind === "catchment_group").map((o) => ({ ...o, role: mine.find((m) => m.org_id === o.id)?.role || null }))
         .sort((a, b) => a.name.localeCompare(b.name));
