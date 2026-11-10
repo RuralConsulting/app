@@ -3,6 +3,7 @@
  *   manifest, url: relPath => absoluteUrl, onBack?, actions?: [{ label, onClick }],
  *   suggest?: { list: async () => [suggestion], submit: async (draft) => void,      // portal only
  *              focus?: suggestionId, manage?: (suggestion) => void }                // staff: open in the inbox
+ *   shared?: [layer entry or null, one for each of manifest.shared_layers]          // platform: layers published once, see mergeShared
  * })
  * Works for the local preview (url = identity) and the customer portal (url = signed link).
  */
@@ -150,6 +151,32 @@
     return { type: "FeatureCollection", features: feats };
   }
 
+  // Layers published once and shared by many maps (core layers, a group's shared layers). manifest.shared_layers names them, with
+  // where each goes in the list; whoever mounts the viewer says where each one is (opts.shared, by its place in that list, each a
+  // layer entry like those in manifest.layers, its files found through url()). The viewer makes no database calls of its own.
+  // One that nobody can supply is left out and reported, so the map still opens. These layers are region-wide and not cut to the
+  // boundary, which is why they count as reaching past it for the mask below.
+  function mergeShared(own, refs, supplied, missing) {
+    const inserts = [];
+    (refs || []).forEach((ref, i) => {
+      const L = supplied && supplied[i];
+      if (!L || !L.tiles) { missing.push(ref.title || ref.key); return; }
+      inserts.push({ at: Number.isFinite(ref.position) ? ref.position : own.length, L: Object.assign({ opacity: 1, legend: [] }, L, {
+        id: L.id || "shared-" + i, title: ref.title || L.title, group: ref.group ?? L.group ?? "", visible: ref.visible !== false,
+        exclusive: !!ref.exclusive, shared: true }) });
+    });
+    if (!inserts.length) return own.slice();
+    inserts.sort((a, b) => a.at - b.at);
+    const out = [];
+    let k = 0;
+    for (let i = 0; i <= own.length; i++) {
+      while (k < inserts.length && inserts[k].at <= i) out.push(inserts[k++].L);
+      if (i < own.length) out.push(own[i]);
+    }
+    while (k < inserts.length) out.push(inserts[k++].L);
+    return out;
+  }
+
   function mount(root, opts) {
     const m = opts.manifest;
     const url = opts.url || ((p) => p);
@@ -183,6 +210,7 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false }), "top-right");
+    let toolMode = null;                           // "measure" while measuring: map clicks add points, no popups
 
     // ---------------------------------------------------------------- 3D: hills in relief, off until asked for
     // Elevation is only downloaded while 3D is on. Default: free terrain tiles (in NZ made from the LINZ 8 m DEM);
@@ -230,7 +258,8 @@
     map.addControl({ onAdd: () => ctl3d, onRemove: () => ctl3d.remove() }, "top-right");
     btn3d.addEventListener("click", () => setThreeD(!threeD));
 
-    const layers = m.layers.map((L) => Object.assign({}, L));   // top first, as in QGIS
+    const sharedMissing = [];                      // shared layers the map refers to that could not be supplied
+    const layers = mergeShared(m.layers.map((L) => Object.assign({}, L)), m.shared_layers, opts.shared, sharedMissing);   // top first, as in QGIS
     // "one at a time" groups (mutually exclusive in QGIS): only the top one that starts on stays on
     const exOn = {};
     layers.forEach((L) => { if (L.exclusive && L.visible) { if (exOn[L.group]) L.visible = false; else exOn[L.group] = true; } });
@@ -250,7 +279,7 @@
       layers.slice().reverse().forEach((L) => {
         if (L.vector && L.features) return addVector(L);
         if (!L.tiles) return;
-        // big imagery (drone orthomosaics) comes in pieces under 1 GB, each its own file: draw every piece
+        // big imagery comes in pieces (each under 1 GB), each covering part of the area and zooms: draw them all
         rasterParts(L).forEach((P) => {
           const src = { type: "raster", url: "pmtiles://" + url(P.tiles), tileSize: 256, minzoom: P.minzoom };
           if (P.bounds) src.bounds = P.bounds;
@@ -267,9 +296,13 @@
         // shade the land outside the property: the whole world with the property cut out of it
         fetch(url(m.boundary)).then((r) => r.json()).then((fc) => {
           map.addSource("mask", { type: "geojson", data: maskOf(fc) });
+          // layers that reach past the boundary (roads, rivers: "around_m") stay bright outside it: the shading then goes
+          // under all the property's own layers (the rest are cut to the boundary, where the shading has its hole anyway)
+          const ownIds = new Set(Object.values(mapIds).flat());
+          const lowest = layers.some((L) => Number(L.around_m) > 0 || L.shared) ? (map.getStyle().layers.find((l) => ownIds.has(l.id)) || {}).id : null;
           map.addLayer({ id: "mask", type: "fill", source: "mask", layout: { visibility: maskOn ? "visible" : "none" },
             paint: { "fill-color": m.mask.color || "#000000", "fill-opacity": Number(m.mask.opacity) || 0.5, "fill-antialias": false } },
-          "boundary-halo");
+          lowest || "boundary-halo");
         }).catch(() => {});
       }
 
@@ -323,11 +356,12 @@
       }
 
       map.on("mousemove", (e) => {
-        if (picking) { map.getCanvas().style.cursor = "crosshair"; return; }
+        if (picking || toolMode === "measure") { map.getCanvas().style.cursor = "crosshair"; return; }
         const f = map.queryRenderedFeatures(box(e.point, 6), { layers: targetIds() });
         map.getCanvas().style.cursor = f.length ? "pointer" : "";
       });
       map.on("click", (e) => {
+        if (toolMode === "measure") return;           // the measure tool has its own click handler
         if (picking) return pickAt(e);
         const f = map.queryRenderedFeatures(box(e.point, 8), { layers: targetIds() });
         if (!f.length) { clearSelection(); closeSheet(); return; }
@@ -464,13 +498,56 @@
         layer_id: L.id, layer_title: L.title, feature_id: String(feat.id ?? ""), feature_label: feat.properties._label || classLabel(L, feat.properties) || "" };
       if (n > 1) ctx.page = (step) => showFeature(list, (i + step + n) % n, lngLat);
       select(feat);
-      showDetails(html, lngLat, ctx);
+      showDetails(html, lngLat, ctx, photoView(feat, L));
     }
-    function showDetails(html, lngLat, ctx) {
+
+    // ---- a photo with a direction: the map turns to look the way the camera did (as the farm platform does): over the
+    // photo's spot, facing its direction, tilted to the camera's angle (or 55°), close in; the spot sits low in the free
+    // part of the map so the view ahead has room, and the details go in a card in the corner instead of over that view
+    function photoView(feat, L) {
+      const p = feat.properties || {}, d = Number(p._dir);
+      if (!L || !L.draw || L.draw.type !== "direction" || p._dir == null || !Number.isFinite(d) || feat.geometry.type !== "Point") return null;
+      const tilt = p._pitch != null && p._pitch !== "" && Number.isFinite(Number(p._pitch)) ? Number(p._pitch) : 55;
+      return { center: feat.geometry.coordinates, bearing: ((d % 360) + 360) % 360,
+               pitch: Math.max(0, Math.min(tilt, map.getMaxPitch())), zoom: Math.min(Math.max(map.getZoom(), 17), 18.5) };
+    }
+    function lookFrom(view) {
+      const c = map.getContainer().getBoundingClientRect(), W = c.width, H = c.height;
+      let x0 = 0, x1 = W, y0 = 0, y1 = H;
+      if (narrow()) {
+        const sr = sheet.hidden ? null : sheet.getBoundingClientRect();
+        if (sr && sr.top > c.top) y1 = Math.min(H, sr.top - c.top);
+        y0 = 50;
+      } else {
+        const pr = panel.getBoundingClientRect();
+        if (!panel.classList.contains("collapsed")) x0 = Math.max(0, pr.right - c.left);
+        x1 = W - 56;                                          // the zoom and 3D buttons
+        if (x1 - 380 - x0 > 260) x1 -= 380;                   // the photo's card, top right
+      }
+      const x = (x0 + x1) / 2, y = y0 + (y1 - y0) * 0.78;
+      const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      map.easeTo({ ...view, offset: [x - W / 2, y - H / 2], duration: still ? 0 : 1300, essential: true });
+    }
+    // the details card for a photo view: fixed in the top right corner, styled like a popup, without a pointer
+    function floatCard(html) {
+      const box = el("div", { class: "rv-floatpop" });
+      box.innerHTML = `<div class="maplibregl-popup-content"><button type="button" class="maplibregl-popup-close-button" aria-label="Close popup">×</button>${html}</div>`;
+      mapEl.appendChild(box);
+      const card = { remove: () => box.remove(), getElement: () => box };
+      box.querySelector(".maplibregl-popup-close-button").addEventListener("click", () => { if (popup === card) popup = null; card.remove(); select(null); });
+      return card;
+    }
+    function showDetails(html, lngLat, ctx, view) {
       if (popup) { popup.remove(); popup = null; }
       if (narrow()) {
         const body = openSheet(html);
         wire(body, ctx);
+        if (view) requestAnimationFrame(() => lookFrom(view));
+      } else if (view) {
+        closeSheet();
+        popup = floatCard(html);
+        wire(popup.getElement(), ctx);
+        lookFrom(view);
       } else {
         closeSheet();
         popup = new maplibregl.Popup({ maxWidth: "340px", offset: 12 }).setLngLat(lngLat).setHTML(html).addTo(map);
@@ -524,6 +601,7 @@
     banner.querySelector("button").addEventListener("click", cancelPick);
 
     function startPick() {
+      endTool();                                  // a tool and picking a spot don't mix
       clearSelection(); closeSheet();
       picking = true; banner.hidden = false; root.classList.add("rv-picking");
       if (narrow()) panel.classList.add("collapsed");
@@ -660,18 +738,25 @@
           return out;
         };
         const areaLayer = L.geometry ? /poly/i.test(L.geometry) : null;
+        const lines = {};                                   // text -> [coords]: joined up below
         (fc.features || []).forEach((f) => { try {
           const t = f.properties && f.properties._lbl;
           if (!t || !f.geometry) return;
           let parts = flat(f.geometry, []).filter((pt) => ["Polygon", "Line", "Point"].includes(pt.type));
           if (areaLayer || parts.some((pt) => pt.type === "Polygon")) parts = parts.filter((pt) => pt.type === "Polygon");
-          const thin = (r) => { if (r.length <= 160) return r; const k = Math.ceil(r.length / 150); return r.filter((_, i) => i % k === 0 || i === r.length - 1); };
           parts.forEach((pt) => {
-            const it = { text: t, type: pt.type, bbox: bboxOf(pt.c), coords: pt.type === "Line" ? thin(pt.c) : pt.c };
+            if (pt.type === "Line") { (lines[t] = lines[t] || []).push(pt.c); return; }
+            const it = { text: t, type: pt.type, bbox: bboxOf(pt.c), coords: pt.c };
             if (pt.type === "Polygon") { it.raw = pt.c; it.coords = outlineAt(it, 15); }   // 3D uses a ~3 m outline
             labelData[L.id].push(it);
           });
         } catch (e) { /* one odd shape never stops the rest being labelled */ } });
+        // a road or river comes in many short sections (Topo50 cuts them at every junction): sections with the same name
+        // that meet are joined into one line, so the name has room to be written along it
+        Object.entries(lines).forEach(([t, parts]) => joinLines(parts).forEach((c) => {
+          const thinned = c.length <= 420 ? c : c.filter((_, i) => i % Math.ceil(c.length / 400) === 0 || i === c.length - 1);
+          labelData[L.id].push({ text: t, type: "Line", bbox: bboxOf(c), coords: thinned });
+        }));
         placeLabels();
       }).catch(() => {});
     });
@@ -691,6 +776,89 @@
       });
       f.oz = key; return f.oc;
     }
+    // join line pieces that share an end into longer lines (greedy; where three meet, as braids do, any one continues)
+    function joinLines(parts) {
+      const key = (p) => p[0].toFixed(6) + "," + p[1].toFixed(6), ends = {};
+      parts.forEach((c, i) => { if (c.length < 2) return; [key(c[0]), key(c[c.length - 1])].forEach((k) => (ends[k] = ends[k] || []).push(i)); });
+      const used = new Array(parts.length).fill(false), out = [];
+      const next = (k) => (ends[k] || []).find((j) => !used[j]);
+      parts.forEach((c, i) => {
+        if (used[i] || c.length < 2) return;
+        used[i] = true;
+        let line = c.slice();
+        for (let j = next(key(line[line.length - 1])); j !== undefined; j = next(key(line[line.length - 1]))) {
+          used[j] = true; const d = parts[j];
+          line = line.concat((key(d[0]) === key(line[line.length - 1]) ? d : d.slice().reverse()).slice(1));
+        }
+        for (let j = next(key(line[0])); j !== undefined; j = next(key(line[0]))) {
+          used[j] = true; const d = parts[j];
+          line = (key(d[d.length - 1]) === key(line[0]) ? d : d.slice().reverse()).slice(0, -1).concat(line);
+        }
+        out.push(line);
+      });
+      return out;
+    }
+    // the parts of a screen polyline inside the box [x0, y0, x1, y1], each a list of points (segments are cut at the edge)
+    function runsOf(pts, x0, y0, x1, y1) {
+      const runs = []; let cur = null;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay;
+        let t0 = 0, t1 = 1, ok = true;
+        [[-dx, ax - x0], [dx, x1 - ax], [-dy, ay - y0], [dy, y1 - ay]].forEach(([p, q]) => {
+          if (!ok) return;
+          if (p === 0) { if (q < 0) ok = false; return; }
+          const r = q / p;
+          if (p < 0) { if (r > t1) ok = false; else if (r > t0) t0 = r; } else { if (r < t0) ok = false; else if (r < t1) t1 = r; }
+        });
+        if (!ok) { cur = null; continue; }
+        const a = [ax + t0 * dx, ay + t0 * dy], b = [ax + t1 * dx, ay + t1 * dy];
+        if (cur && t0 === 0) cur.push(b); else { cur = [a, b]; runs.push(cur); }
+        if (t1 < 1) cur = null;
+      }
+      return runs;
+    }
+    // a straight-enough stretch of a run, the label's width long, centred near distance s along it: where the label
+    // goes and its angle (degrees, kept upright), or null where the line bends too much there
+    function alongLine(run, cum, s, tw, th) {
+      const len = cum[cum.length - 1];
+      const at = (d) => { let i = 1; while (i < cum.length - 1 && cum[i] < d) i++;
+        const seg = cum[i] - cum[i - 1] || 1, k = (d - cum[i - 1]) / seg;
+        return [run[i - 1][0] + k * (run[i][0] - run[i - 1][0]), run[i - 1][1] + k * (run[i][1] - run[i - 1][1])]; };
+      for (const shift of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9]) {
+        const c = s + shift * tw, d0 = c - tw / 2, d1 = c + tw / 2;
+        if (d0 < 0 || d1 > len) continue;
+        const a = at(d0), b = at(d1), dx = b[0] - a[0], dy = b[1] - a[1], chord = Math.hypot(dx, dy) || 1;
+        let bend = 0;
+        for (let i = 1; i < run.length - 1; i++) {
+          if (cum[i] <= d0 || cum[i] >= d1) continue;
+          bend = Math.max(bend, Math.abs((run[i][0] - a[0]) * dy - (run[i][1] - a[1]) * dx) / chord);
+        }
+        if (bend > th * 0.5 || chord < tw * 0.85) continue;
+        let ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+        if (ang > 90) ang -= 180; else if (ang <= -90) ang += 180;
+        return { at: at(c), ang };
+      }
+      return null;
+    }
+    // label boxes, turned or not: { cx, cy, hw, hh, ang (degrees) }; overlap by separating axes
+    function corners(o) {
+      const r = (o.ang * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+      return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => [o.cx + u * o.hw * c - v * o.hh * s, o.cy + u * o.hw * s + v * o.hh * c]);
+    }
+    function overlaps(a, b) {
+      if (Math.hypot(a.cx - b.cx, a.cy - b.cy) > Math.hypot(a.hw, a.hh) + Math.hypot(b.hw, b.hh)) return false;
+      const ca = corners(a), cb = corners(b);
+      for (const o of [a, b]) {
+        const r = (o.ang * Math.PI) / 180;
+        for (const [ux, uy] of [[Math.cos(r), Math.sin(r)], [-Math.sin(r), Math.cos(r)]]) {
+          const pa = ca.map(([x, y]) => x * ux + y * uy), pb = cb.map(([x, y]) => x * ux + y * uy);
+          if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false;
+        }
+      }
+      return true;
+    }
+    const LINE_REPEAT = 450;                                // a long road or river is named again about every 450 px
+    const SAME_GAP = 300;                                   // ... but never within 300 px of the same name (braided rivers)
     const REPEAT = 340;                                     // big areas show their label again about every 340 px
     function placeLabels() {
       const t0 = performance.now();
@@ -760,9 +928,22 @@
               });
             }
           } else if (f.type === "Line") {
-            const pts = f.coords.map((p) => { const q = map.project(p); return [q.x, q.y]; }).filter((p) => p[0] > x0 && p[0] < x1 && p[1] > y0 && p[1] < y1);
-            if (!pts.length) return;
-            at = pts[Math.floor(pts.length / 2)]; weight = pts.length;
+            // along the line, turned to follow it: each visible stretch named at its middle, long ones again every ~450 px
+            const scr = f.coords.map((p) => { const q = map.project(p); return [q.x, q.y]; });
+            runsOf(scr, x0, y0, x1, y1).forEach((run) => {
+              const cum = [0];
+              for (let i = 1; i < run.length; i++) cum.push(cum[i - 1] + Math.hypot(run[i][0] - run[i - 1][0], run[i][1] - run[i - 1][1]));
+              const len = cum[cum.length - 1];
+              if (len < tw + 4) return;
+              const spots = [len / 2];
+              for (let d = len / 2 + LINE_REPEAT; d < len - tw / 2; d += LINE_REPEAT) spots.push(d);
+              for (let d = len / 2 - LINE_REPEAT; d > tw / 2; d -= LINE_REPEAT) spots.push(d);
+              spots.forEach((d, k) => {
+                const fit = alongLine(run, cum, d, tw, th);
+                if (fit) cands.push({ L, f, at: fit.at, ang: fit.ang, alts: null, tw, th, weight: len, st, order, again: k > 0, line: true });
+              });
+            });
+            return;
           } else {
             const q = map.project(f.coords);
             if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) return;
@@ -775,8 +956,9 @@
       });
       // every area's own label before any repeats; layers higher in the list win; then bigger areas (longer lines) first
       cands.sort((a, b) => (a.again ? 1 : 0) - (b.again ? 1 : 0) || a.order - b.order || b.weight - a.weight);
-      const free = (box) => !(box[0] < x0 || box[2] > x1 || box[1] < y0 || box[3] > y1)
-        && !placed.some((p) => !(box[2] < p.box[0] || box[0] > p.box[2] || box[3] < p.box[1] || box[1] > p.box[3]));
+      const free = (o) => corners(o).every(([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)
+        && !placed.some((p) => overlaps(o, p.box));
+      const sameName = {};                                  // layer + name -> where it is already written (lines)
       // in 3D a hill can hide part of the map: only label what can actually be seen at that spot
       const terrain = !!map.getTerrain();
       const inRing = (pt, ring) => { let inside = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const a = ring[i], b = ring[j];
@@ -789,12 +971,15 @@
         return Math.hypot((ll.lng - target[0]) * Math.cos((ll.lat * Math.PI) / 180), ll.lat - target[1]) * 111320 < 30;
       };
       cands.forEach((c) => {
+        const nameKey = c.L.id + "\u0000" + c.f.text;
+        if (c.line && (sameName[nameKey] || []).some((q) => Math.hypot(q[0] - c.at[0], q[1] - c.at[1]) < SAME_GAP)) return;
         let box = null;
         for (const at of c.alts || [c.at]) {
-          const b2 = [at[0] - c.tw / 2, at[1] - c.th / 2, at[0] + c.tw / 2, at[1] + c.th / 2];
+          const b2 = { cx: at[0], cy: at[1], hw: c.tw / 2, hh: c.th / 2, ang: c.ang || 0 };
           if (free(b2) && seen(c, at)) { box = b2; c.at = at; break; }
         }
         if (!box) return;
+        if (c.line) (sameName[nameKey] = sameName[nameKey] || []).push(c.at);
         const e = document.createElement("span");
         e.className = "rv-label";
         e.textContent = c.f.text;
@@ -802,14 +987,20 @@
         const colour = hex(c.st.color);
         const halo = hex(c.st.halo) || (colour && parseInt(colour.slice(1, 3), 16) > 160 ? "#000000" : "#ffffff");
         e.style.cssText = `font-size:${Math.min(Math.max(+c.st.size || 12, 6), 48)}px;color:${colour || "#1b1b1b"};font-weight:${c.st.bold ? 700 : 600};`
-          + `text-shadow:0 0 2px ${halo},0 0 2px ${halo},0 0 3px ${halo},0 0 4px ${halo};`;
-        e.style.transform = `translate(${c.at[0]}px,${c.at[1]}px) translate(-50%,-50%)`;
+          + `${c.st.italic ? "font-style:italic;" : ""}text-shadow:0 0 2px ${halo},0 0 2px ${halo},0 0 3px ${halo},0 0 4px ${halo};`;
+        e.style.transform = `translate(${c.at[0]}px,${c.at[1]}px) translate(-50%,-50%)` + (c.ang ? ` rotate(${c.ang.toFixed(1)}deg)` : "");
         labelBox.appendChild(e);
-        placed.push({ box, e, lnglat: map.unproject(c.at) });
+        placed.push({ box, e, lnglat: map.unproject(c.at), ang: c.ang || 0, bearing: map.getBearing() });
       });
     }
     // while the map moves, labels move with it; once it stops they're placed again for what's on screen
-    map.on("move", () => placed.forEach((p) => { const q = map.project(p.lnglat); p.e.style.transform = `translate(${q.x}px,${q.y}px) translate(-50%,-50%)`; }));
+    map.on("move", () => {
+      const brg = map.getBearing();
+      placed.forEach((p) => {
+        const q = map.project(p.lnglat), a = p.ang ? p.ang - (brg - p.bearing) : 0;
+        p.e.style.transform = `translate(${q.x}px,${q.y}px) translate(-50%,-50%)` + (a ? ` rotate(${a.toFixed(1)}deg)` : "");
+      });
+    });
     map.on("moveend", placeLabels);
     window.addEventListener("resize", () => setTimeout(placeLabels, 50));
 
@@ -832,6 +1023,7 @@
         ${opts.maps && opts.maps.length > 1 ? `<div class="rv-mapsel"><label for="rv-mapsel">Other maps of this property</label>
           <select id="rv-mapsel">${opts.maps.map((x) => `<option value="${esc(x.id)}" ${x.id === opts.currentMap ? "selected" : ""}>${esc(x.title)}${x.kind ? " (" + esc(x.kind) + ")" : ""}</option>`).join("")}</select></div>` : ""}
         ${desc ? `<div class="rv-desc${desc.length > 180 ? " clamp" : ""}"><p>${esc(desc).replace(/\n/g, "<br>")}</p>${desc.length > 180 ? '<button type="button" class="rv-link rv-more">More</button>' : ""}</div>` : ""}
+        ${sharedMissing.length ? `<p class="rv-shared-note" role="status">Not shown on this map: ${esc(sharedMissing.join(", "))} (not available just now).</p>` : ""}
       </div>
       <div class="rv-foot">
         <div class="rv-seg" role="group" aria-label="Background map">
@@ -973,6 +1165,303 @@
     };
     map.on("zoomend", zoomNotes);
     map.once("load", zoomNotes);
+
+    // ---------------------------------------------------------------- tools: compare (swipe), measure, print
+    const tools = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group rv-tools" });
+    const ICONS = {
+      compare: '<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2v16" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 5 9 5 9 15 2.5 15Z" fill="currentColor" opacity=".35"/></svg>',
+      measure: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 13.5 13.5 2.5l4 4-11 11z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 10l1.6 1.6M8.5 7.5l1.6 1.6M11 5l1.6 1.6" stroke="currentColor" stroke-width="1.4"/></svg>',
+      print: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7V2.5h9V7" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="2.5" y="7" width="15" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 11.5h9v6h-9z" fill="var(--btnbg, #fff)" stroke="currentColor" stroke-width="1.6"/></svg>',
+    };
+    const toolBtn = (key, title) => {
+      const b = el("button", { type: "button", "aria-pressed": "false", title, "aria-label": title });
+      b.innerHTML = ICONS[key];
+      tools.appendChild(b);
+      return b;
+    };
+    const rasters = layers.filter((L) => L.tiles);
+    const btnCompare = rasters.length >= 2 ? toolBtn("compare", "Compare two layers side by side (drag the divider)") : null;
+    const btnMeasure = toolBtn("measure", "Measure a distance or an area");
+    const btnPrint = toolBtn("print", "Print this view, or save it as a PDF");
+    map.addControl({ onAdd: () => tools, onRemove: () => tools.remove() }, "top-right");
+    let stopTool = null;                           // ends whichever tool is running
+    const startTool = (name, start) => {
+      if (stopTool) stopTool();
+      if (picking) cancelPick();
+      stopTool = start();
+      toolMode = name;
+    };
+    const endTool = () => { if (stopTool) { const f = stopTool; stopTool = null; toolMode = null; f(); } };
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && stopTool) endTool(); });
+
+    // ---- compare: a second map with the right-hand layer, over this one, cut off left of the divider
+    const isOn = (L) => (mapIds[L.id] || []).some((id) => map.getLayer(id) && map.getLayoutProperty(id, "visibility") !== "none");
+    const yearOf = (L) => { const y = String(L.title || "").match(/\b(19|20)\d{2}\b/); return y ? Number(y[0]) : null; };
+    function compareDefaults() {
+      const pool = rasters.filter((L) => L.kind === "imagery").length >= 2 ? rasters.filter((L) => L.kind === "imagery") : rasters;
+      const dated = pool.filter((L) => yearOf(L) != null).sort((a, b) => yearOf(a) - yearOf(b));
+      if (dated.length >= 2) return [dated[0], dated[dated.length - 1]];          // earliest left, latest right
+      return [pool[1], pool[0]];                                                 // QGIS order: top layer on the right
+    }
+    function startCompare() {
+      if (threeD) setThreeD(false);
+      clearSelection(); closeSheet();
+      let [left, right] = compareDefaults();
+      const before = Object.fromEntries(rasters.map((L) => [L.id, isOn(L)]));
+      const cmpEl = el("div", { class: "rv-compare-map", "aria-hidden": "true" });
+      mapEl.insertBefore(cmpEl, labelBox);
+      // the overlay is a copy of this map (same basemap, layers, labels' lines, photos) with the right-hand layer
+      // shown instead of the left-hand one; it follows every change made here
+      const tIds = (L) => (mapIds[L.id] || []).filter((id) => id.startsWith("t-"));
+      const overlayStyle = () => {
+        const st = JSON.parse(JSON.stringify(map.getStyle()));
+        delete st.terrain;
+        const leftIds = new Set(tIds(left)), rightIds = new Set(tIds(right));
+        st.layers = st.layers.filter((l) => l.id !== "hillshade").map((l) => {
+          if (leftIds.has(l.id)) l.layout = Object.assign({}, l.layout, { visibility: "none" });
+          if (rightIds.has(l.id)) l.layout = Object.assign({}, l.layout, { visibility: "visible" });
+          return l;
+        });
+        delete st.sources.dem; delete st.sources["dem-shade"];
+        return st;
+      };
+      const cmp = new maplibregl.Map({ container: cmpEl, style: overlayStyle(), interactive: false, attributionControl: false,
+        center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), maxZoom: 22, maxPitch: 75 });
+      cmp.on("styleimagemissing", (e) => {                 // photo cones are drawn images: make them again here
+        const mm = /^cone-(.+)-(\d+)$/.exec(e.id);
+        const L = mm && layers.find((x) => x.id === mm[1]);
+        if (!L || !L.draw || cmp.hasImage(e.id)) return;
+        const c = (L.draw.colors && L.draw.colors[Number(mm[2])]) || "#e8590c";
+        cmp.addImage(e.id, coneCanvas(c, 128).getContext("2d").getImageData(0, 0, 128, 128), { pixelRatio: 2 });
+      });
+      const sync = () => cmp.jumpTo({ center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), padding: map.getPadding() });
+      map.on("move", sync);
+      let restyle = 0;
+      const follow = () => { clearTimeout(restyle); restyle = setTimeout(() => cmp.setStyle(overlayStyle()), 60); };
+      map.on("styledata", follow);
+      const onResize = () => { cmp.resize(); sync(); place(divX); };
+      window.addEventListener("resize", onResize);
+      const showRight = follow;
+      const showLeft = () => rasters.forEach((L) => switches[L.id] && switches[L.id](L === left || (L !== right && before[L.id] && L.kind !== "imagery")));
+      // the bar: pick the two layers
+      const opt = (sel) => rasters.map((L) => `<option value="${esc(L.id)}"${L === sel ? " selected" : ""}>${esc(L.title)}</option>`).join("");
+      const bar = el("div", { class: "rv-toolbar rv-compare-bar", role: "group", "aria-label": "Compare layers" });
+      bar.innerHTML = `<label><span>Left</span><select class="rv-cmp-left">${opt(left)}</select></label>`
+        + `<label><span>Right</span><select class="rv-cmp-right">${opt(right)}</select></label>`
+        + `<button type="button" class="rv-btn rv-tool-done">Done</button>`;
+      root.appendChild(bar);
+      const byId = (id) => rasters.find((L) => L.id === id);
+      bar.querySelector(".rv-cmp-left").addEventListener("change", (e) => { left = byId(e.target.value); showLeft(); });
+      bar.querySelector(".rv-cmp-right").addEventListener("change", (e) => { right = byId(e.target.value); showLeft(); showRight(); });
+      bar.querySelector(".rv-tool-done").addEventListener("click", endTool);
+      // the divider
+      const divider = el("div", { class: "rv-divider", role: "slider", tabindex: "0", "aria-label": "Divider between the two layers",
+        "aria-valuemin": "0", "aria-valuemax": "100" });
+      divider.innerHTML = '<span class="rv-divider-handle" aria-hidden="true">‹ ›</span>';
+      root.appendChild(divider);
+      let divX = 0;
+      const place = (x) => {
+        const w = root.clientWidth;
+        divX = Math.max(0, Math.min(w, x));
+        cmpEl.style.clipPath = `inset(0 0 0 ${divX}px)`;
+        divider.style.left = divX + "px";
+        divider.setAttribute("aria-valuenow", String(Math.round((100 * divX) / Math.max(w, 1))));
+      };
+      const panelRight = () => (narrow() ? 0 : panel.getBoundingClientRect().right - root.getBoundingClientRect().left);
+      place((panelRight() + root.clientWidth) / 2);
+      divider.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        divider.setPointerCapture(e.pointerId);
+        const left0 = root.getBoundingClientRect().left;
+        const mv = (ev) => place(ev.clientX - left0);
+        const up = () => { divider.removeEventListener("pointermove", mv); divider.removeEventListener("pointerup", up); divider.removeEventListener("pointercancel", up); };
+        divider.addEventListener("pointermove", mv);
+        divider.addEventListener("pointerup", up);
+        divider.addEventListener("pointercancel", up);
+      });
+      divider.addEventListener("keydown", (e) => {
+        const step = e.shiftKey ? 60 : 15;
+        if (e.key === "ArrowLeft") { place(divX - step); e.preventDefault(); }
+        if (e.key === "ArrowRight") { place(divX + step); e.preventDefault(); }
+      });
+      root.classList.add("rv-comparing");
+      btnCompare.setAttribute("aria-pressed", "true");
+      showLeft();
+      showRight();
+      return () => {
+        map.off("move", sync); map.off("styledata", follow); clearTimeout(restyle);
+        window.removeEventListener("resize", onResize);
+        cmp.remove(); cmpEl.remove(); bar.remove(); divider.remove();
+        rasters.forEach((L) => switches[L.id] && switches[L.id](before[L.id]));
+        root.classList.remove("rv-comparing");
+        btnCompare.setAttribute("aria-pressed", "false");
+      };
+    }
+    if (btnCompare) btnCompare.addEventListener("click", () => (toolMode === "compare" ? endTool() : startTool("compare", startCompare)));
+
+    // ---- measure: distances along a line, or an area (both measured on the ground, curved earth)
+    const R_EARTH = 6371008.8;
+    const rad = (d) => (d * Math.PI) / 180;
+    const dist = (a, b) => {
+      const s = Math.sin(rad(b[1] - a[1]) / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(rad(b[0] - a[0]) / 2) ** 2;
+      return 2 * R_EARTH * Math.asin(Math.min(1, Math.sqrt(s)));
+    };
+    const pathLength = (pts) => pts.slice(1).reduce((t, p, i) => t + dist(pts[i], p), 0);
+    const ringArea = (pts) => {                     // spherical polygon area (as used by turf), square metres
+      const n = pts.length;
+      if (n < 3) return 0;
+      let t = 0;
+      for (let i = 0; i < n; i++) {
+        const p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+        t += (rad(p3[0]) - rad(p1[0])) * Math.sin(rad(p2[1]));
+      }
+      return Math.abs((t * 6378137 * 6378137) / 2);
+    };
+    const fmtLen = (mtr) => (mtr < 1000 ? `${mtr < 10 ? mtr.toFixed(1) : Math.round(mtr)} m` : `${(mtr / 1000).toFixed(mtr < 10000 ? 2 : 1)} km`);
+    const fmtArea = (m2) => (m2 < 1000 ? `${Math.round(m2)} m²` : `${(m2 / 10000).toLocaleString("en-NZ", { maximumFractionDigits: m2 < 100000 ? 2 : 1 })} ha`);
+    RCLViewer.measure = { dist, pathLength, ringArea, fmtLen, fmtArea };   // for tests
+    function startMeasure() {
+      clearSelection(); closeSheet();
+      let kind = "line", pts = [], hover = null, done = false;
+      const dbl = map.doubleClickZoom.isEnabled();
+      map.doubleClickZoom.disable();
+      const fc = () => {
+        const all = hover && !done ? pts.concat([hover]) : pts;
+        const f = [];
+        if (kind === "area" && all.length >= 3) f.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [all.concat([all[0]])] } });
+        if (all.length >= 2) f.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: kind === "area" && all.length >= 3 ? all.concat([all[0]]) : all } });
+        pts.forEach((p) => f.push({ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: p } }));
+        return { type: "FeatureCollection", features: f };
+      };
+      if (!map.getSource("measure")) {
+        map.addSource("measure", { type: "geojson", data: fc() });
+        map.addLayer({ id: "measure-fill", type: "fill", source: "measure", filter: ["==", ["geometry-type"], "Polygon"], paint: { "fill-color": "#fec956", "fill-opacity": 0.18 } });
+        map.addLayer({ id: "measure-halo", type: "line", source: "measure", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#231f20", "line-width": 5, "line-opacity": 0.5 } });
+        map.addLayer({ id: "measure-line", type: "line", source: "measure", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#fec956", "line-width": 2.5, "line-dasharray": [2, 1] } });
+        map.addLayer({ id: "measure-pts", type: "circle", source: "measure", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-radius": 4.5, "circle-color": "#fff", "circle-stroke-color": "#231f20", "circle-stroke-width": 2 } });
+      }
+      const bar = el("div", { class: "rv-toolbar rv-measure-bar", role: "group", "aria-label": "Measure" });
+      bar.innerHTML = `<div class="rv-seg" role="radiogroup" aria-label="What to measure"><button type="button" data-k="line" aria-pressed="true">Distance</button><button type="button" data-k="area" aria-pressed="false">Area</button></div>`
+        + `<div class="rv-measure-out" aria-live="polite"></div>`
+        + `<button type="button" class="rv-link rv-m-undo">Undo</button><button type="button" class="rv-link rv-m-clear">Clear</button>`
+        + `<button type="button" class="rv-btn rv-m-finish">Finish</button><button type="button" class="rv-btn rv-tool-done">Close</button>`;
+      root.appendChild(bar);
+      const out = bar.querySelector(".rv-measure-out");
+      const draw = () => {
+        map.getSource("measure").setData(fc());
+        const all = hover && !done ? pts.concat([hover]) : pts;
+        if (!all.length) out.innerHTML = `<span class="rv-hint">${narrow() ? "Tap" : "Click"} the map to start${kind === "area" ? " outlining an area" : ""}</span>`;
+        else if (kind === "line") out.innerHTML = `<b>${esc(fmtLen(pathLength(all)))}</b>`;
+        else out.innerHTML = all.length < 3 ? `<span class="rv-hint">Add ${3 - all.length} more point${all.length === 2 ? "" : "s"}</span>`
+          : `<b>${esc(fmtArea(ringArea(all)))}</b><span class="rv-hint">perimeter ${esc(fmtLen(pathLength(all.concat([all[0]]))))}</span>`;
+        bar.querySelector(".rv-m-finish").hidden = done || pts.length < (kind === "area" ? 3 : 2);
+      };
+      const near = (a, b) => { const p = map.project(a), q = map.project(b); return Math.hypot(p.x - q.x, p.y - q.y) < 4; };
+      const onClick = (e) => {
+        const p = [e.lngLat.lng, e.lngLat.lat];
+        if (done) { pts = []; done = false; }
+        if (pts.length && near(pts[pts.length - 1], p)) return;          // the second click of a double-click
+        if (kind === "area" && pts.length >= 3 && near(pts[0], p)) { done = true; return draw(); }   // closed the shape
+        pts.push(p); draw();
+      };
+      const onMove = (e) => { if (!done && pts.length) { hover = [e.lngLat.lng, e.lngLat.lat]; draw(); } };
+      const onDbl = (e) => { e.preventDefault(); if (pts.length >= (kind === "area" ? 3 : 2)) { done = true; hover = null; draw(); } };
+      map.on("click", onClick); map.on("mousemove", onMove); map.on("dblclick", onDbl);
+      bar.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => {
+        kind = b.dataset.k; done = false; hover = null;
+        bar.querySelectorAll("[data-k]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        draw();
+      }));
+      bar.querySelector(".rv-m-undo").addEventListener("click", () => { pts.pop(); done = false; draw(); });
+      bar.querySelector(".rv-m-clear").addEventListener("click", () => { pts = []; done = false; hover = null; draw(); });
+      bar.querySelector(".rv-m-finish").addEventListener("click", () => { done = true; hover = null; draw(); });
+      bar.querySelector(".rv-tool-done").addEventListener("click", endTool);
+      root.classList.add("rv-measuring");
+      btnMeasure.setAttribute("aria-pressed", "true");
+      draw();
+      return () => {
+        map.off("click", onClick); map.off("mousemove", onMove); map.off("dblclick", onDbl);
+        if (dbl) map.doubleClickZoom.enable();
+        pts = []; hover = null;
+        if (map.getSource("measure")) map.getSource("measure").setData({ type: "FeatureCollection", features: [] });
+        bar.remove();
+        map.getCanvas().style.cursor = "";
+        root.classList.remove("rv-measuring");
+        btnMeasure.setAttribute("aria-pressed", "false");
+      };
+    }
+    btnMeasure.addEventListener("click", () => (toolMode === "measure" ? endTool() : startTool("measure", startMeasure)));
+
+    // ---- print: a one-page layout (title, map, scale, north arrow, legend, credit), then the browser's print dialog
+    function niceScale(mpp, maxPx) {
+      const maxM = mpp * maxPx, p = 10 ** Math.floor(Math.log10(maxM));
+      const n = [5, 2, 1].map((k) => k * p).find((v) => v <= maxM) || p;
+      return { metres: n, px: n / mpp, label: n >= 1000 ? `${n / 1000} km` : `${n} m` };
+    }
+    function legendFor(L) {
+      if (L.draw) {
+        const colors = L.draw.colors && L.draw.colors.length ? L.draw.colors : ["#e8590c"];
+        const lg = L.legend || [];
+        return lg.length > 1 ? lg.map((g, i) => ({ label: g.label, src: legendIcon(colors[i] || colors[0], L.draw.type === "direction") }))
+          : [{ label: "", src: legendIcon(colors[0], L.draw.type === "direction") }];
+      }
+      return (L.legend || []).map((g) => ({ label: g.label, src: url(g.icon) }));
+    }
+    function printView() {
+      const canvas = map.getCanvas();
+      map.once("render", () => {
+        let img;
+        try { img = canvas.toDataURL("image/png"); } catch (e) { img = null; }   // read during the frame: no extra GPU memory
+        if (!img) { alert("Sorry, this map view can't be printed in this browser."); return; }
+        const w = mapEl.clientWidth, h = mapEl.clientHeight;
+        const zoom = map.getZoom(), lat = map.getCenter().lat;
+        const mpp = (40075016.686 * Math.cos(rad(lat))) / (512 * 2 ** zoom);
+        const room = layers.some((L) => isOn(L)) ? 800 : 1010;     // landscape page, legend beside the map
+        const pz = Math.min(1, room / w, 560 / h);                   // the map image is shrunk by this to fit
+        const sc = map.getPitch() < 5 ? niceScale(mpp / pz, 180) : null;   // measured on the printed image
+        const shown = layers.filter((L) => isOn(L));
+        const legend = shown.map((L) => {
+          const items = legendFor(L);
+          const head = items.length === 1 && !items[0].label
+            ? `<li class="rv-pl-layer"><img alt="" src="${esc(items[0].src)}"><span>${esc(L.title)}</span></li>`
+            : `<li class="rv-pl-layer"><span>${esc(L.title)}</span></li>`
+              + items.filter((g) => g.label).map((g) => `<li><img alt="" src="${esc(g.src)}"><span>${esc(g.label)}</span></li>`).join("");
+          return head;
+        }).join("");
+        const property = m.property && m.property !== (m.map_title || m.title) ? m.property : "";
+        const meta = [property, m.survey_date ? "Surveyed " + fmtDate(m.survey_date) : ""].filter(Boolean).join(" · ");
+        const bmOn = ["aerial", "map"].find((k) => map.getLayoutProperty("bm-" + k, "visibility") !== "none");
+        const credit = [bmOn ? String(BASEMAPS[bmOn].attribution || "").replace(/<[^>]*>/g, "") : "", "Rural Consulting Limited"].filter(Boolean).join(" · ");
+        const labels = labelBox.cloneNode(true);
+        labels.classList.add("rv-pl-labels");
+        const sheet = el("div", { class: "rv-print" });
+        sheet.innerHTML = `<header class="rv-pl-head"><img class="rv-pl-logo" src="brand/logo.a1046e5e.png" alt="Rural Consulting">
+            <div><div class="rv-pl-title">${esc(m.map_title || m.title)}</div><div class="rv-pl-meta">${esc(meta)}</div></div></header>
+          <div class="rv-pl-body">
+            <div class="rv-pl-mapcol"><figure class="rv-pl-fig" style="width:${w}px;height:${h}px"><img class="rv-pl-map" alt="Map" src="${img}"></figure>
+              <div class="rv-pl-cap">
+                ${sc ? `<div class="rv-pl-scale"><div style="width:${sc.px.toFixed(1)}px"></div><span>${esc(sc.label)}</span></div>` : `<div class="rv-pl-scale"><span>Tilted view, not to scale</span></div>`}
+                <div class="rv-pl-north" aria-label="North"><span style="transform:rotate(${-map.getBearing()}deg)">▲</span>N</div>
+              </div></div>
+            ${legend ? `<aside class="rv-pl-legend"><div class="rv-pl-lh">Legend</div><ul>${legend}</ul></aside>` : ""}
+          </div>
+          <footer class="rv-pl-foot"><span>${esc(credit)}</span><span>Printed ${esc(new Date().toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" }))}</span></footer>`;
+        sheet.querySelector(".rv-pl-fig").appendChild(labels);
+        sheet.style.setProperty("--pz", String(pz));
+        document.body.appendChild(sheet);
+        document.body.classList.add("rv-printing");
+        let cleaned = false;
+        const clean = () => { if (cleaned) return; cleaned = true; sheet.remove(); document.body.classList.remove("rv-printing"); window.removeEventListener("afterprint", clean); };
+        window.addEventListener("afterprint", clean);
+        const imgs = [...sheet.querySelectorAll("img")];
+        Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; })))).then(() => {
+          window.print();
+          setTimeout(clean, 1000);                   // browsers that don't send afterprint
+        });
+      });
+      map.triggerRepaint();
+    }
+    btnPrint.addEventListener("click", () => { endTool(); printView(); });
     return map;
   }
 
@@ -988,6 +1477,6 @@
     }));
   }
 
-  const RCLViewer = { mount, rasterParts, terrain: null, stats: {} };
+  const RCLViewer = { mount, mergeShared, rasterParts, terrain: null, stats: {} };
   window.RCLViewer = RCLViewer;
 })();

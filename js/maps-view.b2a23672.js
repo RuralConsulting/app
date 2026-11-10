@@ -30,7 +30,7 @@
   document.addEventListener("visibilitychange", () => FP.mapsView.wake());
 })(typeof window === "undefined" ? globalThis : window, function () {
   const BUCKET = "map-packages";
-  const MAX_MAPS = 100, SIGN_BATCH = 500;
+  const MAX_MAPS = 100, SIGN_BATCH = 500, MAX_SHARED = 50, SHARED_PREFIX = "shared/";
   const LINK_SECONDS = 3600, RENEW_MS = (LINK_SECONDS - 600) * 1000;
   const NONE = "No maps have been published here yet.";
   const UNAVAILABLE = "This map is not available right now.";
@@ -79,13 +79,44 @@
       const { data: pkg, error } = await sb.from("map_packages").select("manifest, storage_prefix").eq("map_id", map.id).eq("is_current", true).maybeSingle();
       if (error) throw error;
       if (!pkg) return null;
-      const byPath = filesByPath(pkg.manifest, pkg.storage_prefix), paths = [...byPath.keys()], urls = {};
+      const byPath = filesByPath(pkg.manifest, pkg.storage_prefix);
+      const shared = await sharedLayers(sb, pkg.manifest, byPath);
+      const paths = [...byPath.keys()], urls = {};
       for (let i = 0; i < paths.length; i += SIGN_BATCH) {
         const { data, error: refused } = await sb.storage.from(BUCKET).createSignedUrls(paths.slice(i, i + SIGN_BATCH), LINK_SECONDS);
         if (refused) throw refused;
         for (const d of data || []) if (d.signedUrl) for (const rel of byPath.get(d.path) || []) urls[rel] = d.signedUrl;
       }
-      return Object.keys(urls).length ? { manifest: pkg.manifest, urls } : null;
+      if (!Object.keys(urls).some((rel) => !rel.startsWith(SHARED_PREFIX))) return null;   // none of the map's own files: as before
+      // a layer whose tiles did not all get a link (removed, or the person may not have them) counts as missing: the viewer says so
+      const usable = shared.map((L) => (L && [L.tiles, ...(L.tile_parts || []).map((p) => p.tiles)].every((f) => urls[f]) ? L : null));
+      return { manifest: pkg.manifest, urls, shared: usable };
+    }
+
+    // The layers this map refers to (manifest.shared_layers: core or a group's), from the registers each by its key: one storage
+    // path, signed like the map's own files, so every map that refers to a layer shares the one copy. A list the same length as the
+    // references, null where a layer is not there; the viewer makes no database calls of its own. Row-level security decides what
+    // the person may read of a group's register, and a read that fails only makes the layer missing.
+    async function sharedLayers(sb, manifest, byPath) {
+      const refs = Array.isArray(manifest.shared_layers) ? manifest.shared_layers.slice(0, MAX_SHARED) : [];
+      if (!refs.length) return [];
+      const rowsOf = async (query) => { try { const { data, error } = await query; return error ? [] : data || []; } catch { return []; } };
+      const found = new Map(), wanted = (tier, org) => [...new Set(refs.filter((r) => r.tier === tier && (tier === "core" || r.org_id === org)).map((r) => r.key))];
+      const core = wanted("core");
+      if (core.length) for (const row of await rowsOf(sb.from("core_layers").select("key, title, style, tiles_path").in("key", core))) found.set("core:" + row.key, row);
+      for (const org of new Set(refs.filter((r) => r.tier === "group").map((r) => r.org_id))) {
+        for (const row of await rowsOf(sb.from("group_shared_layers").select("org_id, key, title, style, tiles_path").eq("org_id", org).in("key", wanted("group", org)))) found.set("group:" + org + ":" + row.key, row);
+      }
+      return refs.map((ref, i) => {
+        const row = found.get(ref.tier === "group" ? "group:" + ref.org_id + ":" + ref.key : "core:" + ref.key);
+        const layer = row && row.style && typeof row.style.layer === "object" ? row.style.layer : null;
+        if (!layer || !row.tiles_path) return null;
+        const folder = row.tiles_path.slice(0, row.tiles_path.lastIndexOf("/") + 1), base = SHARED_PREFIX + i + "/";
+        const name = (file) => { byPath.set(folder + file, [...(byPath.get(folder + file) || []), base + file]); return base + file; };
+        return { ...layer, id: "shared-" + i, title: row.title, tiles: name(row.tiles_path.slice(folder.length)),
+          ...(Array.isArray(layer.tile_parts) ? { tile_parts: layer.tile_parts.map((p) => ({ ...p, tiles: name(p.tiles) })) } : {}),
+          legend: Array.isArray(layer.legend) ? layer.legend.map((e) => (e.icon ? { ...e, icon: name(e.icon) } : e)) : [] };
+      });
     }
 
     function dropMap(s) {
@@ -123,6 +154,7 @@
         s.map = env.mount(holder, {
           manifest: { ...read.manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
           url: (rel) => read.urls[rel] || "",
+          ...(read.shared.length ? { shared: read.shared } : {}),
           onBack: s.several ? () => env.go(s.opts.href(null)) : null, backLabel: "All maps",
           ...env.backgrounds(),
         });
