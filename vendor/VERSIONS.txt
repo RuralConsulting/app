@@ -1,5 +1,5 @@
 maplibre-gl 5.24.0 (CSP build)
 supabase-js 2.117.3 (UMD)
 pmtiles 4.5.0
-viewer.css (and ../js/viewer.js) from rcl-map-portal branch v1/cl3-context-restyle (CL3, plugin 0.13.5: main bc2337e plus context layers' label points, label looks and legend chips), qgis_plugin/rcl_web_package/viewer, re-copied in full: viewer.css is identical, viewer.js differs in V4's two lines only (the map worker under vendor/, opts.basemaps). It includes the portal's reference layers (roads, waterways) and context layers, which the app gives from its own stored copies, and the one-page print
+viewer.css (and ../js/viewer.js) from rcl-map-portal branch n1/viewer-groups (N1, plugin 0.13.7: main 2d010bd plus folding layer headings, context layers under theme groups, and the onFeature option), qgis_plugin/rcl_web_package/viewer, re-copied in full: viewer.css is identical, viewer.js differs in V4's two lines only (the map worker under vendor/, opts.basemaps). It includes the portal's reference layers (roads, waterways) and context layers, which the app gives from its own stored copies, and the one-page print
 Copied from rcl-map-portal so both apps run the same versions.

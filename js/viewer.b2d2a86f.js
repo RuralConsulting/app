@@ -5,8 +5,13 @@
  *              focus?: suggestionId, manage?: (suggestion) => void }                // staff: open in the inbox
  *   shared?: [layer entry or null, one for each of manifest.shared_layers]          // platform: layers published once, see mergeShared
  *   referenceLayers?: [{ key: "roads" | "waterways", url, title?, credit? }]         // platform: where the reference layers are, see referenceDefs
- *                   + [{ key, url, title, credit, style: { source_layer, layers, legend } }] // platform: context layers, see contextDefs
+ *                   + [{ key, url, title, credit, style: { source_layer, layers, legend },  // platform: context layers, see contextDefs
+ *                        group?, order? }]                                          // their theme heading and place, see contextGroups
+ *   onFeature?: (ctx) => boolean   // a click on a published layer's feature, ctx = { layer_id, layer_title, layer_group,
+ *                                  // feature_id, feature_label, properties, lngLat } (see featureContext); true: the host has
+ *                                  // shown it, so the viewer shows no popup of its own; anything else: the viewer's popup as usual
  * })
+ * Every heading in the layer list folds; whether it is folded is remembered on this device per map and heading.
  * Works for the local preview (url = identity) and the customer portal (url = signed link).
  */
 (function () {
@@ -276,8 +281,42 @@
       const def = { key, id: "ctx-" + key, src: "ctx-src-" + key, store: "rv-ctx-" + key, title: plain(r.title || key),
         credit: plain(r.credit || ""), url: r.url, sourceLayer: st.source_layer, layers, labels, legend };
       if (typeof st.note === "string" && st.note.trim()) def.note = plain(st.note).trim().slice(0, 300);   // CL3: one line under the legend
+      if (typeof r.group === "string" && plain(r.group).trim()) def.group = plain(r.group).trim().slice(0, 80);   // N1: its theme heading
+      if (num(r.order) !== undefined) def.order = r.order;
       return [def];
     });
+  }
+  // N1: the context layers under their theme headings. A heading comes in the order of its first layer, the layers under it by
+  // their order (else as given); a layer without a group goes under "Context layers", so a list with no groups reads as before.
+  const CTX_HEAD = "Context layers";
+  function contextGroups(defs) {
+    const at = (d) => (typeof d.order === "number" ? d.order : Infinity);
+    const groups = [];
+    defs.map((d, i) => ({ d, i })).sort((a, b) => (at(a.d) - at(b.d)) || (a.i - b.i)).forEach(({ d }) => {
+      const name = d.group || CTX_HEAD;
+      let g = groups.find((x) => x.name === name);
+      if (!g) groups.push(g = { name, themed: !!d.group, defs: [] });
+      g.defs.push(d);
+    });
+    return groups;
+  }
+  // N1: the features of one source layer already loaded for the view; none, never an error, while the source is not added yet,
+  // has been removed, or the map is gone (MapLibre's querySourceFeatures throws then), so one missing source cannot stop the
+  // other labels. The labels are placed again when a reference or context source loads (the "sourcedata" listener).
+  function sourceFeatures(map, src, sourceLayer) {
+    try { return (map.getSource(src) && map.querySourceFeatures(src, { sourceLayer })) || []; } catch (e) { return []; }
+  }
+  // N1: what a click on a feature of one of the map's own layers tells whoever mounted the viewer (opts.onFeature)
+  function featureContext(L, feat, lngLat) {
+    const p = (feat && feat.properties) || {}, g = feat && feat.geometry;
+    return { layer_id: L.id, layer_title: L.title, layer_group: L.group || null, feature_id: String(feat.id ?? ""),
+      feature_label: p._label || classLabel(L, p) || "", properties: Object.assign({}, p),
+      lngLat: g && g.type === "Point" ? { lng: g.coordinates[0], lat: g.coordinates[1] } : lngLat };
+  }
+  // true when the host has taken the click; no callback, or one that fails or says anything else, leaves the viewer's own popup
+  function handOff(onFeature, ctx) {
+    if (typeof onFeature !== "function") return false;
+    try { return onFeature(ctx) === true; } catch (e) { return false; }
   }
   // a context layer's label text for a feature: ["get", f], ["to-string", e], ["concat", ...] or a plain string; "" when a field is empty
   function contextText(e, p) {
@@ -606,9 +645,10 @@
               const lowest = (map.getStyle().layers.find((l) => refIds.has(l.id)) || {}).id;
               if (map.getLayer("mask") && lowest) map.moveLayer("mask", lowest);     // shading under all reference layers
               R.ready = true;
-              const row = root.querySelector(`.rv-ref-row[data-ref="${R.key}"]`), head = root.querySelector(".rv-ref-group");
+              const row = root.querySelector(`.rv-ref-row[data-ref="${R.key}"]`), head = row && row.closest(".rv-section");
               if (row) row.hidden = false;
               if (head) head.hidden = false;
+              countOn();
             }).catch(() => probe(i + 1));
         };
         probe(0);
@@ -639,9 +679,10 @@
             const lowest = (map.getStyle().layers.find((l) => all.has(l.id)) || {}).id;
             if (map.getLayer("mask") && lowest) map.moveLayer("mask", lowest);     // shading under all of them
             C.ready = true;
-            const row = root.querySelector(`.rv-ctx-row[data-ctx="${C.key}"]`), head = root.querySelector(".rv-ctx-group");
+            const row = root.querySelector(`.rv-ctx-row[data-ctx="${C.key}"]`), head = row && row.closest(".rv-section");
             if (row) row.hidden = false;
-            if (head) head.hidden = false;
+            if (head) head.hidden = false;      // its theme heading shows once one of its layers has answered
+            countOn();
             if (C.L.visible) placeLabels();
           }).catch(() => {});
       });
@@ -747,7 +788,12 @@
         const s = f.find((x) => x.layer.id === "sugg");
         if (s) return showSuggestion(s);
         const list = stack(f, e.point);
-        if (list.length) showFeature(list, 0, e.lngLat);
+        if (!list.length) return;
+        // N1: whoever mounted the viewer may show the feature itself; then the viewer only marks it
+        if (opts.onFeature && handOff(opts.onFeature, featureContext(layerOf(list[0]), list[0], e.lngLat))) {
+          clearSelection(); closeSheet(); photoState.leave(); select(list[0]); return;
+        }
+        showFeature(list, 0, e.lngLat);
       });
     };
     if (map.isStyleLoaded()) setup(); else { map.once("style.load", setup); map.once("load", setup); }
@@ -1273,7 +1319,13 @@
     const AREA_GAP = 640;                                   // a context area, drawn in tile pieces, is named once in about this much
     const POINT_GAP = 160;                                  // and points of the same name close together (a town's bores) once
     const REPEAT = 340;                                     // big areas show their label again about every 340 px
+    // N1: the map can be gone (the app drops it when it renews links or opens another map) while a timer or the window's resize
+    // still asks for labels; then there is nothing to label
+    let mapGone = false;
+    map.on("remove", () => { mapGone = true; clearTimeout(refTimer); });
+    const loadedFeatures = (src, sourceLayer) => sourceFeatures(map, src, sourceLayer);
     function placeLabels() {
+      if (mapGone) return;
       const t0 = performance.now();
       try { placeLabelsNow(); } finally { RCLViewer.stats.labelsMs = Math.round(performance.now() - t0); }
     }
@@ -1284,7 +1336,7 @@
         labelData[R.id] = [];
         if (!R.ready || !layerOn(R.L) || z < R.labelFrom) return;
         const by = {}, seenPart = new Set();
-        R.labelLayers.forEach((sl) => map.querySourceFeatures(R.src, { sourceLayer: sl }).forEach((f) => {
+        R.labelLayers.forEach((sl) => loadedFeatures(R.src, sl).forEach((f) => {
           const t = f.properties && R.labelText(f.properties, z), g = f.geometry;
           if (!t || !g) return;
           (g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? g.coordinates : []).forEach((c) => {
@@ -1314,7 +1366,7 @@
         const out = [], lines = {}, seenPart = new Set();
         if (C.labels.sourceLayer) {
           // CL3: one point per area (the build's <key>-labels): named once, centred; a point a tile repeats (its edge) once
-          map.querySourceFeatures(C.src, { sourceLayer: C.labels.sourceLayer }).forEach((f) => {
+          loadedFeatures(C.src, C.labels.sourceLayer).forEach((f) => {
             const p = f.properties || {}, g = f.geometry;
             let t = contextText(C.labels.text, p);
             if (!t || !g || g.type !== "Point") return;
@@ -1333,7 +1385,7 @@
           const shown = new Set(out.filter((o) => { const q = map.project(o.coords); return q.x >= left && q.x <= mapEl.clientWidth && q.y >= 0 && q.y <= mapEl.clientHeight; })
             .map((o) => o.text));
           const best = {};
-          map.querySourceFeatures(C.src, { sourceLayer: C.sourceLayer }).forEach((f) => {
+          loadedFeatures(C.src, C.sourceLayer).forEach((f) => {
             const p = f.properties || {}, g = f.geometry;
             let t = contextText(C.labels.text, p);
             if (!t || !g || !/Polygon$/.test(g.type)) return;
@@ -1349,7 +1401,7 @@
           labelData[C.id] = out.slice(0, 300).concat(Object.values(best));
           return;
         }
-        map.querySourceFeatures(C.src, { sourceLayer: C.sourceLayer }).forEach((f) => {
+        loadedFeatures(C.src, C.sourceLayer).forEach((f) => {
           const t = contextText(C.labels.text, f.properties || {}), g = f.geometry;
           if (!t || !g) return;
           const parts = /^Multi/.test(g.type) ? g.coordinates.map((c) => [g.type.slice(5), c]) : [[g.type, g.coordinates]];
@@ -1372,7 +1424,8 @@
     }
     let refTimer = null;
     map.on("sourcedata", (e) => {
-      if (!REFS.concat(CTX).some((R) => R.src === e.sourceId) || !e.tile) return;
+      // a tile of a reference or context source, or the source having finished loading: labels again once things settle
+      if (!REFS.concat(CTX).some((R) => R.src === e.sourceId) || (!e.tile && !e.isSourceLoaded)) return;
       clearTimeout(refTimer); refTimer = setTimeout(placeLabels, 350);
     });
     function placeLabelsNow() {
@@ -1611,15 +1664,43 @@
         if (map.getLayer("mask")) map.setLayoutProperty("mask", "visibility", maskOn ? "visible" : "none");
       });
     }
-    let lastGroup = null;
+    // N1: every heading folds: a button over the rows under it, folded or not remembered on this device per map and heading;
+    // folded with layers switched on, it says how many ("3 on") so nothing is hidden by surprise
+    const foldBase = "rv-fold-" + (m.property || "") + "/" + (opts.currentMap || m.map_title || m.title || "") + ":";
+    const sections = [];
+    function section(kind, label, open, { cls = "", note = "", hidden = false } = {}) {
+      const store = foldBase + kind + ":" + label, kept = storeGet(store);
+      const isOpen = kept === "1" ? true : kept === "0" ? false : open;
+      const id = "rv-sec-" + (sections.length + 1);
+      const wrap = el("div", Object.assign({ class: "rv-section" + (cls ? " " + cls : "") }, hidden ? { hidden: "" } : {}));
+      const head = el("button", { type: "button", class: "rv-group", "aria-expanded": String(isOpen), "aria-controls": id },
+        `<span class="rv-chev" aria-hidden="true"></span><span class="rv-group-name">${esc(label)}${note}</span><span class="rv-group-on"></span>`);
+      const rows = el("div", Object.assign({ class: "rv-section-rows", id }, isOpen ? {} : { hidden: "" }));
+      wrap.append(head, rows);
+      head.addEventListener("click", () => {
+        const o = head.getAttribute("aria-expanded") !== "true";
+        head.setAttribute("aria-expanded", String(o)); rows.hidden = !o; storeSet(store, o ? "1" : "0"); countOn();
+      });
+      body.appendChild(wrap);
+      sections.push({ head, rows });
+      return rows;
+    }
+    function countOn() {
+      sections.forEach((s) => {
+        const n = s.rows.querySelectorAll(".rv-layer:not([hidden]) .rv-switch:checked").length;
+        s.head.querySelector(".rv-group-on").textContent = s.rows.hidden && n ? n + " on" : "";
+      });
+    }
+    body.addEventListener("change", countOn);
+    let lastGroup = null, into = body;
     const switches = {};
     layers.forEach((L) => {
       if (L.group && L.group !== lastGroup) {
         const inGroup = layers.filter((x) => x.group === L.group);
         const one = inGroup.length > 1 && inGroup.every((x) => x.exclusive);
-        body.appendChild(el("div", { class: "rv-group" }, esc(L.group) + (one ? ' <span class="rv-group-note">· one at a time</span>' : "")));
+        into = section("map", L.group, true, { note: one ? ' <span class="rv-group-note">· one at a time</span>' : "" });   // the map's own groups start open
         lastGroup = L.group;
-      }
+      } else if (!L.group) { into = body; lastGroup = null; }
       const row = el("div", { class: "rv-layer" + (L.visible ? "" : " off") });
       const cid = "rv-l-" + String(L.id).replace(/[^a-z0-9_-]/gi, "");
       const count = `<span class="rv-count">${esc(L.feature_count || "")}</span>`;
@@ -1640,12 +1721,13 @@
       }
       row.dataset.from = L.visible_from || 0;
       row.dataset.count = L.feature_count || "";
-      body.appendChild(row);
+      into.appendChild(row);
       const setOn = (on) => {
         row.querySelector(".rv-switch").checked = on;
         row.classList.toggle("off", !on);
         (mapIds[L.id] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
         if (L.labels) setTimeout(placeLabels, 0);
+        countOn();
       };
       switches[L.id] = setOn;
       row.querySelector(".rv-switch").addEventListener("change", (e) => {
@@ -1661,7 +1743,7 @@
     });
 
     if (refWanted) {
-      body.appendChild(el("div", { class: "rv-group rv-ref-group", hidden: "" }, "Reference"));
+      const refRows = section("ref", "Reference", true, { cls: "rv-ref-group", hidden: true });
       REFS.slice().reverse().forEach((R) => {                // top first, like the map's own layers
         const row = el("div", { class: "rv-layer rv-ref-row" + (R.L.visible ? "" : " off"), hidden: "" });
         row.dataset.ref = R.key;
@@ -1669,7 +1751,7 @@
           <ul class="rv-legend">${R.classes.map(([, label, c, w, o]) => `<li><img alt="" src="${lineIcon(c, w, o)}"><span>${esc(label)}</span></li>`).join("")}</ul>
           <div class="rv-ref-note">${esc(R.credit)}</div>`;
         row.dataset.from = 0; row.dataset.count = "";
-        body.appendChild(row);
+        refRows.appendChild(row);
         row.querySelector("input").addEventListener("change", (e) => {
           const on = e.target.checked;
           R.L.visible = on; storeSet(R.store, on ? "1" : "0");
@@ -1679,9 +1761,11 @@
         });
       });
     }
-    if (CTX.length) {
-      body.appendChild(el("div", { class: "rv-group rv-ctx-group", hidden: "" }, "Context layers"));
-      CTX.forEach((C) => {                                    // in the order given
+    // context layers under their theme headings (contextGroups); a theme starts folded unless one of its layers is on, and the
+    // one "Context layers" heading of a list without groups starts open, as before
+    contextGroups(CTX).forEach((G) => {
+      const ctxRows = section("ctx", G.name, !G.themed || G.defs.some((C) => C.L.visible), { cls: "rv-ctx-group", hidden: true });
+      G.defs.forEach((C) => {
         const row = el("div", { class: "rv-layer rv-ctx-row" + (C.L.visible ? "" : " off"), hidden: "" });
         row.dataset.ctx = C.key;
         const one = C.legend.length === 1 ? `<img alt="" src="${contextIcon(C.legend[0])}" style="width:20px;height:20px">` : "";
@@ -1690,7 +1774,7 @@
           + (C.note ? `<div class="rv-ref-note">${esc(C.note)}</div>` : "")
           + (C.credit ? `<div class="rv-ref-note">${esc(C.credit)}</div>` : "");
         row.dataset.from = 0; row.dataset.count = "";
-        body.appendChild(row);
+        ctxRows.appendChild(row);
         row.querySelector("input").addEventListener("change", (e) => {
           const on = e.target.checked;
           C.L.visible = on; storeSet(C.store, on ? "1" : "0");
@@ -1699,7 +1783,8 @@
           placeLabels();
         });
       });
-    }
+    });
+    countOn();
     if (maskRow) body.appendChild(maskRow);                // after the layers
     if (labelLayers.length) {
       const row = el("div", { class: "rv-layer rv-mask-row" });
@@ -2173,6 +2258,6 @@
     }));
   }
 
-  const RCLViewer = { mount, mergeShared, referenceDefs, contextDefs, contextText, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
+  const RCLViewer = { mount, mergeShared, referenceDefs, contextDefs, contextText, contextGroups, featureContext, handOff, sourceFeatures, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
   window.RCLViewer = RCLViewer;
 })();

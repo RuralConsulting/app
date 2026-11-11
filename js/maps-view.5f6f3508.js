@@ -96,7 +96,8 @@
       // a layer whose tiles did not all get a link (removed, or the person may not have them) counts as missing: the viewer says so
       const usable = shared.map((L) => (L && [L.tiles, ...(L.tile_parts || []).map((p) => p.tiles)].every((f) => urls[f]) ? L : null));
       // a reference layer whose file did not get a link (not uploaded yet, or removed) is left out: the map opens without it
-      const referenceLayers = reference.filter((r) => urls[r.rel]).map((r) => ({ key: r.key, title: r.title, credit: r.credit, url: urls[r.rel], ...(r.style ? { style: r.style } : {}) }));
+      const referenceLayers = reference.filter((r) => urls[r.rel]).map((r) => ({ key: r.key, title: r.title, credit: r.credit, url: urls[r.rel], ...(r.style ? { style: r.style } : {}),
+        ...(r.group ? { group: r.group } : {}), ...(r.order !== undefined ? { order: r.order } : {}) }));
       return { manifest: pkg.manifest, urls, shared: usable, referenceLayers };
     }
 
@@ -106,6 +107,7 @@
     // CL2: a row drawn as "context" and marked every_map carries its own style ({ source_layer, layers, legend }); it is offered by
     // its own key with that style, in the order the loader gave (tools/core_layers/layers.json), and the viewer lists it under
     // Context layers, off until switched on.
+    // N1: with its theme (style.reference.group) and order, so the viewer lists it under that theme's heading, which folds.
     async function referenceRows(sb, byPath) {
       let rows = [];
       try {
@@ -121,7 +123,11 @@
           const rel = REFERENCE_PREFIX + row.key, ref = row.style.reference;
           byPath.set(row.tiles_path, [...(byPath.get(row.tiles_path) || []), rel]);
           const credit = typeof ref.credit === "string" ? ref.credit : "";
-          return context(ref) ? { rel, key: row.key, title: row.title, credit, style: ref.style } : { rel, key: ref.draw, title: row.title, credit };
+          if (!context(ref)) return { rel, key: ref.draw, title: row.title, credit };
+          // N1: its theme heading in the Layers panel and its place, from the loader (style.reference.group, .order)
+          return { rel, key: row.key, title: row.title, credit, style: ref.style,
+            ...(typeof ref.group === "string" && ref.group.trim() ? { group: ref.group.trim() } : {}),
+            ...(Number.isFinite(ref.order) ? { order: ref.order } : {}) };
         });
     }
 
