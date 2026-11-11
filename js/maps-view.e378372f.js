@@ -112,9 +112,10 @@
         const { data, error } = await sb.from("core_layers").select("key, title, style, tiles_path").not("style->reference", "is", null).order("key").limit(MAX_REFERENCE);
         rows = error ? [] : data || [];
       } catch { rows = []; }
-      const context = (ref) => ref?.draw === CONTEXT_DRAW && ref.every_map === true && ref.style && typeof ref.style === "object" && !Array.isArray(ref.style);
+      // CL3: a row the loader marked offered false is withdrawn: neither listed nor signed (its file and row stay)
+      const context = (ref) => ref?.draw === CONTEXT_DRAW && ref.every_map === true && ref.offered !== false && ref.style && typeof ref.style === "object" && !Array.isArray(ref.style);
       const order = (row) => (context(row.style.reference) ? (Number.isFinite(row.style.reference.order) ? row.style.reference.order : 1e6) : -1);
-      return rows.filter((row) => (REFERENCE_DRAWS.includes(row?.style?.reference?.draw) || context(row?.style?.reference)) && typeof row.tiles_path === "string" && row.tiles_path.startsWith("core/"))
+      return rows.filter((row) => ((REFERENCE_DRAWS.includes(row?.style?.reference?.draw) && row.style.reference.offered !== false) || context(row?.style?.reference)) && typeof row.tiles_path === "string" && row.tiles_path.startsWith("core/"))
         .sort((a, b) => order(a) - order(b))
         .map((row) => {
           const rel = REFERENCE_PREFIX + row.key, ref = row.style.reference;

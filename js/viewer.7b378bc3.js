@@ -210,8 +210,22 @@
   // entry's own. A symbol layer is not drawn by MapLibre (the map has no font server): its text-field (["get", field], or a
   // "concat" of strings and gets) names the features with the viewer's own labels, from its minzoom, in its text colour and
   // halo. Titles, credits and legend labels are plain text and colours hex only. "reference": false turns these off too.
+  // A symbol layer may name its own "source-layer" in the same file: the build's one point per area (<key>-labels), so each area
+  // is named once, centred, not once per tile piece; a point's "label_r" (metres from its edge) leaves out areas too small on
+  // screen for their name. Its text-color may be a "match" on a field (each zone named in its own hue); "text-transform":
+  // "uppercase", "text-letter-spacing" (em), "text-padding" (px kept clear around it), "symbol-spacing" (px between a line's
+  // names) and a maxzoom are taken too.
   const CTX_TYPES = ["fill", "line", "circle", "symbol"];
   const hexOnly = (v) => (/^#[0-9a-f]{3,8}$/i.test(String(v || "")) ? String(v) : null);
+  // a label colour: a hex, or ["match", ["get", field], value, hex, ..., fallback hex] -> {field, map, fallback}
+  function colourRule(v) {
+    if (hexOnly(v)) return hexOnly(v);
+    if (!Array.isArray(v) || v[0] !== "match" || !Array.isArray(v[1]) || v[1][0] !== "get" || typeof v[1][1] !== "string" || v.length < 5) return null;
+    const map = {};
+    for (let i = 2; i < v.length - 1; i += 2) if (hexOnly(v[i + 1]) && (typeof v[i] === "string" || typeof v[i] === "number")) map[v[i]] = v[i + 1];
+    return { field: v[1][1], map, fallback: hexOnly(v[v.length - 1]) || "#1b1b1b" };
+  }
+  const colourFor = (rule, p) => (!rule ? null : typeof rule === "string" ? rule : rule.map[p[rule.field]] || rule.fallback);
   function contextDefs(m, opts) {
     if (!Array.isArray(opts.referenceLayers)) return [];
     const refOff = (r, key) => r === false || (r && typeof r === "object" && r[key] === false);
@@ -234,9 +248,19 @@
           const lay = obj(x.layout), paint = obj(x.paint);
           if (labels || !lay["text-field"]) return;
           const font = Array.isArray(lay["text-font"]) ? lay["text-font"].join(" ") : "";
+          const rule = colourRule(paint["text-color"]);
           labels = { text: lay["text-field"], minzoom: num(x.minzoom) ?? 0, size: num(lay["text-size"]) || 12,
-            color: hexOnly(paint["text-color"]) || "#1b1b1b", halo: hexOnly(paint["text-halo-color"]) || "#ffffff",
+            color: typeof rule === "string" ? rule : rule ? rule.fallback : "#1b1b1b", halo: hexOnly(paint["text-halo-color"]) || "#ffffff",
             italic: /italic/i.test(font), bold: /bold/i.test(font) };
+          // CL3: only what is given, so a layer without these reads exactly as before
+          const sl = x["source-layer"];
+          if (typeof sl === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(sl)) labels.sourceLayer = sl;
+          if (rule && typeof rule === "object") labels.colorBy = rule;
+          if (lay["text-transform"] === "uppercase") labels.upper = true;
+          if (num(lay["text-letter-spacing"]) !== undefined) labels.spacing = Math.min(Math.max(lay["text-letter-spacing"], 0), 0.5);
+          if (num(lay["text-padding"]) !== undefined) labels.padding = Math.min(Math.max(lay["text-padding"], 0), 40);
+          if (num(lay["symbol-spacing"]) !== undefined) labels.repeat = Math.min(Math.max(lay["symbol-spacing"], 150), 2000);
+          if (num(x.maxzoom) !== undefined) labels.maxzoom = x.maxzoom;
           return;
         }
         const d = { type: x.type, paint: obj(x.paint), layout: obj(x.layout) };
@@ -247,9 +271,12 @@
       });
       const legend = (Array.isArray(st.legend) ? st.legend : []).filter((e) => e && typeof e === "object").slice(0, 40).map((e) => ({
         label: plain(e.label || ""), fill: hexOnly(e.fill), outline: hexOnly(e.outline), line: hexOnly(e.line), circle: hexOnly(e.circle),
-        stroke: hexOnly(e.stroke), opacity: num(e.opacity), width: num(e.width), dash: Array.isArray(e.dash) ? e.dash.filter((v) => num(v) !== undefined) : null }));
-      return [{ key, id: "ctx-" + key, src: "ctx-src-" + key, store: "rv-ctx-" + key, title: plain(r.title || key),
-        credit: plain(r.credit || ""), url: r.url, sourceLayer: st.source_layer, layers, labels, legend }];
+        stroke: hexOnly(e.stroke), opacity: num(e.opacity), width: num(e.width), dash: Array.isArray(e.dash) ? e.dash.filter((v) => num(v) !== undefined) : null,
+        casing: hexOnly(e.casing) }));
+      const def = { key, id: "ctx-" + key, src: "ctx-src-" + key, store: "rv-ctx-" + key, title: plain(r.title || key),
+        credit: plain(r.credit || ""), url: r.url, sourceLayer: st.source_layer, layers, labels, legend };
+      if (typeof st.note === "string" && st.note.trim()) def.note = plain(st.note).trim().slice(0, 300);   // CL3: one line under the legend
+      return [def];
     });
   }
   // a context layer's label text for a feature: ["get", f], ["to-string", e], ["concat", ...] or a plain string; "" when a field is empty
@@ -265,22 +292,34 @@
     }
     return "";
   }
-  // a context layer's legend picture: a filled square with its outline, a line, or a dot with its ring
+  // a context layer's legend picture: an area as a solid chip of its colour (not its see-through fill, which turns muddy on the
+  // dark panel) with its outline inside a thin light edge and a faint dark one, readable on the dark and the light panel; a
+  // line as a short sample on its light casing; a point as a dot with its ring
   function contextIcon(e) {
-    if (e.line && !e.fill) return lineIcon(e.line, Math.max(1.5, (e.width || 1.5) * 2), e.dash && e.dash.length ? { dash: e.dash.map((v) => v * 2) } : {});
     const c = document.createElement("canvas"); c.width = 40; c.height = 40;
     const g = c.getContext("2d");
-    if (e.circle) {
+    if (e.line && !e.fill) {
+      const w = Math.max(2, (e.width || 1.5) * 2), path = () => { g.beginPath(); g.moveTo(5, 26); g.bezierCurveTo(14, 12, 25, 32, 35, 16); };
+      g.lineCap = "round"; g.lineJoin = "round";
+      path(); g.lineWidth = w + 5; g.strokeStyle = "rgba(0,0,0,0.25)"; g.stroke();         // a faint dark edge: the casing shows on white
+      path(); g.lineWidth = w + 4; g.strokeStyle = e.casing || "#ffffff"; g.globalAlpha = e.casing ? 0.9 : 0.6; g.stroke(); g.globalAlpha = 1;
+      path(); g.lineWidth = w; g.strokeStyle = e.line;
+      if (e.dash && e.dash.length) { g.lineCap = "butt"; g.setLineDash(e.dash.map((v) => v * 2)); }
+      g.stroke();
+    } else if (e.circle) {
       g.beginPath(); g.arc(20, 20, 9, 0, 2 * Math.PI); g.fillStyle = e.circle; g.fill();
       g.lineWidth = 3; g.strokeStyle = e.stroke || "#ffffff"; g.stroke();
       g.beginPath(); g.arc(20, 20, 11, 0, 2 * Math.PI); g.lineWidth = 1; g.strokeStyle = "rgba(0,0,0,0.35)"; g.stroke();   // shows a white ring on white
     } else {
-      if (e.fill) { g.globalAlpha = Math.min(1, (e.opacity ?? 0.3) + 0.15); g.fillStyle = e.fill; g.fillRect(5, 5, 30, 30); g.globalAlpha = 1; }
-      const o = e.outline || e.line;
+      const chip = () => { g.beginPath(); if (g.roundRect) g.roundRect(6, 6, 28, 28, 4); else g.rect(6, 6, 28, 28); };
+      chip(); g.lineWidth = 4; g.strokeStyle = "rgba(0,0,0,0.3)"; g.stroke();                // the faint dark edge, outermost
+      chip(); g.lineWidth = 2; g.strokeStyle = "rgba(255,255,255,0.9)"; g.stroke();          // the thin light edge
+      chip(); g.fillStyle = e.fill || e.outline || "#b0b0b0"; g.fill();                       // the colour itself, solid
+      const o = e.outline && e.fill ? e.outline : null;
       if (o) {
-        g.lineWidth = Math.max(2, (e.width || 1.5) * 2); g.strokeStyle = o;
-        if (e.dash && e.dash.length) g.setLineDash(e.dash.map((v) => v * 2));
-        g.strokeRect(5, 5, 30, 30);
+        g.beginPath(); g.rect(8.5, 8.5, 23, 23); g.lineWidth = 3; g.strokeStyle = o;
+        if (e.dash && e.dash.length) g.setLineDash(e.dash.map((v) => v * 1.5));
+        g.stroke();
       }
     }
     return c.toDataURL("image/png");
@@ -1273,6 +1312,43 @@
         labelData[C.id] = [];
         if (!C.ready || !layerOn(C.L) || z < C.labels.minzoom - 0.25) return;
         const out = [], lines = {}, seenPart = new Set();
+        if (C.labels.sourceLayer) {
+          // CL3: one point per area (the build's <key>-labels): named once, centred; a point a tile repeats (its edge) once
+          map.querySourceFeatures(C.src, { sourceLayer: C.labels.sourceLayer }).forEach((f) => {
+            const p = f.properties || {}, g = f.geometry;
+            let t = contextText(C.labels.text, p);
+            if (!t || !g || g.type !== "Point") return;
+            if (C.labels.upper) t = t.toUpperCase();
+            const c = g.coordinates, k = t + "|" + c[0].toFixed(3) + "," + c[1].toFixed(3);
+            if (seenPart.has(k)) return;
+            seenPart.add(k);
+            out.push({ text: t, type: "Point", bbox: [c[0], c[1], c[0], c[1]], coords: c, near: "area",
+              r: typeof p.label_r === "number" ? p.label_r : null, color: colourFor(C.labels.colorBy, p) });
+          });
+          out.sort((a, b) => (b.r || 0) - (a.r || 0));
+          // a big area whose point is out of sight (a zone seen close up) is named once, on the roomiest part of it in view
+          const vb = map.getBounds(), w = vb.getWest(), s = vb.getSouth(), e = vb.getEast(), n = vb.getNorth();
+          const pr = panel.getBoundingClientRect(), mr = mapEl.getBoundingClientRect();
+          const left = !printing && !narrow() && !panel.classList.contains("collapsed") ? Math.max(0, pr.right - mr.left) : 0;
+          const shown = new Set(out.filter((o) => { const q = map.project(o.coords); return q.x >= left && q.x <= mapEl.clientWidth && q.y >= 0 && q.y <= mapEl.clientHeight; })
+            .map((o) => o.text));
+          const best = {};
+          map.querySourceFeatures(C.src, { sourceLayer: C.sourceLayer }).forEach((f) => {
+            const p = f.properties || {}, g = f.geometry;
+            let t = contextText(C.labels.text, p);
+            if (!t || !g || !/Polygon$/.test(g.type)) return;
+            if (C.labels.upper) t = t.toUpperCase();
+            if (shown.has(t)) return;
+            (g.type === "Polygon" ? [g.coordinates] : g.coordinates).forEach((c) => {
+              if (!c[0] || c[0].length < 4) return;
+              const bb = bboxOf(c), seen = Math.max(0, Math.min(bb[2], e) - Math.max(bb[0], w)) * Math.max(0, Math.min(bb[3], n) - Math.max(bb[1], s));
+              if (seen > 0 && (!best[t] || seen > best[t].seen)) best[t] = { text: t, type: "Polygon", bbox: bb, raw: c, coords: c, near: true, once: true, seen,
+                color: colourFor(C.labels.colorBy, p) };
+            });
+          });
+          labelData[C.id] = out.slice(0, 300).concat(Object.values(best));
+          return;
+        }
         map.querySourceFeatures(C.src, { sourceLayer: C.sourceLayer }).forEach((f) => {
           const t = contextText(C.labels.text, f.properties || {}), g = f.geometry;
           if (!t || !g) return;
@@ -1316,8 +1392,21 @@
         const size = st.size || 12;
         labelData[L.id].forEach((f) => {
           if (f.bbox[2] < b.getWest() || f.bbox[0] > b.getEast() || f.bbox[3] < b.getSouth() || f.bbox[1] > b.getNorth()) return;
-          const tw = f.text.length * size * 0.58 + 6, th = size * 1.3;
+          let tw = f.text.length * size * 0.58 + 6, th = size * 1.3;
+          if (st.upper || st.spacing) tw = f.text.length * size * ((st.upper ? 0.7 : 0.58) + (st.spacing || 0)) + 6;
+          if (st.padding) { tw += st.padding * 2; th += st.padding * 2; }        // room kept clear around it
           let at = null, weight = 0, alts = null;
+          if (f.near === "area") {
+            // an area's one label point: centred on it, and only where the area is big enough on screen to hold its name
+            const q = map.project(f.coords);
+            if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) return;
+            if (f.r != null) {
+              const mpp = (40075016.686 * Math.cos((f.coords[1] * Math.PI) / 180)) / (512 * Math.pow(2, z));
+              if (f.r / mpp < size * 0.55) return;
+            }
+            cands.push({ L, f, at: [q.x, q.y], alts: null, tw, th, weight: f.r || 0, st, order });
+            return;
+          }
           if (f.type === "Polygon" && terrain3d) {
             // 3D: each area's own best spot (worked out once), so moving the view stays quick
             if (!f.pole) {
@@ -1344,7 +1433,7 @@
             // roomiest spot of its own patch, so no stretch of it is left without a name
             let mx = Infinity, my = Infinity, Mx = -Infinity, My = -Infinity;
             outer.forEach(([x, y]) => { mx = Math.min(mx, x); my = Math.min(my, y); Mx = Math.max(Mx, x); My = Math.max(My, y); });
-            if (Math.max(Mx - mx, My - my) > REPEAT * 0.9) {                // long or big on screen
+            if (!f.once && Math.max(Mx - mx, My - my) > REPEAT * 0.9) {     // long or big on screen (an area named once: not again)
               const a0 = map.project([f.bbox[0], f.bbox[3]]);           // grid fixed to the area, steady as you pan
               const got = [[pole.x, pole.y]], need = Math.max(th * 0.8, tw * 0.35), spots = [];
               for (let gx = Math.floor((mx - a0.x) / REPEAT) * REPEAT + a0.x; gx < Mx; gx += REPEAT) {
@@ -1373,8 +1462,9 @@
               const len = cum[cum.length - 1];
               if (len < tw + 4) return;
               const spots = [len / 2];
-              for (let d = len / 2 + LINE_REPEAT; d < len - tw / 2; d += LINE_REPEAT) spots.push(d);
-              for (let d = len / 2 - LINE_REPEAT; d > tw / 2; d -= LINE_REPEAT) spots.push(d);
+              const rep = st.repeat || LINE_REPEAT;               // a context layer's "symbol-spacing" names it less often
+              for (let d = len / 2 + rep; d < len - tw / 2; d += rep) spots.push(d);
+              for (let d = len / 2 - rep; d > tw / 2; d -= rep) spots.push(d);
               spots.forEach((d, k) => {
                 const fit = alongLine(run, cum, d, tw, th);
                 if (fit) cands.push({ L, f, at: fit.at, ang: fit.ang, alts: null, tw, th, weight: len, st, order, again: k > 0, line: true });
@@ -1410,7 +1500,7 @@
       cands.forEach((c) => {
         const nameKey = c.L.id + "\u0000" + c.f.text;
         const apart = c.line || c.f.near;
-        if (apart && (sameName[nameKey] || []).some((q) => Math.hypot(q[0] - c.at[0], q[1] - c.at[1]) < (c.f.near === "point" ? POINT_GAP : c.f.near ? AREA_GAP : SAME_GAP))) return;
+        if (apart && (sameName[nameKey] || []).some((q) => Math.hypot(q[0] - c.at[0], q[1] - c.at[1]) < (c.f.near === "point" ? POINT_GAP : c.f.near ? AREA_GAP : Math.max(SAME_GAP, (c.st.repeat || 0) * 0.7)))) return;
         let box = null;
         for (const at of c.alts || [c.at]) {
           const b2 = { cx: at[0], cy: at[1], hw: c.tw / 2, hh: c.th / 2, ang: c.ang || 0 };
@@ -1422,15 +1512,16 @@
         e.className = "rv-label";
         e.textContent = c.f.text;
         const hex = (v) => (/^#[0-9a-f]{3,8}$/i.test(String(v || "")) ? v : null);     // colours from the package: hex only
-        const colour = hex(c.st.color);
+        const colour = hex(c.f.color) || hex(c.st.color);                        // a context label may take its area's own hue
         const halo = hex(c.st.halo) || (colour && parseInt(colour.slice(1, 3), 16) > 160 ? "#000000" : "#ffffff");
         e.style.cssText = `font-size:${Math.min(Math.max(+c.st.size || 12, 6), 48)}px;color:${colour || "#1b1b1b"};font-weight:${c.st.bold ? 700 : 600};`
-          + `${c.st.italic ? "font-style:italic;" : ""}text-shadow:0 0 2px ${halo},0 0 2px ${halo},0 0 3px ${halo},0 0 4px ${halo};`;
+          + `${c.st.italic ? "font-style:italic;" : ""}text-shadow:0 0 2px ${halo},0 0 2px ${halo},0 0 3px ${halo},0 0 4px ${halo};`
+          + (c.st.spacing ? `letter-spacing:${c.st.spacing}em;` : "");
         e.style.transform = `translate(${c.at[0]}px,${c.at[1]}px) translate(-50%,-50%)` + (c.ang ? ` rotate(${c.ang.toFixed(1)}deg)` : "");
         labelBox.appendChild(e);
         placed.push({ box, e, lnglat: map.unproject(c.at), ang: c.ang || 0, bearing: map.getBearing(),
           text: c.f.text, at: c.at.slice(), colour: colour || "#1b1b1b", halo, size: Math.min(Math.max(+c.st.size || 12, 6), 48),
-          bold: !!c.st.bold, italic: !!c.st.italic });
+          bold: !!c.st.bold, italic: !!c.st.italic, spacing: c.st.spacing || 0 });
       });
     }
     // while the map moves, labels move with it; once it stops they're placed again for what's on screen
@@ -1596,6 +1687,7 @@
         const one = C.legend.length === 1 ? `<img alt="" src="${contextIcon(C.legend[0])}" style="width:20px;height:20px">` : "";
         row.innerHTML = `<div class="rv-layer-row"><label for="rv-l-${C.id}"><input id="rv-l-${C.id}" class="rv-switch" type="checkbox" ${C.L.visible ? "checked" : ""}>${one}<span>${esc(C.title)}</span></label><span class="rv-count"></span></div>`
           + (C.legend.length > 1 ? `<ul class="rv-legend">${C.legend.map((g) => `<li><img alt="" src="${contextIcon(g)}"><span>${esc(g.label)}</span></li>`).join("")}</ul>` : "")
+          + (C.note ? `<div class="rv-ref-note">${esc(C.note)}</div>` : "")
           + (C.credit ? `<div class="rv-ref-note">${esc(C.credit)}</div>` : "");
         row.dataset.from = 0; row.dataset.count = "";
         body.appendChild(row);
@@ -1941,6 +2033,7 @@
         g.translate(p.at[0] * k, p.at[1] * k);
         if (p.ang) g.rotate((p.ang * Math.PI) / 180);
         g.font = `${p.italic ? "italic " : ""}${p.bold ? 700 : 600} ${p.size * k}px ${fam}`;
+        if (p.spacing && "letterSpacing" in g) g.letterSpacing = `${p.spacing * p.size * k}px`;
         g.strokeStyle = p.halo; g.lineWidth = 3.2 * k; g.globalAlpha = 0.9; g.strokeText(p.text, 0, 0);
         g.globalAlpha = 1; g.fillStyle = p.colour; g.fillText(p.text, 0, 0);
         g.restore();
