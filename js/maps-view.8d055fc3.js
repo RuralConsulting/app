@@ -5,6 +5,8 @@
 // Signed links last an hour. They are renewed ten minutes before they run out, by drawing the map again where it was; a tab that
 // slept past that renews when it is looked at again. If renewing fails, the map goes and the person is told plainly.
 // Client suggestions are off in v1: the viewer is given no `suggest`. farm-space.js and group-space.js only say when to open and close.
+// CL1: every map offers the reference layers (roads, waterways) stored once on the platform under core/, signed and renewed with the
+// map's own files and passed as the viewer's referenceLayers; one whose file is not there is left out and the map opens without it.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) { module.exports = api; return; }
@@ -31,6 +33,7 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   const BUCKET = "map-packages";
   const MAX_MAPS = 100, SIGN_BATCH = 500, MAX_SHARED = 50, SHARED_PREFIX = "shared/";
+  const MAX_REFERENCE = 10, REFERENCE_PREFIX = "reference/", REFERENCE_DRAWS = ["roads", "waterways"];
   const LINK_SECONDS = 3600, RENEW_MS = (LINK_SECONDS - 600) * 1000;
   const NONE = "No maps have been published here yet.";
   const UNAVAILABLE = "This map is not available right now.";
@@ -81,16 +84,36 @@
       if (!pkg) return null;
       const byPath = filesByPath(pkg.manifest, pkg.storage_prefix);
       const shared = await sharedLayers(sb, pkg.manifest, byPath);
+      const reference = await referenceRows(sb, byPath);
       const paths = [...byPath.keys()], urls = {};
       for (let i = 0; i < paths.length; i += SIGN_BATCH) {
         const { data, error: refused } = await sb.storage.from(BUCKET).createSignedUrls(paths.slice(i, i + SIGN_BATCH), LINK_SECONDS);
         if (refused) throw refused;
         for (const d of data || []) if (d.signedUrl) for (const rel of byPath.get(d.path) || []) urls[rel] = d.signedUrl;
       }
-      if (!Object.keys(urls).some((rel) => !rel.startsWith(SHARED_PREFIX))) return null;   // none of the map's own files: as before
+      if (!Object.keys(urls).some((rel) => !rel.startsWith(SHARED_PREFIX) && !rel.startsWith(REFERENCE_PREFIX))) return null;   // none of the map's own files: as before
       // a layer whose tiles did not all get a link (removed, or the person may not have them) counts as missing: the viewer says so
       const usable = shared.map((L) => (L && [L.tiles, ...(L.tile_parts || []).map((p) => p.tiles)].every((f) => urls[f]) ? L : null));
-      return { manifest: pkg.manifest, urls, shared: usable };
+      // a reference layer whose file did not get a link (not uploaded yet, or removed) is left out: the map opens without it
+      const referenceLayers = reference.filter((r) => urls[r.rel]).map((r) => ({ key: r.key, title: r.title, credit: r.credit, url: urls[r.rel] }));
+      return { manifest: pkg.manifest, urls, shared: usable, referenceLayers };
+    }
+
+    // CL1: the reference layers, from the core register: the rows whose style names how the viewer draws them
+    // ({ reference: { draw: "roads" | "waterways", credit } }, written by tools/load_core_reference.py), by key. Each row's one file
+    // is signed with the map's own, so every map draws the same stored copy. A read that fails only leaves them out.
+    async function referenceRows(sb, byPath) {
+      let rows = [];
+      try {
+        const { data, error } = await sb.from("core_layers").select("key, title, style, tiles_path").not("style->reference", "is", null).order("key").limit(MAX_REFERENCE);
+        rows = error ? [] : data || [];
+      } catch { rows = []; }
+      return rows.filter((row) => REFERENCE_DRAWS.includes(row?.style?.reference?.draw) && typeof row.tiles_path === "string" && row.tiles_path.startsWith("core/"))
+        .map((row) => {
+          const rel = REFERENCE_PREFIX + row.key;
+          byPath.set(row.tiles_path, [...(byPath.get(row.tiles_path) || []), rel]);
+          return { rel, key: row.style.reference.draw, title: row.title, credit: typeof row.style.reference.credit === "string" ? row.style.reference.credit : "" };
+        });
     }
 
     // The layers this map refers to (manifest.shared_layers: core or a group's), from the registers each by its key: one storage
@@ -155,6 +178,7 @@
           manifest: { ...read.manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
           url: (rel) => read.urls[rel] || "",
           ...(read.shared.length ? { shared: read.shared } : {}),
+          referenceLayers: read.referenceLayers,
           onBack: s.several ? () => env.go(s.opts.href(null)) : null, backLabel: "All maps",
           ...env.backgrounds(),
         });
@@ -200,5 +224,5 @@
     }
     return { open, close, wake };
   }
-  return { create, backgrounds, filesByPath, BUCKET, MAX_MAPS, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
+  return { create, backgrounds, filesByPath, BUCKET, MAX_MAPS, MAX_REFERENCE, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
 });

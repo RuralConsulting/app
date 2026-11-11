@@ -4,6 +4,7 @@
  *   suggest?: { list: async () => [suggestion], submit: async (draft) => void,      // portal only
  *              focus?: suggestionId, manage?: (suggestion) => void }                // staff: open in the inbox
  *   shared?: [layer entry or null, one for each of manifest.shared_layers]          // platform: layers published once, see mergeShared
+ *   referenceLayers?: [{ key: "roads" | "waterways", url, title?, credit? }]         // platform: where the reference layers are, see referenceDefs
  * })
  * Works for the local preview (url = identity) and the customer portal (url = signed link).
  */
@@ -143,6 +144,63 @@
     g.beginPath(); g.arc(20, 26, 6, 0, Math.PI * 2); g.fillStyle = color; g.fill();
     g.lineWidth = 2.5; g.strokeStyle = "#fff"; g.stroke();
     return c.toDataURL("image/png");
+  }
+  function lineIcon(color, w, o = {}) {
+    const c = document.createElement("canvas"); c.width = c.height = 40;
+    const g = c.getContext("2d");
+    const path = () => { g.beginPath(); g.moveTo(4, 26); g.bezierCurveTo(14, 12, 24, 34, 36, 18); };
+    g.lineCap = "round";
+    if (o.casing) { path(); g.lineWidth = w + 2; g.strokeStyle = o.casing; g.stroke(); }   // pale lines show on white paper
+    path(); g.lineWidth = w; g.strokeStyle = color;
+    if (o.dash) { g.lineCap = "butt"; g.setLineDash(o.dash); }
+    g.stroke();
+    return c.toDataURL("image/png");
+  }
+  // shared reference layers (vector tiles, one public file each for every map, not part of any package), bottom first.
+  // classes: [key, legend label, colour, legend width, {dash, casing}]
+  const REF_DEFS = [
+    { key: "waterways", id: "ref-waterways", src: "ref-ww", title: "Waterways", store: "rv-ref-ww",
+      file: "ref/waterways-canterbury.pmtiles", credit: "Waterways: LINZ Topo50 (CC BY 4.0)", prop: "wclass",
+      classes: [["River", "River", "#4f9bd9", 5], ["Canal or race", "Canal or race", "#3fb8c9", 4],
+        ["Stream or creek", "Stream or creek", "#6aaee6", 3.2], ["Small waterway", "Small waterway", "#8cc3ee", 2.4],
+        ["Drain", "Drain", "#9bb7c9", 2]],
+      labels: { size: 12, color: "#ffffff", italic: true, minzoom: 11 }, labelFrom: 10.75, labelLayers: ["main"],
+      labelText: (p) => p.name || null },
+    { key: "roads", id: "ref-roads", src: "ref-rd", title: "Roads", store: "rv-ref-rd",
+      file: "ref/roads-nz.pmtiles", credit: "Roads: LINZ Topo50 (CC BY 4.0)", prop: "rclass",
+      classes: [["highway", "State highway", "#f5d76e", 5, { casing: "#3a3a3a" }],
+        ["sealed", "Sealed road", "#f2f2f2", 3.6, { casing: "#3a3a3a" }],
+        ["metalled", "Metalled road", "#e8a35c", 3],
+        ["unmetalled", "Unmetalled road", "#e8a35c", 3, { dash: [5, 4] }]],
+      labels: { size: 11, color: "#ffffff", minzoom: 9.75 }, labelFrom: 9.75, labelLayers: ["major", "minor"],
+      // state highways as "SH 1" from zoom 10; road names from zoom 13
+      labelText: (p, z) => (p.ref ? "SH " + p.ref : z >= 12.75 ? roadName(p.name) : null) },
+  ];
+  // LINZ road names are in capitals: "WAKANUI ROAD" -> "Wakanui Road", "MCLEAN STREET" -> "McLean Street"
+  function roadName(t) {
+    if (!t) return null;
+    if (t !== t.toUpperCase()) return t;
+    return t.toLowerCase().replace(/(^|[\s\-/('])([a-zāēīōū])/g, (_, a, b) => a + b.toUpperCase())
+      .replace(/\bMc([a-z])/g, (_, b) => "Mc" + b.toUpperCase()).replace(/\b(Sh|Nz)\b/g, (x) => x.toUpperCase());
+  }
+  const REF_LIVE_BASE = "https://maps.ruralconsulting.co.nz/";
+  // The reference layers a map draws, bottom first, each with the places its file may be (tried in order). Without
+  // opts.referenceLayers: every one the map does not turn off, from opts.referenceUrls / opts.referenceUrl, then this site's ref/
+  // folder, then the live portal. With it (the platform app: its signed links to the files it stores once, [{ key, url, title,
+  // credit }]): only those listed with a url, each from that url alone, under its own title and credit; the rest are not drawn.
+  // "reference": false on the map, or in opts.reference, still turns them off either way.
+  function referenceDefs(m, opts, base) {
+    const refOff = (r, key) => r === false || (r && typeof r === "object" && r[key] === false);
+    const on = REF_DEFS.filter((d) => !refOff(m.reference, d.key) && !refOff(opts.reference, d.key));
+    if (!Array.isArray(opts.referenceLayers)) {
+      return on.map((d, ri) => Object.assign({}, d, { urls: [opts.referenceUrls && opts.referenceUrls[d.key], ri === 0 ? opts.referenceUrl : null,
+        new URL(d.file, base).href, REF_LIVE_BASE + d.file].filter(Boolean) }));
+    }
+    const plain = (t) => String(t).replace(/[<>]/g, "");      // the map's attribution line is HTML
+    return on.flatMap((d) => {
+      const g = opts.referenceLayers.find((r) => r && r.key === d.key && typeof r.url === "string" && r.url);
+      return g ? [Object.assign({}, d, { title: g.title ? plain(g.title) : d.title, credit: g.credit ? plain(g.credit) : d.credit, urls: [g.url] })] : [];
+    });
   }
   function colorExpr(colors) {
     if (!colors || !colors.length) return "#e8590c";
@@ -342,6 +400,12 @@
     // "one at a time" groups (mutually exclusive in QGIS): only the top one that starts on stays on
     const exOn = {};
     layers.forEach((L) => { if (L.exclusive && L.visible) { if (exOn[L.group]) L.visible = false; else exOn[L.group] = true; } });
+    // reference layers (waterways, roads): drawn under the property's layers and over the outside shading.
+    // Off for a map with "reference": false, or one at a time with "reference": {"roads": false}
+    const REFS = referenceDefs(m, opts, document.baseURI).map((d) => Object.assign({}, d, {
+      ready: false,
+      L: { id: d.id, title: d.title, ref: true, visible: storeGet(d.store) !== "0", labels: d.labels } }));
+    const refWanted = REFS.length > 0;
     const hitIds = [];
     const coneIds = [];                            // photo cones are clickable too: a cone picks the photo facing that way
     const mapIds = {};                             // web layer id -> map layer ids (for the on/off switch)
@@ -350,6 +414,74 @@
     let maskOn = true;
 
     // add the property's layers as soon as the map's style is ready, without waiting for the background imagery
+    function addRefLayers(R, before, vis) {
+      const c = Object.fromEntries(R.classes.map((k) => [k[0], k]));
+      if (R.key === "waterways") {
+        const colour = ["match", ["get", "wclass"], "River", c.River[2], "Canal or race", c["Canal or race"][2],
+          "Stream or creek", c["Stream or creek"][2], "Drain", c.Drain[2], c["Small waterway"][2]];
+        const w = (k) => ["match", ["get", "wclass"], "River", k * 1.6, "Canal or race", k * 1.2, "Stream or creek", k, k * 0.7];
+        map.addLayer({ id: own(R.L, "ref-ww-small"), type: "line", source: R.src, "source-layer": "small", minzoom: 12,
+          layout: { visibility: vis, "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": colour, "line-opacity": 0.85,
+            "line-width": ["interpolate", ["exponential", 1.5], ["zoom"], 12, 0.5, 15, 1.2, 18, 2.6] } }, before);
+        map.addLayer({ id: own(R.L, "ref-ww-main"), type: "line", source: R.src, "source-layer": "main",
+          layout: { visibility: vis, "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": colour, "line-opacity": 0.95,
+            "line-width": ["interpolate", ["exponential", 1.5], ["zoom"], 7, w(0.5), 11, w(1.1), 14, w(1.8), 17, w(3.2), 20, w(5)] } }, before);
+        return;
+      }
+      // roads: minor (metalled, unmetalled dashed) under major (sealed, highways, each with a dark casing)
+      const building = ["==", ["get", "status"], "under construction"];
+      const minorW = ["interpolate", ["exponential", 1.5], ["zoom"], 11, 0.6, 14, 1.8, 18, 5];
+      const majorW = ["interpolate", ["exponential", 1.5], ["zoom"], 6, ["match", ["get", "rclass"], "highway", 0.8, 0.4],
+        10, ["match", ["get", "rclass"], "highway", 1.6, 0.9], 14, ["match", ["get", "rclass"], "highway", 4, 2.6],
+        18, ["match", ["get", "rclass"], "highway", 9, 7]];
+      const casingW = ["interpolate", ["exponential", 1.5], ["zoom"], 6, ["match", ["get", "rclass"], "highway", 1.8, 1.2],
+        10, ["match", ["get", "rclass"], "highway", 2.8, 1.9], 14, ["match", ["get", "rclass"], "highway", 6, 4.4],
+        18, ["match", ["get", "rclass"], "highway", 12, 10]];
+      const lay = { visibility: vis, "line-cap": "round", "line-join": "round" };
+      map.addLayer({ id: own(R.L, "ref-rd-metalled"), type: "line", source: R.src, "source-layer": "minor", minzoom: 11,
+        filter: ["all", ["==", ["get", "rclass"], "metalled"], ["!", building]], layout: lay,
+        paint: { "line-color": c.metalled[2], "line-opacity": 0.9, "line-width": minorW } }, before);
+      map.addLayer({ id: own(R.L, "ref-rd-unmetalled"), type: "line", source: R.src, "source-layer": "minor", minzoom: 11,
+        filter: ["any", ["==", ["get", "rclass"], "unmetalled"], building], layout: Object.assign({}, lay, { "line-cap": "butt" }),
+        paint: { "line-color": c.unmetalled[2], "line-opacity": 0.9, "line-width": minorW, "line-dasharray": [2.5, 2] } }, before);
+      map.addLayer({ id: own(R.L, "ref-rd-casing"), type: "line", source: R.src, "source-layer": "major", filter: ["!", building],
+        layout: lay, paint: { "line-color": "#1b1b1b", "line-opacity": 0.55, "line-width": casingW } }, before);
+      map.addLayer({ id: own(R.L, "ref-rd-major"), type: "line", source: R.src, "source-layer": "major", filter: ["!", building],
+        layout: lay, paint: { "line-color": ["match", ["get", "rclass"], "highway", c.highway[2], c.sealed[2]], "line-width": majorW } }, before);
+      map.addLayer({ id: own(R.L, "ref-rd-building"), type: "line", source: R.src, "source-layer": "major", filter: building,
+        layout: Object.assign({}, lay, { "line-cap": "butt" }),
+        paint: { "line-color": ["match", ["get", "rclass"], "highway", c.highway[2], c.sealed[2]], "line-width": majorW,
+          "line-dasharray": [2, 1.5] } }, before);
+    }
+    function addReference() {
+      REFS.forEach((R, ri) => {
+        const urls = R.urls;
+        const probe = (i) => {
+          if (i >= urls.length) return;                         // not available here: its row stays hidden
+          fetch(urls[i], { headers: { Range: "bytes=0-6" } }).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
+            .then((b) => {
+              if (new TextDecoder().decode(new Uint8Array(b).slice(0, 7)) !== "PMTiles") return probe(i + 1);
+              // under the reference layers above this one (whichever loads first) and the property's own layers
+              const above = new Set(REFS.slice(ri + 1).flatMap((o) => mapIds[o.id] || []));
+              const ownIds = new Set(Object.entries(mapIds).filter(([k]) => !REFS.some((o) => o.id === k)).flatMap(([, v]) => v));
+              const before = (map.getStyle().layers.find((l) => above.has(l.id) || ownIds.has(l.id)) || {}).id ||
+                (map.getLayer("boundary-halo") ? "boundary-halo" : undefined);
+              map.addSource(R.src, { type: "vector", url: "pmtiles://" + urls[i], attribution: R.credit });
+              addRefLayers(R, before, R.L.visible ? "visible" : "none");
+              const refIds = new Set(REFS.flatMap((o) => mapIds[o.id] || []));
+              const lowest = (map.getStyle().layers.find((l) => refIds.has(l.id)) || {}).id;
+              if (map.getLayer("mask") && lowest) map.moveLayer("mask", lowest);     // shading under all reference layers
+              R.ready = true;
+              const row = root.querySelector(`.rv-ref-row[data-ref="${R.key}"]`), head = root.querySelector(".rv-ref-group");
+              if (row) row.hidden = false;
+              if (head) head.hidden = false;
+            }).catch(() => probe(i + 1));
+        };
+        probe(0);
+      });
+    }
     let started = false;
     const setup = () => {
       if (started) return;
@@ -371,14 +503,17 @@
       map.addSource("boundary", { type: "geojson", data: url(m.boundary) });
       map.addLayer({ id: "boundary-halo", type: "line", source: "boundary", paint: { "line-color": "#0b1612", "line-width": 5, "line-opacity": 0.45 } });
       map.addLayer({ id: "boundary", type: "line", source: "boundary", paint: { "line-color": "#ffffff", "line-width": 2, "line-dasharray": [3, 2] } });
+      if (refWanted) addReference();
       if (m.mask) {
         // shade the land outside the property: the whole world with the property cut out of it
         fetch(url(m.boundary)).then((r) => r.json()).then((fc) => {
           map.addSource("mask", { type: "geojson", data: maskOf(fc) });
           // layers that reach past the boundary (roads, rivers: "around_m") stay bright outside it: the shading then goes
           // under all the property's own layers (the rest are cut to the boundary, where the shading has its hole anyway)
+          // the property's own layers are cut to the boundary (where the shading has its hole), so the shading can sit
+          // under all of them: then reference waterways and layers reaching past the boundary stay bright outside it
           const ownIds = new Set(Object.values(mapIds).flat());
-          const lowest = layers.some((L) => Number(L.around_m) > 0 || L.shared) ? (map.getStyle().layers.find((l) => ownIds.has(l.id)) || {}).id : null;
+          const lowest = (map.getStyle().layers.find((l) => ownIds.has(l.id)) || {}).id || null;
           map.addLayer({ id: "mask", type: "fill", source: "mask", layout: { visibility: maskOn ? "visible" : "none" },
             paint: { "fill-color": m.mask.color || "#000000", "fill-opacity": Number(m.mask.opacity) || 0.5, "fill-antialias": false } },
           lowest || "boundary-halo");
@@ -822,12 +957,14 @@
 
     // ---------------------------------------------------------------- labels
     const labelLayers = layers.filter((L) => L.labels && L.features);
+    REFS.forEach((R) => labelLayers.push(R.L));          // last: the property's own labels win
     let labelsOn = true;
     const labelBox = el("div", { class: "rv-labels", "aria-hidden": "true" });
     mapEl.insertBefore(labelBox, mapEl.querySelector(".maplibregl-control-container"));   // under controls and popups
     const labelData = {};                                   // layer id -> [{text, type, coords, bbox}]
     const layerOn = (L) => { const c = root.querySelector("#rv-l-" + L.id); return c ? c.checked : L.visible; };
     let placed = [];
+    let printing = false;                                   // laying the map out for print: no panel or sheet to avoid
     function bboxOf(coords) {
       let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
       const walk = (x) => { if (typeof x[0] === "number") { a = Math.min(a, x[0]); b = Math.min(b, x[1]); c = Math.max(c, x[0]); d = Math.max(d, x[1]); } else x.forEach(walk); };
@@ -972,13 +1109,45 @@
       const t0 = performance.now();
       try { placeLabelsNow(); } finally { RCLViewer.stats.labelsMs = Math.round(performance.now() - t0); }
     }
+    // names along the reference layers (river names; road names and "SH 1"), from the tiles already loaded for this view
+    function refLabels() {
+      const z = map.getZoom();
+      REFS.forEach((R) => {
+        labelData[R.id] = [];
+        if (!R.ready || !layerOn(R.L) || z < R.labelFrom) return;
+        const by = {}, seenPart = new Set();
+        R.labelLayers.forEach((sl) => map.querySourceFeatures(R.src, { sourceLayer: sl }).forEach((f) => {
+          const t = f.properties && R.labelText(f.properties, z), g = f.geometry;
+          if (!t || !g) return;
+          (g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? g.coordinates : []).forEach((c) => {
+            if (c.length < 2) return;
+            const k = t + c[0].join() + c[c.length - 1].join();
+            if (seenPart.has(k)) return;                        // the same piece from a neighbouring tile
+            seenPart.add(k); (by[t] = by[t] || []).push(c);
+          });
+        }));
+        const out = [];
+        Object.entries(by).forEach(([t, parts]) => joinLines(parts).forEach((c) => {
+          const bb = bboxOf(c);
+          out.push({ text: t, type: "Line", bbox: bb, coords: c.length <= 300 ? c : c.filter((_, i) => i % Math.ceil(c.length / 280) === 0 || i === c.length - 1),
+            size: (bb[2] - bb[0]) + (bb[3] - bb[1]) });
+        }));
+        labelData[R.id] = out.sort((a, b) => b.size - a.size).slice(0, 200);   // the longest first, enough for one screen
+      });
+    }
+    let refTimer = null;
+    map.on("sourcedata", (e) => {
+      if (!REFS.some((R) => R.src === e.sourceId) || !e.tile) return;
+      clearTimeout(refTimer); refTimer = setTimeout(placeLabels, 350);
+    });
     function placeLabelsNow() {
+      refLabels();
       labelBox.innerHTML = ""; placed = [];
       if (!labelsOn || !labelLayers.length) return;
       const z = map.getZoom(), b = map.getBounds(), W = mapEl.clientWidth, H = mapEl.clientHeight;
       const pr = panel.getBoundingClientRect(), mr = mapEl.getBoundingClientRect();
-      const left = !narrow() && !panel.classList.contains("collapsed") ? Math.max(0, pr.right - mr.left) : 0;
-      const peek = narrow() ? parseFloat(getComputedStyle(root).getPropertyValue("--peek")) || 0 : 0;   // phone: under the sheet
+      const left = !printing && !narrow() && !panel.classList.contains("collapsed") ? Math.max(0, pr.right - mr.left) : 0;
+      const peek = !printing && narrow() ? parseFloat(getComputedStyle(root).getPropertyValue("--peek")) || 0 : 0;   // phone: under the sheet
       const x0 = left + 4, y0 = 4, x1 = W - 4, y1 = H - peek - 4;
       const cands = [], terrain3d = !!map.getTerrain();
       labelLayers.forEach((L, order) => {
@@ -1098,7 +1267,9 @@
           + `${c.st.italic ? "font-style:italic;" : ""}text-shadow:0 0 2px ${halo},0 0 2px ${halo},0 0 3px ${halo},0 0 4px ${halo};`;
         e.style.transform = `translate(${c.at[0]}px,${c.at[1]}px) translate(-50%,-50%)` + (c.ang ? ` rotate(${c.ang.toFixed(1)}deg)` : "");
         labelBox.appendChild(e);
-        placed.push({ box, e, lnglat: map.unproject(c.at), ang: c.ang || 0, bearing: map.getBearing() });
+        placed.push({ box, e, lnglat: map.unproject(c.at), ang: c.ang || 0, bearing: map.getBearing(),
+          text: c.f.text, at: c.at.slice(), colour: colour || "#1b1b1b", halo, size: Math.min(Math.max(+c.st.size || 12, 6), 48),
+          bold: !!c.st.bold, italic: !!c.st.italic });
       });
     }
     // while the map moves, labels move with it; once it stops they're placed again for what's on screen
@@ -1237,6 +1408,25 @@
       if (op) op.addEventListener("input", (e) => rasterParts(L).forEach((P) => map.getLayer(P.id) && map.setPaintProperty(P.id, "raster-opacity", e.target.value / 100)));
     });
 
+    if (refWanted) {
+      body.appendChild(el("div", { class: "rv-group rv-ref-group", hidden: "" }, "Reference"));
+      REFS.slice().reverse().forEach((R) => {                // top first, like the map's own layers
+        const row = el("div", { class: "rv-layer rv-ref-row" + (R.L.visible ? "" : " off"), hidden: "" });
+        row.dataset.ref = R.key;
+        row.innerHTML = `<div class="rv-layer-row"><label for="rv-l-${R.id}"><input id="rv-l-${R.id}" class="rv-switch" type="checkbox" ${R.L.visible ? "checked" : ""}><span>${esc(R.title)}</span></label><span class="rv-count"></span></div>
+          <ul class="rv-legend">${R.classes.map(([, label, c, w, o]) => `<li><img alt="" src="${lineIcon(c, w, o)}"><span>${esc(label)}</span></li>`).join("")}</ul>
+          <div class="rv-ref-note">${esc(R.credit)}</div>`;
+        row.dataset.from = 0; row.dataset.count = "";
+        body.appendChild(row);
+        row.querySelector("input").addEventListener("change", (e) => {
+          const on = e.target.checked;
+          R.L.visible = on; storeSet(R.store, on ? "1" : "0");
+          row.classList.toggle("off", !on);
+          (mapIds[R.id] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
+          placeLabels();
+        });
+      });
+    }
     if (maskRow) body.appendChild(maskRow);                // after the layers
     if (labelLayers.length) {
       const row = el("div", { class: "rv-layer rv-mask-row" });
@@ -1515,48 +1705,148 @@
       }
       return (L.legend || []).map((g) => ({ label: g.label, src: url(g.icon) }));
     }
+    // one A4 landscape page, always: the map drawn again at print resolution for the space it has on the page, labels
+    // painted into the picture, a legend of what's on (and in view) that shrinks to fit, scale, north arrow, credits
+    const PAGE = { mapW: 204, mapH: 150, ratio: 2.5 };             // map size on the page (mm), pixels per CSS pixel
+    function scaleFor(mppPaper) {                                     // ground metres per mm of paper
+      const maxM = mppPaper * 42, p = 10 ** Math.floor(Math.log10(maxM));
+      const n = [5, 2, 1].map((k) => k * p).find((v) => v <= maxM) || p;
+      const fmt = (v) => (n >= 1000 ? `${+(v / 1000).toFixed(2)}` : `${+v.toFixed(1)}`);
+      const sig = (v) => { const e = 10 ** (Math.floor(Math.log10(v)) - 1); return Math.round(v / e) * e; };
+      return { mm: n / mppPaper, n, unit: n >= 1000 ? "km" : "m", half: fmt(n / 2), full: fmt(n), ratio: sig(mppPaper * 1000) };
+    }
+    function legendFor(L, present) {
+      let items;
+      if (L.draw) {
+        const lg = drawLegend(L);
+        items = lg.map((g) => ({ i: g.i, label: lg.length > 1 ? g.label : "", src: legendIcon(g.color, L.draw.type === "direction") }));
+      } else items = (L.legend || []).map((g, i) => ({ i, label: g.label, src: url(g.icon) }));
+      if (present && items.length > 1) items = items.filter((g) => present.has(g.i));
+      return items;
+    }
+    function printLegend() {
+      const blocks = [];
+      layers.forEach((L) => {
+        if (!isOn(L)) return;
+        let present = null;
+        if (L.features && map.getLayer("hit-" + L.id)) {
+          const got = map.queryRenderedFeatures({ layers: ["hit-" + L.id] });
+          if (!got.length) return;                                  // nothing of it in this view
+          present = new Set(got.map((f) => (f.properties._cls == null ? 0 : Number(f.properties._cls))));
+        }
+        const items = legendFor(L, present);
+        if (items.length === 1 && !items[0].label) blocks.push({ title: L.title, icon: items[0].src, items: [] });
+        else blocks.push({ title: L.title, items: items.filter((g) => g.label) });
+      });
+      REFS.slice().reverse().forEach((R) => {
+        if (!R.ready || !layerOn(R.L)) return;
+        const ids = (mapIds[R.id] || []).filter((id) => map.getLayer(id));
+        const have = new Set(map.queryRenderedFeatures({ layers: ids }).map((f) => f.properties[R.prop]));
+        const items = R.classes.filter(([k]) => have.has(k)).map(([, label, c, w, o]) => ({ label, src: lineIcon(c, w, Object.assign({ casing: c === "#f2f2f2" ? "#777" : undefined }, o)) }));
+        if (items.length) blocks.push({ title: R.title, items });
+      });
+      return blocks;
+    }
+    function paintLabels(g, k, list) {                               // the labels placed for print, into the picture
+      const fam = getComputedStyle(labelBox.querySelector(".rv-label") || labelBox).fontFamily || "sans-serif";
+      g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+      list.forEach((p) => {
+        g.save();
+        g.translate(p.at[0] * k, p.at[1] * k);
+        if (p.ang) g.rotate((p.ang * Math.PI) / 180);
+        g.font = `${p.italic ? "italic " : ""}${p.bold ? 700 : 600} ${p.size * k}px ${fam}`;
+        g.strokeStyle = p.halo; g.lineWidth = 3.2 * k; g.globalAlpha = 0.9; g.strokeText(p.text, 0, 0);
+        g.globalAlpha = 1; g.fillStyle = p.colour; g.fillText(p.text, 0, 0);
+        g.restore();
+      });
+    }
+    function capture() {                                             // -> Promise of {img, zoom, lat, bearing, pitch}
+      return new Promise((resolve, reject) => {
+        const pxmm = 96 / 25.4, cw = Math.round(PAGE.mapW * pxmm), ch = Math.round(PAGE.mapH * pxmm);
+        const W = mapEl.clientWidth, H = mapEl.clientHeight;
+        const pr = panel.getBoundingClientRect(), mr = mapEl.getBoundingClientRect();
+        const left = !narrow() && !panel.classList.contains("collapsed") ? Math.max(0, pr.right - mr.left) : 0;
+        const peek = narrow() ? parseFloat(getComputedStyle(root).getPropertyValue("--peek")) || 0 : 0;
+        const fw = Math.max(200, W - left), fh = Math.max(200, H - peek);
+        const was = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), padding: map.getPadding() };
+        const centre = map.unproject([left + fw / 2, fh / 2]);
+        const zoom = was.zoom + Math.log2(Math.min(cw / fw, ch / fh));   // the same view, sized for the page
+        const restore = () => {
+          printing = false;
+          mapEl.style.cssText = "";
+          try { map.setPixelRatio(window.devicePixelRatio || 1); } catch (e) { /* older map library */ }
+          map.resize(); map.jumpTo(was); placeLabels();
+        };
+        printing = true;
+        mapEl.style.cssText = `inset:auto;left:0;top:0;width:${cw}px;height:${ch}px;`;
+        try { map.setPixelRatio(PAGE.ratio); } catch (e) { /* older map library: screen resolution */ }
+        map.resize();
+        map.jumpTo({ center: centre, zoom, bearing: was.bearing, pitch: was.pitch, padding: { top: 0, bottom: 0, left: 0, right: 0 } });
+        let done = false;
+        const grab = () => {
+          if (done) return; done = true;
+          placeLabelsNow();
+          const legend = printLegend();
+          map.once("render", () => {
+            let src;
+            try { src = map.getCanvas().toDataURL("image/png"); } catch (e) { src = null; }
+            const info = { zoom: map.getZoom(), lat: map.getCenter().lat, bearing: map.getBearing(), pitch: map.getPitch(), legend };
+            const k = map.getCanvas().width / cw;
+            const snap = placed.slice();                         // restoring the screen places its own labels again
+            const labelsDraw = (g) => paintLabels(g, k, snap);
+            restore();
+            if (!src) return reject(new Error("canvas"));
+            const im = new Image();
+            im.onload = () => {
+              const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+              const g = c.getContext("2d"); g.drawImage(im, 0, 0); labelsDraw(g);
+              resolve(Object.assign(info, { img: c.toDataURL("image/jpeg", 0.92) }));
+            };
+            im.onerror = () => reject(new Error("image"));
+            im.src = src;
+          });
+          map.triggerRepaint();
+        };
+        map.once("idle", grab);
+        setTimeout(grab, 20000);                                     // slow imagery: print what has arrived
+      });
+    }
     function printView() {
-      const canvas = map.getCanvas();
-      map.once("render", () => {
-        let img;
-        try { img = canvas.toDataURL("image/png"); } catch (e) { img = null; }   // read during the frame: no extra GPU memory
-        if (!img) { alert("Sorry, this map view can't be printed in this browser."); return; }
-        const w = mapEl.clientWidth, h = mapEl.clientHeight;
-        const zoom = map.getZoom(), lat = map.getCenter().lat;
-        const mpp = (40075016.686 * Math.cos(rad(lat))) / (512 * 2 ** zoom);
-        const room = layers.some((L) => isOn(L)) ? 800 : 1010;     // landscape page, legend beside the map
-        const pz = Math.min(1, room / w, 560 / h);                   // the map image is shrunk by this to fit
-        const sc = map.getPitch() < 5 ? niceScale(mpp / pz, 180) : null;   // measured on the printed image
-        const shown = layers.filter((L) => isOn(L));
-        const legend = shown.map((L) => {
-          const items = legendFor(L);
-          const head = items.length === 1 && !items[0].label
-            ? `<li class="rv-pl-layer"><img alt="" src="${esc(items[0].src)}"><span>${esc(L.title)}</span></li>`
-            : `<li class="rv-pl-layer"><span>${esc(L.title)}</span></li>`
-              + items.filter((g) => g.label).map((g) => `<li><img alt="" src="${esc(g.src)}"><span>${esc(g.label)}</span></li>`).join("");
-          return head;
-        }).join("");
+      if (document.querySelector(".rv-print")) return;
+      const busy = el("div", { class: "rv-print-busy" }, "Preparing the print…");
+      root.appendChild(busy);
+      capture().then((v) => {
+        busy.remove();
+        const pxmm = 96 / 25.4, cw = Math.round(PAGE.mapW * pxmm);
+        const mpp = (40075016.686 * Math.cos(rad(v.lat))) / (512 * 2 ** v.zoom);      // ground metres per CSS pixel
+        const sc = v.pitch < 5 ? scaleFor(mpp * cw / PAGE.mapW) : null;
         const property = m.property && m.property !== (m.map_title || m.title) ? m.property : "";
         const meta = [property, m.survey_date ? "Surveyed " + fmtDate(m.survey_date) : ""].filter(Boolean).join(" · ");
         const bmOn = ["aerial", "map"].find((k) => map.getLayoutProperty("bm-" + k, "visibility") !== "none");
-        const credit = [bmOn ? String(BASEMAPS[bmOn].attribution || "").replace(/<[^>]*>/g, "") : "", "Rural Consulting Limited"].filter(Boolean).join(" · ");
-        const labels = labelBox.cloneNode(true);
-        labels.classList.add("rv-pl-labels");
-        const sheet = el("div", { class: "rv-print" });
+        const credits = [bmOn ? String(BASEMAPS[bmOn].attribution || "").replace(/<[^>]*>/g, "") : "",
+          ...REFS.filter((R) => R.ready && layerOn(R.L)).map((R) => R.credit), threeD ? "Elevation: LINZ" : ""].filter(Boolean).join(" · ");
+        const segs = sc ? [0, 1, 2, 3].map((i) => `<rect x="${(i * sc.mm) / 4}" y="0" width="${sc.mm / 4}" height="1.6" fill="${i % 2 ? "#fff" : "#1b2a24"}" stroke="#1b2a24" stroke-width=".25"/>`).join("") : "";
+        const scale = sc ? `<div class="rv-pl-scale"><svg width="${sc.mm + 2}mm" height="2.2mm" viewBox="-1 -0.3 ${sc.mm + 2} 2.2">${segs}</svg>
+            <div class="rv-pl-ticks" style="width:${sc.mm}mm"><span>0</span><span>${sc.half}</span><span>${sc.full} ${sc.unit}</span></div>
+            <div class="rv-pl-ratio">Scale 1:${sc.ratio.toLocaleString("en-NZ")} at A4</div></div>`
+          : `<div class="rv-pl-scale"><div class="rv-pl-ratio">Perspective view, not to scale</div></div>`;
+        const north = `<div class="rv-pl-north"><svg viewBox="-10 -12 20 24" style="transform:rotate(${-v.bearing}deg)"><path d="M0-11 6 8 0 4-6 8z" fill="#1b2a24"/><path d="M0-11 0 4-6 8z" fill="#fff" stroke="#1b2a24" stroke-width=".8"/></svg><b>N</b></div>`;
+        const blocks = v.legend.map((b) => `<section class="rv-pl-blk"><h4>${b.icon ? `<img alt="" src="${esc(b.icon)}">` : ""}${esc(b.title)}</h4>`
+          + (b.items.length ? `<ul>${b.items.map((g) => `<li><img alt="" src="${esc(g.src)}"><span>${esc(g.label)}</span></li>`).join("")}</ul>` : "") + "</section>").join("");
+        const sheet = el("div", { class: "rv-print rv-print-measure" });
         sheet.innerHTML = `<header class="rv-pl-head"><img class="rv-pl-logo" src="brand/logo.a1046e5e.png" alt="Rural Consulting">
-            <div><div class="rv-pl-title">${esc(m.map_title || m.title)}</div><div class="rv-pl-meta">${esc(meta)}</div></div></header>
+            <div class="rv-pl-ht"><div class="rv-pl-title">${esc(m.map_title || m.title)}</div><div class="rv-pl-meta">${esc(meta)}</div></div></header>
           <div class="rv-pl-body">
-            <div class="rv-pl-mapcol"><figure class="rv-pl-fig" style="width:${w}px;height:${h}px"><img class="rv-pl-map" alt="Map" src="${img}"></figure>
-              <div class="rv-pl-cap">
-                ${sc ? `<div class="rv-pl-scale"><div style="width:${sc.px.toFixed(1)}px"></div><span>${esc(sc.label)}</span></div>` : `<div class="rv-pl-scale"><span>Tilted view, not to scale</span></div>`}
-                <div class="rv-pl-north" aria-label="North"><span style="transform:rotate(${-map.getBearing()}deg)">▲</span>N</div>
-              </div></div>
-            ${legend ? `<aside class="rv-pl-legend"><div class="rv-pl-lh">Legend</div><ul>${legend}</ul></aside>` : ""}
+            <figure class="rv-pl-fig" style="width:${PAGE.mapW}mm;height:${PAGE.mapH}mm"><img class="rv-pl-map" alt="Map" src="${v.img}">
+              <div class="rv-pl-plate rv-pl-plate-l">${scale}</div><div class="rv-pl-plate rv-pl-plate-r">${north}</div></figure>
+            <aside class="rv-pl-legend"><div class="rv-pl-lh">Legend</div><div class="rv-pl-lcols">${blocks || '<p class="rv-pl-none">No layers switched on.</p>'}</div></aside>
           </div>
-          <footer class="rv-pl-foot"><span>${esc(credit)}</span><span>Printed ${esc(new Date().toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" }))}</span></footer>`;
-        sheet.querySelector(".rv-pl-fig").appendChild(labels);
-        sheet.style.setProperty("--pz", String(pz));
+          <footer class="rv-pl-foot"><div class="rv-pl-f1"><span>Rural Consulting Limited · ruralconsulting.co.nz</span><span>${esc(credits)}</span>
+              <span>Printed ${esc(new Date().toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" }))}</span></div>
+            <div class="rv-pl-f2">Indicative only: boundaries and features are approximate and are not a legal survey. Check on the ground before relying on them.</div></footer>`;
         document.body.appendChild(sheet);
+        fitLegend(sheet.querySelector(".rv-pl-lcols"));
+        sheet.classList.remove("rv-print-measure");
         document.body.classList.add("rv-printing");
         let cleaned = false;
         const clean = () => { if (cleaned) return; cleaned = true; sheet.remove(); document.body.classList.remove("rv-printing"); window.removeEventListener("afterprint", clean); };
@@ -1566,8 +1856,27 @@
           window.print();
           setTimeout(clean, 1000);                   // browsers that don't send afterprint
         });
-      });
-      map.triggerRepaint();
+      }).catch(() => { busy.remove(); alert("Sorry, this map view can't be printed in this browser."); });
+    }
+    // shrink the legend until it fits its box: smaller type, then two columns, then "+ N more"
+    function fitLegend(box) {
+      const over = () => box.scrollHeight > box.clientHeight + 1 || box.scrollWidth > box.clientWidth + 1;
+      for (const cols of [1, 2]) {
+        box.style.columnCount = cols;
+        for (const pt of [8.5, 8, 7.5, 7, 6.5]) { box.style.fontSize = pt + "pt"; if (!over()) return; }
+      }
+      const items = [...box.querySelectorAll("li, .rv-pl-blk")].reverse();
+      let hidden = 0;
+      const more = el("p", { class: "rv-pl-more" });
+      box.appendChild(more);
+      for (const it of items) {
+        if (!over()) break;
+        if (it.classList.contains("rv-pl-blk") && it.querySelector("li")) continue;
+        hidden += it.tagName === "LI" || !it.querySelector("ul") ? 1 : 0;      // an emptied heading isn't counted again
+        it.remove();
+        more.textContent = `+ ${hidden} more`;
+      }
+      if (!hidden) more.remove();
     }
     btnPrint.addEventListener("click", () => { endTool(); printView(); });
     return map;
@@ -1585,6 +1894,6 @@
     }));
   }
 
-  const RCLViewer = { mount, mergeShared, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
+  const RCLViewer = { mount, mergeShared, referenceDefs, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
   window.RCLViewer = RCLViewer;
 })();
