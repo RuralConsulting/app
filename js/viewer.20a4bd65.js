@@ -5,6 +5,7 @@
  *              focus?: suggestionId, manage?: (suggestion) => void }                // staff: open in the inbox
  *   shared?: [layer entry or null, one for each of manifest.shared_layers]          // platform: layers published once, see mergeShared
  *   referenceLayers?: [{ key: "roads" | "waterways", url, title?, credit? }]         // platform: where the reference layers are, see referenceDefs
+ *                   + [{ key, url, title, credit, style: { source_layer, layers, legend } }] // platform: context layers, see contextDefs
  * })
  * Works for the local preview (url = identity) and the customer portal (url = signed link).
  */
@@ -198,9 +199,91 @@
     }
     const plain = (t) => String(t).replace(/[<>]/g, "");      // the map's attribution line is HTML
     return on.flatMap((d) => {
-      const g = opts.referenceLayers.find((r) => r && r.key === d.key && typeof r.url === "string" && r.url);
+      const g = opts.referenceLayers.find((r) => r && r.key === d.key && !r.style && typeof r.url === "string" && r.url);
       return g ? [Object.assign({}, d, { title: g.title ? plain(g.title) : d.title, credit: g.credit ? plain(g.credit) : d.credit, urls: [g.url] })] : [];
     });
+  }
+  // Context layers (catchments, zones, protected land...): referenceLayers entries that carry their own style, drawn from their
+  // file unclipped, under the map's own layers, off until switched on. style: { source_layer, layers: [MapLibre fill, line,
+  // circle or symbol layer definitions against that source layer], legend: [{ label, fill?, outline?, opacity?, line?, width?,
+  // dash?, circle?, stroke? }] }. Only those four types, their paint, layout, filter and zooms are taken; the source is the
+  // entry's own. A symbol layer is not drawn by MapLibre (the map has no font server): its text-field (["get", field], or a
+  // "concat" of strings and gets) names the features with the viewer's own labels, from its minzoom, in its text colour and
+  // halo. Titles, credits and legend labels are plain text and colours hex only. "reference": false turns these off too.
+  const CTX_TYPES = ["fill", "line", "circle", "symbol"];
+  const hexOnly = (v) => (/^#[0-9a-f]{3,8}$/i.test(String(v || "")) ? String(v) : null);
+  function contextDefs(m, opts) {
+    if (!Array.isArray(opts.referenceLayers)) return [];
+    const refOff = (r, key) => r === false || (r && typeof r === "object" && r[key] === false);
+    const plain = (t) => String(t).replace(/[<>]/g, "");
+    const obj = (o) => (o && typeof o === "object" && !Array.isArray(o) ? Object.assign({}, o) : {});
+    const num = (v) => (typeof v === "number" && isFinite(v) ? v : undefined);
+    const seen = new Set();
+    return opts.referenceLayers.flatMap((r) => {
+      const st = r && r.style;
+      if (!st || typeof st !== "object" || !Array.isArray(st.layers) || typeof r.url !== "string" || !r.url) return [];
+      const key = String(r.key || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 80);
+      if (!key || seen.has(key) || typeof st.source_layer !== "string" || !st.source_layer) return [];
+      if (refOff(m.reference, key) || refOff(opts.reference, key)) return [];
+      seen.add(key);
+      const layers = [];
+      let labels = null;
+      st.layers.forEach((x) => {
+        if (!x || !CTX_TYPES.includes(x.type)) return;
+        if (x.type === "symbol") {
+          const lay = obj(x.layout), paint = obj(x.paint);
+          if (labels || !lay["text-field"]) return;
+          const font = Array.isArray(lay["text-font"]) ? lay["text-font"].join(" ") : "";
+          labels = { text: lay["text-field"], minzoom: num(x.minzoom) ?? 0, size: num(lay["text-size"]) || 12,
+            color: hexOnly(paint["text-color"]) || "#1b1b1b", halo: hexOnly(paint["text-halo-color"]) || "#ffffff",
+            italic: /italic/i.test(font), bold: /bold/i.test(font) };
+          return;
+        }
+        const d = { type: x.type, paint: obj(x.paint), layout: obj(x.layout) };
+        if (Array.isArray(x.filter)) d.filter = x.filter;
+        if (num(x.minzoom) !== undefined) d.minzoom = x.minzoom;
+        if (num(x.maxzoom) !== undefined) d.maxzoom = x.maxzoom;
+        layers.push(d);
+      });
+      const legend = (Array.isArray(st.legend) ? st.legend : []).filter((e) => e && typeof e === "object").slice(0, 40).map((e) => ({
+        label: plain(e.label || ""), fill: hexOnly(e.fill), outline: hexOnly(e.outline), line: hexOnly(e.line), circle: hexOnly(e.circle),
+        stroke: hexOnly(e.stroke), opacity: num(e.opacity), width: num(e.width), dash: Array.isArray(e.dash) ? e.dash.filter((v) => num(v) !== undefined) : null }));
+      return [{ key, id: "ctx-" + key, src: "ctx-src-" + key, store: "rv-ctx-" + key, title: plain(r.title || key),
+        credit: plain(r.credit || ""), url: r.url, sourceLayer: st.source_layer, layers, labels, legend }];
+    });
+  }
+  // a context layer's label text for a feature: ["get", f], ["to-string", e], ["concat", ...] or a plain string; "" when a field is empty
+  function contextText(e, p) {
+    if (typeof e === "string") return e;
+    if (typeof e === "number") return String(e);
+    if (!Array.isArray(e)) return "";
+    if (e[0] === "get") { const v = p[e[1]]; return v == null ? "" : String(v).trim(); }
+    if (e[0] === "to-string") return contextText(e[1], p);
+    if (e[0] === "concat") {
+      const parts = e.slice(1).map((x) => [x, contextText(x, p)]);
+      return parts.some(([x, t]) => Array.isArray(x) && t === "") ? "" : parts.map(([, t]) => t).join("");
+    }
+    return "";
+  }
+  // a context layer's legend picture: a filled square with its outline, a line, or a dot with its ring
+  function contextIcon(e) {
+    if (e.line && !e.fill) return lineIcon(e.line, Math.max(1.5, (e.width || 1.5) * 2), e.dash && e.dash.length ? { dash: e.dash.map((v) => v * 2) } : {});
+    const c = document.createElement("canvas"); c.width = 40; c.height = 40;
+    const g = c.getContext("2d");
+    if (e.circle) {
+      g.beginPath(); g.arc(20, 20, 9, 0, 2 * Math.PI); g.fillStyle = e.circle; g.fill();
+      g.lineWidth = 3; g.strokeStyle = e.stroke || "#ffffff"; g.stroke();
+      g.beginPath(); g.arc(20, 20, 11, 0, 2 * Math.PI); g.lineWidth = 1; g.strokeStyle = "rgba(0,0,0,0.35)"; g.stroke();   // shows a white ring on white
+    } else {
+      if (e.fill) { g.globalAlpha = Math.min(1, (e.opacity ?? 0.3) + 0.15); g.fillStyle = e.fill; g.fillRect(5, 5, 30, 30); g.globalAlpha = 1; }
+      const o = e.outline || e.line;
+      if (o) {
+        g.lineWidth = Math.max(2, (e.width || 1.5) * 2); g.strokeStyle = o;
+        if (e.dash && e.dash.length) g.setLineDash(e.dash.map((v) => v * 2));
+        g.strokeRect(5, 5, 30, 30);
+      }
+    }
+    return c.toDataURL("image/png");
   }
   function colorExpr(colors) {
     if (!colors || !colors.length) return "#e8590c";
@@ -406,6 +489,15 @@
       ready: false,
       L: { id: d.id, title: d.title, ref: true, visible: storeGet(d.store) !== "0", labels: d.labels } }));
     const refWanted = REFS.length > 0;
+    // context layers (platform core layers with their own style): off until switched on, remembered on this device
+    const CTX = contextDefs(m, opts).map((d) => Object.assign({}, d, {
+      ready: false,
+      L: { id: d.id, title: d.title, ctx: true, visible: storeGet(d.store) === "1", labels: d.labels } }));
+    // where each context and reference map layer sits, bottom first: areas, then lines, then roads and waterways, then points;
+    // all of them under the property's own layers
+    const CTX_Z = { fill: 1, line: 2, circle: 4 }, REF_Z = 3;
+    const stackZ = {};
+    const ctxIdsAbove = (z) => CTX.flatMap((o) => mapIds[o.id] || []).filter((id) => stackZ[id] > z);
     const hitIds = [];
     const coneIds = [];                            // photo cones are clickable too: a cone picks the photo facing that way
     const mapIds = {};                             // web layer id -> map layer ids (for the on/off switch)
@@ -464,13 +556,14 @@
             .then((b) => {
               if (new TextDecoder().decode(new Uint8Array(b).slice(0, 7)) !== "PMTiles") return probe(i + 1);
               // under the reference layers above this one (whichever loads first) and the property's own layers
-              const above = new Set(REFS.slice(ri + 1).flatMap((o) => mapIds[o.id] || []));
-              const ownIds = new Set(Object.entries(mapIds).filter(([k]) => !REFS.some((o) => o.id === k)).flatMap(([, v]) => v));
+              const above = new Set(REFS.slice(ri + 1).flatMap((o) => mapIds[o.id] || []).concat(ctxIdsAbove(REF_Z)));
+              const ownIds = new Set(Object.entries(mapIds).filter(([k]) => !REFS.some((o) => o.id === k) && !CTX.some((o) => o.id === k)).flatMap(([, v]) => v));
               const before = (map.getStyle().layers.find((l) => above.has(l.id) || ownIds.has(l.id)) || {}).id ||
                 (map.getLayer("boundary-halo") ? "boundary-halo" : undefined);
               map.addSource(R.src, { type: "vector", url: "pmtiles://" + urls[i], attribution: R.credit });
               addRefLayers(R, before, R.L.visible ? "visible" : "none");
-              const refIds = new Set(REFS.flatMap((o) => mapIds[o.id] || []));
+              (mapIds[R.id] || []).forEach((id) => { stackZ[id] = REF_Z + ri * 0.01; });
+              const refIds = new Set(REFS.concat(CTX).flatMap((o) => mapIds[o.id] || []));
               const lowest = (map.getStyle().layers.find((l) => refIds.has(l.id)) || {}).id;
               if (map.getLayer("mask") && lowest) map.moveLayer("mask", lowest);     // shading under all reference layers
               R.ready = true;
@@ -480,6 +573,38 @@
             }).catch(() => probe(i + 1));
         };
         probe(0);
+      });
+    }
+    // context layers: each from its own file, once it answers as a PMTiles file; each map layer slotted in by its kind
+    function addContext() {
+      CTX.forEach((C, ci) => {
+        fetch(C.url, { headers: { Range: "bytes=0-6" } }).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
+          .then((b) => {
+            if (new TextDecoder().decode(new Uint8Array(b).slice(0, 7)) !== "PMTiles") return;
+            map.addSource(C.src, { type: "vector", url: "pmtiles://" + C.url, attribution: C.credit });
+            const vis = C.L.visible ? "visible" : "none";
+            C.layers.forEach((d, j) => {
+              const z = CTX_Z[d.type] + ci * 0.001 + j * 0.00001;
+              const ownIds = new Set(Object.entries(mapIds).filter(([k]) => !REFS.some((o) => o.id === k) && !CTX.some((o) => o.id === k)).flatMap(([, v]) => v));
+              const before = (map.getStyle().layers.find((l) => stackZ[l.id] > z || ownIds.has(l.id)) || {}).id ||
+                (map.getLayer("boundary-halo") ? "boundary-halo" : undefined);
+              const id = `${C.id}-${j}`;
+              const def = Object.assign({ id, type: d.type, source: C.src, "source-layer": C.sourceLayer, paint: d.paint,
+                layout: Object.assign({}, d.layout, { visibility: vis }) }, d.filter ? { filter: d.filter } : {},
+                d.minzoom !== undefined ? { minzoom: d.minzoom } : {}, d.maxzoom !== undefined ? { maxzoom: d.maxzoom } : {});
+              try { map.addLayer(def, before); } catch (e) { return; }      // a definition MapLibre refuses is left out
+              if (!map.getLayer(id)) return;
+              own(C.L, id); stackZ[id] = z;
+            });
+            const all = new Set(REFS.concat(CTX).flatMap((o) => mapIds[o.id] || []));
+            const lowest = (map.getStyle().layers.find((l) => all.has(l.id)) || {}).id;
+            if (map.getLayer("mask") && lowest) map.moveLayer("mask", lowest);     // shading under all of them
+            C.ready = true;
+            const row = root.querySelector(`.rv-ctx-row[data-ctx="${C.key}"]`), head = root.querySelector(".rv-ctx-group");
+            if (row) row.hidden = false;
+            if (head) head.hidden = false;
+            if (C.L.visible) placeLabels();
+          }).catch(() => {});
       });
     }
     let started = false;
@@ -504,6 +629,7 @@
       map.addLayer({ id: "boundary-halo", type: "line", source: "boundary", paint: { "line-color": "#0b1612", "line-width": 5, "line-opacity": 0.45 } });
       map.addLayer({ id: "boundary", type: "line", source: "boundary", paint: { "line-color": "#ffffff", "line-width": 2, "line-dasharray": [3, 2] } });
       if (refWanted) addReference();
+      if (CTX.length) addContext();
       if (m.mask) {
         // shade the land outside the property: the whole world with the property cut out of it
         fetch(url(m.boundary)).then((r) => r.json()).then((fc) => {
@@ -958,6 +1084,7 @@
     // ---------------------------------------------------------------- labels
     const labelLayers = layers.filter((L) => L.labels && L.features);
     REFS.forEach((R) => labelLayers.push(R.L));          // last: the property's own labels win
+    CTX.forEach((C) => { if (C.labels) labelLayers.push(C.L); });
     let labelsOn = true;
     const labelBox = el("div", { class: "rv-labels", "aria-hidden": "true" });
     mapEl.insertBefore(labelBox, mapEl.querySelector(".maplibregl-control-container"));   // under controls and popups
@@ -1104,6 +1231,8 @@
     }
     const LINE_REPEAT = 450;                                // a long road or river is named again about every 450 px
     const SAME_GAP = 300;                                   // ... but never within 300 px of the same name (braided rivers)
+    const AREA_GAP = 640;                                   // a context area, drawn in tile pieces, is named once in about this much
+    const POINT_GAP = 160;                                  // and points of the same name close together (a town's bores) once
     const REPEAT = 340;                                     // big areas show their label again about every 340 px
     function placeLabels() {
       const t0 = performance.now();
@@ -1135,13 +1264,44 @@
         labelData[R.id] = out.sort((a, b) => b.size - a.size).slice(0, 200);   // the longest first, enough for one screen
       });
     }
+    // names on the context layers that are on, from the tiles already loaded for this view: areas (a piece per tile, the
+    // same name never written twice close together), lines joined up by name, points
+    function ctxLabels() {
+      const z = map.getZoom();
+      CTX.forEach((C) => {
+        if (!C.labels) return;
+        labelData[C.id] = [];
+        if (!C.ready || !layerOn(C.L) || z < C.labels.minzoom - 0.25) return;
+        const out = [], lines = {}, seenPart = new Set();
+        map.querySourceFeatures(C.src, { sourceLayer: C.sourceLayer }).forEach((f) => {
+          const t = contextText(C.labels.text, f.properties || {}), g = f.geometry;
+          if (!t || !g) return;
+          const parts = /^Multi/.test(g.type) ? g.coordinates.map((c) => [g.type.slice(5), c]) : [[g.type, g.coordinates]];
+          parts.forEach(([type, c]) => {
+            const k = t + type + JSON.stringify(type === "Point" ? c : type === "Polygon" ? [c[0][0], c[0].length] : [c[0], c[c.length - 1]]);
+            if (seenPart.has(k)) return;                          // the same piece from a neighbouring tile
+            seenPart.add(k);
+            if (type === "Polygon" && c[0] && c[0].length > 3) out.push({ text: t, type: "Polygon", bbox: bboxOf(c), raw: c, coords: c, near: true });
+            else if (type === "LineString" && c.length > 1) (lines[t] = lines[t] || []).push(c);
+            else if (type === "Point") out.push({ text: t, type: "Point", bbox: [c[0], c[1], c[0], c[1]], coords: c, near: "point" });
+          });
+        });
+        Object.entries(lines).forEach(([t, ps]) => joinLines(ps).forEach((c) => {
+          const bb = bboxOf(c);
+          out.push({ text: t, type: "Line", bbox: bb, coords: c.length <= 300 ? c : c.filter((_, i) => i % Math.ceil(c.length / 280) === 0 || i === c.length - 1) });
+        }));
+        const size = (f) => (f.bbox[2] - f.bbox[0]) + (f.bbox[3] - f.bbox[1]);
+        labelData[C.id] = out.sort((a, b) => size(b) - size(a)).slice(0, 300);
+      });
+    }
     let refTimer = null;
     map.on("sourcedata", (e) => {
-      if (!REFS.some((R) => R.src === e.sourceId) || !e.tile) return;
+      if (!REFS.concat(CTX).some((R) => R.src === e.sourceId) || !e.tile) return;
       clearTimeout(refTimer); refTimer = setTimeout(placeLabels, 350);
     });
     function placeLabelsNow() {
       refLabels();
+      ctxLabels();
       labelBox.innerHTML = ""; placed = [];
       if (!labelsOn || !labelLayers.length) return;
       const z = map.getZoom(), b = map.getBounds(), W = mapEl.clientWidth, H = mapEl.clientHeight;
@@ -1249,14 +1409,15 @@
       };
       cands.forEach((c) => {
         const nameKey = c.L.id + "\u0000" + c.f.text;
-        if (c.line && (sameName[nameKey] || []).some((q) => Math.hypot(q[0] - c.at[0], q[1] - c.at[1]) < SAME_GAP)) return;
+        const apart = c.line || c.f.near;
+        if (apart && (sameName[nameKey] || []).some((q) => Math.hypot(q[0] - c.at[0], q[1] - c.at[1]) < (c.f.near === "point" ? POINT_GAP : c.f.near ? AREA_GAP : SAME_GAP))) return;
         let box = null;
         for (const at of c.alts || [c.at]) {
           const b2 = { cx: at[0], cy: at[1], hw: c.tw / 2, hh: c.th / 2, ang: c.ang || 0 };
           if (free(b2) && seen(c, at)) { box = b2; c.at = at; break; }
         }
         if (!box) return;
-        if (c.line) (sameName[nameKey] = sameName[nameKey] || []).push(c.at);
+        if (apart) (sameName[nameKey] = sameName[nameKey] || []).push(c.at);
         const e = document.createElement("span");
         e.className = "rv-label";
         e.textContent = c.f.text;
@@ -1423,6 +1584,26 @@
           R.L.visible = on; storeSet(R.store, on ? "1" : "0");
           row.classList.toggle("off", !on);
           (mapIds[R.id] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
+          placeLabels();
+        });
+      });
+    }
+    if (CTX.length) {
+      body.appendChild(el("div", { class: "rv-group rv-ctx-group", hidden: "" }, "Context layers"));
+      CTX.forEach((C) => {                                    // in the order given
+        const row = el("div", { class: "rv-layer rv-ctx-row" + (C.L.visible ? "" : " off"), hidden: "" });
+        row.dataset.ctx = C.key;
+        const one = C.legend.length === 1 ? `<img alt="" src="${contextIcon(C.legend[0])}" style="width:20px;height:20px">` : "";
+        row.innerHTML = `<div class="rv-layer-row"><label for="rv-l-${C.id}"><input id="rv-l-${C.id}" class="rv-switch" type="checkbox" ${C.L.visible ? "checked" : ""}>${one}<span>${esc(C.title)}</span></label><span class="rv-count"></span></div>`
+          + (C.legend.length > 1 ? `<ul class="rv-legend">${C.legend.map((g) => `<li><img alt="" src="${contextIcon(g)}"><span>${esc(g.label)}</span></li>`).join("")}</ul>` : "")
+          + (C.credit ? `<div class="rv-ref-note">${esc(C.credit)}</div>` : "");
+        row.dataset.from = 0; row.dataset.count = "";
+        body.appendChild(row);
+        row.querySelector("input").addEventListener("change", (e) => {
+          const on = e.target.checked;
+          C.L.visible = on; storeSet(C.store, on ? "1" : "0");
+          row.classList.toggle("off", !on);
+          (mapIds[C.id] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
           placeLabels();
         });
       });
@@ -1745,6 +1926,11 @@
         const items = R.classes.filter(([k]) => have.has(k)).map(([, label, c, w, o]) => ({ label, src: lineIcon(c, w, Object.assign({ casing: c === "#f2f2f2" ? "#777" : undefined }, o)) }));
         if (items.length) blocks.push({ title: R.title, items });
       });
+      CTX.forEach((C) => {
+        if (!C.ready || !layerOn(C.L) || !C.legend.length) return;
+        if (C.legend.length === 1) blocks.push({ title: C.title, icon: contextIcon(C.legend[0]), items: [] });
+        else blocks.push({ title: C.title, items: C.legend.map((g) => ({ label: g.label, src: contextIcon(g) })) });
+      });
       return blocks;
     }
     function paintLabels(g, k, list) {                               // the labels placed for print, into the picture
@@ -1824,7 +2010,7 @@
         const meta = [property, m.survey_date ? "Surveyed " + fmtDate(m.survey_date) : ""].filter(Boolean).join(" · ");
         const bmOn = ["aerial", "map"].find((k) => map.getLayoutProperty("bm-" + k, "visibility") !== "none");
         const credits = [bmOn ? String(BASEMAPS[bmOn].attribution || "").replace(/<[^>]*>/g, "") : "",
-          ...REFS.filter((R) => R.ready && layerOn(R.L)).map((R) => R.credit), threeD ? "Elevation: LINZ" : ""].filter(Boolean).join(" · ");
+          ...REFS.filter((R) => R.ready && layerOn(R.L)).map((R) => R.credit), ...CTX.filter((C) => C.ready && layerOn(C.L)).map((C) => C.credit), threeD ? "Elevation: LINZ" : ""].filter(Boolean).join(" · ");
         const segs = sc ? [0, 1, 2, 3].map((i) => `<rect x="${(i * sc.mm) / 4}" y="0" width="${sc.mm / 4}" height="1.6" fill="${i % 2 ? "#fff" : "#1b2a24"}" stroke="#1b2a24" stroke-width=".25"/>`).join("") : "";
         const scale = sc ? `<div class="rv-pl-scale"><svg width="${sc.mm + 2}mm" height="2.2mm" viewBox="-1 -0.3 ${sc.mm + 2} 2.2">${segs}</svg>
             <div class="rv-pl-ticks" style="width:${sc.mm}mm"><span>0</span><span>${sc.half}</span><span>${sc.full} ${sc.unit}</span></div>
@@ -1894,6 +2080,6 @@
     }));
   }
 
-  const RCLViewer = { mount, mergeShared, referenceDefs, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
+  const RCLViewer = { mount, mergeShared, referenceDefs, contextDefs, contextText, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
   window.RCLViewer = RCLViewer;
 })();

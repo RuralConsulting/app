@@ -7,6 +7,7 @@
 // Client suggestions are off in v1: the viewer is given no `suggest`. farm-space.js and group-space.js only say when to open and close.
 // CL1: every map offers the reference layers (roads, waterways) stored once on the platform under core/, signed and renewed with the
 // map's own files and passed as the viewer's referenceLayers; one whose file is not there is left out and the map opens without it.
+// CL2: so is every core layer marked to be offered on every map with its own style (tools/load_core_reference.py --batch).
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) { module.exports = api; return; }
@@ -33,7 +34,7 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   const BUCKET = "map-packages";
   const MAX_MAPS = 100, SIGN_BATCH = 500, MAX_SHARED = 50, SHARED_PREFIX = "shared/";
-  const MAX_REFERENCE = 10, REFERENCE_PREFIX = "reference/", REFERENCE_DRAWS = ["roads", "waterways"];
+  const MAX_REFERENCE = 40, REFERENCE_PREFIX = "reference/", REFERENCE_DRAWS = ["roads", "waterways"], CONTEXT_DRAW = "context";
   const LINK_SECONDS = 3600, RENEW_MS = (LINK_SECONDS - 600) * 1000;
   const NONE = "No maps have been published here yet.";
   const UNAVAILABLE = "This map is not available right now.";
@@ -95,24 +96,31 @@
       // a layer whose tiles did not all get a link (removed, or the person may not have them) counts as missing: the viewer says so
       const usable = shared.map((L) => (L && [L.tiles, ...(L.tile_parts || []).map((p) => p.tiles)].every((f) => urls[f]) ? L : null));
       // a reference layer whose file did not get a link (not uploaded yet, or removed) is left out: the map opens without it
-      const referenceLayers = reference.filter((r) => urls[r.rel]).map((r) => ({ key: r.key, title: r.title, credit: r.credit, url: urls[r.rel] }));
+      const referenceLayers = reference.filter((r) => urls[r.rel]).map((r) => ({ key: r.key, title: r.title, credit: r.credit, url: urls[r.rel], ...(r.style ? { style: r.style } : {}) }));
       return { manifest: pkg.manifest, urls, shared: usable, referenceLayers };
     }
 
     // CL1: the reference layers, from the core register: the rows whose style names how the viewer draws them
     // ({ reference: { draw: "roads" | "waterways", credit } }, written by tools/load_core_reference.py), by key. Each row's one file
     // is signed with the map's own, so every map draws the same stored copy. A read that fails only leaves them out.
+    // CL2: a row drawn as "context" and marked every_map carries its own style ({ source_layer, layers, legend }); it is offered by
+    // its own key with that style, in the order the loader gave (tools/core_layers/layers.json), and the viewer lists it under
+    // Context layers, off until switched on.
     async function referenceRows(sb, byPath) {
       let rows = [];
       try {
         const { data, error } = await sb.from("core_layers").select("key, title, style, tiles_path").not("style->reference", "is", null).order("key").limit(MAX_REFERENCE);
         rows = error ? [] : data || [];
       } catch { rows = []; }
-      return rows.filter((row) => REFERENCE_DRAWS.includes(row?.style?.reference?.draw) && typeof row.tiles_path === "string" && row.tiles_path.startsWith("core/"))
+      const context = (ref) => ref?.draw === CONTEXT_DRAW && ref.every_map === true && ref.style && typeof ref.style === "object" && !Array.isArray(ref.style);
+      const order = (row) => (context(row.style.reference) ? (Number.isFinite(row.style.reference.order) ? row.style.reference.order : 1e6) : -1);
+      return rows.filter((row) => (REFERENCE_DRAWS.includes(row?.style?.reference?.draw) || context(row?.style?.reference)) && typeof row.tiles_path === "string" && row.tiles_path.startsWith("core/"))
+        .sort((a, b) => order(a) - order(b))
         .map((row) => {
-          const rel = REFERENCE_PREFIX + row.key;
+          const rel = REFERENCE_PREFIX + row.key, ref = row.style.reference;
           byPath.set(row.tiles_path, [...(byPath.get(row.tiles_path) || []), rel]);
-          return { rel, key: row.style.reference.draw, title: row.title, credit: typeof row.style.reference.credit === "string" ? row.style.reference.credit : "" };
+          const credit = typeof ref.credit === "string" ? ref.credit : "";
+          return context(ref) ? { rel, key: row.key, title: row.title, credit, style: ref.style } : { rel, key: ref.draw, title: row.title, credit };
         });
     }
 
