@@ -44,6 +44,81 @@
     if (c.kind === "categories") return c.values[props._cls] ? c.values[props._cls][1] : null;
     return c.ranges[props._cls] ? c.ranges[props._cls][2] : null;
   }
+  // a title or legend label that says nothing ("default" from a style, the plugin's stand-in "Other" for unnamed symbols)
+  const said = (t) => t != null && String(t).trim() !== "" && !/^(default|null|none|untitled)$/i.test(String(t).trim());
+  // a feature's title in its details: its own title, else its class, else (a photo) its file name, else the layer's name
+  function featureTitle(L, p, cls) {
+    if (said(p._label)) return String(p._label);
+    if (said(cls)) return String(cls);
+    if (p._photo) {
+      const file = Object.values(p).find((v) => typeof v === "string" && /^[^\\/]+\.(jpe?g|png|tiff?|heic|webp|dng)$/i.test(v.trim()));
+      if (!file) return "Photo";
+      if (/\s/.test(file.trim())) return file.trim();
+      const n = file.replace(/\.[^.]+$/, "").match(/\d+/g);   // DJI_0043.JPG reads as "Photo 0043", as the plugin's own titles do
+      return n ? "Photo " + n[n.length - 1] : file.trim();
+    }
+    return L.title;
+  }
+  // the legend of a layer the web map draws itself (photo dots and cones): [{i, label, color}]. When QGIS named none of the
+  // symbols (the plugin then writes "Other" for each), the category's own label or value is used, or one plain entry is shown.
+  function drawLegend(L) {
+    const colors = L.draw.colors && L.draw.colors.length ? L.draw.colors : ["#e8590c"];
+    const lg = L.legend || [];
+    const plain = [{ i: 0, label: L.draw.type === "direction" ? "Photo, cone shows the view" : "", color: colors[0] }];
+    if (lg.length <= 1) return plain;
+    const seen = {};
+    lg.forEach((g) => { const k = String(g.label || "").trim().toLowerCase(); seen[k] = (seen[k] || 0) + 1; });
+    const c = L.classes || {};
+    const items = lg.map((g, i) => {
+      let label = String(g.label || "").trim();
+      if (!said(label) || (label.toLowerCase() === "other" && seen.other > 1)) {
+        const v = c.kind === "categories" ? c.values && c.values[i] : c.ranges && c.ranges[i];
+        const named = v && (c.kind === "categories" ? v[1] : v[2]);
+        const value = v && c.kind === "categories" && !Array.isArray(v[0]) ? v[0] : null;
+        label = said(named) ? String(named) : said(value) ? String(value) : "";
+      }
+      return { i, label, color: colors[i] || colors[0] };
+    });
+    return items.some((g) => g.label) ? items.map((g) => (g.label ? g : Object.assign(g, { label: "Other" }))) : plain;
+  }
+  // an enlarged photo closes with its Close button, Esc, or a click beside the photo
+  function lightboxWire(lb, doc) {
+    const close = () => { lb.remove(); doc.removeEventListener("keydown", onKey); };
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    lb.addEventListener("click", (e) => { if (e.target === lb || (e.target.closest && e.target.closest(".rv-lightbox-close"))) close(); });
+    doc.addEventListener("keydown", onKey);
+    return close;
+  }
+  // the whole-property view: top down and north up, however the map was turned or tilted (a photo's view, 3D)
+  const wholeView = (padding) => ({ padding, bearing: 0, pitch: 0, freezeElevation: true });
+  // The photo view: the map looks the way a photo's camera did, with the hills in 3D. Leaving it puts back the view and the
+  // 3D (or 2D) the person had before; stepping from photo to photo keeps that first view to go back to.
+  // cam: { get() -> camera, threeD() -> bool, setThreeD(on), look(view), move(camera), whole() }
+  function photoViewState(cam) {
+    let before = null;
+    const back3d = (b) => { if (cam.threeD() !== b.threeD) cam.setThreeD(b.threeD); };
+    return {
+      active: () => !!before,
+      enter(view) {
+        if (!before) before = { camera: cam.get(), threeD: cam.threeD() };
+        if (!cam.threeD()) cam.setThreeD(true);
+        cam.look(view);
+      },
+      leave() {                                    // back to the view from before (or, not known, the whole property)
+        if (!before) return false;
+        const b = before; before = null;
+        back3d(b);
+        if (b.camera) cam.move(b.camera); else cam.whole();
+        return true;
+      },
+      end() {                                      // the map is going somewhere else: only the 3D (or 2D) goes back
+        if (!before) return false;
+        const b = before; before = null;
+        back3d(b);
+        return true;
+      },
+    };
+  }
 
   // ---- drawn symbols for photo-style point layers: a dot plus a cone showing which way the camera faced
   function rgba(hex, a) {
@@ -221,7 +296,11 @@
       opts.terrain || RCLViewer.terrain || {
         tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"], encoding: "terrarium",
         attribution: "Elevation: Mapzen terrain tiles (LINZ 8 m DEM)" });
-    function setThreeD(on) {
+    // auto: switched by the photo view, which moves the map itself (no tilt here) and leaves the person's own choice saved.
+    // Every move with the hills on passes freezeElevation: MapLibre (5.x) otherwise keeps the ground height it guessed when
+    // the move began (sea level, if 3D has only just been switched on and no elevation tile has arrived) and stops following
+    // the ground afterwards, so the camera can end up inside a hill: a large flat blank wedge across the map.
+    function setThreeD(on, auto) {
       threeD = on;
       btn3d.setAttribute("aria-pressed", String(on));
       if (on) {
@@ -243,14 +322,14 @@
         });
         map.setTerrain({ source: "dem", exaggeration: 1.4 });
         map.once("idle", () => typeof placeLabels === "function" && placeLabels());
-        map.easeTo({ pitch: 62, bearing: map.getBearing() || -20, duration: 900 });
+        if (!auto) onGround(map.getCenter(), () => threeD && map.easeTo({ pitch: 62, bearing: map.getBearing() || -20, duration: 900, freezeElevation: true }));
       } else {
         map.setTerrain(null);
         if (map.getLayer("hillshade")) map.setLayoutProperty("hillshade", "visibility", "none");
         Object.entries(fillOpacity).forEach(([id, v]) => map.getLayer(id) && map.setPaintProperty(id, "fill-opacity", v));
-        map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+        if (!auto) map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
       }
-      storeSet("rv-3d", on ? "1" : "");
+      if (!auto) storeSet("rv-3d", on ? "1" : "");
     }
     const ctl3d = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group rv-3d" });
     const btn3d = el("button", { type: "button", "aria-pressed": "false", title: "Show the hills in 3D (drag with the right mouse button, or two fingers, to tilt and turn)" }, "3D");
@@ -364,7 +443,7 @@
         if (toolMode === "measure") return;           // the measure tool has its own click handler
         if (picking) return pickAt(e);
         const f = map.queryRenderedFeatures(box(e.point, 8), { layers: targetIds() });
-        if (!f.length) { clearSelection(); closeSheet(); return; }
+        if (!f.length) { clearSelection(); closeSheet(); photoState.leave(); return; }   // away from a photo: back to the overview
         const s = f.find((x) => x.layer.id === "sugg");
         if (s) return showSuggestion(s);
         const list = stack(f, e.point);
@@ -458,7 +537,7 @@
       const cls = classLabel(L, p);
       const icon = L.draw ? `<img alt="" src="${legendIcon((L.draw.colors || [])[p._cls || 0] || "#e8590c", L.draw.type === "direction")}">`
         : p._cls != null && L.legend[p._cls] ? `<img alt="" src="${esc(url(L.legend[p._cls].icon))}">` : "";
-      const title = p._label || cls || L.title;
+      const title = featureTitle(L, p, cls);
       const rows = (L.fields || []).filter((f) => p[f.name] !== undefined && p[f.name] !== null && p[f.name] !== "");
       let html = `<div class="rv-pop">${pager || ""}<div class="rv-pop-kicker">${icon}<span>${esc(L.title)}${cls && cls !== title ? " · " + esc(cls) : ""}</span></div>`;
       html += `<div class="rv-pop-title">${esc(title)}</div>`;
@@ -526,15 +605,43 @@
       }
       const x = (x0 + x1) / 2, y = y0 + (y1 - y0) * 0.78;
       const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      map.easeTo({ ...view, offset: [x - W / 2, y - H / 2], duration: still ? 0 : 1300, essential: true });
+      map.easeTo({ ...view, offset: [x - W / 2, y - H / 2], duration: still ? 0 : 1300, essential: true, freezeElevation: true });
     }
+    // With the hills on, the camera's height is measured from the ground where it looks. Just after 3D is switched on that
+    // ground is not known until its elevation tile arrives (MapLibre says sea level), so wait for it, briefly, then stand there.
+    function onGround(at, go) {
+      if (!map.getTerrain()) return go();
+      let done = false, timer = null;
+      const run = (force) => {
+        if (done) return;
+        const g = map.queryTerrainElevation(at);
+        if (!g && force !== true) return;
+        done = true; clearTimeout(timer); map.off("data", run);
+        if (g) map.jumpTo({ elevation: g });
+        go();
+      };
+      map.on("data", run);
+      timer = setTimeout(() => run(true), 2500);
+      run();
+    }
+    const photoState = photoViewState({
+      get: () => ({ center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }),
+      threeD: () => threeD,
+      setThreeD: (on) => { setThreeD(on, true); if (!photoState.active()) storeSet("rv-3d", on ? "1" : ""); },   // the way back is saved
+      look: (view) => onGround(view.center, () => lookFrom(view)),
+      move: (camera) => {
+        const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        map.easeTo({ ...camera, duration: still ? 0 : 900, essential: true, freezeElevation: true });
+      },
+      whole: () => map.fitBounds(m.bounds, wholeView(pad())),
+    });
     // the details card for a photo view: fixed in the top right corner, styled like a popup, without a pointer
     function floatCard(html) {
       const box = el("div", { class: "rv-floatpop" });
       box.innerHTML = `<div class="maplibregl-popup-content"><button type="button" class="maplibregl-popup-close-button" aria-label="Close popup">×</button>${html}</div>`;
       mapEl.appendChild(box);
       const card = { remove: () => box.remove(), getElement: () => box };
-      box.querySelector(".maplibregl-popup-close-button").addEventListener("click", () => { if (popup === card) popup = null; card.remove(); select(null); });
+      box.querySelector(".maplibregl-popup-close-button").addEventListener("click", () => { if (popup === card) popup = null; card.remove(); select(null); photoState.leave(); });
       return card;
     }
     function showDetails(html, lngLat, ctx, view) {
@@ -542,20 +649,21 @@
       if (narrow()) {
         const body = openSheet(html);
         wire(body, ctx);
-        if (view) requestAnimationFrame(() => lookFrom(view));
+        if (view) requestAnimationFrame(() => photoState.enter(view)); else photoState.leave();
       } else if (view) {
         closeSheet();
         popup = floatCard(html);
         wire(popup.getElement(), ctx);
-        lookFrom(view);
+        photoState.enter(view);
       } else {
         closeSheet();
-        popup = new maplibregl.Popup({ maxWidth: "340px", offset: 12 }).setLngLat(lngLat).setHTML(html).addTo(map);
+        const backing = photoState.leave();           // something else picked: back out of a photo's view first
+        popup =new maplibregl.Popup({ maxWidth: "340px", offset: 12 }).setLngLat(lngLat).setHTML(html).addTo(map);
         popup.on("close", () => { select(null); popup = null; });
         wire(popup.getElement(), ctx);
         // keep the whole popup on screen (photos make it tall)
         const fitPopup = () => {
-          if (!popup) return;
+          if (!popup || backing) return;              // a pan now would stop the way back
           const r = popup.getElement().getBoundingClientRect(), c = map.getContainer().getBoundingClientRect();
           const dy = r.top < c.top + 10 ? r.top - c.top - 10 : r.bottom > c.bottom - 10 ? r.bottom - c.bottom + 10 : 0;
           const dx = r.left < c.left + 370 ? r.left - c.left - 370 : r.right > c.right - 60 ? r.right - c.right + 60 : 0;
@@ -570,7 +678,7 @@
     const sheet = el("section", { class: "rv-sheet", role: "dialog", "aria-label": "Details", hidden: "" });
     sheet.innerHTML = `<button type="button" class="rv-sheet-close" aria-label="Close">×</button><div class="rv-sheet-body"></div>`;
     root.appendChild(sheet);
-    sheet.querySelector(".rv-sheet-close").addEventListener("click", () => { closeSheet(); clearSelection(); cancelPick(); });
+    sheet.querySelector(".rv-sheet-close").addEventListener("click", () => { closeSheet(); clearSelection(); cancelPick(); photoState.leave(); });
     function openSheet(html) {
       const body = sheet.querySelector(".rv-sheet-body");
       body.innerHTML = html;
@@ -585,12 +693,12 @@
 
     function lightbox(src) {
       const lb = el("div", { class: "rv-lightbox", role: "dialog", "aria-label": "Photo" });
-      lb.innerHTML = `<img alt="Photo" src="${esc(src)}"><button class="rv-btn" type="button">Close</button>`;
-      const close = () => { lb.remove(); document.removeEventListener("keydown", onKey); };
-      const onKey = (e) => { if (e.key === "Escape") close(); };
-      lb.addEventListener("click", (e) => { if (e.target === lb || e.target.tagName === "BUTTON") close(); });
-      document.addEventListener("keydown", onKey);
-      root.appendChild(lb);
+      lb.innerHTML = `<img alt="Photo" src="${esc(src)}"><button class="rv-lightbox-close" type="button" aria-label="Close photo"><span aria-hidden="true">×</span>Close</button>`;
+      lightboxWire(lb, document);
+      // on the page itself, not inside the viewer: a page that holds the viewer under its own header (the farm platform)
+      // would otherwise draw that header over the close button
+      document.body.appendChild(lb);
+      lb.querySelector(".rv-lightbox-close").focus();
     }
 
     // ---------------------------------------------------------------- suggestions
@@ -1097,9 +1205,7 @@
       row.innerHTML = `<div class="rv-layer-row"><label for="${cid}"><input id="${cid}" class="rv-switch" type="checkbox" ${L.visible ? "checked" : ""}><span>${esc(L.title)}</span></label>${count}</div>`;
       let legend = L.legend || [];
       if (L.draw) {
-        const colors = L.draw.colors && L.draw.colors.length ? L.draw.colors : ["#e8590c"];
-        legend = legend.length > 1 ? legend.map((g, i) => ({ label: g.label, src: legendIcon(colors[i] || colors[0], L.draw.type === "direction") }))
-          : [{ label: L.draw.type === "direction" ? "Photo, cone shows the view" : "", src: legendIcon(colors[0], L.draw.type === "direction") }];
+        legend = drawLegend(L).map((g) => ({ label: g.label, src: legendIcon(g.color, L.draw.type === "direction") }));
       } else legend = legend.map((g) => ({ label: g.label, src: url(g.icon) }));
       if (legend.length > 1 || (legend.length === 1 && legend[0].label && L.draw)) {
         row.innerHTML += `<ul class="rv-legend">${legend.map((g) => `<li><img alt="" src="${esc(g.src)}"><span>${esc(g.label)}</span></li>`).join("")}</ul>`;
@@ -1147,7 +1253,10 @@
     }));
 
     const fit = el("button", { class: "rv-btn rv-fit", type: "button" }, "Whole property");
-    fit.addEventListener("click", () => map.fitBounds(m.bounds, { padding: pad() }));
+    fit.addEventListener("click", () => {
+      if (photoState.end()) clearSelection();      // out of a photo's view, its card closed, 3D as the person had it
+      map.fitBounds(m.bounds, wholeView(pad()));
+    });
     root.appendChild(fit);
     if (suggest) {
       const sb = el("button", { class: "rv-btn rv-suggest-btn", type: "button" }, '<span aria-hidden="true">＋</span> Suggest a change');
@@ -1204,6 +1313,7 @@
       return [pool[1], pool[0]];                                                 // QGIS order: top layer on the right
     }
     function startCompare() {
+      photoState.end();
       if (threeD) setThreeD(false);
       clearSelection(); closeSheet();
       let [left, right] = compareDefaults();
@@ -1400,10 +1510,8 @@
     }
     function legendFor(L) {
       if (L.draw) {
-        const colors = L.draw.colors && L.draw.colors.length ? L.draw.colors : ["#e8590c"];
-        const lg = L.legend || [];
-        return lg.length > 1 ? lg.map((g, i) => ({ label: g.label, src: legendIcon(colors[i] || colors[0], L.draw.type === "direction") }))
-          : [{ label: "", src: legendIcon(colors[0], L.draw.type === "direction") }];
+        const lg = drawLegend(L);
+        return lg.map((g) => ({ label: lg.length > 1 ? g.label : "", src: legendIcon(g.color, L.draw.type === "direction") }));
       }
       return (L.legend || []).map((g) => ({ label: g.label, src: url(g.icon) }));
     }
@@ -1477,6 +1585,6 @@
     }));
   }
 
-  const RCLViewer = { mount, mergeShared, rasterParts, terrain: null, stats: {} };
+  const RCLViewer = { mount, mergeShared, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
   window.RCLViewer = RCLViewer;
 })();
