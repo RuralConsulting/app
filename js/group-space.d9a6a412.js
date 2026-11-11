@@ -1,7 +1,7 @@
 // The catchment group's space (S5, docs/CATCHMENT-SPACE.md): the farm space's shape at catchment scale. Map (the group's
 // own layers, member farms at the level the group and each farm allow, shared reference areas and sites) with the group's
 // standing answers (members, what's due, what's changed, water quality nearby); Documents (the group's own, tiered, and
-// what member farms shared); Create → Monthly update (drafted by code, edited here, stored as a group document); Settings
+// what member farms shared); Events (N4, events.js: the group's events and attendance, a calendar, export and import); Create → Monthly update (drafted by code, edited here, stored as a group document); Settings
 // (a group admin chooses how member farms are shown). Every read is as the signed-in person, through row-level security
 // and the group functions (group_map, group_member_summary, group_member_farms, group_shared_entries/documents,
 // group_wq_sites); nothing needs AI. The water-quality card opens with the group's standing answer, "What does our
@@ -154,7 +154,7 @@
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage" || route.view === "maps") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps" || route.view === "events") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
@@ -165,6 +165,16 @@
       return FP.mapsView.open($("#group-maps"), { owner: { org: group.id }, name: group.name, item: route.item || null, href: (id) => FP.href(G().href(group.id, "maps", id)) });
     }
     FP.mapsView?.close();
+    // N4: Events is a calendar, not a map: the panel takes the width and the view reads and writes the group's events itself
+    // (events.js), with none of the group's other reads
+    if (route.view === "events") {
+      document.title = group.name + " · " + G().viewLabel("events") + " | " + (FP.brand?.product || "");
+      const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
+      if (current !== token) return;
+      panel.replaceChildren(FP.groupEvents.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T00:00:00Z" : null }));
+      panel.scrollTop = 0;
+      return;
+    }
     // TIM1 (#409): a view that draws the map, with no map drawn or being drawn, starts the drawn-time clock here (after
     // sign-in, whatever screen came before); a second route while it is still drawing keeps the same clock
     if (route.view !== "manage" && !mapHandle) timing = T()?.begin("group", group.id) || null;

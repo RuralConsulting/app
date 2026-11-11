@@ -9,8 +9,9 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   // ON3b: `/manage[/members|gaps|updates|sites|settings]` is the group's manage space (group-manage.js); the member-detail form moved
   // there, so the old `/settings` address opens the manage space's Settings tab.
-  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(maps|documents|create|settings|manage)(?:\/(members|gaps|updates|sites|settings))?)?(?:\?item=([0-9a-f-]{36}))?$/;
-  const views = [["map", "Map"], ["maps", "Maps"], ["documents", "Documents"], ["create", "Create"], ["manage", "Manage"]];
+  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(maps|documents|events|create|settings|manage)(?:\/(members|gaps|updates|sites|settings))?)?(?:\?item=([0-9a-f-]{36}))?$/;
+  // N4: `/events` is the group's Events view (events.js)
+  const views = [["map", "Map"], ["maps", "Maps"], ["documents", "Documents"], ["events", "Events"], ["create", "Create"], ["manage", "Manage"]];
   function match(hash) {
     const m = String(hash || "").match(ROUTE);
     if (!m || (m[3] && m[2] !== "manage") || (m[4] && m[2] !== "maps")) return null;

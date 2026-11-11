@@ -57,7 +57,7 @@
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
-      return /^(?:\/(?:documents|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:documents|events|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -331,6 +331,35 @@
         { id: "demo-g-s5", farm: MEMBERS[1].id, record_type: "note", body: "Spring stock count done; no change to the wintering paddocks (synthetic).", captured_at: at("2026-10-15"), location: null }],
       sharedDocs: [{ id: "demo-g-sd1", farm: MEMBERS[0].id, title: "Riparian planting plan (synthetic)", doc_type: "memo", created_at: "2026-09-20T03:00:00Z", tier: "primary", storage_path: "demo/riparian.pdf" }] };
     manageDemo(data, queue);
+    eventsDemo(data);
+  }
+  // N4: the group's events (public.group_events) and attendance (public.group_event_attendees), invented: past and coming ones
+  // around the fixture's date (29 Oct 2026), one all-day on the day daylight saving starts, one cancelled, one with a macron and
+  // a comma in its place. Saved in memory only. group_event_people stands in for the editors' picker (names, no emails).
+  function eventsDemo(data) {
+    const id = (n) => "de000000-0000-4000-8000-0000000004" + String(n).padStart(2, "0"), made = "2026-09-01T00:00:00Z";
+    const ev = (n, title, starts_at, ends_at, extra = {}) => ({ id: id(n), org_id: GROUP, title, starts_at, ends_at, all_day: false, place_name: null, latitude: null, longitude: null,
+      topics: [], notes: null, head_count: null, cancelled_at: null, cancelled_by: null, created_by: USER, created_at: made, updated_at: made, ...extra });
+    data.tables.group_events = [
+      ev(1, "Planting day at the wetland (synthetic)", "2026-09-26T12:00:00Z", "2026-09-27T11:00:00Z", { all_day: true, place_name: "Wetland reserve, Waimā Road", latitude: -43.0101, longitude: 172.0402,
+        topics: ["Riparian planting", "Biodiversity"], notes: "300 flax and carex planted along the margin.\nThanks to everyone who came.", head_count: 22 }),
+      ev(2, "Committee meeting (synthetic)", "2026-10-07T06:00:00Z", "2026-10-07T08:00:00Z", { place_name: "Community hall", topics: ["Committee"], head_count: 9 }),
+      ev(3, "Field day at the ford (synthetic)", "2026-10-13T21:00:00Z", "2026-10-14T00:00:00Z", { place_name: "The ford, Ford Road", latitude: -43.0012, longitude: 172.0518,
+        topics: ["Water quality", "Riparian planting"], notes: "Walked the creek with the facilitator; looked at the new fencing and the sampling sites." }),
+      ev(4, "Water sampling workshop (synthetic)", "2026-10-21T20:30:00Z", "2026-10-21T23:30:00Z", { place_name: "Sampling site 2", topics: ["Water quality"], cancelled_at: "2026-10-18T02:00:00Z", cancelled_by: USER,
+        notes: "Postponed: the creek was in flood." }),
+      ev(5, "Committee meeting (synthetic)", "2026-11-04T06:00:00Z", "2026-11-04T08:00:00Z", { place_name: "Community hall", topics: ["Committee"] }),
+      ev(6, "Nitrogen budgeting evening (synthetic)", "2026-11-11T06:30:00Z", "2026-11-11T08:30:00Z", { place_name: "Rugby club rooms, Main Street", topics: ["Nutrients", "Farm plans"] }),
+      ev(7, "Catchment open day (synthetic)", "2026-11-20T11:00:00Z", "2026-11-22T11:00:00Z", { all_day: true, place_name: "Across the catchment", topics: ["Biodiversity", "Water quality"] }),
+    ];
+    data.tables.group_event_attendees = [
+      { id: id(51), event_id: id(3), org_id: GROUP, user_id: USER, group_member_id: null, name: "Demo advisor", note: "Facilitator", added_at: made },
+      { id: id(52), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: GROUP_MEMBERS[0].id, name: GROUP_MEMBERS[0].business_name, note: null, added_at: made },
+      { id: id(53), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: GROUP_MEMBERS[2].id, name: GROUP_MEMBERS[2].business_name, note: null, added_at: made },
+      { id: id(54), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: null, name: "Aroha Tāne (synthetic)", note: "Regional council, land management", added_at: made },
+      { id: id(55), event_id: id(2), org_id: GROUP, user_id: null, group_member_id: null, name: "Pat Example (synthetic)", note: "Chair", added_at: made },
+    ];
+    data.eventPeople = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: "de000000-0000-4000-8000-000000000499", name: "Mere Example (synthetic)", role: "member" }];
   }
   // ON3b: the group's manage space. An invented business register (group_members) with farm associations, DQ1's gaps for the
   // group (group_load_gaps), ON3a's proposals about them as tools/reconcile_group.py writes them (subject, evidence, candidates),
@@ -799,8 +828,8 @@
   // The tables the demo adds rows to, in memory: What's due's Done (checks) and Add the record (documents, entries, links).
   // B4b: the capture queue's entries and entry files too (ids made on the phone; a second insert of one id is refused as
   // the database refuses it, 23505, which the queue reads as "already written").
-  const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes"];
-  const EDITED = ["layer_notes", "farm_parcels"];   // and the tables whose rows the demo changes (the Layers page; a new block's note)
+  const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes", "group_events", "group_event_attendees"];   // N4: the group's events
+  const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees"];   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
@@ -1250,6 +1279,7 @@
           return result(...farmParts(d, name, args));
         }
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
+        if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
         // PERF1b, as public.farm_reference_counts and public.farm_reference_context (PERF1a): the farm's reference entries
         // (d.reference by farm; the fixture's `reference`, none in the demo) counted, and one served source's entry read on
         // its own (no features here: its entry with none; not served or no such farm: null). farm_map's `reference` is [].
