@@ -264,7 +264,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
    this hides the chrome around them. Display only: the database's policies decide what anyone can read. */
 body.simple-view #space-people, body.simple-view #space-layers, body.simple-view #command-bar, body.simple-view .layers-ctrl,
 body.simple-view #overview-rail, body.simple-view #layers-drawer, body.simple-view .documents-onboarding,
-body.simple-view #pw-qgis-line, body.simple-view #portfolio-list li > button > span { display: none !important; }
+body.simple-view #pw-qgis-line { display: none !important; }
 body.simple-files #map, body.simple-files #farm-scene { visibility: hidden; }
 body.simple-files #space-content { inset: 0; width: auto; height: auto; border-radius: 0; }
 body.simple-files #space-content > .sheet-head { display: none; }

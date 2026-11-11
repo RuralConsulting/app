@@ -371,10 +371,11 @@
     try { if (id) target = sessionStorage.getItem("fp-view-" + user.id + "-" + id) || target; } catch {}
     return target;
   }
-  // Portfolio: every farm with its one sentence, and a map of them all (the NZ -> farm zoom starts here).
-  async function showPortfolio() {
+  // The home page's map screen (LP1): the farm space puts its own things away and leaves the map, whole-window, to js/home.js,
+  // which draws every farm and group the person can see (the NZ -> farm zoom starts here).
+  function showPortfolio() {
     FP.mapsView?.close();
-    const current = ++token, rows = portfolio.map((farm) => ({ farm, line: "", extent: null }));
+    token++;
     flushDone();
     context = null; forget(); openedMap = null;
     unmount(scene, answers, view); scene = null; answers = []; view = null; standing = []; focused = null;
@@ -384,26 +385,9 @@
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
     for (const id of ["#space-content", "#overview-rail", "#layers-drawer", "#map-msg"]) $(id).hidden = true;
-    document.title = "Farms | " + FP.brand?.product;
+    document.title = "Farms and groups | " + FP.brand?.product;
     FP.show("screen-map");
     $("#portfolio").hidden = false;
-    const select = (row) => { if (row.extent) FP.farmMap.zoomTo(row.extent); location.hash = FP.href(farmTarget(row.farm.id)); };
-    const items = rows.map((row) => {
-      row.node = el("li", {}, el("button", { type: "button", onclick: () => select(row) }, el("b", {}, row.farm.name),
-        row.farm.region ? el("small", {}, row.farm.region[0].toUpperCase() + row.farm.region.slice(1)) : null, el("span", {})));
-      return row.node;
-    });
-    $("#portfolio-list").replaceChildren(...items);
-    let found;
-    try { found = new Map((await summaries(FP.sb)).map((r) => [r.id, r])); } catch { found = new Map(); }
-    if (current !== token) return;
-    for (const row of rows) {
-      const summary = found.get(row.farm.id);
-      row.line = summary ? M.summaryLine(summary) : "Couldn't read this farm.";
-      row.extent = summary?.extent || null;
-      row.node.querySelector("span").textContent = row.line;
-    }
-    await FP.farmMap.portfolio(rows.map((r) => ({ id: r.farm.id, name: r.farm.name, extent: r.extent })), (id) => select(rows.find((r) => r.farm.id === id)));
   }
   function header(farm, route) {
     $("#farm-space-header").hidden = false;

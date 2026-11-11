@@ -231,26 +231,46 @@ body.block-flow-active #block-open { display: none; }
 }
 @media print { #farm-space-header, #overview-rail, #space-content, .layers-drawer { display: none !important; } }
 
-/* Portfolio: the map of every farm, with the list beside it (wide) or under it (phone). */
+/* LP1, the home page: the map of every farm and group fills the window; the search, the folded list and the chosen place's
+   card float over it (top and bottom on a phone, one column on the left when wide). */
 body.portfolio-active #screen-map #map { right: 0; bottom: 0; }
-#portfolio { position: absolute; z-index: 4; top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 48%; overflow: auto; padding: 14px 12px; background: var(--panel); color: var(--ink); border-radius: 14px 14px 0 0; box-shadow: var(--shadow); }
-#portfolio h1 { font: 600 var(--text-heading)/1.2 var(--f-head); margin: 0 0 8px; }
-#portfolio-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-#portfolio-list button { width: 100%; text-align: left; font: inherit; color: inherit; border: 1px solid var(--rule); background: var(--panel); border-radius: 10px; padding: 10px 12px; cursor: pointer; display: grid; gap: 3px; }
-#portfolio-list button:hover, #portfolio-list button:focus-visible { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
-#portfolio-list b { font: 650 var(--text-body)/1.2 var(--f-head); }
-#portfolio-list small { font-size: var(--text-small); color: var(--ink-3); }
-#portfolio-list span { font-size: var(--text-small); color: var(--ink-2); line-height: 1.35; min-height: 1.35em; }
+#portfolio { position: absolute; z-index: 4; top: 12px; left: 12px; right: 58px; width: auto; max-height: calc(100% - 190px); overflow: auto; padding: 10px; background: var(--panel); color: var(--ink); border-radius: 12px; box-shadow: var(--shadow); }
+.home-find input { width: 100%; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); color: var(--ink); font-size: var(--text-body); }
+.home-results, .home-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.home-item button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; color: inherit; border: 0; background: none; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+.home-item button:hover, .home-item button[aria-current="true"] { background: var(--wash); }
+.home-item.sub button { padding-left: 30px; }
+.home-item span { display: grid; gap: 1px; min-width: 0; }
+.home-item b { font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.home-item small { font-size: var(--text-small); color: var(--ink-3); line-height: 1.25; }
+.home-swatch { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--map-farm); border: 2px solid var(--ink-3); }
+.home-item:not([data-kind="farm"]) .home-swatch { background: var(--map-group); border-style: dashed; border-radius: 3px; }
+.home-none { margin: 6px 2px 0; font-size: var(--text-small); color: var(--ink-2); }
+.home-none:empty { display: none; }
+.home-fold { margin-top: 8px; }
+.home-fold summary { cursor: pointer; padding: 6px 2px; font-weight: 600; font-size: var(--text-small); color: var(--ink-2); }
+.home-count { font-weight: 400; color: var(--ink-3); }
+#portfolio .fine { margin: 8px 2px 0; }
+.home-card { position: absolute; z-index: 5; left: 12px; right: 12px; bottom: 30px; padding: 14px 16px; background: var(--panel); color: var(--ink); border-radius: 12px; box-shadow: var(--shadow); }
+body:not(.portfolio-active) .home-card { display: none; }
+.home-card h2 { font: 650 var(--text-heading)/1.2 var(--f-head); margin: 0 36px 2px 0; overflow-wrap: anywhere; }
+.home-card-kind { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.home-card-note { margin: 4px 0 0; color: var(--ink-3); font-size: var(--text-small); }
+.home-card-open { display: inline-block; margin-top: 10px; padding: 9px 18px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+.home-card-close { position: absolute; top: 8px; right: 8px; width: 36px; height: 36px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font-size: var(--text-heading); line-height: 1; cursor: pointer; }
+.home-card-close:hover { background: var(--wash); }
+.home-hover .maplibregl-popup-content { padding: 4px 8px; font: 600 var(--text-small) var(--f-ui); color: var(--ink); background: var(--panel); }
+.home-hover .maplibregl-popup-tip { display: none; }
+.home-hover { pointer-events: none; }   /* the name never takes the click meant for the place under it */
+@media (min-width: 801px) {
+  #portfolio { top: 16px; left: 16px; right: auto; width: 340px; max-height: calc(100% - 210px); padding: 12px; }
+  .home-card { left: 16px; right: auto; bottom: 40px; width: 340px; }
+}
+@media print { #portfolio, .home-card { display: none !important; } }
 .pf-pin { display: flex; flex-direction: column; align-items: center; gap: 3px; border: 0; background: none; padding: 4px; cursor: pointer; color: var(--map-label); font: 600 var(--text-small) var(--f-head); text-shadow: var(--map-label-shadow); }
 .pf-pin span { max-width: 130px; text-align: center; line-height: 1.15; }
 .pf-pin.no-name span { display: none; }
 .pf-pin i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--map-label); box-shadow: var(--map-pin-shadow); }
-@media (min-width: 801px) {
-  #portfolio { top: 16px; left: 16px; right: auto; bottom: auto; width: 380px; max-height: calc(100% - 32px); padding: 18px 16px; border-radius: 12px; }
-  #portfolio h1 { margin-bottom: 12px; }
-  #portfolio-list button { padding: 12px 14px; }
-}
-@media print { #portfolio { display: none !important; } }
 
 /* The farm's Map scene block draws on #map; its host carries only the hidden heading and, for a farm with no
    boundary, one note on the map. It never takes a tap from the map. */

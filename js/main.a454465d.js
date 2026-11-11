@@ -75,7 +75,11 @@
     try {
       const { data: mine, error } = await sb.from("org_members").select("org_id, role").eq("user_id", user.id);
       if (error || !mine?.length) return [];
-      const { data: orgs, error: e2 } = await sb.from("organisations").select("id, name, slug, kind").in("id", mine.map((m) => m.org_id));
+      // LP1: with each group's parent (SG1's parent_org_id), so the home page puts sub-groups under their parent; a database
+      // without the column is read as before
+      const read = (columns) => sb.from("organisations").select(columns).in("id", mine.map((m) => m.org_id));
+      let { data: orgs, error: e2 } = await read("id, name, slug, kind, parent_org_id");
+      if (e2) ({ data: orgs, error: e2 } = await read("id, name, slug, kind"));
       if (e2) return [];
       return (orgs || []).filter((o) => o.kind === "catchment_group").map((o) => ({ ...o, role: mine.find((m) => m.org_id === o.id)?.role || null }))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -147,13 +151,12 @@
     else listFarms();
   }
 
+  // LP1: the home page is a map of every farm and group the person can see, with search and a folded list (home.js). A person
+  // with one place was taken straight to it above; a person with none gets the plain note.
   function listFarms() {
-    // the catchment groups the person belongs to, under the farms (or alone, when there are no farms)
-    const links = () => groups.map((g) => el("li", {}, el("a", { href: FP.href(FP.groupModel.href(g.id)) }, el("b", {}, g.name), el("small", {}, "Catchment group"))));
-    for (const id of ["#portfolio-groups", "#farms-groups"]) { $(id).replaceChildren(...links()); $(id).hidden = !groups.length; }
-    if (farms.length) { FP.farmSpace.showPortfolio(); return; }
+    if (farms.length + groups.length) { FP.farmSpace.showPortfolio(); FP.home.show({ farms, groups }); return; }
     FP.farmSpace.close();
-    msg("#farms-msg", groups.length ? "" : FP.brand.no_farms_note);
+    msg("#farms-msg", FP.brand.no_farms_note);
     show("screen-farms");
   }
 

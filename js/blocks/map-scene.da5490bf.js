@@ -200,6 +200,7 @@
     if (photo) closePhoto();   // (and the hills come back if a photo had flattened them)
     photo?.card.remove(); photo = null; photoSets.clear(); units = null; featurePopup?.remove(); featurePopup = null;
     if (declutter) { for (const ev of ["move", "resize"]) map.off(ev, declutter); declutter = null; }
+    homeOff?.(); homeOff = null;   // LP1: the home map's own listeners and hover name
     if (offLine) { map.off("move", offLine); offLine = null; }
     for (const m of markers) m.remove();
     markers = [];
@@ -827,6 +828,74 @@
     fit(union(boxes), wide ? { top: 90, left: 480, bottom: 90, right: 110 } : { top: 80, left: 85, bottom: Math.round(window.innerHeight * 0.5), right: 85 });
   }
 
+  // LP1: the home map. Every farm and group the person can see, each as its own (already lightened) outline, or as one point
+  // while the map is zoomed out so far that the outline would be a speck (item.pointZoom). Farms and groups are drawn apart
+  // (their own colour; a group's line dashed). Its name shows on hover; a click or tap calls onSelect(id), the smallest place
+  // under it winning (a farm inside a group's area is the farm). padding: the map's edges the home panels cover.
+  // items: [{ id, kind: "farm" | "group" | "subgroup", name, geometry, bbox, pointZoom }].
+  let homeOff = null, homeItems = [];
+  async function home(items, onSelect, padding) {
+    const request = ++opening;
+    init(); await loaded();
+    if (request !== opening) return;
+    clear(); flightKey = null; framed = null; removeSketch(); hasShown = true;
+    map.resize();
+    homeItems = items.filter((i) => i.geometry?.coordinates && i.bbox);
+    const props = (i) => ({ id: i.id, kind: i.kind === "farm" ? "farm" : "group", name: i.name, size: area(i.bbox) });
+    source("home-shapes", { type: "FeatureCollection", features: homeItems.map((i) => ({ type: "Feature", geometry: i.geometry, properties: props(i) })) });
+    source("home-points", { type: "FeatureCollection", features: homeItems.map((i) => ({ type: "Feature", geometry: { type: "Point", coordinates: FP.homeModel.centre(i.bbox) }, properties: props(i) })) });
+    const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    const colour = ["match", ["get", "kind"], "farm", css("--map-farm"), css("--map-group")], none = ["in", ["get", "id"], ["literal", []]];
+    layer({ id: "home-fill", type: "fill", source: "home-shapes", filter: none, paint: { "fill-color": colour, "fill-opacity": ["match", ["get", "kind"], "farm", 0.3, 0.12] } });
+    layer({ id: "home-line-group", type: "line", source: "home-shapes", filter: none, paint: { "line-color": css("--map-group"), "line-width": 2, "line-dasharray": [3, 2] } });
+    layer({ id: "home-line-farm", type: "line", source: "home-shapes", filter: none, paint: { "line-color": css("--map-farm"), "line-width": 2.5 } });
+    layer({ id: "home-chosen", type: "line", source: "home-shapes", filter: none, paint: { "line-color": css("--map-label"), "line-width": 4 } });
+    layer({ id: "home-point", type: "circle", source: "home-points", filter: none,
+      paint: { "circle-color": colour, "circle-radius": ["match", ["get", "kind"], "farm", 7, 9], "circle-stroke-color": css("--map-label"), "circle-stroke-width": 2 } });
+    // outline or point, as the zoom says (set again only when the split changes)
+    let split = "";
+    const show = () => {
+      if (!map?.getLayer("home-fill")) return;
+      const z = map.getZoom(), shapes = homeItems.filter((i) => z >= i.pointZoom).map((i) => i.id), points = homeItems.filter((i) => z < i.pointZoom).map((i) => i.id);
+      const key = shapes.join();
+      if (key === split) return;
+      split = key;
+      const ids = (list) => ["in", ["get", "id"], ["literal", list]];
+      map.setFilter("home-fill", ids(shapes));
+      map.setFilter("home-line-group", ["all", ["==", ["get", "kind"], "group"], ids(shapes)]);
+      map.setFilter("home-line-farm", ["all", ["==", ["get", "kind"], "farm"], ids(shapes)]);
+      map.setFilter("home-point", ids(points));
+    };
+    const hits = (point) => {
+      const found = map.queryRenderedFeatures(point, { layers: ["home-point", "home-fill", "home-line-farm", "home-line-group"].filter((id) => map.getLayer(id)) });
+      return found.sort((a, b) => (a.layer.id === "home-point" ? 0 : 1) - (b.layer.id === "home-point" ? 0 : 1) || a.properties.size - b.properties.size);
+    };
+    const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: "home-hover", offset: 12 });
+    const onMove = (e) => {
+      const f = hits(e.point)[0];
+      map.getCanvas().style.cursor = f ? "pointer" : "";
+      if (!f) { hover.remove(); return; }
+      hover.setLngLat(e.lngLat).setText(f.properties.name).addTo(map);
+    };
+    const onOut = () => hover.remove();
+    const onTap = (e) => { const f = hits(e.point)[0]; if (f) { hover.remove(); onSelect(f.properties.id); } };
+    map.on("zoom", show); map.on("moveend", show); map.on("mousemove", onMove); map.on("mouseout", onOut); map.on("click", onTap);
+    homeOff = () => { map?.off("zoom", show); map?.off("moveend", show); map?.off("mousemove", onMove); map?.off("mouseout", onOut); map?.off("click", onTap); hover.remove(); homeItems = []; };
+    const boxes = homeItems.map((i) => i.bbox);
+    // all of them at once (never closer than a district, so one small farm still shows where it is), or New Zealand
+    map.fitBounds(boxes.length ? FP.homeModel.union(boxes) : [[166.3, -47.4], [178.6, -34.3]], { padding, duration: 0, maxZoom: 10, pitch: 0 });
+    show();
+  }
+  // The chosen place: marked, and framed in the part of the map the home panels leave (nothing moves for a place with no shape).
+  function homeChoose(id, padding) {
+    if (!map?.getLayer("home-chosen")) return false;
+    map.setFilter("home-chosen", ["in", ["get", "id"], ["literal", id ? [id] : []]]);
+    const item = id && homeItems.find((i) => i.id === id);
+    if (!item) return false;
+    map.fitBounds(item.bbox, { padding, duration: reduced() ? 0 : 900, maxZoom: 15, pitch: 0 });
+    return true;
+  }
+
   const area = (b) => (b[1][0] - b[0][0]) * (b[1][1] - b[0][1]);
   function bbox(geom) {
     let w = 180, s = 90, e = -180, n = -90;
@@ -1185,6 +1254,8 @@
     resize: () => map && map.resize(), closePopup, atRest, closePhoto, dismissPhoto, photoOpen: () => (photo ? { layer: photo.i, at: photo.k } : null), remove,
     // PERF3b: a group's deferred layer drawn for the map in view
     layerData, view, onMoveEnd,
+    // LP1: the home map of every place the person can see, and the one chosen on it
+    home, homeChoose,
     // LK2: looks that came after the scene was drawn, applied to it; LK4: a second context fill drawn as outline and hatch
     restyle, setStacked,
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.

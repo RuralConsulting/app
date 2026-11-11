@@ -232,6 +232,7 @@
         valid_from: "2016-01-01", valid_to: "2031-01-01", created_at: "2026-02-03T00:00:00Z" });
       data.map2 = { farm: { id: FARM2, name: second.name, region: second.region }, extent: polygon(172.62, -42.78, 172.64, -42.765), extent_ha: 220,
         titles: collection([]), land_units: collection([]), layers: [], reference: [] };
+      multiGroups(data);
     }
     // Documents as F1e and B3 leave them: every one primary by default, and the walk notes filed with the plan by a
     // person (so the demo shows a supporting document folded under its main one). relates_to is read through the view.
@@ -244,6 +245,36 @@
     data.tables.farm_summaries = data.tables.farms.map((x) => summary(data, x));
     data.people = people(data, { sparse, farmer });
     return data;
+  }
+  // LP1: the two-farm demo's person also belongs to three invented catchment groups, so the home map has farms and groups on
+  // it: a parent group and one of its sub-groups, each with an area place (its geometry in NZTM metres, as the places table holds
+  // it; the parent's outline has many points, as a real catchment's does), and a group with no area yet (found by search and
+  // the list only). The groups' own spaces are not part of this demo.
+  const MULTI_GROUPS = [
+    { id: "de000000-0000-4000-8000-0000000003b1", name: "Example Collective (synthetic)", parent: null, area: { at: [172.33, -42.88], r: 0.42, points: 1500 } },
+    { id: "de000000-0000-4000-8000-0000000003b2", name: "North Sub-group (synthetic)", parent: "de000000-0000-4000-8000-0000000003b1", area: { at: [172.63, -42.77], r: 0.06, points: 120 } },
+    { id: "de000000-0000-4000-8000-0000000003b3", name: "Another Landcare Group (synthetic)", parent: null, area: null },
+  ];
+  function multiGroups(data) {
+    // a wobbly ring round a centre (an illustration, not a catchment), in NZTM metres; made when first read (wq-model.js, which
+    // converts, may load after the fixture does)
+    const ring = ({ at: [x, y], r, points }) => {
+      const W = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel, out = [];
+      for (let i = 0; i < points; i++) {
+        const a = (2 * Math.PI * i) / points, k = r * (1 + 0.12 * Math.sin(5 * a) + 0.04 * Math.sin(37 * a));
+        out.push(W.lngLatToNztm(x + k * Math.cos(a) * 1.35, y + k * Math.sin(a)).map((v) => Math.round(v * 10) / 10));
+      }
+      return [...out, out[0]];
+    };
+    for (const g of MULTI_GROUPS) {
+      data.tables.organisations.push({ id: g.id, name: g.name, slug: null, kind: "catchment_group", parent_org_id: g.parent });
+      data.tables.org_members.push({ org_id: g.id, user_id: USER, role: "member" });
+      if (!g.area) continue;
+      const row = { id: g.id.slice(0, -3) + "a" + g.id.slice(-2), org_id: g.id, farm_id: null, kind: "area", code: null, name: g.name + " area", valid_to: null };
+      let geom = null;
+      Object.defineProperty(row, "geom", { enumerable: true, get: () => (geom ||= { type: "MultiPolygon", coordinates: [[ring(g.area)]] }) });
+      data.tables.places.push(row);
+    }
   }
   // S5: the catchment group "HDLG (example)" with invented member farms, records, documents and its own layers. Each member
   // farm's own share choice is `share`; how it is shown follows the group's setting (memory only) by the database's rule:

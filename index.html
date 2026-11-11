@@ -18,11 +18,11 @@
 <link rel="stylesheet" href="vendor/maplibre-gl.ab1e70d5.css">
 <!-- V4: the map viewer's stylesheet sets page-wide rules, so it is on only while a map is shown (js/maps-view.js); before tokens.css, so the app's colours and type win -->
 <link rel="stylesheet" href="vendor/viewer.454df015.css" media="not all" data-viewer-styles>
-<link rel="stylesheet" href="css/tokens.a8cbbc18.css">
-<link rel="stylesheet" href="css/app.f8222e81.css">
+<link rel="stylesheet" href="css/tokens.e0bf6837.css">
+<link rel="stylesheet" href="css/app.9f7f5691.css">
 <link rel="stylesheet" href="css/demo.e75cefbe.css">
 <link rel="stylesheet" href="css/blocks.6669e69b.css">
-<link rel="stylesheet" href="css/farm-space.76b3e291.css">
+<link rel="stylesheet" href="css/farm-space.d71cb8e1.css">
 <link rel="stylesheet" href="css/group-space.ba8a4945.css">
 <link rel="stylesheet" href="css/maps.6ac78773.css">
 <link rel="stylesheet" href="css/ops.7e44c4d5.css">
@@ -130,7 +130,6 @@
     <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
     <h1>Farms</h1>
     <p id="farms-msg" class="msg"></p>
-    <ul id="farms-groups" class="group-links" aria-label="Catchment groups" hidden></ul>
     <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button></p>
   </div>
 </main>
@@ -161,12 +160,28 @@
 <div id="screen-map" class="map-screen" hidden>
   <div id="map" aria-label="Farm map"></div>
   <div id="farm-scene"></div>
-  <aside id="portfolio" aria-label="Farms" hidden>
-    <h1>Farms</h1>
-    <ul id="portfolio-list"></ul>
-    <ul id="portfolio-groups" class="group-links" aria-label="Catchment groups" hidden></ul>
+  <!-- LP1: the home page is this map of every farm and group the person can see, with search and a folded list (js/home.js) -->
+  <aside id="portfolio" class="home-panel" aria-label="Farms and groups" hidden>
+    <h1 class="visually-hidden">Farms and groups</h1>
+    <div class="home-find" role="search">
+      <label for="home-search" class="visually-hidden">Find a farm or group</label>
+      <input id="home-search" type="search" autocomplete="off" spellcheck="false" placeholder="Find a farm or group" aria-controls="home-results">
+    </div>
+    <ul id="home-results" class="home-results" aria-label="Matching places" hidden></ul>
+    <p id="home-none" class="home-none" role="status"></p>
+    <details id="home-fold" class="home-fold">
+      <summary>All places <span id="home-count" class="home-count"></span></summary>
+      <ul id="home-list" class="home-list" aria-label="All farms and groups"></ul>
+    </details>
     <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button></p>
   </aside>
+  <section id="home-card" class="home-card" aria-labelledby="home-card-name" hidden>
+    <button type="button" id="home-card-close" class="home-card-close" aria-label="Close">×</button>
+    <h2 id="home-card-name"></h2>
+    <p id="home-card-kind" class="home-card-kind"></p>
+    <p id="home-card-note" class="home-card-note" hidden>No outline recorded for it yet.</p>
+    <a id="home-card-open" class="home-card-open" href="#/">Open</a>
+  </section>
   <aside id="layers-drawer" class="layers-drawer" aria-label="Layers" hidden>
     <div class="drawer-heading"><h2>Layers</h2><button id="layers-close" type="button">Close</button></div>
     <ul id="layer-list" class="layer-list"></ul>
@@ -192,7 +207,7 @@
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
 <script src="js/brand.80965af9.js"></script>
 <script src="js/consent-no.711a9161.js"></script>
-<script src="js/demo.96e0021f.js"></script>
+<script src="js/demo.3c0664ec.js"></script>
 <script src="js/util.1d5eb095.js"></script>
 <script src="js/simple-view.dab8ac59.js"></script>
 <script src="js/layer-kinds.f0f86f81.js"></script>
@@ -207,7 +222,7 @@
 <script src="js/popup.02390ce3.js"></script>
 <script src="js/blocks/registry.108f6d88.js"></script>
 <script src="js/blocks/answer.ce39f59d.js"></script>
-<script src="js/blocks/map-scene.2963c0d3.js"></script>
+<script src="js/blocks/map-scene.da5490bf.js"></script>
 <script src="js/blocks/list.ecfce221.js"></script>
 <script src="js/blocks/timeline.d3df4ebf.js"></script>
 <script src="js/blocks/checklist.956251f9.js"></script>
@@ -236,7 +251,7 @@
 <script src="js/farm-reference.44ef4bd8.js"></script>
 <script src="js/block-model.9536f147.js"></script>
 <script src="js/add-block.b10a1af6.js"></script>
-<script src="js/farm-space.70f24a33.js"></script>
+<script src="js/farm-space.a5e8df11.js"></script>
 <script src="js/group-model.26cbd8ec.js"></script>
 <script src="js/group-update.7493b872.js"></script>
 <script src="js/group-wq-answer.7133bd52.js"></script>
@@ -248,6 +263,8 @@
 <script src="js/shape-editor.0ee097ec.js"></script>
 <script src="js/viewer.1d84d7ac.js"></script>
 <script src="js/maps-view.b2a23672.js"></script>
+<script src="js/home-model.d8294dd9.js"></script>
+<script src="js/home.57a0f294.js"></script>
 <script src="js/ops-model.53057a2f.js"></script>
 <script src="js/ops.bf82c038.js"></script>
 <script src="js/layer-notes-model.37f62a4d.js"></script>
@@ -257,7 +274,7 @@
 <script src="js/tokens-model.c6a721ec.js"></script>
 <script src="js/tokens.368b3ae6.js"></script>
 <script src="js/two-factor.a22a65e5.js"></script>
-<script src="js/main.214684f5.js"></script>
+<script src="js/main.a454465d.js"></script>
 </body>
 </html>
 

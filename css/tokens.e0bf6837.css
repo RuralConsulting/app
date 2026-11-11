@@ -52,6 +52,8 @@
   /* DEC3: the decision card map's three looks, as its legend draws them (the map's own colours, the same in both themes; decision-card-model.js LOOKS) */
   --card-subject: #00c8ff; --card-subject-fill: rgba(0, 200, 255, .45); --card-member-line: rgba(255, 255, 255, .85); --card-others-line: rgba(168, 168, 168, .6);
   --card-swatch-ground: #4b5843;
+  /* LP1: the home map's farms and groups (map colours, the same in both themes: they sit on the aerial) */
+  --map-farm: #ffc94a; --map-group: #62d2ff;
   --backdrop: rgba(21, 26, 20, .55);
   --banner-panel: #302f28; --banner-ink: #fffdf7;
   --print-panel: #ffffff; --print-ink: #000000;
