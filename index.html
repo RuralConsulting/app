@@ -19,8 +19,8 @@
 <!-- V4: the map viewer's stylesheet sets page-wide rules, so it is on only while a map is shown (js/maps-view.js); before tokens.css, so the app's colours and type win -->
 <link rel="stylesheet" href="vendor/viewer.566c7f59.css" media="not all" data-viewer-styles>
 <link rel="stylesheet" href="css/tokens.e0bf6837.css">
-<link rel="stylesheet" href="css/app.9f7f5691.css">
-<link rel="stylesheet" href="css/demo.e75cefbe.css">
+<link rel="stylesheet" href="css/app.c00335d2.css">
+<link rel="stylesheet" href="css/demo.09842fda.css">
 <link rel="stylesheet" href="css/blocks.6669e69b.css">
 <link rel="stylesheet" href="css/farm-space.d71cb8e1.css">
 <link rel="stylesheet" href="css/group-space.ba8a4945.css">
@@ -46,6 +46,7 @@
     </form>
     <p id="signin-msg" class="msg" role="alert"></p>
     <p class="fine">Accounts are set up by Rural Consulting. Forgotten your password? Ask RCL to set you a new one.</p>
+    <p class="fine"><a class="privacy-link" href="#/privacy">Privacy and terms</a></p>
     <p hidden><a href="#/demo">Try the demo — synthetic data, no sign-in</a></p>
   </div>
 </main>
@@ -111,7 +112,7 @@
     </form>
     <p id="tf-msg" class="msg" role="alert"></p>
     <form id="f-tf-continue" hidden><button type="submit">Continue</button></form>
-    <p class="fine"><span id="tf-lost" hidden>Lost your phone or changed apps? Ask an RCL admin to reset your two-factor. </span><button type="button" class="link b-signout">Sign out</button></p>
+    <p class="fine"><span id="tf-lost" hidden>Lost your phone or changed apps? Ask an RCL admin to reset your two-factor. </span><button type="button" class="link b-signout">Sign out</button> · <a class="privacy-link" href="#/privacy">Privacy and terms</a></p>
   </div>
 </main>
 
@@ -119,7 +120,7 @@
   <div class="ops-wrap">
     <header class="ops-head">
       <h1 id="ops-title">Operations</h1>
-      <p class="fine"><a id="ops-back" href="#/">Farms</a> · <span id="ops-tab-wrap"><a id="ops-tab" href="#/ops/layers">Layers</a> · <a id="ops-looks-tab" href="#/ops/looks">Looks</a> · </span><span class="who"></span> · <button type="button" class="link b-signout">Sign out</button></p>
+      <p class="fine"><a id="ops-back" href="#/">Farms</a> · <span id="ops-tab-wrap"><a id="ops-tab" href="#/ops/layers">Layers</a> · <a id="ops-looks-tab" href="#/ops/looks">Looks</a> · </span><span class="who"></span> · <button type="button" class="link b-signout">Sign out</button> · <a class="privacy-link" href="#/privacy">Privacy and terms</a></p>
     </header>
     <div id="ops-panels" aria-live="polite"></div>
   </div>
@@ -130,7 +131,7 @@
     <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
     <h1>Farms</h1>
     <p id="farms-msg" class="msg"></p>
-    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button></p>
+    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button> · <a class="privacy-link" href="#/privacy">Privacy and terms</a></p>
   </div>
 </main>
 
@@ -139,13 +140,29 @@
     <h1>Not available</h1>
     <p>This part of the platform isn't available to your sign-in.</p>
     <p id="unavailable-links"></p>
-    <p class="fine"><span class="who"></span> · <button type="button" class="link b-signout">Sign out</button></p>
+    <p class="fine"><span class="who"></span> · <button type="button" class="link b-signout">Sign out</button> · <a class="privacy-link" href="#/privacy">Privacy and terms</a></p>
+  </div>
+</main>
+
+<!-- V8: the privacy and terms note (js/privacy.js; the words are privacy-terms.md). Open to everyone at #/privacy, and asked once
+     after sign-in for each new version of the note. -->
+<main id="screen-privacy" class="screen privacy-screen" hidden>
+  <div class="card wide privacy-card">
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <article id="privacy-note" class="privacy-note"><p>Loading…</p></article>
+    <p id="privacy-version" class="fine"></p>
+    <div class="privacy-actions">
+      <button type="button" id="privacy-ok" class="privacy-ok" hidden>I understand</button>
+      <a id="privacy-back" class="privacy-back" href="#/">Back</a>
+      <button type="button" id="privacy-print" class="link">Print</button>
+    </div>
+    <p id="privacy-msg" class="msg" role="alert"></p>
   </div>
 </main>
 
 <main id="screen-group" class="group-screen" hidden>
   <header class="group-head">
-    <div class="group-identity"><img id="group-logo" class="group-logo" alt="" hidden><div class="group-title"><a id="group-back" class="group-back" href="#/" hidden>All farms and groups</a><h1 id="group-name"></h1><p id="group-kind" class="group-kind"></p></div></div>
+    <div class="group-identity"><img id="group-logo" class="group-logo" alt="" hidden><div class="group-title"><a id="group-back" class="group-back" href="#/" hidden>All farms and groups</a><h1 id="group-name"></h1><p id="group-kind" class="group-kind"></p><p class="group-legal"><a class="privacy-link" href="#/privacy">Privacy and terms</a></p></div></div>
     <nav id="group-nav" class="group-nav" aria-label="Group views"></nav>
   </header>
   <div class="group-body">
@@ -173,7 +190,7 @@
       <summary>All places <span id="home-count" class="home-count"></span></summary>
       <ul id="home-list" class="home-list" aria-label="All farms and groups"></ul>
     </details>
-    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button></p>
+    <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button> · <a class="privacy-link" href="#/privacy">Privacy and terms</a></p>
   </aside>
   <section id="home-card" class="home-card" aria-labelledby="home-card-name" hidden>
     <button type="button" id="home-card-close" class="home-card-close" aria-label="Close">×</button>
@@ -207,9 +224,10 @@
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
 <script src="js/brand.80965af9.js"></script>
 <script src="js/consent-no.711a9161.js"></script>
-<script src="js/demo.3c0664ec.js"></script>
+<script src="js/demo.7688f4a8.js"></script>
 <script src="js/util.1d5eb095.js"></script>
-<script src="js/simple-view.dab8ac59.js"></script>
+<script src="js/simple-view.1d930e7d.js"></script>
+<script src="js/privacy.2bf69cda.js"></script>
 <script src="js/layer-kinds.f0f86f81.js"></script>
 <script src="js/route-timing.eb451185.js"></script>
 <script src="js/qml.5b2c66e1.js"></script>
@@ -251,7 +269,7 @@
 <script src="js/farm-reference.44ef4bd8.js"></script>
 <script src="js/block-model.9536f147.js"></script>
 <script src="js/add-block.b10a1af6.js"></script>
-<script src="js/farm-space.a5e8df11.js"></script>
+<script src="js/farm-space.c55a82c3.js"></script>
 <script src="js/group-model.26cbd8ec.js"></script>
 <script src="js/group-update.7493b872.js"></script>
 <script src="js/group-wq-answer.7133bd52.js"></script>
@@ -274,7 +292,7 @@
 <script src="js/tokens-model.c6a721ec.js"></script>
 <script src="js/tokens.368b3ae6.js"></script>
 <script src="js/two-factor.a22a65e5.js"></script>
-<script src="js/main.a454465d.js"></script>
+<script src="js/main.15919dbc.js"></script>
 </body>
 </html>
 

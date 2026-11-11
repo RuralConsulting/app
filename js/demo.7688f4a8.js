@@ -52,6 +52,7 @@
     if (isGroup(hash)) {
       const suffix = hash.split("?")[0].slice("#/demo/group".length);
       if (suffix === "/farms") return "";
+      if (suffix === "/privacy") return "#/privacy";   // V8: the privacy and terms note
       // LK2: the staff page for layer looks, with the group's map at group scale
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
@@ -62,6 +63,7 @@
     let suffix = path.slice("#/demo".length), farm = FARM;
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
+    if (suffix === "/privacy") return "#/privacy";              // V8: the privacy and terms note, in any demo
     if (suffix === "/layers") return "#/layers";                  // Layer notes (LN2): the same screen for advisors and farm editors
     if (suffix === "/account/qgis" && !multi) return "#/account/qgis";   // the person's access keys for QGIS (QGIS1a)
     if (suffix === "/ops" && !multi) return "#/ops";            // the staff Operations page
@@ -84,6 +86,7 @@
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
+    if (hash === "#/privacy") return group ? "#/demo/group/privacy" : "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/privacy";
     if (hash === "#/account/qgis") return "#/demo/account/qgis";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
     if (hash === "#/ops/looks") return group ? "#/demo/group/ops/looks" + (queue ? "?queue=" + queue : "") : "#/demo/ops/looks";

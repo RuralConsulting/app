@@ -271,3 +271,24 @@ body.simple-files #space-content > .sheet-head { display: none; }
 body.simple-files #space-body { width: 100%; max-width: 860px; margin: 0 auto; }
 body.simple-files #group-map { display: none; }
 body.simple-files .group-body { grid-template-columns: minmax(0, 1fr); }
+
+/* V8: the privacy and terms note (privacy.js), a page anyone can open and the one-time acknowledgement after sign-in. */
+.privacy-screen { align-items: flex-start; }
+.privacy-card { max-width: 680px; }
+.privacy-note { overflow-wrap: anywhere; }
+.privacy-note h1 { margin: 18px 0 12px; }
+.privacy-note h2 { font-family: var(--f-head); font-weight: 650; font-size: var(--text-heading); line-height: 1.2; margin: 22px 0 6px; }
+.privacy-note p { margin: 0 0 10px; }
+.privacy-note ul { margin: 0 0 10px; padding-left: 22px; display: grid; gap: 4px; }
+.privacy-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-top: 16px; }
+.privacy-ok { min-height: 44px; padding: 11px 18px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; font-size: var(--text-body); }
+.privacy-ok[disabled] { opacity: 0.6; cursor: default; }
+.privacy-back { color: inherit; font-size: var(--text-small); }
+.group-legal { margin: 2px 0 0; font-size: var(--text-small); }
+.group-legal a { color: var(--ink-3); }
+@media print {
+  body:has(> #screen-privacy:not([hidden])) > :not(#screen-privacy):not(.demo-banner) { display: none !important; }
+  #screen-privacy { display: block; min-height: 0; padding: 0; }
+  #screen-privacy .privacy-card { max-width: none; box-shadow: none; padding: 0; background: none; }
+  #screen-privacy .privacy-actions, #screen-privacy .msg { display: none !important; }
+}

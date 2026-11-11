@@ -11,8 +11,9 @@
   // The allow-list. Each space: [view, the word the client reads], in tab order; the first the router knows is the landing.
   // "documents" is the Files store (its route name stays). "maps" is V4's view; until the router knows it, no tab is drawn for it.
   const CLIENT_VIEWS = { farm: [["maps", "Maps"], ["documents", "Files"]], group: [["maps", "Maps"], ["documents", "Files"]] };
-  // Pages outside a farm or group a client may open, as their address after "#/" (for example "account/qgis"). None in v1.
-  const CLIENT_PAGES = [];
+  // Pages outside a farm or group a client may open, as their address after "#/" (for example "account/qgis"). V8: the privacy
+  // and terms note, which everyone can read.
+  const CLIENT_PAGES = ["privacy"];
 
   const SAMPLE = "00000000-0000-4000-8000-000000000000";
   const browserModels = () => ({ farm: root.FP.farmModel, group: root.FP.groupModel });

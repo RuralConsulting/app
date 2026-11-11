@@ -3,6 +3,7 @@
 // #/group/<id> (a catchment group's space, S5) and its /documents, /create and /settings; #/account/qgis (the person's access
 // keys for QGIS, QGIS1a).
 // V6: a client gets the simple view (simple-view.js, the allow-list): every route is checked against it first.
+// V8: #/privacy, the privacy and terms note (privacy.js), for everyone, signed in or not; asked once after sign-in per version.
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [], groups = [];
@@ -31,11 +32,16 @@
       }
     }
     const user = await FP.auth.user();
-    if (!user) { show("screen-signin"); $("#email").focus(); return; }
+    FP.privacy.links();
+    // V8: the privacy and terms note is open to everyone, signed in or not
+    if (!user) { if (FP.privacy.isRoute(location.hash)) { FP.privacy.open(); return; } show("screen-signin"); $("#email").focus(); return; }
     if (!FP.demo?.active) {
       try { if (await FP.auth.needsPassword()) { welcome(user); return; } }
       catch (e) { show("screen-signin"); msg("#signin-msg", e.message); return; }
     }
+    // V8: the note, once, before anything else, for each version a person has not yet acknowledged (staff too). Never keeps
+    // anyone out: a note or record that can't be read or written lets them in and asks again next time (privacy.js).
+    await FP.privacy.gate(user);
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
     $("#pw-email").value = user.email;
     // PERF1b: the farms, the person's memberships (then their organisations, only if there are any) and the staff flag
@@ -110,7 +116,8 @@
       // none gets no hashchange routing, so a redirect would leave them on the screen they were on)
       if (gate.action === "go" && (gate.space === "farm" ? allFarms : groups).some((p) => p.id === gate.id)) { location.replace(FP.href(gate.href)); return; }
       if (gate.action === "hidden") { closeAll(); FP.simpleView.notAvailable(gate, { farms: allFarms, groups }); return; }
-    }
+    }    // V8: the privacy and terms note, for everyone (a client reaches it through the simple view's CLIENT_PAGES)
+    if (FP.privacy.isRoute(hash)) { closeAll(); FP.privacy.open(); return; }
     // TIM1 (#409): Operations, Layers, the plan screens and the gallery don't close the group space; the group's drawn-time run
     // is dropped all the same, so a figure never takes in the time spent there
     const toGroup = !!FP.groupModel.match(hash) || (!farms.length && groups.length === 1 && !FP.farmModel.match(hash));
@@ -223,7 +230,13 @@
     t.addEventListener("change", () => FP.farmMap.terrain(t.checked));
   }
 
-  window.addEventListener("hashchange", () => { if (farms.length || groups.length) route(); });
+  window.addEventListener("hashchange", () => {
+    if (FP.privacy.asking()) return;   // the first sign-in note waits for I understand
+    if (farms.length || groups.length) route();
+    // V8: signed out (or with no farm or group), the note opens from its link, and leaving it goes back to where the person was
+    else if (FP.privacy.isRoute(routed())) FP.privacy.open();
+    else if (!$("#screen-privacy").hidden) start();
+  });
   sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.routeTiming?.cancel(); FP.farmSpace.close(); show("screen-signin"); } });
 
   // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts
