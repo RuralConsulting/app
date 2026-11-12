@@ -133,5 +133,57 @@
   const centre = (box) => [(box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2];
   const union = (boxes) => boxes.reduce((a, b) => [[Math.min(a[0][0], b[0][0]), Math.min(a[0][1], b[0][1])], [Math.max(a[1][0], b[1][0]), Math.max(a[1][1], b[1][1])]]);
 
-  return { places, kindLabel, search, fold, openHref, polygons, bbox, simplifyRing, lighten, joinAreas, pointZoom, centre, union, MAX_POINTS, SPECK };
+  // ---- where a person starts (J2, J2c) ------------------------------------------------------------------------------------------
+  // Josh, 13 Nov 2026: Places (the map of all places) is mainly for RCL staff; "If I'm the coordinator of MCCC I want to start
+  // directly in that space". Decided from what start-up already read (main.js: the farms, the groups with the person's role and
+  // parent_org_id, the staff flag), nothing else. hash: the app's own address (the demo's already turned into it).
+  //   link: true            an address of its own (a place, Files, #/ops...): it wins, as the router follows it first; `to` is
+  //                         only where an address the router cannot open (someone else's place, a staff page) falls back to
+  //   { to: "places" }      Places: "#/places" ("All places"), or the bare address when nothing below decides
+  //   { to: "none" }        no farm and no group (the plain note)
+  //   { to: "farm" | "group", id }   the bare address opens this place (on its Home)
+  // The rule, for the bare address (and so for sign-in):
+  //   1. exactly one place: it (staff too, as J2);
+  //   2. RCL staff, or the staff flag unread: Places;
+  //   3. a coordinator (facilitator, advisor or admin) of one group and of nothing above it: that group. The group's sub-groups and
+  //      member farms do not count; every group the person is in must sit in that group's tree (its top-level group's);
+  //   4. no coordinator role anywhere, one farm, and every group is the farm's own (farms.org_id) or above it: the farm;
+  //   5. anything else, or anything not loaded or unreadable (the groups, a group's parent_org_id): Places.
+  const COORDINATOR = new Set(["facilitator", "advisor", "admin"]);
+  const isBare = (h) => h == null || h === "" || h === "#" || h === "#/";
+  function landing(hash, people = {}) {
+    if (hash === "#/places") return { to: "places" };
+    return isBare(hash) ? start(people) : { ...start(people), link: true };
+  }
+  function start({ farms, groups, staff, staffKnown }) {
+    if (!Array.isArray(farms) || !Array.isArray(groups)) return { to: "places" };   // not loaded yet: never guess
+    if (!farms.length && !groups.length) return { to: "none" };
+    if (farms.length + groups.length === 1) return farms.length ? { to: "farm", id: farms[0].id } : { to: "group", id: groups[0].id };
+    if (staff || !staffKnown) return { to: "places" };
+    // every group's parent must have been read (null for a top-level group): a database without the column decides nothing
+    if (!groups.length || groups.some((g) => g.parent_org_id === undefined)) return { to: "places" };
+    const byId = new Map(groups.map((g) => [g.id, g]));
+    // the chain above a group as far as the person's own groups show it, nearest first (the last may be a parent they are not in)
+    const above = (g) => {
+      const out = [];
+      for (let p = g.parent_org_id; p && out.length < 16 && !out.includes(p); p = byId.get(p)?.parent_org_id) out.push(p);
+      return out;
+    };
+    const tree = (g) => above(g).at(-1) || g.id;   // its topmost known ancestor, or itself
+    const coordinated = groups.filter((g) => COORDINATOR.has(g.role));
+    if (coordinated.length) {
+      const ids = new Set(coordinated.map((g) => g.id));
+      const roots = coordinated.filter((g) => !above(g).some((p) => ids.has(p)));   // not under another group they coordinate
+      if (roots.length !== 1) return { to: "places" };
+      const root = roots[0];
+      return groups.every((g) => tree(g) === tree(root)) ? { to: "group", id: root.id } : { to: "places" };
+    }
+    if (farms.length !== 1) return { to: "places" };
+    const farm = farms[0], home = farm.org_id ? byId.get(farm.org_id) : null;
+    if (!home) return { to: "places" };   // which group the farm is in is not known from what was read
+    const own = new Set([home.id, ...above(home)]);
+    return groups.every((g) => own.has(g.id)) ? { to: "farm", id: farm.id } : { to: "places" };
+  }
+
+  return { places, kindLabel, search, fold, openHref, polygons, bbox, simplifyRing, lighten, joinAreas, pointZoom, centre, union, landing, MAX_POINTS, SPECK };
 });

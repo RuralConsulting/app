@@ -167,7 +167,7 @@
       badge: key === "people" ? () => FP.groupPeople?.countBadge?.(group.id) : null })), route.view);   // RV1: open review items, once People has read them
     const back = $("#group-back");
     back.hidden = !(FP.groupSpace.hasPortfolio?.());
-    back.setAttribute("href", FP.href("") || "#/");
+    back.setAttribute("href", FP.href("#/places"));   // J2c: Places itself, never the bare address (which may land in a place)
     if (FP.icon && !back.querySelector("svg")) back.prepend(FP.icon("back", 20));
     // UI1: Add, for what this person may add to this group (add.js)
     FP.add?.mount($("#group-add-slot"), "group");

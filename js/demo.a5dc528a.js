@@ -60,6 +60,7 @@
     if (isGroup(hash)) {
       const suffix = hash.split("?")[0].slice("#/demo/group".length);
       if (suffix === "/farms") return "";
+      if (suffix === "/places") return "#/places";   // J2c: Places itself (the bare address may land in the group)
       if (suffix === "/privacy") return "#/privacy";   // V8: the privacy and terms note
       // LK2: the staff page for layer looks, with the group's map at group scale
       if (suffix === "/ops/looks") return "#/ops/looks";
@@ -71,6 +72,7 @@
     let suffix = path.slice("#/demo".length), farm = FARM;
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
+    if (suffix === "/places") return "#/places";                // J2c: Places itself ("All places")
     if (suffix === "/privacy") return "#/privacy";              // V8: the privacy and terms note, in any demo
     if (suffix === "/layers") return "#/layers";                  // Layer notes (LN2): the same screen for advisors and farm editors
     if (suffix === "/account/qgis" && !multi) return "#/account/qgis";   // the person's access keys for QGIS (QGIS1a)
@@ -94,6 +96,7 @@
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
+    if (hash === "#/places") return "#/demo" + (group ? "/group" : multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/places" + (group && queue ? "?queue=" + queue : "");   // J2c
     if (hash === "#/privacy") return group ? "#/demo/group/privacy" : "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/privacy";
     if (hash === "#/account/qgis") return "#/demo/account/qgis";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
@@ -322,7 +325,7 @@
     // WQ4: the group's area, as the loader makes it (the preset's applies_to.area is this code)
     t.places.push({ id: "demo-g-area", org_id: GROUP, kind: "area", code: "hdlg-catchment", name: "HDLG (example) catchment", method: "member_blocks_buffer_1km",
       description: "Working boundary: the group's member blocks plus 1 km (synthetic).", valid_to: null });
-    t.organisations.push({ id: GROUP, name: "HDLG (example)", kind: "catchment_group" });
+    t.organisations.push({ id: GROUP, name: "HDLG (example)", kind: "catchment_group", parent_org_id: null });   // (J2c: a top-level group)
     t.org_members.push({ org_id: GROUP, user_id: USER, role: "admin" });
     t.record_types.push({ id: "rt-planting", key: "planting", label: "Planting", farm_id: null, org_id: null },
       { id: "rt-meeting", key: "meeting", label: "Meeting", farm_id: null, org_id: null }, { id: "rt-sample", key: "water_sample", label: "Water sample", farm_id: null, org_id: null });

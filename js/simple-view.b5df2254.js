@@ -13,8 +13,8 @@
   // J2: Home (place-home.js) is first, so it is every client's landing; the bare address of a place goes on to it.
   const CLIENT_VIEWS = { farm: [["home", "Home"], ["maps", "Maps"], ["documents", "Files"]], group: [["home", "Home"], ["maps", "Maps"], ["documents", "Files"], ["events", "Events"], ["people", "People"]] };   // N4: a group's Events; PE1: People (its tab is drawn only for the group's facilitators, advisors and admins, group-space.js)
   // Pages outside a farm or group a client may open, as their address after "#/" (for example "account/qgis"). V8: the privacy
-  // and terms note, which everyone can read.
-  const CLIENT_PAGES = ["privacy"];
+  // and terms note, which everyone can read. J2c: "places", Places itself ("All places"; the bare address may land in a place).
+  const CLIENT_PAGES = ["privacy", "places"];
 
   const SAMPLE = "00000000-0000-4000-8000-000000000000";
   const browserModels = () => ({ farm: root.FP.farmModel, group: root.FP.groupModel });

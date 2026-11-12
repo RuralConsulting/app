@@ -175,7 +175,7 @@
     // (the person, the farm switcher, People, Layer notes, Operations, Change password, Privacy and Sign out sit behind it, on a
     // phone and a computer alike). The views: a segmented control in the header on a computer, a tab bar along the bottom on a phone.
     h.className = "space-head";
-    h.innerHTML = '<div class="farm-header-row space-bar"><a id="space-home" class="space-back" href="#/" hidden><span class="space-back-label">All places</span></a>' +
+    h.innerHTML = '<div class="farm-header-row space-bar"><a id="space-home" class="space-back" href="#/places" hidden><span class="space-back-label">All places</span></a>' +
       '<div class="space-identity"><span id="space-mark" class="space-mark" aria-hidden="true"></span><div class="space-title"><h1><a id="space-farm-name" href="#"></a></h1><p id="space-kind" class="space-kind">Farm</p></div></div>' +
       '<div class="space-actions"><span class="add-slot" id="farm-add-slot"></span>' +
       '<button type="button" id="account-open" class="account-open" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account and people"><span id="account-initials" aria-hidden="true"></span></button>' +
@@ -424,7 +424,7 @@
     if (roleNode) { roleNode.textContent = roleLine; roleNode.hidden = !roleLine; }
     // UI1: where the person is and how to get back: every place, when they have more than this one
     $("#space-home").hidden = !(FP.groupSpace?.hasPortfolio ? FP.groupSpace.hasPortfolio() : portfolio.length > 1);
-    $("#space-home").setAttribute("href", FP.href("") || "#/");
+    $("#space-home").setAttribute("href", FP.href("#/places"));   // J2c: Places itself, never the bare address (which may land in a place)
     const letters = monogram(farm.name);   // (no letters at all: a neutral place glyph)
     $("#space-mark").replaceChildren(letters || FP.icon("places", 18));
     // UI1: Add, for what this person may add to this farm (add.js); the role comes with the farm's reads, or is read on its own

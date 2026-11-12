@@ -124,7 +124,12 @@
     if (FP.privacy.isRoute(hash)) { closeAll(); FP.privacy.open(); return; }
     // TIM1 (#409): Operations, Layers, the plan screens and the gallery don't close the group space; the group's drawn-time run
     // is dropped all the same, so a figure never takes in the time spent there
-    const toGroup = !!FP.groupModel.match(hash) || (!farms.length && groups.length === 1 && !FP.farmModel.match(hash));
+    // J2c: where the bare address (and so sign-in) opens: one place, a coordinator's own group, a farmer's one farm, or Places
+    // (home-model.js landing). Decided only here, once the groups and the staff flag are read, so Places never shows first.
+    // (a link to one of the person's own farms is that farm, never the landing; any other address the router cannot open falls back to it)
+    const ownFarm = ((r) => !!r && allFarms.some((f) => f.id === r.farm))(FP.farmModel.match(hash));
+    const land = FP.homeModel.landing(hash, { farms: allFarms, groups, staff: FP.ops.isStaff(), staffKnown: !!FP.ops.staffKnown?.() });
+    const toGroup = !!FP.groupModel.match(hash) || (land.to === "group" && !ownFarm);
     if (!toGroup) FP.routeTiming?.cancel("group");
     // The Farm Environment Plan and Freshwater Farm Plan documents, on the invented farm: only in the demo.
     if (FP.demo?.active && /^#\/plans(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.close(); FP.farmPlansDemo.open(hash); return; }
@@ -150,23 +155,24 @@
     // Layer notes (LN2): the same screen for a group's advisors and a farm's editors, scoped by their roles (the page offers nothing to a viewer).
     if (hash === "#/layers") { FP.farmSpace.close(); FP.ops.close(); FP.opsLayers.open(); return; }
     FP.ops.close(); FP.opsLayers.close();
-    // A catchment group's space (S5); a person whose only place is one group goes straight to it.
+    // A catchment group's space (S5); the bare address of a person who lands in a group (J2c) goes straight to it.
     const groupRoute = FP.groupModel.match(hash), group = groupRoute && FP.groupSpace.find(groupRoute.group);
     // PF1: People is the group's facilitators', advisors' and admins' only; decided here, with the group's role already read (this
     // runs only once the groups are known), so an address of People answers "not available" to anyone else and never to them
     if (group && groupRoute.view === "people" && !FP.peopleModel?.canSeeTab(group, groups)) { closeAll(); FP.simpleView.notAvailable({ space: "group", id: group.id }, { farms: allFarms, groups }); return; }
     if (group) { FP.farmSpace.close(); markFiles(groupRoute.view); FP.groupSpace.open(group, groupRoute); return; }
-    if (!farms.length && groups.length === 1 && !FP.farmModel.match(hash)) { const view = homeView("group"); FP.farmSpace.close(); markFiles(view); FP.groupSpace.open(groups[0], { group: groups[0].id, view }); return; }
+    const landed = land.to === "group" && !ownFarm && FP.groupSpace.find(land.id);
+    if (landed) { const view = homeView("group"); FP.farmSpace.close(); markFiles(view); FP.groupSpace.open(landed, { group: landed.id, view }); return; }
     FP.groupSpace.close();
     const route = FP.farmModel.match(hash);
-    // one farm and no group: straight to it; with a group too, the portfolio lists both
-    const farm = (route && allFarms.find((f) => f.id === route.farm)) || (farms.length === 1 && !groups.length ? farms[0] : null);
+    // the farm the address names, or the one the bare address lands on (one farm and no group, or a farmer's one farm in its group)
+    const farm = (route && allFarms.find((f) => f.id === route.farm)) || (land.to === "farm" ? allFarms.find((f) => f.id === land.id) : null);
     if (farm) { const shown = route?.farm === farm.id ? route : { farm: farm.id, view: homeView("farm") }; markFiles(shown.view); FP.farmSpace.open(farm, shown); }
     else listFarms();
   }
 
-  // LP1: the home page is a map of every farm and group the person can see, with search and a folded list (home.js). A person
-  // with one place was taken straight to it above; a person with none gets the plain note.
+  // LP1: Places, a map of every farm and group the person can see, with search and a folded list (home.js); "#/places" always
+  // opens it ("All places"). A person the bare address lands in a place (J2c) was taken there above; a person with none gets the plain note.
   function listFarms() {
     if (farms.length + groups.length) { FP.farmSpace.showPortfolio(); FP.home.show({ farms, groups }); return; }
     FP.farmSpace.close();

@@ -6,15 +6,16 @@
   const M = FP.opsModel, { $, $$, el, sb } = FP;
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ext = (href, label) => href ? '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + esc(label) + "</a>" : "";
-  let staff = false, token = 0, me = null;
+  let staff = false, known = false, token = 0, me = null;
 
   // Whether this sign-in is RCL staff (profiles.is_staff, readable by its owner). Anything unexpected means not staff.
   async function checkStaff(user) {
     me = user || null;
-    staff = false;   // V6: not known yet is not staff, so a later sign-in on this page never inherits the last person's flag
+    staff = false; known = false;   // V6: not known yet is not staff, so a later sign-in on this page never inherits the last person's flag
     try {
       const { data, error } = await sb.from("profiles").select("is_staff").eq("user_id", user.id).maybeSingle();
       staff = !error && data?.is_staff === true;
+      known = !error;   // J2c: whether the flag was read at all (an unread flag starts a person with several places on Places)
     } catch { staff = false; }
     showLinks();
     return staff;
@@ -278,5 +279,5 @@
   }
   function close() { token++; }
 
-  FP.ops = { checkStaff, showLinks, isStaff: () => staff, user: () => me, open, close, decide, groupGaps, render: { jobsPanel, referencesPanel, gapsPanel, recipesPanel, ratchetPanel, onboardingPanel, buildPanel } };
+  FP.ops = { checkStaff, showLinks, isStaff: () => staff, staffKnown: () => known, user: () => me, open, close, decide, groupGaps, render: { jobsPanel, referencesPanel, gapsPanel, recipesPanel, ratchetPanel, onboardingPanel, buildPanel } };
 })();
