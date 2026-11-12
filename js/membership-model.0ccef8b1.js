@@ -106,10 +106,20 @@
     for (const r of rows || []) { const v = r.fields?.[field.key]; if (typeof v === "string" && !seen.has(v.toLowerCase())) { seen.add(v.toLowerCase()); out.push(v); } }
     return out;
   }
-  // The table's columns on a computer: the base four, then Type and each list field (sortable).
+  // The table's columns on a computer, in the list pattern's order (the title first, quiet details, the date at the right):
+  // Member, No., Type, each list field, Primary contact, Last contact (sortable).
   function columns(fields) {
-    return [["name", "Member"], ["member", "No."], ["type", "Type"], ["contact", "Primary contact"], ...listFields(fields).map((f) => ["field:" + f.key, f.label]), ["last", "Last contact"]];
+    return [["name", "Member"], ["member", "No."], ["type", "Type"], ...listFields(fields).map((f) => ["field:" + f.key, f.label]), ["contact", "Primary contact"], ["last", "Last contact"]];
   }
+  // The one column template the header and every row share (written in full: CSS repeat() refuses a count of 0, which made the
+  // whole template invalid for a group with no list fields), and where each cell goes: 1 Member, 2 No., 3 Type, 4.. the n list
+  // fields, then Primary contact, then Last contact.
+  const COL = { name: "minmax(10em, 1.6fr)", member: "minmax(3.5em, .5fr)", type: "minmax(6em, .7fr)", field: "minmax(7em, .8fr)", contact: "minmax(8em, 1.2fr)", last: "minmax(6em, .8fr)" };
+  function colTemplate(n) {
+    const k = Math.max(0, Math.floor(Number(n) || 0));
+    return [COL.name, COL.member, COL.type, ...Array.from({ length: k }, () => COL.field), COL.contact, COL.last].join(" ");
+  }
+  const colOf = (n) => ({ name: 1, member: 2, type: 3, field: (i) => 4 + i, contact: 4 + Math.max(0, n | 0), last: 5 + Math.max(0, n | 0) });
   // Sorted by Type or a field (as sortDirectory does the base columns): the empty ones last.
   function sortBy(rows, by, dir = 1, fields = []) {
     if (by !== "type" && !String(by || "").startsWith("field:")) return null;
@@ -221,7 +231,7 @@
   }
   const contactLine = (c) => [c.organisation_name, c.contact_kind ? c.contact_kind[0].toUpperCase() + c.contact_kind.slice(1) : null, c.job_title].filter(Boolean).join(" · ");
 
-  return { canDefine, canEnd, canEdit, memberActions, endNote, KINDS, KIND_TEXT, CONTACT_KINDS, MAX_FIELDS, MAX_CHOICES, MAX_TYPES, ORPHAN, active, listFields, filterFields, activeTypes, valueText, termText,
+  return { canDefine, canEnd, canEdit, memberActions, endNote, colTemplate, colOf, KINDS, KIND_TEXT, CONTACT_KINDS, MAX_FIELDS, MAX_CHOICES, MAX_TYPES, ORPHAN, active, listFields, filterFields, activeTypes, valueText, termText,
     matches, filterRows, chips, remove, clear, toggleType, setField, toggleChoice, typeChoices, choiceChoices, columns, sortBy, emailText, emailNotice, listCsv,
     fieldForm, toField, removedChoices, toType, valueArg, searchContacts, contactLine };
 });

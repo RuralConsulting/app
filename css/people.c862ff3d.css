@@ -156,6 +156,8 @@
 .mf-field.mf-tick label { grid-column: 2; grid-row: 1; color: var(--ink); font-size: inherit; }
 .mf-field.mf-tick input { grid-column: 1; grid-row: 1; width: 22px; height: 22px; }
 .mf-field.mf-tick .mf-saved { grid-column: 1 / -1; }
+/* the sub-groups' own section inside Tags: one divider, not two */
+.crm-section > .sg-chips { margin-top: 0; padding-top: 0; border-top: 0; }
 .mf-defs { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .mf-def { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); }
 .mf-def-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 16em; }
@@ -173,19 +175,22 @@
   .crm-table.mf-table .crm-c-type { grid-area: type; white-space: nowrap; }
   /* with the type beside it, a long contact name wraps inside its own space (never runs on, hidden, under the round +) */
   .crm-table.mf-table .crm-c-contact { white-space: normal; text-overflow: clip; overflow-wrap: anywhere; }
-  .crm-table.mf-table .crm-c-member:has(+ .crm-c-type)::after, .crm-table.mf-table .crm-c-type:has(+ .crm-c-contact)::after { content: "\00b7"; margin: 0 6px; }
+  /* the dots between member, type and contact (the hidden field cells may sit between type and contact in the row) */
+  .crm-table.mf-table .crm-c-member:has(~ .crm-c-type, ~ .crm-c-contact)::after, .crm-table.mf-table .crm-c-type:has(~ .crm-c-contact)::after { content: "\00b7"; margin: 0 6px; }
   .crm-table.mf-table .crm-c-field { display: none; }
   .crm-table.mf-table .crm-thead { display: none; }
 }
 @media (min-width: 761px) {
   /* a computer: Type and the list fields as columns; wide tables scroll sideways inside themselves, the name column staying put */
-  .crm-table.mf-table { --cols: minmax(10em, 1.6fr) minmax(3.5em, .5fr) minmax(6em, .7fr) minmax(8em, 1.2fr) repeat(var(--mf-extra, 0), minmax(7em, .8fr)) minmax(6em, .8fr); }
+  /* the template itself is set on the table by people.js (membership-model.js colTemplate), header and rows alike */
   .crm-table.mf-table .crm-c-type { grid-column: 3; font-size: var(--text-body); color: var(--ink-2); }
-  .crm-table.mf-table .crm-c-contact { grid-column: 4; }
   .crm-table.mf-table .crm-c-last { grid-column: -2 / -1; }
+  .crm-table.mf-table .crm-c-contact { grid-column: -3 / -2; }   /* Primary contact: always second to last */
   .mf-scroll { overflow-x: auto; border-radius: var(--radius); }
   .crm-table.mf-wide { min-width: calc(42em + var(--mf-extra, 0) * 8em); }
   .crm-table.mf-wide .crm-c-name, .crm-table.mf-wide .crm-th:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); }
   .crm-table.mf-wide .crm-th:first-child { background: var(--wash); }
   .crm-table.mf-wide .crm-thead { position: static; }
+  /* the list clips its corners without being a scroll box of its own (overflow: hidden would be one, and stop the name column staying put) */
+  .crm-table.mf-wide .crm-list { overflow: clip; }
 }

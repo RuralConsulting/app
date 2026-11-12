@@ -432,7 +432,7 @@
     data.tables.group_member_terms = [term(1, 1, 1, "2019-04-01"), term(2, 2, 2, "2018-02-01", "2024-07-01"), term(3, 2, 1, "2024-07-01"), term(4, 3, 1, "2020-09-15"), term(5, 4, 3, null),
       term(6, 5, 1, "2021-03-01"), term(7, 6, 2, "2022-05-10"), term(8, 7, 1, null), term(9, 8, 3, "2023-01-20"), term(10, 9, 1, "2016-06-01", "2025-06-30", "Sold the farm (synthetic)")];
     const fieldDef = (n, key, label, kind, extra = {}) => ({ id: mid(9, n), org_id: GROUP, key, label, kind, choices: [], sort_order: n, shown_in_list: false, archived_at: null, ...extra });
-    data.tables.group_fields = [fieldDef(1, "farm_plan", "Farm plan status", "choice", { choices: ["Draft", "Final"], shown_in_list: true }), fieldDef(2, "nzfap", "NZFAP", "tick", { shown_in_list: true }),
+    data.tables.group_fields = [fieldDef(1, "farm_plan", "Farm plan status", "choice", { choices: ["Draft", "Final"] }), fieldDef(2, "nzfap", "NZFAP", "tick"),
       fieldDef(3, "fep_due", "FEP due", "date"), fieldDef(4, "plan_note", "Plan note", "text")];
     const val = (n, b, f, v) => ({ id: mid(9, 20 + n), org_id: GROUP, group_member_id: B(b), field_id: mid(9, f), value: v });
     data.tables.group_member_field_values = [val(1, 1, 1, "Final"), val(2, 1, 2, true), val(3, 1, 3, "2027-03-31"), val(4, 2, 1, "Draft"), val(5, 3, 1, "Awaiting audit"), val(6, 3, 2, true),

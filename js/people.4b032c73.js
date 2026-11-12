@@ -370,6 +370,8 @@
         }
         FP.sheet.open({ opener, title: "Filter", where: st.tab === "businesses" ? "Members" : "People", className: "crm-filter-sheet", body: () => holder, onClose: () => { sheetBody = null; } });
       }
+      // M1d: when the group's fields or types could not be read, say so (the list then has no field columns or filters)
+      if (st.tab === "businesses" && st.defs.failed && !st.loading) box.append(el("p", { class: "group-fine", role: "status", "data-defs-failed": "" }, "Couldn't read " + st.defs.failed + ". Reload to try again."));
       box.append(list);
       // The first screenful is drawn at once and the rest of a long list on the next frame (a newer fill drops an older one's rest).
       function listOf(shown, row) {
@@ -396,8 +398,10 @@
           // M1b: Type and the fields shown in the list as more columns on a computer (the table scrolls sideways inside itself, the
           // member's name column staying put); on a phone the type is quiet words on the row's second line
           const cols = FP.membershipModel ? MM().columns(st.defs.fields) : [["name", "Member"], ["member", "No."], ["contact", "Primary contact"], ["last", "Last contact"]];
-          const extra = cols.length - 5;
-          const table = el("div", { class: "crm-table" + (FP.membershipModel ? " mf-table" : "") + (extra > 0 ? " mf-wide" : ""), ...(FP.membershipModel ? { style: "--mf-extra: " + Math.max(0, extra) } : {}) },
+          const extra = FP.membershipModel ? MM().listFields(st.defs.fields).length : 0;
+          // one column template for the header and every row (set here in full, whatever the number of list fields)
+          const table = el("div", { class: "crm-table" + (FP.membershipModel ? " mf-table" : "") + (extra > 0 ? " mf-wide" : ""),
+            ...(FP.membershipModel ? { style: "--cols: " + MM().colTemplate(extra) + "; --mf-extra: " + extra } : {}) },
             head(cols), listOf(shown, businessRow));
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "member", "members")),
             shown.length ? (extra > 0 ? el("div", { class: "mf-scroll" }, table) : table)
@@ -447,11 +451,13 @@
           el("span", { class: "crm-c-member" }, el("span", { class: "crm-member-word" }, "Member "), r.member_number),
           // M1b: the membership type (quiet words; a computer's "Type" column)
           FP.membershipModel && r.membership_type ? el("span", { class: "crm-c-type" }, el("span", { class: "visually-hidden" }, "Type "), r.membership_type) : null,
-          // (no contact recorded: nothing, rather than a line saying so)
-          r.primary_name || r.people_count ? el("span", { class: "crm-c-contact" }, r.primary_name || M().plural(r.people_count, "person", "people")) : null,
-          // M1b: the fields shown in the list, each its own column on a computer (not on a phone)
-          ...(FP.membershipModel ? MM().listFields(st.defs.fields).map((f, i) => el("span", { class: "crm-c-field", "data-field": f.key, style: "grid-column: " + (5 + i) },
+          // M1b: the fields shown in the list, each its own column on a computer (hidden on a phone, so their inline column never
+          // applies there); in the order the computer shows them, before Primary contact
+          ...(FP.membershipModel ? MM().listFields(st.defs.fields).map((f, i) => el("span", { class: "crm-c-field", "data-field": f.key, style: "grid-column: " + MM().colOf(0).field(i) },
             el("span", { class: "visually-hidden" }, f.label + " "), MM().valueText(f, r.fields?.[f.key]))) : []),
+          // (no contact recorded: nothing, rather than a line saying so). Its column on a computer is set in people.css (second to
+          // last), never inline: a phone places it by its grid area.
+          r.primary_name || r.people_count ? el("span", { class: "crm-c-contact" }, r.primary_name || M().plural(r.people_count, "person", "people")) : null,
           el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), last)));
     }
     // M1b: the directory as it is shown (search, PE1's and SG2's filters, then membership type and fields; sorted)

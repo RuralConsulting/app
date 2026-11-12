@@ -12,14 +12,13 @@
   // The group's fields (its facilitators, advisors and admins read them) and membership types (the defaults are added the first
   // time a group needs them). Never fails: a failure is an empty list and its reason.
   async function readDefinitions(sb, g) {
+    // The two are read apart, so a failure of one never empties the other; a failure is kept (and said on the list), never hidden.
     const out = { fields: [], types: [], failed: null };
-    try {
-      const f = await sb.from("group_fields").select(FIELD_COLS).eq("org_id", g).order("sort_order").limit(200);
-      if (f.error) throw f.error;
-      const t = await sb.rpc("crm_membership_types", { g });
-      if (t.error) throw t.error;
-      Object.assign(out, { fields: f.data || [], types: t.data || [] });
-    } catch (e) { out.failed = message(e); }
+    const [f, t] = await Promise.all([
+      Promise.resolve(sb.from("group_fields").select(FIELD_COLS).eq("org_id", g).order("sort_order").limit(200)).catch((e) => ({ error: e })),
+      Promise.resolve(sb.rpc("crm_membership_types", { g })).catch((e) => ({ error: e }))]);
+    if (f.error) out.failed = "the group's fields: " + message(f.error); else out.fields = f.data || [];
+    if (t.error) out.failed = (out.failed ? out.failed + "; " : "") + "the membership types: " + message(t.error); else out.types = t.data || [];
     return out;
   }
   async function readMember(sb, b) {
@@ -101,13 +100,13 @@
       const save = (v) => {
         const n = ++latest;
         status.removeAttribute("role"); status.setAttribute("role", "status"); status.textContent = "Saving…";
-        chain = chain.then(async () => {
-          const { error } = await ctx.sb.rpc("crm_set_field_value", { b: b.id, field: f.field_id, value: MM().valueArg(f, v) });
+        chain = chain.catch(() => {}).then(async () => {
+          const { error } = await Promise.resolve(ctx.sb.rpc("crm_set_field_value", { b: b.id, field: f.field_id, value: MM().valueArg(f, v) })).catch((e) => ({ error: e }));
           if (!error) { f.value = v === "" ? null : v; f.orphaned = false; ctx.changed?.(f); }
           if (n !== latest) return;
           status.textContent = error ? "Couldn't save: " + message(error) : "Saved";
           if (error) status.setAttribute("role", "alert");
-        }, () => {});
+        });
         return chain;
       };
       if (f.kind === "choice") {
