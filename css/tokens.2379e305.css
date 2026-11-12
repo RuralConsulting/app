@@ -1,0 +1,167 @@
+/* Paddock: the only authored colour literals and type sizes (APP-STRUCTURE §5). */
+/* The two Source faces stay for the printed plans (plan-print.css) only; the app's own screens use the system face (UI1). */
+@font-face {
+  font-family: 'Source Serif 4 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-serif-4-latin-ext-wght-normal.d10ccbbd.woff2) format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Source Serif 4 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-serif-4-latin-wght-normal.382475f3.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: 'Source Sans 3 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-sans-3-latin-ext-wght-normal.a85a7459.woff2) format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Source Sans 3 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url(../fonts/source-sans-3-latin-wght-normal.19143dca.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+:root {
+  /* UI1 (12 Nov 2026): a calm, brand-neutral system. Neutral surfaces, one ink with two quieter steps, hairline rules and ONE
+     accent (UI2: ink, near-black or near-white) for the primary action, selection and focus. A group's or RCL's brand is identity only (its logo
+     and name in the space's header), never the colour of the controls. docs/DESIGN.md has the palette and the rules. */
+  /* type: one system family (no web font for the app's own screens); four sizes, 13 / 16 / 22 / 28, with weight (400, 600,
+     700) for hierarchy. 16 px body also keeps a phone from zooming into a field. */
+  --f-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-head: var(--f-display);
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* the printed plans' own faces (plan-print.css: the document and its running header and footer) */
+  --f-print: "Source Sans 3 Variable", system-ui, sans-serif; --f-print-display: "Source Serif 4 Variable", Georgia, serif;
+  --text-small: .8125rem; --text-body: 1rem; --text-heading: 1.375rem; --text-title: 1.75rem;
+  /* space: a 4 px scale */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+  --space: var(--s-4);
+  /* radii: small controls; cards and rows; sheets and dialogs; pills (segmented controls, chips, the Add button) */
+  --radius-s: 8px; --radius: 12px; --radius-l: 16px; --radius-pill: 999px;
+  /* controls: 44 px targets for every button and field */
+  --tap: 44px;
+  /* motion: short and soft; none when the person asks for reduced motion (app.css) */
+  --ease: cubic-bezier(.2, .8, .2, 1); --dur-1: .14s; --dur-2: .24s;
+
+  /* colour, light */
+  --wash: #f5f5f7;        /* the page: a grouped background */
+  --panel: #ffffff;       /* surface 1: cards, panels, headers */
+  --raised: #ffffff;      /* surface 2: menus, popovers and sheets (with a shadow) */
+  --fill: #ececf0;        /* a quiet control's fill: a segmented control's track, a secondary button */
+  --fill-hover: #e3e3e8;
+  --selected: #ffffff;    /* the chosen segment of a segmented control, on --fill */
+  --material: rgba(255, 255, 255, .92);   /* bars over content (the phone's tab bar), blurred where the browser can */
+  --ink: #1d1d1f; --ink-2: #48484d; --ink-3: #66666b;
+  --rule: #d2d2d7;        /* hairlines and field borders */
+  --rule-soft: #e5e5ea;
+  --field-border: #86868b; /* a field's edge: at least 3:1 against the surfaces it sits on (WCAG 1.4.11) */
+  --page-max: 1040px;      /* a list page's content width, and its header's inner width with it */
+  /* UI2 (Josh, 12 Nov 2026): the one accent is INK, near-black here and near-white in dark mode; colour is left to the maps and data */
+  --accent: #1d1d1f; --accent-ink: #ffffff; --accent-text: #1d1d1f; --accent-soft: rgba(0, 0, 0, .06); --accent-hover: #3a3a3c;
+  --focus: #1d1d1f;
+  --success: #1e7d34; --warning: #a35200; --danger: #c4271b;
+  --success-soft: rgba(30, 125, 52, .1); --warning-soft: rgba(163, 82, 0, .1); --danger-soft: rgba(196, 39, 27, .08);
+  --bad: var(--ink); --good: var(--ink);   /* status words stay in ink: a sentence says what happened, not a colour */
+  /* identity: a space's mark when it has no logo of its own, a neutral monogram */
+  --mark: #e8e8ed; --mark-ink: #48484d;
+  /* the viewer (vendor/viewer.css) reads --brand for its pressed map tools: the accent, never a brand colour */
+  --brand: var(--accent); --brand-ink: var(--accent-ink);
+  /* one shadow per elevation: 1 cards, 2 menus and popovers, 3 sheets and dialogs */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .06), 0 0 0 1px rgba(0, 0, 0, .03);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, .12), 0 2px 6px rgba(0, 0, 0, .06);
+  --shadow-3: 0 24px 64px rgba(0, 0, 0, .22), 0 4px 14px rgba(0, 0, 0, .1);
+  --shadow: var(--shadow-2);
+  --backdrop: rgba(0, 0, 0, .32);
+
+  --clear: transparent;
+  --map-label: #ffffff; --map-halo: #151a14;
+  --map-label-shadow: 0 0 3px rgba(0, 0, 0, .85), 0 1px 2px rgba(0, 0, 0, .7);
+  --map-pin-shadow: 0 0 3px rgba(0, 0, 0, .7);
+  --map-icon-shadow: drop-shadow(0 0 2px rgba(0, 0, 0, .8)) drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
+  /* DEC3: the decision card map's three looks, as its legend draws them (the map's own colours, the same in both themes; decision-card-model.js LOOKS) */
+  --card-subject: #00c8ff; --card-subject-fill: rgba(0, 200, 255, .45); --card-member-line: rgba(255, 255, 255, .85); --card-others-line: rgba(168, 168, 168, .6);
+  --card-swatch-ground: #4b5843;
+  /* LP1: the home map's farms and groups (map colours, the same in both themes: they sit on the aerial) */
+  --map-farm: #2f3542; --map-group: #5f9bd8;
+  --map-label-lift: 0 1px 3px rgba(0, 0, 0, .18); --swatch-edge: rgba(0, 0, 0, .12);
+  --map-boundary: #4c9aff;   /* UI2: a farm's boundary and the marks drawn in the old accent on its detailed map (the accent is ink now) */
+  /* UI2: the overview maps' soft hues (map-palette.js), a neutral set chosen to be told apart (after the Okabe-Ito colour-blind safe
+     set, softened), never a group's brand: one per group by its id, its sub-groups lighter; outlines toned from these */
+  --map-hue-1: #5f9bd8; --map-hue-2: #3fae8c; --map-hue-3: #b083c4; --map-hue-4: #d6ad4f; --map-hue-5: #6cc0e5; --map-hue-6: #d98879; --map-hue-7: #8f9bb3;
+  --fab: 52px;            /* UI2: the round Add button on a phone */
+  --fab-gutter: 60px;     /* the corner a row keeps its own controls out of while the round Add button shows */
+  /* N2: water quality site pins on a published map (the same in both themes: they sit on the aerial and the topographic map) */
+  --map-wq: #0a8fd6; --map-wq-older: #7f95a3;
+  --banner-panel: #1d1d1f; --banner-ink: #ffffff;
+  --print-panel: #ffffff; --print-ink: #000000;
+  --print-body: 10.5pt; --print-small: 8pt; --print-table: 9pt;
+  /* Farm Environment Plan / Freshwater Farm Plan print (plan-print.css): nothing below 10 pt, greys that survive greyscale. */
+  --plan-print-small: 10pt; --plan-print-body: 11pt; --plan-print-h4: 11.5pt; --plan-print-h3: 13pt; --plan-print-h2: 17pt; --plan-print-h1: 28pt;
+  --print-ink-2: #3f3d35; --print-rule: #8f897b; --print-wash: #efebe1;
+  --reader-small: var(--text-small); --reader-body: var(--text-body);
+  --reader-heading: var(--text-heading); --reader-title: var(--text-title); --reader-gap: 1.5rem;
+  --map-background: #e4e6e2;
+  --qr-ground: #fff;   /* the same in both themes: a phone reads a QR code only on white */
+  --map-icon-filter: none;
+  /* N2: the sites in a water quality comparison, one colour each (chart lines, chips and map pins), readable on the panel */
+  --series-1: #0b62a4; --series-2: #b34700; --series-3: #11734f; --series-4: #7247a0; --series-5: #b0255f; --series-6: #6b5a12;
+  color-scheme: light;
+}
+/* The printed plans keep their own document faces (Source Serif and Source Sans, shipped with the app) */
+.plan-doc, .plans-page { --f-ui: var(--f-print); --f-display: var(--f-print-display); --f-head: var(--f-print); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --wash: #111113; --panel: #1c1c1e; --raised: #2c2c2e; --fill: #2c2c2e; --fill-hover: #3a3a3c; --selected: #545458; --material: rgba(28, 28, 30, .9);
+  --ink: #f5f5f7; --ink-2: #c7c7cc; --ink-3: #98989f; --rule: #3a3a3c; --rule-soft: #2c2c2e; --field-border: #7c7c80;
+  --accent: #f5f5f7; --accent-ink: #111113; --accent-text: #f5f5f7; --accent-soft: rgba(255, 255, 255, .12); --accent-hover: #d1d1d6; --focus: #f5f5f7;
+  --success: #4cc76a; --warning: #ffb340; --danger: #ff6b5e;
+  --success-soft: rgba(76, 199, 106, .14); --warning-soft: rgba(255, 179, 64, .14); --danger-soft: rgba(255, 107, 94, .14);
+  --mark: #3a3a3c; --mark-ink: #e5e5ea;
+  --brand: var(--accent); --brand-ink: var(--accent-ink);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .04);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .06);
+  --shadow-3: 0 24px 64px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .06);
+  --shadow: var(--shadow-2);
+  --backdrop: rgba(0, 0, 0, .5);
+  --banner-panel: #2c2c2e; --banner-ink: #f5f5f7;
+  --map-background: #2a2c2a;
+  --map-icon-filter: invert(1);
+  --series-1: #62b0ec; --series-2: #ff9a52; --series-3: #4cc79a; --series-4: #c2a0ee; --series-5: #ff86b8; --series-6: #e2c35c;
+  color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --wash: #111113; --panel: #1c1c1e; --raised: #2c2c2e; --fill: #2c2c2e; --fill-hover: #3a3a3c; --selected: #545458; --material: rgba(28, 28, 30, .9);
+  --ink: #f5f5f7; --ink-2: #c7c7cc; --ink-3: #98989f; --rule: #3a3a3c; --rule-soft: #2c2c2e; --field-border: #7c7c80;
+  --accent: #f5f5f7; --accent-ink: #111113; --accent-text: #f5f5f7; --accent-soft: rgba(255, 255, 255, .12); --accent-hover: #d1d1d6; --focus: #f5f5f7;
+  --success: #4cc76a; --warning: #ffb340; --danger: #ff6b5e;
+  --success-soft: rgba(76, 199, 106, .14); --warning-soft: rgba(255, 179, 64, .14); --danger-soft: rgba(255, 107, 94, .14);
+  --mark: #3a3a3c; --mark-ink: #e5e5ea;
+  --brand: var(--accent); --brand-ink: var(--accent-ink);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .04);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .06);
+  --shadow-3: 0 24px 64px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .06);
+  --shadow: var(--shadow-2);
+  --backdrop: rgba(0, 0, 0, .5);
+  --banner-panel: #2c2c2e; --banner-ink: #f5f5f7;
+  --map-background: #2a2c2a;
+  --map-icon-filter: invert(1);
+  --series-1: #62b0ec; --series-2: #ff9a52; --series-3: #4cc79a; --series-4: #c2a0ee; --series-5: #ff86b8; --series-6: #e2c35c;
+  color-scheme: dark;
+}
