@@ -121,6 +121,7 @@
     ctx = null; draft = null;
     FP.groupManage?.forget(); lastView = null;   // ON3b: leaving the group space drops the manage space's reads
     document.body.classList.remove("group-space-active");
+    FP.add?.update(null);
   }
   // V8: the group's own logo, for a group listed in GROUP_LOGOS; every other group's header stays without one.
   function showLogo(group) {
@@ -130,19 +131,35 @@
     img.hidden = !logo;
     if (logo) { img.src = logo.src; img.alt = logo.alt; } else { img.removeAttribute("src"); img.alt = ""; }
   }
+  const monogram = (name) => FP.icons.monogram(name);   // UI1: the same rule as a farm's (icons.js)
+  // UI1: what the group is: a catchment group, or a sub-group of its parent (named when the person is a member of the parent too)
+  function kindOf(group) {
+    if (!group.parent_org_id) return "Catchment group";
+    const parent = groups.find((g) => g.id === group.parent_org_id);
+    return parent ? "Sub-group of " + parent.name : "Sub-group";
+  }
   function header(group, route) {
     showLogo(group);
+    // UI1: a group with no logo of its own has a quiet monogram in its place
+    const mark = $("#group-mark"), logo = G().groupLogo(group);
+    if (mark) { mark.hidden = !!logo; mark.replaceChildren(logo ? "" : monogram(group.name) || FP.icon("places", 18)); }
     $("#group-name").textContent = group.name;
-    $("#group-kind").textContent = "Catchment group" + (group.role ? " · you are " + (/^[aeiou]/.test(group.role) ? "an " : "a ") + group.role : "");
+    $("#group-kind").textContent = kindOf(group) + (group.role ? " · you are " + (/^[aeiou]/.test(group.role) ? "an " : "a ") + group.role : "");
     const nav = $("#group-nav");
     // ON3b: the manage space is linked for the group's admins, advisors and facilitators only (a plain member never sees the link)
     // V6: a client's tabs are the allow-list (simple-view.js)
     // PE1: People (personal information) is linked for the group's facilitators, advisors and admins only, in either view
     const people = ([k]) => k !== "people" || !!FP.peopleModel?.canSee(group.role);
-    nav.replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).map(([key, label]) =>
-      el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
-    $("#group-back").hidden = !(FP.groupSpace.hasPortfolio?.());
-    $("#group-back").setAttribute("href", FP.href("") || "#/");
+    const tabs = [];   // UI1: the views drawn, for Add
+    nav.replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).map(([key, label]) => (tabs.push([key, label]),
+      el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", "data-tab": key, ...(route.view === key ? { "aria-current": "page" } : {}) }, FP.icon ? FP.icon(FP.icons.forView(key)) : null, el("span", {}, label)))));
+    const back = $("#group-back");
+    back.hidden = !(FP.groupSpace.hasPortfolio?.());
+    back.setAttribute("href", FP.href("") || "#/");
+    if (FP.icon && !back.querySelector("svg")) back.prepend(FP.icon("back", 20));
+    // UI1: Add, for what this person may add to this group (add.js)
+    FP.add?.mount($("#group-add-slot"), "group");
+    FP.add?.update({ space: "group", id: group.id, name: group.name, role: group.role || null, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: route.view });
   }
   async function open(group, route) {
     const current = ++token;

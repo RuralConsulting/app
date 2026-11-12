@@ -42,6 +42,7 @@
   const MAX_REFERENCE = 40, REFERENCE_PREFIX = "reference/", REFERENCE_DRAWS = ["roads", "waterways"], CONTEXT_DRAW = "context";
   const LINK_SECONDS = 3600, RENEW_MS = (LINK_SECONDS - 600) * 1000;
   const NONE = "No maps have been published here yet.";
+  const NONE_HINT = "Rural Consulting publishes maps here; each one appears as soon as it is ready.";
   const UNAVAILABLE = "This map is not available right now.";
   const RAN_OUT = "This map's links have run out and could not be renewed. Check your connection and try again.";
   const LINZ = "https://basemaps.linz.govt.nz/v1/tiles";
@@ -179,7 +180,7 @@
     function list(s, maps) {
       dropMap(s);
       s.host.replaceChildren(el("section", { class: "maps-list" }, el("h2", {}, "Maps"),
-        el("ul", {}, ...maps.map((m) => el("li", {}, el("a", { href: s.opts.href(m.id) }, el("b", {}, m.title),
+        el("ul", {}, ...maps.map((m) => el("li", {}, el("a", { href: s.opts.href(m.id) }, globalThis.FP?.icon ? el("span", { class: "maps-thumb", "aria-hidden": "true" }, globalThis.FP.icon("maps", 30)) : null, el("b", {}, m.title),
           el("small", {}, [m.kind, m.published_at ? "Updated " + day(m.published_at) : ""].filter(Boolean).join(" · "))))))));
     }
 
@@ -230,7 +231,7 @@
       try { maps = await readMaps(opts.owner); }
       catch { if (s === shown) say(s, "Couldn't load the maps just now.", tryAgain(s)); return; }
       if (s !== shown) return;
-      if (!maps.length) { say(s, NONE); return; }
+      if (!maps.length) { say(s, NONE, el("p", { class: "maps-hint" }, NONE_HINT)); return; }   // UI1: and what happens next
       s.several = maps.length > 1;
       s.chosen = opts.item ? maps.find((m) => m.id === opts.item) : maps.length === 1 ? maps[0] : null;
       if (opts.item && !s.chosen) { say(s, UNAVAILABLE, el("a", { href: opts.href(null) }, "All maps")); return; }

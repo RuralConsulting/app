@@ -43,6 +43,8 @@
     // anyone out: a note or record that can't be read or written lets them in and asks again next time (privacy.js).
     await FP.privacy.gate(user);
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
+    // UI1: the account menus' round buttons carry the person's initials
+    for (const i of $$(".account-initials")) i.textContent = FP.demo?.active ? "D" : FP.accountMenu.initials(user);
     $("#pw-email").value = user.email;
     // PERF1b: the farms, the person's memberships (then their organisations, only if there are any) and the staff flag
     // are read at once; a link straight to one of the person's farms is followed as soon as the farms are known, so
@@ -208,12 +210,16 @@
   }
   function back() { route(); }
   $("#b-pw-back").addEventListener("click", back);
-  for (const b of $$(".b-password")) b.addEventListener("click", () => { msg("#pw-msg", ""); show("screen-password"); $("#pw0").focus(); });
-  for (const b of $$(".b-signout")) b.addEventListener("click", async () => {
+  // UI1: one handler for every Change password and Sign out, wherever the menu that holds it was drawn (the farm header's is made later)
+  window.addEventListener("click", async (e) => {
+    if (e.target.closest(".b-password")) { msg("#pw-msg", ""); show("screen-password"); $("#pw0").focus(); return; }
+    if (!e.target.closest(".b-signout")) return;
     if (FP.demo?.active) { location.href = location.pathname + location.search; return; }
     FP.groupManage?.forget();   // ON3b: no group's queue outlives the sign-in
     await FP.auth.signOut(); location.hash = ""; location.reload();
   });
+  FP.accountMenu?.wire($("#home-account-open"), $("#home-account-menu"));
+  FP.accountMenu?.wire($("#group-account-open"), $("#group-account-menu"));
   if (FP.basemaps.names.length < 2) $("#drawer-background").hidden = true;
   // Background and terrain live in the Layers drawer, under the farm's own layers (they are secondary).
   const pressed = (name) => { for (const o of $$("[data-basemap]")) o.setAttribute("aria-pressed", String(o.dataset.basemap === name)); };

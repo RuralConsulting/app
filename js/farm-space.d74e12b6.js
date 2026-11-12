@@ -164,18 +164,25 @@
     layerEntries = []; focusPlace = null; photoShown = false; handSet = new Map(); stackOk = new Set(); askSet = null; lastAsk = null; pendingAsk = null; proposals.clear();
     $("#farm-space-header")?.setAttribute("hidden", "");
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
+    FP.add?.update(null);
   }
   function setPortfolio(farms, person) { portfolio = farms; user = person; init(); }
   function init() {
     if ($("#farm-space-header")) return;
     const h = el("header", { id: "farm-space-header", hidden: true });
-    // Phone: row one is the farm and one account button, row two the three things to do. The person, the farm
-    // switcher, People, Operations and Sign out sit behind the button; on a wide screen they stay in the row.
-    h.innerHTML = '<div class="farm-header-row"><h1><a id="space-farm-name" href="#"></a></h1>' +
+    // UI1: the space's header. One row: a way back to every place, the farm's mark, name and kind, Add, and one account button
+    // (the person, the farm switcher, People, Layer notes, Operations, Change password, Privacy and Sign out sit behind it, on a
+    // phone and a computer alike). The views: a segmented control in the header on a computer, a tab bar along the bottom on a phone.
+    h.className = "space-head";
+    h.innerHTML = '<div class="farm-header-row space-bar"><a id="space-home" class="space-back" href="#/" hidden><span class="space-back-label">All places</span></a>' +
+      '<div class="space-identity"><span id="space-mark" class="space-mark" aria-hidden="true"></span><div class="space-title"><h1><a id="space-farm-name" href="#"></a></h1><p id="space-kind" class="space-kind">Farm</p></div></div>' +
+      '<div class="space-actions"><span class="add-slot" id="farm-add-slot"></span>' +
       '<button type="button" id="account-open" class="account-open" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Account and people"><span id="account-initials" aria-hidden="true"></span></button>' +
       '<div id="account-menu" class="account-menu"><label class="farm-switch-label">Farm<select id="farm-switch"></select></label>' +
-      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-layers" class="link" hidden>Layer notes</a><a id="space-ops" class="link ops-link" hidden>Operations</a><a class="link privacy-link" href="#/privacy">Privacy and terms</a></span><span id="space-person"></span><button class="link" id="space-signout">Sign out</button></div></div>' +
-      '<nav id="farm-actions" aria-label="Farm"></nav>';
+      '<span class="farm-links"><a id="space-people" class="link" hidden>People</a><a id="space-layers" class="link" hidden>Layer notes</a><a id="space-ops" class="link ops-link" hidden>Operations</a><a class="link privacy-link" href="#/privacy">Privacy and terms</a></span><span id="space-person"></span><span class="password-link"><button type="button" class="link b-password">Change password</button></span><button class="link" id="space-signout">Sign out</button></div></div></div>' +
+      '<nav id="farm-actions" class="space-tabs" aria-label="Farm"></nav>';
+    h.querySelector("#space-home").prepend(FP.icon("back", 20));
+    FP.add?.mount(h.querySelector("#farm-add-slot"), "farm");
     document.body.prepend(h);
     FP.privacy?.links();   // V8: the note's link, with the demo's address in the demo
     reserveHeader = () => document.documentElement.style.setProperty("--farm-header-height", h.hidden ? "0px" : h.getBoundingClientRect().height + "px");
@@ -387,6 +394,7 @@
     document.documentElement.style.setProperty("--sheet-overlap", "0px"); framedOverlap = 0;
     for (const id of ["#space-content", "#overview-rail", "#layers-drawer", "#map-msg"]) $(id).hidden = true;
     document.title = "Farms and groups | " + FP.brand?.product;
+    FP.add?.update(null);
     FP.show("screen-map");
     $("#portfolio").hidden = false;
   }
@@ -405,7 +413,18 @@
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
     // The home view is the first tab, so from Ask, Create or Documents the way back is a tab, not a guess at the title.
     // V6: a client's tabs are the allow-list (simple-view.js)
-    $("#farm-actions").replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("farm") : [["map", "What's due"], ...M.views]).map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
+    const tabs = FP.simpleView?.on() ? FP.simpleView.tabs("farm") : [["map", "What's due"], ...M.views];
+    $("#farm-actions").replaceChildren(...tabs.map(([key, label]) => el("a", { href: FP.href(M.href(farm.id, key)), "data-tab": key, ...(route.view === key ? { "aria-current": "page" } : {}) }, FP.icon(FP.icons.forView(key)), el("span", {}, label))));
+    // UI1: where the person is and how to get back: every place, when they have more than this one
+    $("#space-home").hidden = !(FP.groupSpace?.hasPortfolio ? FP.groupSpace.hasPortfolio() : portfolio.length > 1);
+    $("#space-home").setAttribute("href", FP.href("") || "#/");
+    const letters = monogram(farm.name);   // (no letters at all: a neutral place glyph)
+    $("#space-mark").replaceChildren(letters || FP.icon("places", 18));
+    // UI1: Add, for what this person may add to this farm (add.js); the role comes with the farm's reads, or is read on its own
+    // for Maps (which reads nothing else of the farm)
+    const addCtx = ({ role, tiers }) => ({ space: "farm", id: farm.id, name: farm.name, role, documentTiers: tiers, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: route.view });
+    if (context?.farm.id === farm.id) FP.add?.update(addCtx({ role: context.role, tiers: context.documentTiers }));
+    else { FP.add?.update(null); farmRole(farm).then((r) => { if ($("#space-farm-name").getAttribute("href") === FP.href(M.href(farm.id, "map"))) FP.add?.update(addCtx(r)); }); }
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
     const people = $("#space-people");
     people.hidden = !M.canManage(context?.role); people.href = FP.href(M.href(farm.id, "people"));
@@ -416,6 +435,27 @@
     layerNotes.href = FP.href("#/layers");
     if (route.view === "people") people.setAttribute("aria-current", "page"); else people.removeAttribute("aria-current");
     $("#account-open").toggleAttribute("data-current", route.view === "people");
+  }
+
+  // UI1: a farm's mark (a farm has no logo of its own): its monogram (icons.js, the same rule as a group's)
+  const monogram = (name) => FP.icons.monogram(name);
+  // UI1: the person's role on a farm, and whether its Files can take new files (the documents' tier columns: farm-space's own
+  // `learnt`, or a read of no rows that asks for them), for Add on a view that reads nothing else of the farm (Maps). One row
+  // under farm_members' own policy, kept for the session.
+  const roles = new Map();
+  function farmRole(farm) {
+    if (context?.farm.id === farm.id) return Promise.resolve({ role: context.role, tiers: context.documentTiers });
+    if (!roles.has(farm.id)) {
+      const role = Promise.resolve(FP.sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).maybeSingle()).then((r) => r?.data?.role || null, () => null);
+      // (a failed read, or a refused one that is not about the columns, is not kept: it is asked again when the space next opens)
+      let failed = false;
+      const tiers = learnt.has(FP.sb) ? Promise.resolve(learnt.get(FP.sb))
+        : Promise.resolve(FP.sb.from("documents").select("id" + TIER_COLUMNS.chosen).eq("farm_id", farm.id).limit(0))
+          .then((r) => (!r?.error ? "chosen" : missingColumn(r.error) ? "tiers" : ((failed = true), null)), () => ((failed = true), null));
+      const both = Promise.all([role, tiers]).then(([r, t]) => { if (failed || r === null) roles.delete(farm.id); return { role: r, tiers: t }; });
+      roles.set(farm.id, both);
+    }
+    return roles.get(farm.id);
   }
 
   // ---- People: who can open the farm, for its owner and admins (A0) -----------------------------------
@@ -861,7 +901,7 @@
     // Phone: across the top of the map. Wide: in the header row, between the farm's name and its links, so it covers
     // none of the map (the farm keeps its frame).
     const wideQ = window.matchMedia("(min-width: 801px)");
-    const place = () => { if (wideQ.matches) $("#farm-space-header h1").after(form); else $("#screen-map").append(form); };
+    const place = () => { if (wideQ.matches) $("#farm-space-header .space-identity").after(form); else $("#screen-map").append(form); };
     place(); wideQ.addEventListener("change", place);
     input.addEventListener("input", () => { commandPick = -1; suggest(); });
     input.addEventListener("focus", suggest);
@@ -1217,11 +1257,20 @@
       handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null } },
         { read: () => { const d = data(); documentsNotice = null; documentsOffer = []; return d; }, level: 3, nested: true, href: FP.href, store: documentStore(farm, () => handles) }));
     // FU4: the open requests are read once the view is up, and drawn when they arrive (unless a notice or a fresh offer is waiting to be shown).
+    // UI1 (review of #504): never while files are waiting at the confirm step (drawing the block again would drop them): the requests
+    // are drawn once that step is confirmed or cancelled.
     const mine = context;
+    const confirming = () => !!list.querySelector(".doc-confirm:not([hidden])");
+    const drawRequests = () => { if (!documentsNotice && !documentsOffer.length) for (const h of handles) h.refresh(); };
     if (!context.planRequests) readPlanRequests(FP.sb, context.farm).then((rows) => {
       if (context !== mine) return;
       context.planRequests = rows;
-      if (!documentsNotice && !documentsOffer.length) for (const h of handles) h.refresh();
+      if (!confirming()) { drawRequests(); return; }
+      const wait = new MutationObserver(() => {
+        if (!list.isConnected || context !== mine) { wait.disconnect(); return; }
+        if (!confirming()) { wait.disconnect(); drawRequests(); }
+      });
+      wait.observe(list, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
     });
     return { destroy: () => unmount(handles) };
   }

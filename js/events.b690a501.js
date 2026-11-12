@@ -223,10 +223,11 @@
         const addIt = () => { const t = add.value.trim(); if (!t) return; f.topics = M().cleanTopics([...f.topics, t]); drawTopics(); topicBox.querySelector("#ev-topic")?.focus(); };
         add.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addIt(); } });
         topicBox.replaceChildren(
-          f.topics.length ? el("ul", { class: "events-topic-chips" }, ...f.topics.map((t) => el("li", {}, t, el("button", { type: "button", class: "link", "aria-label": "Remove topic " + t, onclick: () => { f.topics = f.topics.filter((x) => x !== t); drawTopics(); } }, "×")))) : null,
+          // (UI1: no chips draws nothing; replaceChildren would print a null as the word "null")
+          ...(f.topics.length ? [el("ul", { class: "events-topic-chips" }, ...f.topics.map((t) => el("li", {}, t, el("button", { type: "button", class: "link", "aria-label": "Remove topic " + t, onclick: () => { f.topics = f.topics.filter((x) => x !== t); drawTopics(); } }, "×"))))] : []),
           el("div", { class: "events-topic-add" }, add, el("button", { type: "button", class: "secondary", onclick: addIt }, "Add")),
           el("datalist", { id: "ev-topic-list" }, ...M().topicSuggestions(st.events).map((t) => el("option", { value: t }))),
-          suggest.length ? el("p", { class: "events-suggest" }, el("small", {}, "Used before: "), ...suggest.map((t) => el("button", { type: "button", class: "events-suggestion", onclick: () => { f.topics = M().cleanTopics([...f.topics, t]); drawTopics(); } }, t))) : null);
+          ...(suggest.length ? [el("p", { class: "events-suggest" }, el("small", {}, "Used before: "), ...suggest.map((t) => el("button", { type: "button", class: "events-suggestion", onclick: () => { f.topics = M().cleanTopics([...f.topics, t]); drawTopics(); } }, t)))] : []));
       };
       drawTopics();
       const notes = el("textarea", { id: "ev-notes", rows: "4", maxlength: "10000" }); notes.value = f.notes || ""; notes.addEventListener("input", () => { f.notes = notes.value; });
@@ -372,9 +373,18 @@
     }
 
     wrap.append(el("h2", {}, "Events"), el("p", { class: "group-status", role: "status" }, "Reading the group's events…"));
-    reload().then(draw);
+    // UI1: Add → Event (add.js) opens the new event form here, once the events are read (a writer only: the form is theirs)
+    shown = { group: group.id, wrap, openNew: () => { if (canWrite) openForm(null, today()); } };
+    reload().then(() => { draw(); if (pendingNew === group.id) { pendingNew = null; shown.wrap === wrap && shown.openNew(); } });
     return wrap;
   }
+  // UI1: Add → Event. On the group's Events already: the form opens at once; anywhere else: Events opens, then the form.
+  let shown = null, pendingNew = null;
+  function openNew(groupId) {
+    if (shown?.group === groupId && shown.wrap.isConnected && shown.wrap.querySelector(".events-calendar, .events-form, .events-event, .events-export, .events-import")) { shown.openNew(); return; }
+    pendingNew = groupId;
+    root.location.hash = FP.href(G().href(groupId, "events"));
+  }
 
-  FP.groupEvents = { view, readEvents, CAP };
+  FP.groupEvents = { view, readEvents, CAP, openNew };
 })(typeof window === "undefined" ? globalThis : window);
