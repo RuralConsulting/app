@@ -384,17 +384,28 @@
 
     wrap.append(el("h2", {}, "Events"), el("p", { class: "group-status", role: "status" }, "Reading the group's events…"));
     // UI1: Add → Event (add.js) opens the new event form here, once the events are read (a writer only: the form is theirs)
-    shown = { group: group.id, wrap, openNew: () => { if (canWrite) openForm(null, today()); } };
-    reload().then(() => { draw(); if (pendingNew === group.id) { pendingNew = null; shown.wrap === wrap && shown.openNew(); } });
+    shown = { group: group.id, wrap, openNew: () => { if (canWrite) openForm(null, today()); }, openEvent: (id) => openEvent(id) };
+    reload().then(() => {
+      draw();
+      if (pendingNew === group.id) { pendingNew = null; shown.wrap === wrap && shown.openNew(); }
+      if (pendingEvent?.group === group.id) { const id = pendingEvent.id; pendingEvent = null; if (shown.wrap === wrap) shown.openEvent(id); }   // J2: from Home's search
+    });
     return wrap;
   }
   // UI1: Add → Event. On the group's Events already: the form opens at once; anywhere else: Events opens, then the form.
-  let shown = null, pendingNew = null;
+  let shown = null, pendingNew = null, pendingEvent = null;
   function openNew(groupId) {
     if (shown?.group === groupId && shown.wrap.isConnected && shown.wrap.querySelector(".events-calendar, .events-form, .events-event, .events-export, .events-import")) { shown.openNew(); return; }
     pendingNew = groupId;
     root.location.hash = FP.href(G().href(groupId, "events"));
   }
 
-  FP.groupEvents = { view, readEvents, CAP, openNew };
+  // J2: an event found by Home's search: Events opens at it (once its events are read; one not read just shows the calendar)
+  function open(groupId, eventId) {
+    if (shown?.group === groupId && shown.wrap.isConnected && shown.wrap.querySelector(".events-calendar, .events-event")) { shown.openEvent(eventId); return; }
+    pendingEvent = { group: groupId, id: eventId };
+    root.location.hash = FP.href(G().href(groupId, "events"));
+  }
+
+  FP.groupEvents = { view, readEvents, CAP, openNew, open };
 })(typeof window === "undefined" ? globalThis : window);

@@ -26,6 +26,7 @@
   // TIM1 (#409, #410): the route timing run for the group map being drawn (route-timing.js), from when its route began loading.
   let timing = null;
   let addCtx = null;   // UI2: what Add offers here (header), for the Add in What needs doing
+  let shownTabs = [];   // J2: the sections drawn for this person here ([key, label]), for Home's shortcuts
   const T = () => FP.routeTiming || null;
   const featureCount = (n) => Number(n).toLocaleString("en-NZ") + (Number(n) === 1 ? " feature" : " features");
 
@@ -121,6 +122,7 @@
     mapHandle?.destroy(); mapHandle = null; surface = null; entries = [];
     ctx = null; draft = null;
     hideNeeds();
+    FP.placeHome?.close();
     FP.groupManage?.forget(); lastView = null;   // ON3b: leaving the group space drops the manage space's reads
     document.body.classList.remove("group-space-active");
     FP.add?.update(null);
@@ -170,6 +172,7 @@
     // UI1: Add, for what this person may add to this group (add.js)
     FP.add?.mount($("#group-add-slot"), "group");
     addCtx = { space: "group", id: group.id, name: group.name, role: group.role || null, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: route.view };
+    shownTabs = tabs;
     FP.add?.update(addCtx);
   }
   async function open(group, route) {
@@ -178,14 +181,15 @@
     FP.show("screen-group");
     header(group, route);
     $("#screen-group").dataset.view = route.view;
-    if (route.view !== "map") hideNeeds();   // UI2: What needs doing is the Overview's
+    if (route.view !== "map") hideNeeds();   // UI2: What needs doing is the Working map's (UI2's Overview)
+    if (route.view !== "home") FP.placeHome?.close();
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
     if (route.view === "manage" && (lastView !== "manage" || ctx?.group.id !== group.id)) FP.groupManage?.forget(group.id);
     // DEC1b: leaving Manage removes its decision cards' small maps (each a WebGL context and the engine's listeners)
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
@@ -219,6 +223,17 @@
       const q = pendingSearch?.view === "people" ? pendingSearch.q : ""; pendingSearch = null;
       panel.replaceChildren(FP.groupPeople.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T09:00:00+13:00" : null, tab: route.tab || null, q,
         parent: group.parent_org_id ? groups.find((x) => x.id === group.parent_org_id) || null : null }));   // SG2: a sub-group's parent, when the person is in it
+      panel.scrollTop = 0;
+      return;
+    }
+    // J2: Home is a launcher, not a map: search, the add actions, the sections and anything waiting (place-home.js), with none of the
+    // group's own reads; a person with one place lands here, and Places opens a group here
+    if (route.view === "home") {
+      document.title = group.name + " · " + G().viewLabel("home") + " | " + (FP.brand?.product || "");
+      const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : G().isoDay(Date.now());
+      if (current !== token) return;
+      panel.replaceChildren(FP.placeHome.view({ space: "group", place: group, sections: shownTabs, people: !!FP.peopleModel?.canSeeTab(group, groups), addCtx, sb: FP.sb, today,
+        search: (view, q) => { pendingSearch = { view, q }; } }));
       panel.scrollTop = 0;
       return;
     }

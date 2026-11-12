@@ -51,7 +51,7 @@
   }
 
   // Where a place opens: its space, at the address the router already knows (the simple view sends a client on to Maps).
-  const openHref = (p) => (p.kind === "farm" ? "#/farm/" + p.id : "#/group/" + p.id);
+  const openHref = (p) => (p.kind === "farm" ? "#/farm/" + p.id : "#/group/" + p.id) + "/home";   // J2: a place opens on its Home
 
   // ---- outlines ---------------------------------------------------------------------------------------------------------------
   // A polygon geometry as degrees: a GeoJSON object (or its text) in degrees, or in NZTM metres as a table's geometry column

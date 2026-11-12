@@ -31,8 +31,9 @@
 <link rel="stylesheet" href="css/gallery.e67863d6.css">
 <link rel="stylesheet" href="css/plan-print.ac7ecabf.css">
 <link rel="stylesheet" href="css/plans-demo.04d0dd02.css">
+<link rel="stylesheet" href="css/place-home.c807a616.css">
 <!-- UI1: the shared components (space header, tabs, account menu, Add, sheets, buttons, fields) last, so they set the look -->
-<link rel="stylesheet" href="css/ui.b0dcde35.css">
+<link rel="stylesheet" href="css/ui.2a7e9921.css">
 </head>
 <body>
 <p id="loading" class="loading">Loading…</p>
@@ -187,6 +188,8 @@
 </main>
 
 <main id="screen-maps" hidden></main>
+<!-- J2: a farm's Home under its header (js/place-home.js); a group's Home is drawn in its own panel -->
+<main id="screen-farm-home" class="place-home-screen" hidden></main>
 
 <div id="screen-map" class="map-screen" hidden>
   <div id="map" aria-label="Farm map"></div>
@@ -241,14 +244,14 @@
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
 <script src="js/brand.80965af9.js"></script>
 <script src="js/consent-no.711a9161.js"></script>
-<script src="js/demo.d4af40fa.js"></script>
+<script src="js/demo.7b805f1e.js"></script>
 <script src="js/util.1d5eb095.js"></script>
-<script src="js/icons.5bbcab3e.js"></script>
+<script src="js/icons.d9c59684.js"></script>
 <script src="js/account-menu.0f64e677.js"></script>
 <script src="js/sheet.f9b10d89.js"></script>
-<script src="js/space-nav.1af6646b.js"></script>
+<script src="js/space-nav.9a24ed54.js"></script>
 <script src="js/map-palette.611ef9f6.js"></script>
-<script src="js/simple-view.838d9982.js"></script>
+<script src="js/simple-view.d82f2668.js"></script>
 <script src="js/privacy.2bf69cda.js"></script>
 <script src="js/layer-kinds.f0f86f81.js"></script>
 <script src="js/route-timing.eb451185.js"></script>
@@ -266,7 +269,7 @@
 <script src="js/blocks/list.cce37062.js"></script>
 <script src="js/blocks/timeline.d3df4ebf.js"></script>
 <script src="js/blocks/checklist.956251f9.js"></script>
-<script src="js/farm-model.f1fcf8bc.js"></script>
+<script src="js/farm-model.235078aa.js"></script>
 <script src="js/classify.e399e148.js"></script>
 <script src="js/blocks/documents.c853106d.js"></script>
 <script src="js/document-files.c4ac637b.js"></script>
@@ -291,15 +294,15 @@
 <script src="js/farm-reference.44ef4bd8.js"></script>
 <script src="js/block-model.442f7f01.js"></script>
 <script src="js/add-block.8917b951.js"></script>
-<script src="js/farm-space.42f42212.js"></script>
-<script src="js/group-model.23ae9857.js"></script>
+<script src="js/farm-space.cfb0bd5e.js"></script>
+<script src="js/group-model.54ec22e8.js"></script>
 <script src="js/group-update.0bd365c9.js"></script>
 <script src="js/group-wq-answer.7133bd52.js"></script>
 <script src="js/group-manage-model.b3d694fa.js"></script>
 <script src="js/group-manage.73b21940.js"></script>
 <script src="js/group-layers.76cf63c1.js"></script>
 <script src="js/events-model.2753e2cd.js"></script>
-<script src="js/events.5026a32d.js"></script>
+<script src="js/events.71b7d11f.js"></script>
 <script src="js/people-model.2797abe7.js"></script>
 <script src="js/review-items-model.67761b14.js"></script>
 <script src="js/review-items.1c1ac6b4.js"></script>
@@ -307,15 +310,17 @@
 <script src="js/membership-model.0ccef8b1.js"></script>
 <script src="js/membership.276560e7.js"></script>
 <script src="js/people.4b032c73.js"></script>
-<script src="js/add.bb6ff4e2.js"></script>
-<script src="js/group-space.4933389e.js"></script>
+<script src="js/add.c5f65358.js"></script>
+<script src="js/place-home-model.94bb4749.js"></script>
+<script src="js/place-home.35f48e85.js"></script>
+<script src="js/group-space.a3c7a634.js"></script>
 <script src="js/shape-edit-model.ae81c31a.js"></script>
 <script src="js/shape-editor.0ee097ec.js"></script>
 <script src="js/wq-sites-model.97e120be.js"></script>
 <script src="js/wq-sites.df1b0ed0.js"></script>
 <script src="js/viewer.269d4a07.js"></script>
 <script src="js/maps-view.089bad01.js"></script>
-<script src="js/home-model.d8294dd9.js"></script>
+<script src="js/home-model.1a00756f.js"></script>
 <script src="js/home.1432d2bd.js"></script>
 <script src="js/ops-model.432d61f3.js"></script>
 <script src="js/ops.bf82c038.js"></script>
@@ -326,7 +331,7 @@
 <script src="js/tokens-model.c6a721ec.js"></script>
 <script src="js/tokens.368b3ae6.js"></script>
 <script src="js/two-factor.a22a65e5.js"></script>
-<script src="js/main.166b0777.js"></script>
+<script src="js/main.d74cd888.js"></script>
 </body>
 </html>
 

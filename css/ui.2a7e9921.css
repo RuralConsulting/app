@@ -324,6 +324,7 @@ body.simple-files .group-documents { margin: 0 auto; }
 
 /* ---- the sections: five in a phone's tab bar and More; six in a computer's segmented control and More ------------------- */
 .space-tabs .nav-more { font: 500 var(--text-small)/1.1 var(--f-ui); color: var(--ink-2); background: none; border: 0; cursor: pointer; position: relative; }
+#farm-space-header .space-tabs .nav-more { font: 500 var(--text-small)/1.1 var(--f-ui); }   /* J2: a farm's More (staff have six sections there now) reads as its tabs do */
 .icon-more { stroke-width: 3.2; }
 .nav-dot { position: absolute; top: 6px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--material); }
 .space-tabs a, .space-tabs .nav-more { color: var(--ink-3); }

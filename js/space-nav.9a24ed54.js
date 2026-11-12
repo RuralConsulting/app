@@ -11,9 +11,9 @@
   // (a computer shows the same five and More: Create and Manage are staff tools, under More on every screen, as docs/PRODUCT.md)
   const PHONE_MAX = 5, DESKTOP_MAX = 5;
   // Josh (12 Nov 2026): on a phone people capture and look things up (log a call, find a contact, add a file); the map is for the
-  // bigger screen. So a phone's bar puts those sections first: Overview (Home), People, Files, Events, then Maps; a section not
+  // bigger screen. So a phone's bar puts those sections first: Home, People, Files, Events, then Maps; a section not
   // named here keeps its place after them. A computer keeps the space's own order.
-  const PHONE_ORDER = ["map", "people", "documents", "events", "maps"];
+  const PHONE_ORDER = ["home", "people", "documents", "events", "maps"];
   function phoneOrder(tabs) {
     const rank = (t) => { const i = PHONE_ORDER.indexOf(t.key); return i < 0 ? PHONE_ORDER.length : i; };
     return tabs.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);

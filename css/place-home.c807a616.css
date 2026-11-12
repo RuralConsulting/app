@@ -1,0 +1,67 @@
+/* J2: Home, the first section of a place (js/place-home.js): search, the add actions shown openly, the sections as a list, and
+   anything waiting as one quiet line. Calm: no filled button of its own (the + is the screen's one), ink controls, the list as
+   Attio's rows. Phone first; a computer gets the same in a comfortable width, nothing extra. */
+.place-home { display: grid; align-content: start; gap: var(--s-5); width: 100%; max-width: var(--page-max); margin: 0 auto; padding: var(--s-4) var(--space) var(--s-8);
+  color: var(--ink); font-family: var(--f-ui); }
+/* a farm's Home: its own screen under the farm's header (as Maps) */
+.place-home-screen { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--demo-banner-height) + var(--farm-header-height)); background: var(--wash); overflow: auto; }
+/* a group's Home: its panel takes the width, no map beside it */
+#screen-group[data-view="home"] .group-map { display: none; }
+#screen-group[data-view="home"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="home"] .group-panel { padding: 0; border: 0; background: var(--wash); }
+
+/* search */
+.ph-search { position: relative; display: flex; align-items: center; }
+.ph-search .icon { position: absolute; left: 14px; color: var(--ink-3); pointer-events: none; }
+.ph-search input { width: 100%; min-height: 52px; padding: 0 var(--s-4) 0 44px; border: 0; border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--field-border); font: 400 var(--text-body) var(--f-ui); -webkit-appearance: none; appearance: none; }
+.ph-search input::placeholder { color: var(--ink-3); }
+.ph-search input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ph-results { display: grid; gap: var(--s-4); }
+.ph-results[hidden] { display: none; }
+.ph-group h2 { margin: 0 0 var(--s-2); font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink-2); }
+.ph-group h2 small { font-weight: 400; color: var(--ink-3); }
+.ph-quiet { margin: 0; padding: var(--s-2) var(--s-1); color: var(--ink-3); font-size: var(--text-small); }
+/* while searching, the results are the page */
+.place-home.searching > :not(.ph-search):not(.ph-results) { display: none; }
+
+/* a list of rows: the results and the sections */
+.ph-rows { list-style: none; margin: 0; padding: 0; overflow: hidden; border-radius: var(--radius); background: var(--panel); box-shadow: inset 0 0 0 1px var(--rule-soft); }
+.ph-rows > li + li { border-top: 1px solid var(--rule-soft); }
+.ph-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 60px; padding: var(--s-2) var(--s-4); border: 0; background: none; color: var(--ink);
+  font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.ph-row:hover { background: var(--fill); }
+.ph-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ph-row-icon, .ph-add-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-s); background: var(--fill); color: var(--ink); }
+.ph-row-text { flex: 1 1 auto; display: grid; gap: 2px; min-width: 0; }
+.ph-row-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-row-text small { color: var(--ink-3); font-size: var(--text-small); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-row > .icon:last-child { flex: none; color: var(--ink-3); }
+
+/* the add actions: large targets, two across on a phone */
+.ph-adds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+.ph-adds[hidden] { display: none; }
+.ph-add { display: flex; align-items: center; gap: var(--s-3); min-height: 64px; padding: var(--s-3); border: 0; border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--field-border); font: 600 var(--text-body)/1.25 var(--f-ui); text-align: left; cursor: pointer; }
+.ph-add:hover { background: var(--fill); }
+.ph-add:active { transform: scale(.98); }
+.ph-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* anything waiting: one quiet line */
+.ph-waiting { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-1); margin: calc(-1 * var(--s-3)) 0; color: var(--ink-3); font-size: var(--text-small); }
+.ph-waiting[hidden] { display: none; }
+/* each link a full tap target (44 px high), the line itself as quiet as before */
+.ph-waiting a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-weight: 500; }
+
+@media (max-width: 800px) {
+  body.farm-space-active #screen-farm-home { bottom: var(--tabbar-h); }
+  /* clear of the round + over the bottom right */
+  .place-home { padding-bottom: calc(var(--fab) + var(--s-8)); }
+  #screen-group[data-view="home"] { padding-bottom: var(--tabbar-h); }
+}
+@media (min-width: 801px) {
+  .place-home { padding-top: var(--s-6); gap: var(--s-6); }
+  .ph-adds { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  body:has(#screen-farm-home:not([hidden])) #farm-space-header.space-head,
+  #screen-group[data-view="home"] .group-head.space-head { padding-left: max(var(--s-3), calc((100% - var(--page-max)) / 2)); padding-right: max(var(--s-5), calc((100% - var(--page-max)) / 2 + var(--s-4))); }
+}

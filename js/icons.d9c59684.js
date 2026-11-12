@@ -35,6 +35,7 @@
     places: "M4 10.5L12 4l8 6.5V19a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z",
     // UI2: More, the Overview, Filter, and the kinds of file
     more: "M5 12h.01M12 12h.01M19 12h.01",
+    home: "M3.5 11L12 4l8.5 7M5.5 9.5V20h4.5v-5.5h4V20h4.5V9.5",   // J2: Home
     overview: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z",
     filter: "M4 6h16M7 12h10M10 18h4",
     download: "M12 4v11M7 10.5l5 5 5-5M5 20h14",
@@ -44,7 +45,7 @@
     mapdoc: "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14",
   };
   // The icon each space view shows in the tab bar
-  const VIEW_ICONS = { map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due" };
+  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due" };
   const NS = "http://www.w3.org/2000/svg";
   function icon(name, size = 22) {
     const d = PATHS[name] || PATHS.file, doc = root.document;

@@ -17,11 +17,11 @@
   const addDays = (d, n) => new Date(Date.parse(d.slice(0, 10) + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
   // Places reached from the header rather than the three actions: People is for a farm's owner and admins.
   // Onboarding (ON1) is reached from the command bar and from Documents.
-  const otherViews = [["people", "People"], ["onboarding", "Onboarding"]];
+  const otherViews = [["people", "People"], ["onboarding", "Onboarding"], ["home", "Home"], ["map", "Working map"]];   // J2: Home, the first section; the farm map with What's due is staff's Working map
   const viewLabel = (key) => [...views, ...otherViews].find(([k]) => k === key)?.[1] || null;
   const href = (f, view, id) => "#/farm/" + f + (view && view !== "map" ? "/" + view : "") + (id ? "?item=" + encodeURIComponent(id) : "");
   function match(hash) {
-    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(maps|ask|create|documents|people|onboarding))?(?:\?item=([^&#]+))?$/);
+    const m = String(hash || "").match(/^#\/farm\/([0-9a-f-]{36})(?:\/(home|maps|ask|create|documents|people|onboarding))?(?:\?item=([^&#]+))?$/);
     try { return m ? { farm: m[1], view: m[2] || "map", item: m[3] ? decodeURIComponent(m[3]) : null } : null; } catch { return null; }
   }
   // A consent's or document's title as the app quotes it in a sentence or a line: without the full stop its record may

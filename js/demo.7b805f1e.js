@@ -38,7 +38,7 @@
   const FARM2 = "de000000-0000-4000-8000-000000000005";
   const GROUP = "de000000-0000-4000-8000-000000000006";   // the catchment group (S5): "HDLG (example)", invented members
   const PHOTO = "demo/photo-synthetic.svg";   // a drawn stand-in: no real photo is in the demo
-  const VIEWS = /^$|^\/(maps|ask|create|documents|people|onboarding)$/;
+  const VIEWS = /^$|^\/(home|maps|ask|create|documents|people|onboarding)$/;
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|\?|$)/.test(hash);
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|\?|$)/.test(hash);
@@ -63,7 +63,7 @@
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
-      return /^(?:\/(?:documents|events|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:home|documents|events|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;

@@ -1,6 +1,7 @@
 // Screens and routing: sign in -> the farm (or the portfolio if there are several) -> the farm space.
-// Routes: #/farm/<id> (map and standing answers), #/farm/<id>/ask, /create and /documents; #/ops, #/ops/layers and #/ops/looks (RCL staff);
-// #/group/<id> (a catchment group's space, S5) and its /documents, /create and /settings; #/account/qgis (the person's access
+// Routes: #/farm/<id>/home (J2: Home, the first section), #/farm/<id> (the Working map: the map and standing answers, RCL staff),
+// #/farm/<id>/ask, /create and /documents; #/ops, #/ops/layers and #/ops/looks (RCL staff);
+// #/group/<id> (a catchment group's space, S5: its Working map) and its /home, /documents, /create and /settings; #/account/qgis (the person's access
 // keys for QGIS, QGIS1a).
 // V6: a client gets the simple view (simple-view.js, the allow-list): every route is checked against it first.
 // V8: #/privacy, the privacy and terms note (privacy.js), for everyone, signed in or not; asked once after sign-in per version.
@@ -65,6 +66,7 @@
     if (early) { readyToRoute = true; route(); }
     groups = await groupsRead;
     FP.groupSpace.setGroups(groups, user);
+    FP.placeHome?.setPlaces({ farms: allFarms, groups });   // J2: the places Home's search may lead to
     FP.groupSpace.hasPortfolio = () => farms.length + groups.length > 1;
     const asked = await staffRead;
     readyToRoute = true;
@@ -100,8 +102,8 @@
     FP.farmPlansDemo.close(); FP.farmPlanDraft.close(); FP.gallery.close(); FP.tokens?.close();
     FP.ops.close(); FP.opsLayers.close(); FP.opsLooks?.close(); FP.groupSpace.close(); FP.farmSpace.close();
   }
-  // The view a person's one farm or group opens on: the first of the allow-list for a client, the map for staff.
-  const homeView = (space) => (FP.simpleView.on() ? FP.simpleView.landing(space) : "map");
+  // The view a person's one farm or group opens on: its Home (J2), for clients (the first of the allow-list) and staff alike.
+  const homeView = (space) => (FP.simpleView.on() ? FP.simpleView.landing(space) : "home");
   // V6: a client's Files is a plain list, with no farm or group map beside it.
   const markFiles = (view) => $("body").classList.toggle("simple-files", FP.simpleView.on() && view === "documents");
 

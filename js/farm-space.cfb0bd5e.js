@@ -155,6 +155,7 @@
   const $ = (s) => FP.$(s), el = (...a) => FP.el(...a);
   function close() {
     FP.mapsView?.close();
+    FP.placeHome?.close();
     FP.addBlock?.close(false);
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
@@ -375,7 +376,7 @@
     FP.farmMap.reframe(context.maps.extent);
   }
   function farmTarget(id) {
-    let target = id ? M.href(id, "map") : "";
+    let target = id ? M.href(id, "home") : "";   // J2: a farm opens on its Home
     try { if (id) target = sessionStorage.getItem("fp-view-" + user.id + "-" + id) || target; } catch {}
     return target;
   }
@@ -401,8 +402,8 @@
   function header(farm, route) {
     $("#farm-space-header").hidden = false;
     const name = $("#space-farm-name");
-    name.textContent = farm.name; name.href = FP.href(M.href(farm.id, "map"));
-    if (route.view === "map") name.setAttribute("aria-current", "page"); else name.removeAttribute("aria-current");
+    name.textContent = farm.name; name.href = FP.href(M.href(farm.id, "home"));   // J2: the farm's name leads to its Home
+    if (route.view === "home") name.setAttribute("aria-current", "page"); else name.removeAttribute("aria-current");
     // (drawn first with the farm's map, before the farm's roles are read: People and Layer notes come with them)
     const person = FP.demo?.active ? (context?.advisor ? "Demo advisor" : "Demo farmer") : user.user_metadata?.display_name || user.email;
     $("#space-person").textContent = person;
@@ -413,10 +414,9 @@
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
     // The home view is the first tab, so from Ask, Create or Documents the way back is a tab, not a guess at the title.
     // V6: a client's tabs are the allow-list (simple-view.js)
-    // UI2: staff's order: Overview (the farm map with What's due), Maps, Files, then Ask and Create; More when over five (space-nav.js)
-    const staffTabs = [["map", "Overview"], ...["maps", "documents"].map((k) => M.views.find(([x]) => x === k)).filter(Boolean).map(([k, l]) => [k, k === "documents" ? "Files" : l]),
-      ...M.views.filter(([k]) => !["maps", "documents"].includes(k))];
-    const tabs = FP.simpleView?.on() ? FP.simpleView.tabs("farm") : staffTabs;
+    // J2: staff's order: Home, Maps, Files, Ask and Create, then the Working map (UI2's Overview: the farm map with What's due), under
+    // More as in a group (space-nav.js)
+    const tabs = farmTabs();
     const navTabs = tabs.map(([key, label]) => ({ key, label, href: FP.href(M.href(farm.id, key)), icon: FP.icons?.forView(key) }));
     if (FP.spaceNav) FP.spaceNav.render($("#farm-actions"), navTabs, route.view);
     else $("#farm-actions").replaceChildren(...navTabs.map((t) => el("a", { href: t.href, "data-tab": t.key, ...(route.view === t.key ? { "aria-current": "page" } : {}) }, FP.icon(t.icon), el("span", {}, t.label))));
@@ -431,7 +431,7 @@
     // for Maps (which reads nothing else of the farm)
     const addCtx = ({ role, tiers }) => ({ space: "farm", id: farm.id, name: farm.name, role, documentTiers: tiers, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: route.view });
     if (context?.farm.id === farm.id) FP.add?.update(addCtx({ role: context.role, tiers: context.documentTiers }));
-    else { FP.add?.update(null); farmRole(farm).then((r) => { if ($("#space-farm-name").getAttribute("href") === FP.href(M.href(farm.id, "map"))) FP.add?.update(addCtx(r)); }); }
+    else { FP.add?.update(null); farmRole(farm).then((r) => { if ($("#space-farm-name").getAttribute("href") === FP.href(M.href(farm.id, "home"))) FP.add?.update(addCtx(r)); }); }
     $("#space-signout").textContent = FP.demo?.active ? "Exit demo" : "Sign out";
     const people = $("#space-people");
     people.hidden = !M.canManage(context?.role); people.href = FP.href(M.href(farm.id, "people"));
@@ -444,6 +444,9 @@
     $("#account-open").toggleAttribute("data-current", route.view === "people");
   }
 
+  // The sections a person sees on a farm, [key, label] in order: a client's are the allow-list (simple-view.js)
+  const staffTabs = () => [["home", "Home"], ["maps", "Maps"], ["documents", "Files"], ...M.views.filter(([k]) => !["maps", "documents"].includes(k)), ["map", "Working map"]];
+  const farmTabs = () => (FP.simpleView?.on() ? FP.simpleView.tabs("farm") : staffTabs());
   // UI1: a farm's mark (a farm has no logo of its own): its monogram (icons.js, the same rule as a group's)
   const monogram = (name) => FP.icons.monogram(name);
   // UI1: the person's role on a farm, and whether its Files can take new files (the documents' tier columns: farm-space's own
@@ -1504,8 +1507,28 @@
     document.title = farm.name + " · " + M.viewLabel("maps") + " | " + FP.brand?.product;
     return FP.mapsView.open($("#screen-maps"), { owner: { farm: farm.id }, name: farm.name, item: route.item || null, href: (id) => FP.href(M.href(farm.id, "maps", id)) });
   }
+  // J2: Home is its own screen under the farm's header (place-home.js): search, the add actions, the sections; no farm map and none
+  // of the farm's reads (as Maps)
+  function openHome(farm, route) {
+    if (context && context.farm.id !== farm.id) close();   // another farm's reads and map go first
+    token++;
+    FP.mapsView?.close();
+    document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
+    document.body.classList.add("farm-space-active");
+    setDrawer(false); FP.farmMap.closePopup?.(); FP.shapeEditor?.close();
+    FP.show("screen-farm-home");
+    header(farm, route); reserveHeader();
+    document.title = farm.name + " · " + M.viewLabel("home") + " | " + FP.brand?.product;
+    const tabs = farmTabs();
+    const addCtx = farmRole(farm).then(({ role, tiers }) => ({ space: "farm", id: farm.id, name: farm.name, role, documentTiers: tiers, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: "home" }));
+    const host = $("#screen-farm-home");
+    host.replaceChildren(FP.placeHome.view({ space: "farm", place: { id: farm.id, name: farm.name }, sections: tabs, addCtx, sb: FP.sb }));
+    host.scrollTop = 0;
+  }
   async function open(farm, route) {
     flushDone();   // going to another view (or farm) writes any Done still inside its Undo window (#258)
+    if (route.view !== "home") FP.placeHome?.close();
+    if (route.view === "home") return openHome(farm, route);
     if (route.view === "maps") return openMaps(farm, route);
     FP.mapsView?.close();
     const current = ++token;

@@ -2,7 +2,9 @@
 // computer) opens a sheet listing what THIS person may add in THIS space. What can be added is a small registry, so a later item
 // brings its own action without touching the button:
 //
-//   FP.add.register({ id, label, hint, icon, where: ["farm", "group"], order, can(ctx), run(ctx) })
+//   FP.add.register({ id, label, hint, icon, where: ["farm", "group"], order, can(ctx), run(ctx), verb? })
+//
+// verb (J2): the words Home shows the action with, openly (place-home-model.js: "Add a file"); without one, "Add " and the label.
 //
 // ctx: { space: "farm" | "group", id, name, role (the person's farm_members or org_members role), staff (profiles.is_staff),
 //        views: the space's views this person can open (the tab keys, so the simple view's allow-list rules here too), view }
@@ -49,13 +51,13 @@
   const mayAddPeople = (ctx) => ctx.space === "group" && views(ctx).includes("people") && !!models().people?.canSee(ctx.role);
 
   const registry = createRegistry();
-  registry.register({ id: "file", label: "File", hint: "A plan, consent or report, to the space's Files", icon: "file", where: ["farm", "group"], order: 10,
+  registry.register({ id: "file", label: "File", hint: "A plan, consent or report, to the space's Files", icon: "file", where: ["farm", "group"], order: 10, verb: "Add a file",
     can: mayAddFile, run: (ctx) => addFile(ctx) });
-  registry.register({ id: "event", label: "Event", hint: "A meeting, field day or workshop", icon: "event", where: ["group"], order: 20,
+  registry.register({ id: "event", label: "Event", hint: "A meeting, field day or workshop", icon: "event", where: ["group"], order: 20, verb: "Add an event",
     can: mayAddEvent, run: (ctx) => root.FP.groupEvents.openNew(ctx.id) });
-  registry.register({ id: "interaction", label: "Call or meeting note", hint: "A call, visit or meeting, in the group's log", icon: "note", where: ["group"], order: 30,
+  registry.register({ id: "interaction", label: "Call or meeting note", hint: "A call, visit or meeting, in the group's log", icon: "note", where: ["group"], order: 30, verb: "Log a call or visit",
     can: mayAddPeople, run: (ctx) => root.FP.groupPeople.logInteraction(ctx.id) });
-  registry.register({ id: "person", label: "Person", hint: "Someone the group works with", icon: "person", where: ["group"], order: 40,
+  registry.register({ id: "person", label: "Person", hint: "Someone the group works with", icon: "person", where: ["group"], order: 40, verb: "Add a person",
     can: mayAddPeople, run: (ctx) => root.FP.groupPeople.addPerson(ctx.id) });
 
   // ---- the actions, in the browser ------------------------------------------------------------------------------------------
