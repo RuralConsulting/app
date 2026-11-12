@@ -9,11 +9,11 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   // ON3b: `/manage[/members|gaps|updates|sites|settings]` is the group's manage space (group-manage.js); the member-detail form moved
   // there, so the old `/settings` address opens the manage space's Settings tab.
-  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(maps|documents|events|people|create|settings|manage)(?:\/(members|gaps|updates|sites|settings|log|follow-ups|add-person|review))?)?(?:\?item=([0-9a-f-]{36}))?$/;
+  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(maps|documents|events|people|create|settings|manage)(?:\/(members|gaps|updates|sites|settings|log|follow-ups|add-person|add-contact|review))?)?(?:\?item=([0-9a-f-]{36}))?$/;
   // N4: `/events` is the group's Events view (events.js). PE1: `/people[/log|follow-ups|add-person]` is the group's People view (RV1, PF1: and `/people/review`, its To review list)
   // (people.js; shown only to its facilitators, advisors and admins), the tab opening a form or the follow-ups straight away.
   const views = [["map", "Overview"], ["maps", "Maps"], ["documents", "Files"], ["events", "Events"], ["people", "People"], ["create", "Create"], ["manage", "Manage"]];
-  const TABS = { manage: ["members", "gaps", "updates", "sites", "settings"], people: ["log", "follow-ups", "add-person", "review"] };
+  const TABS = { manage: ["members", "gaps", "updates", "sites", "settings"], people: ["log", "follow-ups", "add-person", "add-contact", "review"] };
   function match(hash) {
     const m = String(hash || "").match(ROUTE);
     if (!m || (m[3] && !TABS[m[2]]?.includes(m[3])) || (m[4] && m[2] !== "maps")) return null;

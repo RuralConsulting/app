@@ -63,7 +63,7 @@
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
-      return /^(?:\/(?:documents|events|people(?:\/(?:log|follow-ups|add-person|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:documents|events|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -424,6 +424,20 @@
       joined_on: null, left_on: null, note: null, source: "gis", external_id: null, created_by: null, created_at: made, updated_by: null, updated_at: made, ...extra });
     data.tables.subgroup_businesses = [sg(1, SUBGROUPS[0].id, 1, { joined_on: "2025-04-01" }), sg(2, SUBGROUPS[0].id, 2), sg(3, SUBGROUPS[1].id, 1, { source: "apptivo" }),
       sg(4, SUBGROUPS[1].id, 3, { joined_on: "2024-01-01", left_on: "2025-06-30", source: "manual" })];
+    // M1b: the group's membership types, each member's terms (member 2 changed type; India left), the group's own fields with some
+    // values (one a choice no longer offered), and one other contact (a council officer, linked to no member). All invented.
+    const mid = (k, n) => "de000000-0000-4000-8000-000000000" + k + String(n).padStart(2, "0");
+    data.tables.group_membership_types = ["Full", "Associate", "Community"].map((name, i) => ({ id: mid(8, i + 1), org_id: GROUP, name, sort_order: i + 1, archived_at: null }));
+    const term = (n, b, type, joined_on, left_on = null, note = null) => ({ id: mid(8, 10 + n), org_id: GROUP, group_member_id: B(b), membership_type_id: mid(8, type), joined_on, left_on, note, source: "manual" });
+    data.tables.group_member_terms = [term(1, 1, 1, "2019-04-01"), term(2, 2, 2, "2018-02-01", "2024-07-01"), term(3, 2, 1, "2024-07-01"), term(4, 3, 1, "2020-09-15"), term(5, 4, 3, null),
+      term(6, 5, 1, "2021-03-01"), term(7, 6, 2, "2022-05-10"), term(8, 7, 1, null), term(9, 8, 3, "2023-01-20"), term(10, 9, 1, "2016-06-01", "2025-06-30", "Sold the farm (synthetic)")];
+    const fieldDef = (n, key, label, kind, extra = {}) => ({ id: mid(9, n), org_id: GROUP, key, label, kind, choices: [], sort_order: n, shown_in_list: false, archived_at: null, ...extra });
+    data.tables.group_fields = [fieldDef(1, "farm_plan", "Farm plan status", "choice", { choices: ["Draft", "Final"], shown_in_list: true }), fieldDef(2, "nzfap", "NZFAP", "tick", { shown_in_list: true }),
+      fieldDef(3, "fep_due", "FEP due", "date"), fieldDef(4, "plan_note", "Plan note", "text")];
+    const val = (n, b, f, v) => ({ id: mid(9, 20 + n), org_id: GROUP, group_member_id: B(b), field_id: mid(9, f), value: v });
+    data.tables.group_member_field_values = [val(1, 1, 1, "Final"), val(2, 1, 2, true), val(3, 1, 3, "2027-03-31"), val(4, 2, 1, "Draft"), val(5, 3, 1, "Awaiting audit"), val(6, 3, 2, true),
+      val(7, 4, 2, false), val(8, 6, 1, "Draft"), val(9, 6, 3, "2026-12-01")];
+    data.tables.people.push(person(8, "Iris", "Council (synthetic)", { job_title: "Land management advisor", organisation_name: "Regional council (synthetic)", contact_kind: "council", emails: ["iris@council.example.invalid"] }));
     // RV1: questions about the register for the group's advisers to come back to (public.proposals of kind register_review, as
     // tools/load_review_items.py writes them), beside the farm's proposals so Manage's counts and queue are as before. Invented.
     const answers = (...pairs) => [...pairs.map(([action, label]) => ({ action, label })), { action: "other", label: "Something else" }, { action: "not_needed", label: "Not needed" }];
@@ -487,6 +501,80 @@
     Object.assign(row, { decided_by: USER, decided_at: new Date().toISOString() });
     return [row];
   }
+  // M1b: a member's values of the list and filter fields ({key: value}), as crm_directory gives them.
+  function listValues(T, b) {
+    const out = {};
+    for (const v of (T.group_member_field_values || []).filter((x) => x.group_member_id === b && x.value != null && x.value !== "")) {
+      const f = (T.group_fields || []).find((x) => x.id === v.field_id);
+      if (f && !f.archived_at && (f.shown_in_list || f.kind !== "text")) out[f.key] = v.value;
+    }
+    return out;
+  }
+  // M1b, as crm_membership, crm_contacts, crm_email_list and the membership writes (the caller is one of the group's facilitators,
+  // advisors or admins: crmRpc checked). Ending and reopening a membership: its admins only, as the database's guard says.
+  function membershipRpc(d, name, args, k) {
+    const T = d.tables, terms = T.group_member_terms || (T.group_member_terms = []), typeName = (id) => (T.group_membership_types || []).find((t) => t.id === id)?.name || null;
+    const now = new Date().toISOString(), day = (x) => x || k.today, refuse = (message) => [null, { message }];
+    const reg = d.groupTables?.group_members || [];
+    if (name === "crm_membership") {
+      const b = k.byBusiness(args.b);
+      if (!b) return [null];
+      const ts = terms.filter((t) => t.group_member_id === b.id).sort((x, y) => (!!x.left_on - !!y.left_on) || String(y.left_on || "").localeCompare(String(x.left_on || "")) || String(y.joined_on || "").localeCompare(String(x.joined_on || "")));
+      return [{ group_member_id: b.id, ended_at: b.ended_at,
+        terms: ts.map((t) => ({ id: t.id, membership_type_id: t.membership_type_id, type: typeName(t.membership_type_id), joined_on: t.joined_on, left_on: t.left_on, current: !t.left_on, note: t.note, source: t.source })),
+        fields: (T.group_fields || []).filter((f) => !f.archived_at).sort((a, b2) => a.sort_order - b2.sort_order).map((f) => {
+          const v = (T.group_member_field_values || []).find((x) => x.group_member_id === b.id && x.field_id === f.id);
+          return { field_id: f.id, key: f.key, label: f.label, kind: f.kind, choices: f.choices, shown_in_list: f.shown_in_list, value: v?.value ?? null,
+            orphaned: f.kind === "choice" && v?.value != null && !f.choices.includes(v.value) };
+        }) }];
+    }
+    if (name === "crm_contacts") {
+      const linked = new Set(T.group_member_people.filter(k.current).map((l) => l.person_id));
+      return [T.people.filter((p) => !linked.has(p.id)).sort((a, b) => (!!a.archived_at - !!b.archived_at) || a.display_name.localeCompare(b.display_name)).map((p) => ({ person_id: p.id, display_name: p.display_name,
+        job_title: p.job_title, organisation_name: p.organisation_name || null, contact_kind: p.contact_kind || null, emails: p.emails, phones: p.phones, archived_at: p.archived_at, source: p.source,
+        last_interaction_at: k.withLink("person_id", p.id).filter((i) => !i.cancelled_at).sort(k.newest)[0]?.happened_at || null }))];
+    }
+    if (name === "crm_email_list") {
+      const ids = args.filter?.ids || reg.map((b) => b.id);
+      return [reg.filter((b) => ids.includes(b.id)).map((b) => {
+        const here = T.group_member_people.filter((l) => l.group_member_id === b.id && k.current(l)).map((l) => ({ l, p: k.byPerson(l.person_id) })).filter((x) => !x.p.archived_at)
+          .sort((x, y) => (y.l.is_primary - x.l.is_primary) || x.p.display_name.localeCompare(y.p.display_name))[0];
+        return { group_member_id: b.id, member_number: b.member_number, business_name: b.business_name, primary_name: here?.p.display_name || null, emails: here?.p.emails || [],
+          business_emails: T.group_member_details.find((x) => x.group_member_id === b.id)?.emails || [] };
+      })];
+    }
+    if (name === "crm_set_field_value") {
+      const f = (T.group_fields || []).find((x) => x.id === args.field), v = String(args.value ?? "").trim();
+      if (!f || !k.byBusiness(args.b)) return refuse("That field is not this group's");
+      if (f.archived_at) return refuse("That field is archived");
+      const value = v === "" ? null : f.kind === "tick" ? v === "true" : f.kind === "choice" ? f.choices.find((c) => c.toLowerCase() === v.toLowerCase()) : v;
+      if (f.kind === "choice" && v && !value) return refuse("That is not one of the field's choices");
+      const rows = T.group_member_field_values || (T.group_member_field_values = []), have = rows.find((x) => x.group_member_id === args.b && x.field_id === f.id);
+      if (have) have.value = value; else rows.push({ id: "demo-new-" + ++made, org_id: GROUP, group_member_id: args.b, field_id: f.id, value });
+      return [have?.id || rows.at(-1).id];
+    }
+    if (name === "crm_change_membership_type" || name === "crm_reopen_membership" || name === "crm_end_membership") {
+      const b = reg.find((x) => x.id === args.b), cur = terms.find((t) => t.group_member_id === args.b && !t.left_on);
+      if (!b) return refuse("No such member");
+      if (name === "crm_end_membership") {
+        if (k.role !== "admin") return refuse("Only the group's admins end a membership (the member leaves the register); change its type instead");
+        if (!cur) return refuse("This member has no current membership to end");
+        Object.assign(cur, { left_on: day(args.on_date), note: [cur.note, args.reason].filter(Boolean).join("\n") || null });
+        b.ended_at = b.ended_at || cur.left_on + "T00:00:00+13:00";
+        return [cur.id];
+      }
+      if (name === "crm_reopen_membership") {
+        if (k.role !== "admin") return refuse("Only the group's admins reopen a membership (the member comes back on the register)");
+        b.ended_at = null;
+      } else if (b.ended_at && !cur) return refuse("That member has left the register: reopen its membership instead");
+      if (cur && cur.membership_type_id === args.type_id) return [cur.id];
+      if (cur) cur.left_on = day(args.on_date);
+      const t = { id: "demo-new-" + ++made, org_id: GROUP, group_member_id: b.id, membership_type_id: args.type_id, joined_on: day(args.on_date), left_on: null, note: null, source: "manual", created_at: now };
+      terms.push(t);
+      return [t.id];
+    }
+    return null;
+  }
   // PE1, as the crm_* read functions and crm_save_interaction: the group's facilitators, advisors and admins only (anyone else gets
   // no rows or null), bounded as the database bounds them. Returns [data, error], or null for a name it does not know.
   function crmRpc(d, name, args) {
@@ -503,18 +591,24 @@
     const newest = (a, b) => String(b.happened_at).localeCompare(String(a.happened_at));
     const withLink = (key, id) => T.interactions.filter((i) => T.interaction_links.some((k) => k.interaction_id === i.id && k[key] === id));
     const open = (i) => !!i.follow_up_on && !i.follow_up_done_at && !i.cancelled_at;
-    if (!T.people) return name === "crm_business" || name === "crm_person" || name === "crm_feed_count" ? [null] : [[]];
-    if (["crm_directory", "crm_people", "crm_feed", "crm_team"].includes(name) && (!allowed || args.g !== GROUP)) return [[]];
-    if (["crm_business", "crm_person", "crm_feed_count"].includes(name) && !allowed) return [null];
+    if (!T.people) return name === "crm_business" || name === "crm_person" || name === "crm_feed_count" || name === "crm_membership" ? [null] : [[]];
+    // M1b: the membership types are read by any member of the group (the defaults are already there in the demo)
+    if (name === "crm_membership_types") return [role && args.g === GROUP ? [...(T.group_membership_types || [])].sort((a, b) => (!!a.archived_at - !!b.archived_at) || a.sort_order - b.sort_order) : []];
+    if (["crm_directory", "crm_people", "crm_feed", "crm_team", "crm_contacts", "crm_email_list"].includes(name) && (!allowed || args.g !== GROUP)) return [[]];
+    if (["crm_business", "crm_person", "crm_feed_count", "crm_membership"].includes(name) && !allowed) return [null];
+    const m1 = membershipRpc(d, name, args, { today, current, byBusiness, byPerson, withLink, newest, allowed, role });
+    if (m1) return m1;
     if (name === "crm_directory") {
       return [[...register].sort((a, b) => (!!a.ended_at - !!b.ended_at) || a.business_name.localeCompare(b.business_name)).slice(0, args.max_rows ?? 2000).map((b) => {
         const dt = T.group_member_details.find((x) => x.group_member_id === b.id);
         const here = T.group_member_people.filter((l) => l.group_member_id === b.id && current(l)).map((l) => ({ l, p: byPerson(l.person_id) })).filter((x) => !x.p.archived_at);
         const first = [...here].sort((x, y) => (y.l.is_primary - x.l.is_primary) || x.p.display_name.localeCompare(y.p.display_name))[0];
         const its = withLink("group_member_id", b.id);
+        const cur = (T.group_member_terms || []).find((t) => t.group_member_id === b.id && !t.left_on);   // M1b
         return { group_member_id: b.id, member_number: b.member_number, business_name: b.business_name, ended_at: b.ended_at, trading_name: dt?.trading_name || null, labels: dt?.labels || [], status: dt?.status || null,
           primary_person_id: first?.p.id || null, primary_name: first?.p.display_name || null, people_names: here.map((x) => x.p.display_name).sort(), people_count: here.length,
-          last_interaction_at: its.filter((i) => !i.cancelled_at).sort(newest)[0]?.happened_at || null, open_follow_ups: its.filter(open).length, due_follow_ups: its.filter((i) => open(i) && i.follow_up_on <= today).length };
+          last_interaction_at: its.filter((i) => !i.cancelled_at).sort(newest)[0]?.happened_at || null, open_follow_ups: its.filter(open).length, due_follow_ups: its.filter((i) => open(i) && i.follow_up_on <= today).length,
+          membership_type: cur ? (T.group_membership_types || []).find((t) => t.id === cur.membership_type_id)?.name || null : null, joined_on: cur?.joined_on || null, fields: listValues(T, b.id) };
       })];
     }
     if (name === "crm_people") {
@@ -1046,9 +1140,11 @@
   // the database refuses it, 23505, which the queue reads as "already written").
   const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes", "group_events", "group_event_attendees",   // N4: the group's events
     "people", "group_member_people", "group_member_details",   // PE1: the group's people
-    "subgroup_businesses"];   // SG2: a business added to a sub-group
+    "subgroup_businesses",   // SG2: a business added to a sub-group
+    "group_fields", "group_membership_types"];   // M1b: a field or type added by the group's admin
   const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees", "people", "group_member_people", "group_member_details", "interactions",
-    "subgroup_businesses"];   // SG2: ended   // and the tables whose rows the demo changes (the Layers page; a new block's note)
+    "subgroup_businesses",   // SG2: ended
+    "group_fields", "group_membership_types"];   // M1b: renamed, reordered, archived   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
@@ -1550,6 +1646,7 @@
           for (const r of added) {
             if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
             if (table === "subgroup_businesses") Object.assign(r, { parent_org_id: GROUP, joined_on: r.joined_on ?? String(d.asAt).slice(0, 10), left_on: null, created_by: d.user.id });   // SG2: as the guard stamps it
+            if (table === "group_fields") Object.assign(r, { key: r.key || String(r.label).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field", archived_at: null });   // M1b: as the guard makes the key
             rows.push(r);
             if (table === "documents") d.tables.document_relations.push({ id: r.id, tier: r.tier, relates_to: r.relates_to || null, superseded_by: null });
           }

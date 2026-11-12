@@ -10,6 +10,7 @@
 (function (root) {
   const FP = root.FP;
   const M = () => FP.peopleModel, G = () => FP.groupModel, R = () => FP.reviewItemsModel, RV = () => FP.reviewItems;   // RV1: review items
+  const MM = () => FP.membershipModel, MS = () => FP.membership;   // M1b: membership and the group's own fields
   const el = (...a) => FP.el(...a);
   const CAP = 2000;        // businesses and people read for a group (counted first)
   const PAGE = 100;        // feed rows read at a time (counted first)
@@ -97,7 +98,9 @@
     }
     const today = () => String(opts.today || M().dayKey(Date.now())).slice(0, 10);
     const now = () => opts.now || new Date().toISOString();
-    const st = { screen: "directory", stack: [], tab: "businesses", filters: { q: String(opts.q || ""), status: "current", label: "", labels: [], due: false }, pq: "", archived: false, sort: { by: null, dir: 1 },
+    const st = { screen: "directory", stack: [], tab: "businesses", filters: { q: String(opts.q || ""), status: "current", label: "", labels: [], due: false, types: [], fieldf: {} }, pq: "", archived: false, sort: { by: null, dir: 1 },
+      // M1b: the group's own fields and membership types (read with the lists), and other contacts (read when first shown)
+      defs: { fields: [], types: [], failed: null }, contacts: { rows: null, failed: null, q: "" },
       directory: [], people: [], team: [], failed: null, loading: "all", page: null, form: null, errors: [], notice: null,
       feed: { filters: { kinds: [], from: "", to: "", logger: "", followUp: "", topic: "" }, items: [], total: null, failed: null },
       // RV1: the register questions to review (public.proposals of kind register_review), the open one and its answer form
@@ -110,11 +113,14 @@
     // opening: the first read (shared, see openingLists), drawn in two steps: the businesses as soon as they are in, then the rest.
     async function loadLists(opening = false) {
       const lists = opening ? openingLists(sb, g) : readLists(sb, g);
+      const defs = FP.membership ? FP.membership.readDefinitions(sb, g) : Promise.resolve(st.defs);   // M1b: never fails
       try {
         const directory = await lists.directory;
+        st.defs = await defs;
         if (opening) { Object.assign(st, { directory, failed: null, loading: "people" }); redrawDirectory(); }
         const [people, team, truncated, review] = await Promise.all([lists.people, lists.team, lists.truncated, lists.review]);
         Object.assign(st, { directory, people, team, failed: null, truncated, loading: null });
+        if (st.contacts.rows) st.contacts.rows = null;   // M1b: read again when next shown
         takeReview(review);
       } catch (e) { Object.assign(st, { failed: message(e), loading: null }); }
     }
@@ -137,14 +143,19 @@
       RV().release();   // RV1: the item's map preview, if one was open
       const body = s === "business" ? businessScreen() : s === "person" ? personScreen() : s === "log" ? logScreen() : s === "person-form" ? personFormScreen()
         : s === "details-form" ? detailsFormScreen() : s === "feed" ? feedScreen() : s === "export" ? exportScreen()
-        : s === "review" ? reviewScreen() : s === "review-item" ? reviewItemScreen() : directoryScreen();
+        : s === "review" ? reviewScreen() : s === "review-item" ? reviewItemScreen() : s === "fields" ? fieldsScreen() : directoryScreen();
       // UI2: on the directory the title row carries the one primary action and a "…" menu for the quieter ones
+      // M1b: add a contact; copy the email addresses or download the list of the members shown; the admins' Fields and types
       const title = s === "directory" ? el("div", { class: "crm-titlebar" }, el("h2", {}, "People"),
         el("div", { class: "crm-title-actions" },
           el("button", { type: "button", class: "primary", "data-action": "log", onclick: () => openLog(null, []) }, "Log an interaction"),
           FP.sheet.moreButton("More actions", [
             { label: "Add a person", icon: "person", action: "add-person", run: () => openPersonForm(null, null) },
-            { label: "Export", hint: "A spreadsheet for reporting", icon: "download", action: "export", run: () => go("export") }]))) : el("h2", {}, "People");
+            { label: "Add a contact", hint: "Someone the group works with who is not a member", icon: "person", action: "add-contact", run: () => openPersonForm(null, null, true) },
+            { label: "Copy email addresses", hint: "Of the members shown, for your own email program", icon: "note", action: "copy-emails", run: () => copyEmails() },
+            { label: "Download list", hint: "The members shown, as a spreadsheet", icon: "download", action: "download-list", run: () => downloadList() },
+            { label: "Export", hint: "A spreadsheet for reporting", icon: "download", action: "export", run: () => go("export") },
+            ...(FP.membership && FP.membershipModel?.canDefine(group.role) ? [{ label: "Fields and types", hint: "The group's own fields and membership types", icon: "manage", action: "fields", run: () => go("fields") }] : [])]))) : el("h2", {}, "People");
       wrap.replaceChildren(title, ...(st.notice ? [el("p", { class: "crm-notice", role: "status" }, st.notice)] : []), body);
       st.notice = null;
     }
@@ -157,7 +168,7 @@
       st.stack.push({ screen: st.screen, page: st.page, address: byAddress }); byAddress = false;
       Object.assign(st, { screen, errors: [] }, extra); draw(); wrap.scrollIntoView?.({ block: "start" });
     }
-    const SCREEN_OF = { review: ["review", "review-item"], log: ["log"], "add-person": ["person-form"], "follow-ups": ["feed"] };
+    const SCREEN_OF = { review: ["review", "review-item"], log: ["log"], "add-person": ["person-form"], "add-contact": ["person-form"], "follow-ups": ["feed"] };
     function route(tab) {
       if (!tab) {   // the bare People address: back to the screen the last address was opened from
         const i = st.stack.map((f) => f.address).lastIndexOf(true);
@@ -168,6 +179,7 @@
       if (SCREEN_OF[tab]?.includes(st.screen)) return;
       byAddress = true;
       if (tab === "review") openReviewHere(); else if (tab === "log") openLog(null, []); else if (tab === "add-person") openPersonForm(null, null);
+      else if (tab === "add-contact") openPersonForm(null, null, true);   // M1b
       else if (tab === "follow-ups") openFeed({ followUp: "open" });
       byAddress = false;
     }
@@ -239,7 +251,9 @@
       box.append(el("nav", { class: "crm-views", "aria-label": "People views" },
         el("div", { class: "crm-switch", role: "group", "aria-label": "Show" },
           view("Members (" + count("businesses") + ")", { "data-tab": "businesses", onclick: () => { st.tab = "businesses"; draw(); } }, st.tab === "businesses"),
-          view("People (" + count("people") + ")", { "data-tab": "people", onclick: () => { st.tab = "people"; draw(); } }, st.tab === "people")),
+          view("People (" + count("people") + ")", { "data-tab": "people", onclick: () => { st.tab = "people"; draw(); } }, st.tab === "people"),
+          // M1b: other contacts, people the group works with who are not members (read when first shown)
+          FP.membershipModel ? view("Contacts" + (st.contacts.rows ? " (" + MM().searchContacts(st.contacts.rows).length + ")" : ""), { "data-tab": "contacts", onclick: () => { st.tab = "contacts"; draw(); readContacts(); } }, st.tab === "contacts") : null),
         el("div", { class: "crm-also" },
           view("Interactions", { "data-action": "feed", onclick: () => openFeed({}) }),
           view("Follow-ups", { "data-action": "follow-ups", onclick: () => openFeed({ followUp: "open" }) }),
@@ -250,10 +264,13 @@
       // PF1: while the lists are read, the frame and controls are here at once, with a placeholder list in place of each list not yet in
       box.setAttribute("aria-busy", String(!!st.loading));
       const list = el("div", { class: "crm-results" });
-      const search = el("input", { id: "crm-search", type: "search", autocomplete: "off", placeholder: st.tab === "businesses" ? "Member, person, number or label" : "Name, email, phone or member", "aria-label": "Search" });
-      search.value = st.tab === "businesses" ? st.filters.q : st.pq;
-      search.addEventListener("input", () => { if (st.tab === "businesses") st.filters.q = search.value; else st.pq = search.value; fill(); });
+      const search = el("input", { id: "crm-search", type: "search", autocomplete: "off", placeholder: st.tab === "businesses" ? "Member, person, number or label" : st.tab === "contacts" ? "Name, organisation, email or phone" : "Name, email, phone or member", "aria-label": "Search" });
+      search.value = st.tab === "businesses" ? st.filters.q : st.tab === "contacts" ? st.contacts.q : st.pq;
+      search.addEventListener("input", () => { if (st.tab === "businesses") st.filters.q = search.value; else if (st.tab === "contacts") st.contacts.q = search.value; else st.pq = search.value; fill(); });
       const current = () => (st.tab === "businesses" ? { ...st.filters, subgroups: st.sg.chosen } : { archived: st.archived });
+      // M1b: the membership type and field chips beside PE1's and SG2's
+      const allChips = () => [...M().filterChips(current(), st.tab === "contacts" ? "people" : st.tab, sgNames()), ...(st.tab === "businesses" && FP.membershipModel ? MM().chips(st.filters, st.defs.fields) : [])];
+      const removeChip = (key) => (/^(type|field):/.test(key) ? MM().remove(current(), key) : M().removeFilter(current(), key));
       const sgNames = () => new Map((st.sg.counts || []).map((c) => [c.subgroup_id, c.subgroup_name]));
       const filterButton = el("button", { type: "button", class: "crm-filter", "data-action": "filter", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => openFilters(filterButton) },
         FP.icon("filter", 18), el("span", {}, "Filter"));
@@ -261,13 +278,13 @@
       box.append(el("div", { class: "crm-searchbar" }, el("div", { class: "crm-search" }, search), filterButton), chips);
       // the chosen filters as chips, each with its own remove; Clear when any is set (the default, current businesses, is never a chip)
       function drawChips() {
-        const on = M().filterChips(current(), st.tab, sgNames());
+        const on = allChips();
         filterButton.classList.toggle("on", on.length > 0);
         filterButton.querySelector(".crm-filter-n")?.remove();
         if (on.length) filterButton.append(el("span", { class: "crm-filter-n" }, el("span", { class: "visually-hidden" }, ", chosen: "), String(on.length)));
         chips.hidden = !on.length;
-        chips.replaceChildren(...on.map((c) => el("button", { type: "button", class: "crm-chip-on", "data-remove": c.key, "aria-label": "Remove the filter " + c.label, onclick: () => setFilters(M().removeFilter(current(), c.key)) },
-          el("span", {}, c.label), FP.icon("close", 14))), ...(on.length ? [el("button", { type: "button", class: "link crm-clear", "data-action": "clear", onclick: () => setFilters(M().clearFilters(current())) }, "Clear")] : []));
+        chips.replaceChildren(...on.map((c) => el("button", { type: "button", class: "crm-chip-on", "data-remove": c.key, "aria-label": "Remove the filter " + c.label, onclick: () => setFilters(removeChip(c.key)) },
+          el("span", {}, c.label), FP.icon("close", 14))), ...(on.length ? [el("button", { type: "button", class: "link crm-clear", "data-action": "clear", onclick: () => setFilters(FP.membershipModel ? MM().clear(M().clearFilters(current())) : M().clearFilters(current())) }, "Clear")] : []));
       }
       let sheetBody = null;
       function setFilters(f) {
@@ -285,7 +302,7 @@
           const was = root.document?.activeElement, key = holder.contains(was) ? [was.dataset.label ? "[data-label=\"" + CSS.escape(was.dataset.label) + "\"]" : was.dataset.status ? "[data-status=\"" + was.dataset.status + "\"]" : was.id ? "#" + was.id : null] : [null];
           queueMicrotask(() => { const n = key[0] && holder.querySelector(key[0]); if (n) n.focus(); });
           const f = st.filters;
-          if (st.tab === "people") {
+          if (st.tab === "people" || st.tab === "contacts") {
             const sw = el("input", { type: "checkbox", role: "switch", id: "crm-archived", ...(st.archived ? { checked: true } : {}), onchange: () => setFilters({ archived: sw.checked }) });
             holder.replaceChildren(el("label", { class: "crm-switch-row", for: "crm-archived" }, el("span", {}, "Show archived people"), sw));
             return;
@@ -310,8 +327,40 @@
           drawLabels();
           holder.replaceChildren(el("h3", { class: "crm-filter-h" }, "Status"), status,
             el("label", { class: "crm-switch-row", for: "crm-due" }, el("span", {}, "Follow-up due"), due),
-            el("h3", { class: "crm-filter-h" }, "Labels"), ...(all.length > 6 ? [find] : []), labelList, ...subgroupSection((id) => setFilters({ subgroups: st.sg.chosen.includes(id) ? st.sg.chosen.filter((x) => x !== id) : [...st.sg.chosen, id] })));
+            el("h3", { class: "crm-filter-h" }, "Labels"), ...(all.length > 6 ? [find] : []), labelList, ...subgroupSection((id) => setFilters({ subgroups: st.sg.chosen.includes(id) ? st.sg.chosen.filter((x) => x !== id) : [...st.sg.chosen, id] })),
+            ...membershipFilters());
         };
+        // M1b: Membership type (any of those chosen), and each of the group's choice, tick and date fields
+        function membershipFilters() {
+          if (!FP.membershipModel) return [];
+          const f = st.filters, out = [];
+          const types = MM().typeChoices(st.defs.types, st.directory);
+          if (types.length) out.push(el("h3", { class: "crm-filter-h" }, "Membership type"), el("ul", { class: "crm-label-list mf-filter-types" }, ...types.map((t, ti) => el("li", {}, el("label", { class: "crm-label-row" },
+            el("input", { type: "checkbox", id: "mf-type-" + ti, "data-type": t.name, ...((f.types || []).some((x) => x.toLowerCase() === t.name.toLowerCase()) ? { checked: true } : {}), onchange: () => setFilters(MM().toggleType(st.filters, t.name)) }),
+            el("span", {}, t.name), el("small", {}, String(t.count)))))));
+          for (const fd of MM().filterFields(st.defs.fields)) {
+            const c = f.fieldf?.[fd.key] || {}, id = "mf-filter-" + fd.key;
+            out.push(el("h3", { class: "crm-filter-h" }, fd.label));
+            if (fd.kind === "choice") {
+              out.push(el("ul", { class: "crm-label-list", "data-filter-field": fd.key }, ...[...MM().choiceChoices(fd, st.directory), null].map((ch, ci) => el("li", {}, el("label", { class: "crm-label-row" },
+                el("input", { type: "checkbox", id: "mf-c-" + fd.key + "-" + (ch == null ? "none" : ci), "data-choice": ch ?? "", ...((ch == null ? c.none : (c.is || []).some((x) => x.toLowerCase() === ch.toLowerCase())) ? { checked: true } : {}),
+                  onchange: () => setFilters(ch == null ? MM().setField(st.filters, fd.key, c.none ? null : { none: true }) : MM().toggleChoice(st.filters, fd.key, ch)) }),
+                el("span", {}, ch == null ? "Not set" : ch + ((fd.choices || []).includes(ch) ? "" : MM().ORPHAN)))))));
+            } else if (fd.kind === "tick") {
+              const now = c.ticked == null ? "any" : c.ticked ? "yes" : "no";
+              out.push(el("div", { class: "crm-seg", role: "radiogroup", "aria-label": fd.label, "data-filter-field": fd.key }, ...[["any", "Any"], ["yes", "Ticked"], ["no", "Not ticked"]].map(([k, label]) =>
+                el("button", { type: "button", role: "radio", "aria-checked": String(now === k), id: "mf-tick-" + fd.key + "-" + k, "data-tick": k, onclick: () => setFilters(MM().setField(st.filters, fd.key, k === "any" ? null : { ticked: k === "yes" })) }, label))));
+            } else {
+              const how = c.none ? "none" : c.before ? "before" : c.after ? "after" : "any", day = el("input", { type: "date", id, "aria-label": fd.label + " date", value: c.before || c.after || "" });
+              const apply = (k) => setFilters(MM().setField(st.filters, fd.key, k === "any" ? null : k === "none" ? { none: true } : day.value ? { [k]: day.value } : null));
+              day.addEventListener("change", () => { if (how === "before" || how === "after") apply(how); });
+              out.push(el("div", { class: "crm-seg", role: "radiogroup", "aria-label": fd.label, "data-filter-field": fd.key }, ...[["any", "Any"], ["before", "Before"], ["after", "After"], ["none", "None"]].map(([k, label]) =>
+                el("button", { type: "button", role: "radio", "aria-checked": String(how === k), id: "mf-date-" + fd.key + "-" + k, "data-date": k, onclick: () => { if ((k === "before" || k === "after") && !day.value) day.value = today(); apply(k); } }, label))),
+                how === "before" || how === "after" ? day : null);
+            }
+          }
+          return out;
+        }
         sheetBody();
         // SG2: the sub-groups and who is in them are read the first time the filter is opened (subgroups.js readFilter)
         if (!M().isSubgroup(group) && FP.subgroups && !st.sg.counts && !st.sg.loading) {
@@ -343,10 +392,23 @@
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, "Reading the group's people…"),
             el("ul", { class: "crm-list crm-skeleton", "aria-hidden": "true" }, ...Array.from({ length: 8 }, () => el("li", { class: "crm-skeleton-row" }, el("span"), el("span")))));
         } else if (st.tab === "businesses") {
-          const shown = M().sortDirectory(M().searchDirectory(st.directory, { ...st.filters, subgroups: st.sg.chosen, subgroupIndex: st.sg.index }), st.sort.by, st.sort.dir);
+          const shown = shownMembers();
+          // M1b: Type and the fields shown in the list as more columns on a computer (the table scrolls sideways inside itself, the
+          // member's name column staying put); on a phone the type is quiet words on the row's second line
+          const cols = FP.membershipModel ? MM().columns(st.defs.fields) : [["name", "Member"], ["member", "No."], ["contact", "Primary contact"], ["last", "Last contact"]];
+          const extra = cols.length - 5;
+          const table = el("div", { class: "crm-table" + (FP.membershipModel ? " mf-table" : "") + (extra > 0 ? " mf-wide" : ""), ...(FP.membershipModel ? { style: "--mf-extra: " + Math.max(0, extra) } : {}) },
+            head(cols), listOf(shown, businessRow));
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "member", "members")),
-            shown.length ? el("div", { class: "crm-table" }, head([["name", "Member"], ["member", "No."], ["contact", "Primary contact"], ["last", "Last contact"]]), listOf(shown, businessRow))
+            shown.length ? (extra > 0 ? el("div", { class: "mf-scroll" }, table) : table)
               : el("p", { class: "crm-empty" }, st.directory.length ? "No member matches." : "The group's member register is empty."));
+        } else if (st.tab === "contacts") {
+          if (st.contacts.failed) { list.replaceChildren(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the contacts just now: " + st.contacts.failed)); return; }
+          if (!st.contacts.rows) { list.replaceChildren(el("p", { class: "crm-count", role: "status" }, "Reading the group's other contacts…")); readContacts(); return; }
+          const shown = M().sortDirectory(MM().searchContacts(st.contacts.rows, st.contacts.q, st.archived), st.sort.by === "member" ? null : st.sort.by, st.sort.dir);
+          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "contact", "contacts")),
+            shown.length ? el("div", { class: "crm-table crm-table-people" }, head([["name", "Name"], ["contact", "Organisation"], ["last", "Last contact"]]), listOf(shown, contactRow))
+              : el("p", { class: "crm-empty" }, st.contacts.rows.length ? "Nobody matches." : "No other contacts yet. Add council staff, funders and contractors the group works with from the … menu."));
         } else {
           const shown = M().sortDirectory(M().searchPeople(st.people, { q: st.pq, archived: st.archived }), st.sort.by === "member" ? null : st.sort.by, st.sort.dir);
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "person", "people")),
@@ -383,9 +445,74 @@
             r.ended_at ? el("span", { class: "crm-badge" }, "Ended") : null),
           // (a computer's table heads the column "No.": the word Member is for a phone's row and for screen readers)
           el("span", { class: "crm-c-member" }, el("span", { class: "crm-member-word" }, "Member "), r.member_number),
+          // M1b: the membership type (quiet words; a computer's "Type" column)
+          FP.membershipModel && r.membership_type ? el("span", { class: "crm-c-type" }, el("span", { class: "visually-hidden" }, "Type "), r.membership_type) : null,
           // (no contact recorded: nothing, rather than a line saying so)
           r.primary_name || r.people_count ? el("span", { class: "crm-c-contact" }, r.primary_name || M().plural(r.people_count, "person", "people")) : null,
+          // M1b: the fields shown in the list, each its own column on a computer (not on a phone)
+          ...(FP.membershipModel ? MM().listFields(st.defs.fields).map((f, i) => el("span", { class: "crm-c-field", "data-field": f.key, style: "grid-column: " + (5 + i) },
+            el("span", { class: "visually-hidden" }, f.label + " "), MM().valueText(f, r.fields?.[f.key]))) : []),
           el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), last)));
+    }
+    // M1b: the directory as it is shown (search, PE1's and SG2's filters, then membership type and fields; sorted)
+    function shownMembers() {
+      let rows = M().searchDirectory(st.directory, { ...st.filters, subgroups: st.sg.chosen, subgroupIndex: st.sg.index });
+      if (FP.membershipModel) rows = MM().filterRows(rows, st.filters);
+      return (FP.membershipModel && MM().sortBy(rows, st.sort.by, st.sort.dir, st.defs.fields)) || M().sortDirectory(rows, st.sort.by, st.sort.dir);
+    }
+    // M1b: an other contact: name, organisation and kind, last contact
+    function contactRow(c) {
+      return el("li", { class: "crm-row" + (c.archived_at ? " ended" : "") },
+        el("button", { type: "button", "data-person": c.person_id, onclick: () => openPerson(c.person_id) },
+          el("span", { class: "crm-c-name" }, el("b", {}, c.display_name), c.archived_at ? el("span", { class: "crm-badge" }, "Archived") : null),
+          el("span", { class: "crm-c-contact" }, MM().contactLine(c) || "No organisation recorded"),
+          el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), M().lastShort(c.last_interaction_at, today()))));
+    }
+    // M1b: a set-returning read a page at a time (the API returns at most 1,000 rows a request), each read ordered by the database,
+    // until a short page; a failed page fails the whole read, never a silent part of it. (A client without range(): one read.)
+    async function pagedRpc(name, args) {
+      const out = [], PAGE_ROWS = 1000;
+      for (let n = 0; n < 10; n++) {
+        const q = sb.rpc(name, args);
+        if (typeof q?.range !== "function") return rows(q);
+        const got = await rows(q.range(n * PAGE_ROWS, n * PAGE_ROWS + PAGE_ROWS - 1));
+        out.push(...got);
+        if (got.length < PAGE_ROWS) break;
+      }
+      return out;
+    }
+    async function readContacts() {
+      if (st.contacts.rows || st.contacts.reading) return;
+      st.contacts.reading = true;
+      try { st.contacts.rows = await pagedRpc("crm_contacts", { g, max_rows: CAP }); st.contacts.failed = null; } catch (e) { st.contacts.failed = message(e); }
+      st.contacts.reading = false;
+      if (st.screen === "directory") redrawDirectory();
+    }
+    // M1b: contacting members. The platform sends nothing: the addresses go to the clipboard, the list to a file.
+    async function membersShownEmails() {
+      const shown = shownMembers();
+      if (!shown.length) return { shown, rows: [] };
+      return { shown, rows: await pagedRpc("crm_email_list", { g, filter: { ids: shown.map((r) => r.group_member_id) } }) };
+    }
+    async function copyEmails() {
+      try {
+        const { rows: got } = await membersShownEmails(), r = MM().emailText(got);
+        if (r.text) await root.navigator.clipboard.writeText(r.text);
+        st.notice = MM().emailNotice(r);
+      } catch (e) { st.notice = "Couldn't copy the email addresses: " + message(e); }
+      draw();
+    }
+    async function downloadList() {
+      try {
+        const { shown, rows: got } = await membersShownEmails();
+        // the sub-groups each member is in (SG2's map, read here when the Filter has not read it yet)
+        if (!st.sg.counts && FP.subgroups && !M().isSubgroup(group)) { try { Object.assign(st.sg, await FP.subgroups.readFilter(sb, g)); } catch { /* the list without sub-groups */ } }
+        const names = new Map((st.sg.counts || []).map((c) => [c.subgroup_id, c.subgroup_name]));
+        const subgroupsOf = (id) => [...(st.sg.index?.get(id) || [])].map((s) => names.get(s)).filter(Boolean);
+        download(M().fileName(group.name, "members", today(), "").replace(/-end\.csv$/, ".csv"), MM().listCsv(shown, got, st.people, st.defs.fields, subgroupsOf));
+        st.notice = M().plural(shown.length, "member", "members") + " downloaded. The file holds personal information: keep it where the group's records are kept.";
+      } catch (e) { st.notice = "Couldn't download the list: " + message(e); }
+      draw();
     }
     function personRow(p) {
       return el("li", { class: "crm-row" + (p.archived_at ? " ended" : "") },
@@ -399,8 +526,11 @@
     async function openBusiness(id, push = true) {
       if (push) go("business", { page: { loading: true } });
       try {
+        // M1b: the membership and the group's fields are read beside the page (their failure is said in their own place)
+        const member = MS() ? MS().readMember(sb, id).catch((e) => ({ failed: message(e) })) : Promise.resolve(null);
         const page = await one(sb.rpc("crm_business", { b: id }));
         if (!page) throw new Error("not found, or not yours to read");
+        page.membership = await member;
         st.page = page;
       } catch (e) { st.page = { failed: message(e) }; }
       if (push) draw();
@@ -417,26 +547,46 @@
       const p = st.page || {};
       if (p.loading) return el("div", {}, backButton(), el("p", { class: "group-status", role: "status" }, "Reading the member…"));
       if (p.failed) return el("div", {}, backButton(), el("p", { role: "alert", class: "crm-failed" }, "Couldn't read this member: " + p.failed));
-      const b = p.business, d = p.details || {}, people = p.people || [];
+      const b = p.business, d = p.details || {}, people = p.people || [], mem = p.membership;
       const box = el("article", { class: "crm-page", "data-business": b.id }, backButton(),
         el("h3", {}, b.business_name, b.ended_at ? el("span", { class: "crm-badge" }, "Ended") : null),
         el("p", { class: "crm-sub" }, ["Member " + b.member_number, d.trading_name ? "trading as " + d.trading_name : null, d.status].filter(Boolean).join(" · ")),
-        (d.labels || []).length ? el("ul", { class: "crm-labels" }, ...d.labels.map((l) => el("li", {}, l))) : null,
         el("div", { class: "crm-actions" },
           el("button", { type: "button", class: "primary", "data-action": "log", onclick: () => openLog(null, [{ kind: "business", id: b.id, name: b.business_name, member_number: b.member_number }]) }, "Log an interaction"),
           el("button", { type: "button", class: "secondary", "data-action": "edit-details", onclick: () => go("details-form", { form: M().detailsForm(p.details), target: b }) }, "Edit details"),
           el("button", { type: "button", class: "secondary", "data-action": "add-person", onclick: () => openPersonForm(null, b) }, "Add a person here")));
-      // SG2: the sub-groups this business is in (read when the page is drawn first; kept with the page)
-      if (!M().isSubgroup(group) && FP.subgroups) box.append(p.subgroups ||= FP.subgroups.chips(b, { sb, group, today: today() }));
+      // M1b: in the product page's order: contact details (and the people linked), membership, tags (sub-groups and labels), where
+      // they are at (the group's own fields), notes, interactions, then its land, files and records
       const facts = contactLines(d);
-      box.append(el("section", { class: "crm-section" }, el("h4", {}, "Contact details"),
-        facts.length ? el("dl", { class: "crm-facts" }, ...facts) : el("p", { class: "crm-empty" }, "No contact details recorded for the member."),
-        d.notes ? el("p", { class: "crm-notes" }, d.notes) : null));
+      box.append(el("section", { class: "crm-section", "data-section": "contact" }, el("h4", {}, "Contact details"),
+        facts.length ? el("dl", { class: "crm-facts" }, ...facts) : el("p", { class: "crm-empty" }, "No contact details recorded for the member.")));
       const current = people.filter((x) => x.current), past = people.filter((x) => !x.current);
       box.append(el("section", { class: "crm-section" }, el("h4", {}, "People (" + current.length + ")"),
         current.length ? el("ul", { class: "crm-people" }, ...current.map((x) => linkedPerson(x, b))) : el("p", { class: "crm-empty" }, "Nobody linked yet."),
         linkExisting(b, people),
         past.length ? el("details", { class: "crm-past" }, el("summary", {}, "Earlier (" + past.length + ")"), el("ul", { class: "crm-people" }, ...past.map((x) => linkedPerson(x, b)))) : null));
+      const memberCtx = { sb, group, business: b, page: mem, types: st.defs.types, today: today(), openSettings: () => go("fields"),
+        done: async (notice) => {
+          const here = () => st.screen === "business" && st.page?.business?.id === b.id;   // still on this member's page
+          if (!here()) return;
+          st.notice = notice; await loadLists();
+          if (!here()) return;
+          await openBusiness(b.id, false);
+          if (here()) draw();
+        },
+        changed: (f) => { const r = st.directory.find((x) => x.group_member_id === b.id); if (r) r.fields = { ...(r.fields || {}), [f.key]: f.value }; } };
+      if (MS() && mem && !mem.failed) box.append(MS().membershipSection(memberCtx));
+      else if (mem?.failed) box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the membership just now: " + mem.failed));
+      // SG2: the sub-groups this business is in (read when the page is drawn first; kept with the page), with its labels
+      // (one heading: the sub-groups' own, with the labels under it; "Labels" when there are no sub-groups here)
+      const tags = el("section", { class: "crm-section", "data-section": "tags" });
+      const chips = !M().isSubgroup(group) && FP.subgroups ? (p.subgroups ||= FP.subgroups.chips(b, { sb, group, today: today() })) : null;
+      if (chips) tags.append(chips);
+      if ((d.labels || []).length) tags.append(...(chips ? [] : [el("h4", {}, "Labels")]), el("ul", { class: "crm-labels" }, ...d.labels.map((l) => el("li", {}, l))));
+      if (tags.childElementCount) box.append(tags);
+      if (MS() && mem && !mem.failed) box.append(MS().fieldsSection(memberCtx));
+      box.append(el("section", { class: "crm-section", "data-section": "notes" }, el("h4", {}, "Notes"),
+        d.notes ? el("p", { class: "crm-notes" }, d.notes) : el("p", { class: "crm-empty" }, "No notes. Add them with Edit details.")));
       box.append(el("section", { class: "crm-section" }, el("h4", {}, "Interactions (" + p.interactions_total + ")"),
         timeline(p.interactions || [], p.interactions_total)));
       const links = [];
@@ -496,7 +646,7 @@
       const x = p.person, archived = !!x.archived_at, current = (p.businesses || []).filter((b) => b.current), past = (p.businesses || []).filter((b) => !b.current);
       const box = el("article", { class: "crm-page", "data-person": x.id }, backButton(),
         el("h3", {}, x.display_name, archived ? el("span", { class: "crm-badge" }, "Archived") : null),
-        x.job_title ? el("p", { class: "crm-sub" }, x.job_title) : null);
+        x.job_title || x.organisation_name || x.contact_kind ? el("p", { class: "crm-sub" }, [x.job_title, FP.membershipModel ? MM().contactLine({ organisation_name: x.organisation_name, contact_kind: x.contact_kind }) : null].filter(Boolean).join(" · ")) : null);
       const actions = el("div", { class: "crm-actions" });
       if (!archived) actions.append(
         el("button", { type: "button", class: "primary", "data-action": "log", onclick: () => openLog(null, [{ kind: "person", id: x.id, name: x.display_name },
@@ -626,9 +776,19 @@
     }
 
     // ---- a person: add or edit ------------------------------------------------------------------------------------------------------------
-    function openPersonForm(x, business) { go("person-form", { form: M().personForm(x), target: { person: x, business } }); }
+    // M1b: contact = true for "Add a contact" (someone the group works with who is not a member: their organisation and kind)
+    function openPersonForm(x, business, contact = false) {
+      go("person-form", { form: { ...M().personForm(x), organisation_name: x?.organisation_name || "", contact_kind: x?.contact_kind || "" }, target: { person: x, business, contact } });
+    }
+    // M1b: the Fields and types screen (the group's admins)
+    function fieldsScreen() {
+      return MS().settingsScreen({ sb, group, defs: st.defs, rows: st.directory, backButton: (label) => backButton(label),
+        reload: async () => { const d = await MS().readDefinitions(sb, g); st.defs = d; await loadLists(); return d; } });
+    }
     function personFormScreen() {
-      const f = st.form, { person: x, business: b } = st.target;
+      const f = st.form, { person: x, business: b, contact } = st.target;
+      // a contact (someone linked to no member): who they work for and what kind of contact; never for a member's person
+      const asContact = !b && !!FP.membershipModel && (contact || (!!x && !(st.page?.person?.id === x.id && (st.page.businesses || []).some((y) => y.current))));
       const input = (id, attrs = {}) => { const i = el(attrs.rows ? "textarea" : "input", { id: "pf-" + id, name: id, ...attrs }); i.value = f[id] ?? ""; i.addEventListener("input", () => { f[id] = i.value; }); return i; };
       const field = (id, label, node, hint) => el("div", { class: "crm-field", "data-field": id }, el("label", { for: "pf-" + id }, label), node, hint ? el("small", {}, hint) : null);
       const errors = el("div", { class: "crm-errors", role: "alert" }, ...(st.errors || []).map((e) => el("p", {}, e)));
@@ -636,11 +796,15 @@
       primary.addEventListener("change", () => { f.is_primary = primary.checked; });
       const save = el("button", { type: "submit", class: "primary" }, x ? "Save changes" : "Add the person");
       const form = el("form", { class: "crm-form", novalidate: true }, backButton("Cancel"),
-        el("h3", {}, x ? "Edit " + x.display_name : b ? "Add a person at " + b.business_name : "Add a person"), errors,
+        el("h3", {}, x ? "Edit " + x.display_name : b ? "Add a person at " + b.business_name : contact ? "Add a contact" : "Add a person"), errors,
+        contact ? el("p", { class: "group-fine" }, "Someone the group works with who is not a member, such as council staff, a funder or a contractor. Link them to a member later if that changes.") : null,
         el("div", { class: "crm-row-fields" }, field("given_name", "First name", input("given_name", { type: "text", maxlength: "100", autocomplete: "off" })),
           field("family_name", "Last name", input("family_name", { type: "text", maxlength: "100", autocomplete: "off" }))),
         field("display_name", "Name shown (optional)", input("display_name", { type: "text", maxlength: "200", autocomplete: "off" }), "Leave empty to use the first and last name."),
         field("job_title", "Job title or role", input("job_title", { type: "text", maxlength: "200", autocomplete: "off" })),
+        asContact ? el("div", { class: "crm-row-fields" }, field("organisation_name", "Organisation", input("organisation_name", { type: "text", maxlength: "200", autocomplete: "off", placeholder: "For example: Environment Canterbury" })),
+          field("contact_kind", "Kind of contact", input("contact_kind", { type: "text", maxlength: "40", autocomplete: "off", list: "pf-kinds" }))) : null,
+        asContact ? el("datalist", { id: "pf-kinds" }, ...MM().CONTACT_KINDS.map((k) => el("option", { value: k }))) : null,
         b ? el("div", { class: "crm-row-fields" }, field("relationship", "Relationship to " + b.business_name, input("relationship", { type: "text", maxlength: "60", placeholder: "owner, manager, contact, accounts", autocomplete: "off" })),
           el("div", { class: "crm-check" }, primary, el("label", { for: "pf-is_primary" }, "Primary contact"))) : null,
         field("emails", "Emails", input("emails", { rows: "2", inputmode: "email" }), "One per line."),
@@ -652,6 +816,12 @@
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const { errors: problems, row, link } = M().toPerson(f);
+        if (asContact && !problems.length) {   // M1b
+          const org = String(f.organisation_name ?? "").trim().replace(/\s+/g, " "), kind = String(f.contact_kind ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+          if (org.length > 200) problems.push("The organisation is longer than 200 characters.");
+          if (kind.length > 40) problems.push("The kind of contact is at most 40 characters.");
+          Object.assign(row, { organisation_name: org || null, contact_kind: kind || null });
+        }
         if (problems.length) { st.errors = problems; draw(); return; }
         save.disabled = true;
         const res = x ? await sb.from("people").update(row).eq("id", x.id).select("id").single() : await sb.from("people").insert({ org_id: g, ...row }).select("id").single();
@@ -788,6 +958,7 @@
     draw();
     if (entryTab === "log") openLog(null, []);
     else if (entryTab === "add-person") openPersonForm(null, null);
+    else if (entryTab === "add-contact") openPersonForm(null, null, true);   // M1b
     else if (entryTab === "follow-ups") openFeed({ followUp: "open" });
     else if (entryTab === "review") openReviewHere();   // RV1
     if (entryTab) st.stack = [];
@@ -801,11 +972,13 @@
   const go = (groupId, tab) => { root.location.hash = FP.href(G().href(groupId, "people", tab)); };
   const logInteraction = (groupId) => go(groupId, "log");
   const addPerson = (groupId) => go(groupId, "add-person");
+  const addContact = (groupId) => go(groupId, "add-contact");   // M1b
   // Each: { key, label, shows(group) (the person's role allows it), run(group) }.
   const addEntries = [
     { key: "interaction", label: "Log an interaction", shows: (group) => M().canSee(group?.role), run: (group) => logInteraction(group.id) },
     { key: "person", label: "Add a person", shows: (group) => M().canSee(group?.role), run: (group) => addPerson(group.id) },
+    { key: "contact", label: "Add a contact", shows: (group) => M().canSee(group?.role), run: (group) => addContact(group.id) },
   ];
 
-  FP.groupPeople = { view, logInteraction, addPerson, addEntries, CAP, PAGE, countBadge, openingLists };
+  FP.groupPeople = { view, logInteraction, addPerson, addContact, addEntries, CAP, PAGE, countBadge, openingLists };
 })(typeof window === "undefined" ? globalThis : window);

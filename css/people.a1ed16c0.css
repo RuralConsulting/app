@@ -136,3 +136,56 @@
   .crm-save { position: static; border-top: 0; background: none; }
   .crm-save button { width: auto; min-width: 12em; }
 }
+
+/* ---- M1b: membership and the group's own fields ----------------------------------------------------------------------------- */
+.mf-term { margin: 0; }
+.mf-terms { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.mf-terms small { display: block; color: var(--ink-3); }
+.mf-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; }
+.mf-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.mf-inline:empty { display: none; }
+.mf-inline .group-fine { flex-basis: 100%; margin: 0; }
+.mf-inline input, .mf-inline select, .mf-field select, .mf-field input:not([type="checkbox"]), .mf-def input[type="text"], .mf-def textarea { min-height: 40px; padding: 0 10px; border: 1px solid var(--field-border, var(--rule)); border-radius: var(--radius-s, 6px); background: var(--panel); color: var(--ink); font: inherit; max-width: 100%; }
+.mf-def textarea { padding: 8px 10px; width: 100%; }
+.mf-status:empty, .mf-saved:empty { display: none; }
+.mf-status, .mf-saved { color: var(--ink-3); font-size: var(--text-small); margin: 4px 0 0; }
+.mf-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16em), 1fr)); }
+.mf-field { display: grid; gap: 4px; align-content: start; }
+.mf-field label { color: var(--ink-2); font-size: var(--text-small); }
+.mf-field.mf-tick { grid-template-columns: auto 1fr; align-items: center; }
+.mf-field.mf-tick label { grid-column: 2; grid-row: 1; color: var(--ink); font-size: inherit; }
+.mf-field.mf-tick input { grid-column: 1; grid-row: 1; width: 22px; height: 22px; }
+.mf-field.mf-tick .mf-saved { grid-column: 1 / -1; }
+.mf-defs { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.mf-def { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); }
+.mf-def-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 16em; }
+.mf-def-head input { flex: 1 1 12em; }
+.mf-def-head small { color: var(--ink-3); }
+.mf-choices { display: grid; gap: 4px; flex-basis: 100%; }
+.mf-choices span { color: var(--ink-3); font-size: var(--text-small); }
+.mf-def-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.mf-add { margin-top: 16px; }
+.crm-table.mf-table .crm-c-type { color: var(--ink-3); font-size: var(--text-small); overflow-wrap: anywhere; }
+.crm-c-field { color: var(--ink-2); overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  /* a phone: the type is quiet words on the row's second line; the field columns are on a computer only */
+  .crm-table.mf-table .crm-row > button { grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "name name name last" "member type contact contact"; }
+  .crm-table.mf-table .crm-c-type { grid-area: type; white-space: nowrap; }
+  /* with the type beside it, a long contact name wraps inside its own space (never runs on, hidden, under the round +) */
+  .crm-table.mf-table .crm-c-contact { white-space: normal; text-overflow: clip; overflow-wrap: anywhere; }
+  .crm-table.mf-table .crm-c-member:has(+ .crm-c-type)::after, .crm-table.mf-table .crm-c-type:has(+ .crm-c-contact)::after { content: "\00b7"; margin: 0 6px; }
+  .crm-table.mf-table .crm-c-field { display: none; }
+  .crm-table.mf-table .crm-thead { display: none; }
+}
+@media (min-width: 761px) {
+  /* a computer: Type and the list fields as columns; wide tables scroll sideways inside themselves, the name column staying put */
+  .crm-table.mf-table { --cols: minmax(10em, 1.6fr) minmax(3.5em, .5fr) minmax(6em, .7fr) minmax(8em, 1.2fr) repeat(var(--mf-extra, 0), minmax(7em, .8fr)) minmax(6em, .8fr); }
+  .crm-table.mf-table .crm-c-type { grid-column: 3; font-size: var(--text-body); color: var(--ink-2); }
+  .crm-table.mf-table .crm-c-contact { grid-column: 4; }
+  .crm-table.mf-table .crm-c-last { grid-column: -2 / -1; }
+  .mf-scroll { overflow-x: auto; border-radius: var(--radius); }
+  .crm-table.mf-wide { min-width: calc(42em + var(--mf-extra, 0) * 8em); }
+  .crm-table.mf-wide .crm-c-name, .crm-table.mf-wide .crm-th:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); }
+  .crm-table.mf-wide .crm-th:first-child { background: var(--wash); }
+  .crm-table.mf-wide .crm-thead { position: static; }
+}
