@@ -16,6 +16,14 @@
   const canSee = (role) => ROLES.includes(role);
   const KIND = "register_review";
   const PREFIX = "register:";
+  // LT1: questions about members' land from the LINZ titles check (tools/check_title_owners.py, migration 20261113030000), in the
+  // same shape and answered the same way: a title's owners changed under a member's land, or a title a member may own is not
+  // mapped. Owner names appear only in their facts, which only the group's facilitators, advisors and admins (and RCL staff) read.
+  const TITLE_KINDS = ["title_owner_change", "title_not_mapped"];
+  const KINDS = [KIND, ...TITLE_KINDS];
+  const PREFIXES = [PREFIX, "title:"];
+  const TITLE_SOURCE = "Title and owner details: Land Information New Zealand (LINZ Data Service), CC BY 4.0.";
+  const isTitle = (it) => TITLE_KINDS.includes(it?.kind);
   const COLUMNS = "id,org_id,kind,subject,subject_key,evidence,candidates,status,decision,decided_by,decided_at,created_at";
   const LISTED = ["proposed", "accepted", "rejected", "applied"];   // superseded rows have a successor and are never listed
   const CAP = 500;                                                     // items read at a time (counted first)
@@ -54,7 +62,8 @@
     const chosen = answers.find((a) => a.action === action);
     const state = open ? "open" : p?.status === "rejected" ? "not_needed" : "answered";
     return {
-      id: p?.id ?? null, key: str(p?.subject_key).startsWith(PREFIX) ? str(p.subject_key).slice(PREFIX.length) : str(p?.subject_key),
+      id: p?.id ?? null, kind: p?.kind || null,
+      key: (() => { const k = str(p?.subject_key), pre = PREFIXES.find((x) => k.startsWith(x)); return pre ? k.slice(pre.length) : k; })(),
       topic: str(s.topic).trim() || "Review item", question: str(s.question).trim(),
       members: (Array.isArray(s.member_numbers) ? s.member_numbers : []).filter((m) => typeof m === "string" && m.trim()),
       place: placeOf(s.place), facts: factLines(p?.evidence), answers, open, state, status: p?.status || null,
@@ -67,7 +76,7 @@
 
   // Newest first; open ones before answered ones when both are shown.
   function items(rows) {
-    return (Array.isArray(rows) ? rows : []).filter((p) => p && p.kind === KIND && LISTED.includes(p.status)).map(item)
+    return (Array.isArray(rows) ? rows : []).filter((p) => p && KINDS.includes(p.kind) && LISTED.includes(p.status)).map(item)
       .sort((a, b) => (Number(b.open) - Number(a.open)) || str(b.created_at).localeCompare(str(a.created_at)) || (Number(b.id) - Number(a.id)));
   }
   const openCount = (list) => (list || []).filter((i) => i.open).length;
@@ -111,7 +120,7 @@
   const arrangedCount = (sections) => sections.reduce((n, s) => n + s.items.length, 0);
   const countText = (n, which) => which === "open" ? plural(n, "item to review", "items to review")
     : which === "answered" ? plural(n, "item answered", "items answered") : plural(n, "item", "items");
-  const emptyText = (which, total) => !total ? "Nothing to review. Questions about the member register that need someone who knows the farms show here."
+  const emptyText = (which, total) => !total ? "Nothing to review. Questions about the member register and members' land that need someone who knows the farms show here."
     : which === "open" ? "Nothing open: every item has an answer." : which === "answered" ? "Nothing answered yet." : "Nothing here.";
 
   // Member numbers to the businesses in the People directory (crm_directory rows), so each can open that business's page:
@@ -152,6 +161,6 @@
   const suggested = (it) => (it?.answers || []).filter((a) => a.action !== "other" && a.action !== "not_needed");
   const otherLabel = (it) => (it?.answers || []).find((a) => a.action === "other")?.label || SPECIAL.other;
 
-  return { ROLES, canSee, KIND, PREFIX, COLUMNS, LISTED, CAP, MAX_TEXT, FILTERS, SPECIAL, factLines, placeOf, placeText, item, items, openCount, filter,
+  return { ROLES, canSee, KIND, KINDS, TITLE_KINDS, TITLE_SOURCE, isTitle, PREFIX, COLUMNS, LISTED, CAP, MAX_TEXT, FILTERS, SPECIAL, factLines, placeOf, placeText, item, items, openCount, filter,
     countText, emptyText, memberLinks, matches, arrange, arrangedCount, FOLD, raisedText, whoText, answerArgs, suggested, otherLabel };
 });

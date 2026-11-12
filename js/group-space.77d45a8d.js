@@ -467,7 +467,7 @@
         if (!r?.error && n > 0) items.push({ order: 0, node: el("a", { href: to("people", "follow-ups"), "data-waiting": "follow-ups" }, FP.peopleModel.plural(n, "follow-up", "follow-ups") + " due") });
       }, () => {}));
       const R = FP.reviewItemsModel;
-      if (R) asks.push(Promise.resolve(sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", g.id).eq("kind", R.KIND).eq("status", "proposed")).then((r) => {
+      if (R) asks.push(Promise.resolve(sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", g.id).in("kind", R.KINDS).eq("status", "proposed")).then((r) => {
         const n = typeof r?.count === "number" ? r.count : Array.isArray(r?.data) ? R.openCount(R.items(r.data)) : 0;
         if (!r?.error && n > 0) items.push({ order: 1, node: el("a", { href: to("people", "review"), "data-waiting": "review" }, n + " to review") });
       }, () => {}));

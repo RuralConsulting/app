@@ -1,4 +1,4 @@
-// RV1: review items a group can come back to, drawn inside the People view (people.js reads and answers them; the words and the logic
+// RV1: review items a group can come back to (LT1: and the LINZ titles check's questions about members' land), drawn inside the People view (people.js reads and answers them; the words and the logic
 // are in review-items-model.js). Questions about the group's member register that only someone who knows the farms can answer,
 // raised by RCL's tools; the group's facilitators, advisors and admins answer them whenever they get to it. Answering records the
 // answer and changes nothing else. Safe DOM only (FP.el): no data is ever written as HTML.
@@ -43,7 +43,7 @@
   // o: { all: items, filter, failed, truncated, directory, onFilter(k), onOpen(item), onMember(id), backButton }
   function listScreen(o) {
     const box = el("div", { class: "rv-list", "data-view": "review" }, o.backButton("Back to People"), el("h3", {}, "To review"),
-      el("p", { class: "crm-sub" }, "Questions about the member register that need someone who knows the farms. Come back to them when you can. "
+      el("p", { class: "crm-sub" }, "Questions about the member register and members' land that need someone who knows the farms. Come back to them when you can. "
         + "Answering records what you say for RCL and the group to act on; it changes nothing by itself."));
     if (o.failed) { box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the items to review just now: " + o.failed)); return box; }
     const all = o.all || [], open = M().openCount(all);
@@ -95,6 +95,8 @@
         el("p", { class: "group-fine" }, M().placeText(it.place))));
     }
     page.append(it.open ? answerForm(o) : answered(o));
+    // LT1: a question from the LINZ titles check credits its source (CC BY 4.0), as the basemaps do
+    if (M().isTitle(it)) page.append(el("p", { class: "group-fine rv-source" }, M().TITLE_SOURCE));
     return page;
   }
 

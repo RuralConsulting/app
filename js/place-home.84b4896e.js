@@ -139,7 +139,7 @@
       const R = FP.reviewItemsModel;
       Promise.all([
         Promise.resolve(sb.rpc("crm_feed_count", FP.peopleModel.feedArgs(place.id, { followUp: "due" }))).then((r) => (r?.error ? null : Number(r?.data) || 0), () => null),
-        R ? Promise.resolve(sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", place.id).eq("kind", R.KIND).eq("status", "proposed"))
+        R ? Promise.resolve(sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", place.id).in("kind", R.KINDS).eq("status", "proposed"))
           .then((r) => (r?.error ? null : typeof r?.count === "number" ? r.count : Array.isArray(r?.data) ? R.openCount(R.items(r.data)) : null), () => null) : null,
       ]).then(([followUps, review]) => {
         if (!live()) return;

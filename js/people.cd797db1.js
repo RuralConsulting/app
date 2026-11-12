@@ -63,10 +63,10 @@
   // RV1: the open review items, counted first, then at most that many (newest first). Never fails: a failure is its answer.
   async function readReview(sb, g) {
     try {
-      const head = await sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED);
+      const head = await sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", g).in("kind", R().KINDS).in("status", R().LISTED);
       if (head.error) throw head.error;
       const n = typeof head.count === "number" ? Math.min(head.count, R().CAP) : R().CAP;
-      const got = n ? await rows(sb.from("proposals").select(R().COLUMNS).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED)
+      const got = n ? await rows(sb.from("proposals").select(R().COLUMNS).eq("org_id", g).in("kind", R().KINDS).in("status", R().LISTED)
         .order("created_at", { ascending: false }).limit(n)) : [];
       return { rows: got, failed: null, truncated: typeof head.count === "number" && head.count > R().CAP };
     } catch (e) { return { rows: [], failed: message(e), truncated: false }; }

@@ -18,12 +18,14 @@
     // UI2: "?groupmap=none" makes the demo group one with nothing in the older map model (an MCCC group): its Overview has no map
     // of its own, only its published map under Maps
     const groupMap = new URLSearchParams(root.location.search).get("groupmap");
+    // LT1: "?titles=1" adds two invented questions from the LINZ titles check to the group's To review
+    const titles = new URLSearchParams(root.location.search).get("titles") === "1";
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -149,7 +151,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -217,6 +219,7 @@
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
     if (group) groupDemo(data, queue);
+    if (group && titles) titleQuestionsDemo(data);   // LT1
     demoMaps(data, sparse);
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
@@ -471,6 +474,28 @@
         { status: "accepted", decision: { candidate: { action: "lease", label: "No: member 7 leases it" }, chosen_from: "candidates", note: "Confirmed with the owner at the field day (synthetic)", action: "lease", answer: null },
           decided_by: OTHER, decided_at: "2026-10-22T02:00:00Z" })];
   }
+  // LT1: two questions from the LINZ titles check (tools/check_title_owners.py), as it writes them: an owner change under member 5's
+  // land and a title member 6 may own that is not mapped. Every title number and name is invented and marked so.
+  function titleQuestionsDemo(data) {
+    const answers = (...pairs) => [...pairs.map(([action, label]) => ({ action, label })), { action: "other", label: "Something else" }, { action: "not_needed", label: "Not needed" }];
+    const SOURCE = "Source: Title and owner details: Land Information New Zealand, NZ Property Titles Including Owners (LINZ Data Service, layer 50805), CC BY 4.0.";
+    const ask = (id, kind, key, subject, evidence, candidates) => ({ id, farm_id: null, org_id: GROUP, kind, subject, subject_key: "title:" + key, document_id: null, evidence, candidates,
+      status: "proposed", decision: null, decided_by: null, decided_at: null, method_version: "check_title_owners v1", run_id: "de000000-0000-4000-8000-000000000a08",
+      created_at: "2026-10-28T21:00:00Z", applied_at: null, outcome: null, superseded_by: null, proposed_by: null });
+    data.tables.proposals = [...(data.tables.proposals || []),
+      ask(211, "title_owner_change", "owner:DEMO1A/101:5:00a1b2c3d4e5f607", { topic: "Title owners changed under a member's land", member_numbers: ["5"], place: { lon: 172.695, lat: -42.878 }, ref: "linz:layer-50805:DEMO1A/101",
+        question: "The owners of title DEMO1A/101 changed between the read of 28 Sep 2026 and the read of 28 Oct 2026. It lies under member 5's land (84.2 ha, 97% of the title). What does the change mean for member 5? (synthetic)" },
+        ["Title: DEMO1A/101 (synthetic)", "Owners before (read 28 Sep 2026): Echo Invented Holdings Limited (synthetic)", "Owners now (read 28 Oct 2026): Newbuyer Invented Limited (synthetic)",
+          "Member: 5, Echo Invented Ltd", "Member's blocks: block 12", "Under the member's blocks: 84.2 ha, 97% of the title", "Title area: 86.8 ha", "LINZ changes read: 28 Sep 2026 to 28 Oct 2026",
+          "Land district: Canterbury", SOURCE],
+        answers(["still_member", "Still the member's land (leased or a family change)"], ["sold_left", "Sold: the member has left this block"],
+          ["sold_invite", "Sold: the new owner should be asked to join"], ["look_later", "Not sure, look later"])),
+      ask(212, "title_not_mapped", "unmapped:DEMO1A/202:6:0f1e2d3c4b5a6978", { topic: "Land a member may own that is not mapped", member_numbers: ["6"], place: { lon: 172.711, lat: -42.869 }, ref: "linz:layer-50805:DEMO1A/202",
+        question: "Title DEMO1A/202 (24.6 ha) touches member 6's mapped land and has exactly the same owners as land under the member's blocks, but it is in no member's blocks. Is it part of member 6's farm? (synthetic)" },
+        ["Title: DEMO1A/202 (synthetic)", "Owners: Foxtrot Invented Trust Limited (synthetic)", "Same owners as, under member 6's blocks: title DEMO1A/201", "Distance from the member's blocks: touches them",
+          "Title area: 24.6 ha", "Read: 28 Oct 2026", SOURCE],
+        answers(["add_land", "Yes, add it to the member's land"], ["not_farm", "No, not part of the farm"], ["unsure", "Not sure"]))];
+  }
   // SG2: the invented sub-groups of "HDLG (example)" (not among the demo person's own groups: their spaces are not part of the demo).
   const SUBGROUPS = [{ id: "de000000-0000-4000-8000-0000000003c1", name: "Ford Creek sub-group (synthetic)", slug: "demo-ford-creek", member: true },
     { id: "de000000-0000-4000-8000-0000000003c2", name: "Hill Country sub-group (synthetic)", slug: "demo-hill-country", member: false }];
@@ -492,7 +517,7 @@
   // "other" with the typed answer; "not_needed" sets it aside); recorded in memory only, nothing else changes. [data, error].
   function reviewAnswer(d, args) {
     const role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role;
-    const row = (d.tables.proposals || []).find((p) => p.id === args.id && p.kind === "register_review");
+    const row = (d.tables.proposals || []).find((p) => p.id === args.id && ["register_review", "title_owner_change", "title_not_mapped"].includes(p.kind));   // LT1: and a title question
     const refuse = (message) => [null, { message }];
     if (!row || !["admin", "advisor", "facilitator"].includes(role)) return refuse("review item " + args.id + " is not open for you to answer");
     if (row.status !== "proposed") return refuse("review item " + args.id + " is already answered");
