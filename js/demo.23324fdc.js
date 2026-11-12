@@ -12,12 +12,14 @@
     const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash), group = api.isGroup(hash), queue = api.queueOf(hash);
     // V6: "?simple=client" (not staff), "staff" or "unreadable" (the staff flag can't be read) before the hash turns the simple view on in the demo
     const simple = new URLSearchParams(root.location.search).get("simple");
+    // N2b: "?groupsites=none" makes the demo group one the old model has no area for (an MCCC sub-group): group_wq_sites is empty
+    const groupSites = new URLSearchParams(root.location.search).get("groupsites");
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -143,7 +145,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -218,6 +220,7 @@
       data.tables.profiles = [{ user_id: USER, is_staff: false }]; data.tables.ops_job_status = []; data.tables.ops_reference_status = [];
       data.tables.ai_recipes = (f.ops.recipes || []).filter((r) => r.status === "approved");   // what a farmer can read
     }
+    data.groupSitesNone = groupSites === "none";
     if (simple === "client" || simple === "unreadable") {
       data.tables.profiles = [{ user_id: USER, is_staff: false }];
       for (const m of data.groupTables?.org_members || []) m.role = "member";
@@ -623,7 +626,7 @@
       if (d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role !== "admin") return [null, { message: "Only an admin of this catchment group can change how its member farms are shown" }];
       g.setting = args.level; return [null];
     }
-    if (name === "group_wq_sites") return [wqOf(d).sites.filter((x) => !x.owner_farm_id)];
+    if (name === "group_wq_sites") return [d.groupSitesNone ? [] : wqOf(d).sites.filter((x) => !x.owner_farm_id)];
     if (name === "group_wq_pick") return [demoPick(wqOf(d), args)];
     if (name === "group_wq_presets") return [[DEMO_PRESET]];
     if (name === "group_readiness") {
@@ -1262,6 +1265,20 @@
       result, unavailable, caveats, statement: "", ai_proposed_inputs: null, advisor_overrides: {}, note_allowed: false,
       preview_sha256: (site.site_id.toString(16) + p.tool.length.toString(16) + years.toString(16) + parameter.length.toString(16)).padStart(64, "0") };
   }
+  // N2b, as public.monitoring_sites (the shared, served ECan sites every signed-in person may read) and as reference_view_features
+  // over the ECan site list: each shared demo site has a reference feature, id 70000 + its site id, at its own position.
+  const demoFeatureId = (siteId) => 70000 + siteId;
+  function demoMonitoringSites(d) {
+    return wqOf(d).sites.filter((s) => s.source_key === "ecan-wq-sites" && !s.owner_farm_id && !s.owner_org_id).map((s) => ({ id: s.site_id, external_id: s.external_id, name: s.name,
+      site_type: s.site_type, source_key: s.source_key, feature_id: demoFeatureId(s.site_id), farm_id: null, org_id: null }));
+  }
+  function demoWqFeatures(d, args) {
+    const M = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel;
+    const [w, e] = [Math.min(args.x0, args.x1), Math.max(args.x0, args.x1)], [s, n] = [Math.min(args.y0, args.y1), Math.max(args.y0, args.y1)];
+    const inBox = demoMonitoringSites(d).map((r) => ({ r, at: M.siteLngLat(wqOf(d).sites.find((x) => x.site_id === r.id).geom) })).filter(({ at }) => at && at[0] >= w && at[0] <= e && at[1] >= s && at[1] <= n);
+    return { features: { type: "FeatureCollection", features: inBox.map(({ r, at }) => ({ type: "Feature", id: r.feature_id, geometry: { type: "Point", coordinates: at },
+      properties: { SITE_NAME: r.name, SITE_ID: r.external_id, external_id: r.external_id } })) }, total_in_box: inBox.length, truncated: false };
+  }
   // N2, as public.site_record_summary: each listed demo site's record per parameter family (distinct sampling times, first, last, years).
   function demoRecordSummary(d) {
     const wq = wqOf(d), M = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel, out = [];
@@ -1305,7 +1322,7 @@
         then(resolve, reject) { return execute().then(resolve, reject); },
       };
       async function execute() {
-        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : table === "site_record_summary" ? demoRecordSummary(d) : d.tables[table];
+        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : table === "site_record_summary" ? demoRecordSummary(d) : table === "monitoring_sites" ? demoMonitoringSites(d) : d.tables[table];
         if (write && adding && KEPT.includes(table)) {
           const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
             ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));
@@ -1329,6 +1346,9 @@
         let selected = [...rows, ...(d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => (val && Array.isArray(val.in) ? val.in.includes(row[key]) : val && typeof val === "object" && "is" in val ? (row[key] ?? null) === val.is : row[key] === val)));
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
         if (span) selected = selected.slice(span[0], span[1] + 1);
+        // N2b: as the real API, at most 1000 rows a request (the stand-in for site_record_summary keeps the cap, so a reader that trusts a
+        // full page is caught by a test)
+        if (table === "site_record_summary") selected = selected.slice(0, 1000);
         if (singular && selected.length !== 1) return maybe && !selected.length ? result(null) : error("Demo row not found");
         return result(singular ? selected[0] : selected);
       }
@@ -1348,6 +1368,8 @@
         const d = await ready;
         // CAP1b: with d.farmParts the demo farm is a large farm as CAP1a gives it (farmParts); without, a database before CAP1a
         if (d.farmParts && args.f === FARM && ["farm_map", "farm_reference_counts", "farm_reference_context", "farm_layer_features"].includes(name)) return result(...farmParts(d, name, args));
+        // N2b: the ECan site list's features in a box (reference_view_features), for a group the old model has no area for
+        if (name === "reference_view_features" && args.source === "ecan-wq-sites") return result(demoWqFeatures(d, args));
         if (name === "farm_layer_features" || name === "reference_in_view" || name === "reference_view_features") {
           if (!d.farmParts) return result(null, { code: "PGRST202", message: "Could not find the function in the schema cache" });
           return result(...farmParts(d, name, args));

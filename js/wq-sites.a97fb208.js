@@ -1,17 +1,23 @@
-// N2: water quality sites in Maps. On a farm's or a group's published map, a "Water quality" button (a map control beside the
-// viewer's own, added to the map the viewer returns; js/viewer.js is not changed) switches the monitoring sites on: the sites near the
-// farm (wq_sites_near, as the farm's "Water quality nearby" line reads them) or the group's sites (group_wq_sites, as the group space
-// reads them), drawn as pins named at close zoom. Opening a site shows a panel (beside the map on a computer, a sheet from the bottom on
-// a phone): its source and the "provisional" note where the source says so, its record, its latest result of each measure, and for the
-// chosen measure a chart (the Chart block) with the NPS-FM band shading where there are bands, the NPS-FM band, the indicative trend and
-// LAWA's published state and trend. Up to six sites can be compared: one chart with a line per site and a table.
+// N2: water quality sites in Maps. On a farm's or a group's published map, a "Water quality" button switches the monitoring sites on:
+// the sites near the farm (wq_sites_near, as the farm's "Water quality nearby" line reads them) or the group's sites (group_wq_sites,
+// as the group space reads them), drawn as pins named at close zoom. Opening a site shows a panel (beside the map on a computer, a
+// sheet from the bottom on a phone): its source and the "provisional" note where the source says so, its record, and for the chosen
+// measure a chart (the Chart block) with the NPS-FM band shading where there are bands, the NPS-FM band, the indicative trend and LAWA's
+// published state and trend, then the latest result of every measure. Up to six sites can be compared: one chart, a line per site, and
+// a table. js/viewer.js is not changed: the button and the panel are the app's own, laid over the map the viewer fills.
+// N2b (the live check, 12 Nov 2026): the button is placed by measuring the viewer's own buttons (how many there are differs per map), so
+// it never sits under one; a group the old model has no area for (an MCCC sub-group: an organisation and a published map) lists the
+// shared sites inside its published map (reference_view_features over the map's bounds, then those sites' monitoring_sites rows); the
+// list leads with sites sampled lately, folds away sites with no results and has a search; numbers are shown to sensible figures; the
+// source's credit is said once, at the foot; a measure's chart comes first; a failed series read is tried once more as samples only.
 // Every read is the signed-in person's own, through the existing functions and policies (wq_site_latest, site_record_summary,
-// measurement_series, wq_state_trend_for_site, and the `analysis` function's preview, which computes the median, band and trend
-// with the tested library and stores nothing). Nothing here widens what anyone can read. The words are wq-sites-model.js's.
+// measurement_series, wq_state_trend_for_site, reference_view_features, monitoring_sites, and the `analysis` function's preview,
+// which computes the median, band and trend with the tested library and stores nothing). Nothing here widens what anyone can read.
+// The words are wq-sites-model.js's.
 (function (root) {
   const FP = root.FP;
   const M = () => FP.wqSitesModel, W = () => FP.wqModel, A = () => FP.wqAnalysis;
-  const CONCURRENCY = 4;
+  const CONCURRENCY = 4, IN_BATCH = 200, MAX_SPLITS = 2;
   const list = (v) => (Array.isArray(v) ? v : []);
   // replaceChildren would print a left-out part (null) as the word "null": leave such parts out
   const fill = (node, ...kids) => node.replaceChildren(...kids.filter((k) => k != null && k !== false));
@@ -23,12 +29,13 @@
   }
 
   // map: the MapLibre map RCLViewer.mount returned; holder: the element the viewer fills; owner: { farm } or { org }; state: kept by
-  // maps-view across a redraw of the same map (renewed links), so what the person had open stays open. Returns { remove() }.
-  function attach({ map, holder, sb, owner, state, el = FP.el, now = () => Date.now() }) {
+  // maps-view across a redraw of the same map (renewed links), so what the person had open stays open; bounds: the published map's
+  // [west, south, east, north]. Returns { remove() }.
+  function attach({ map, holder, sb, owner, state, bounds = null, el = FP.el, now = () => Date.now() }) {
     const st = state || {};
-    st.chosen = list(st.chosen); st.years = M().pickYears(st.years); st.cache = st.cache || new Map();
+    st.chosen = list(st.chosen); st.years = M().pickYears(st.years); st.cache = st.cache || new Map(); st.query = st.query || "";
     const gl = root.maplibregl;
-    let sites = null, gone = false, token = 0, chart = null, framed = !!st.framed;
+    let sites = null, where = owner.farm ? "farm" : "group", partial = false, gone = false, token = 0, chart = null, framed = !!st.framed;
     const markers = new Map();
 
     // ---- reads, each once per map (failures are not kept) ------------------------------------------------------------------
@@ -41,7 +48,43 @@
       }
       return st.cache.get(key);
     }
-    const readSites = () => once("sites", () => (owner.farm ? rpc("wq_sites_near", { farm_id: owner.farm, km: W().RADIUS_KM }) : rpc("group_wq_sites", { g: owner.org })));
+    // A group's sites; when the group read has none (no area in the old model), the shared sites inside the published map.
+    const readSites = () => once("sites", async () => {
+      if (owner.farm) return { rows: await rpc("wq_sites_near", { farm_id: owner.farm, km: W().RADIUS_KM }), where: "farm" };
+      const rows = await rpc("group_wq_sites", { g: owner.org });
+      if (rows.length || !M().boxes(bounds).length) return { rows, where: "group" };
+      const box = await sitesInBox(bounds);
+      return { rows: box.rows, where: "map", partial: box.partial };
+    });
+    // reference_view_features (the ECan site list's features in a box, at most 1000; a fuller box is split, at most twice), then the
+    // monitoring sites of those features (monitoring_sites: shared, served sites, which every signed-in person may read), then their
+    // latest sample (site_record_summary: council sites). Bounded: at most 4^MAX_SPLITS boxes, ids read IN_BATCH at a time.
+    // partial: a box still too full after its splits, or more sites than MAX_READ: the list says not every site is listed.
+    async function sitesInBox(b) {
+      const features = [];
+      let partial = false;
+      const take = async (box, depth) => {
+        const res = await rpc("reference_view_features", { source: "ecan-wq-sites", x0: box[0], y0: box[1], x1: box[2], y1: box[3] });
+        if (res?.truncated && depth < MAX_SPLITS) { for (const q of M().quarters(box)) await take(q, depth + 1); return; }
+        if (res?.truncated) partial = true;
+        features.push(...list(res?.features?.features));
+      };
+      for (const box of M().boxes(b)) await take(box, 0);
+      const all = [...new Set(features.map((f) => Number(f.id)).filter(Number.isFinite))];
+      if (all.length > M().MAX_READ) partial = true;
+      const ids = all.slice(0, M().MAX_READ);
+      const siteRows = [], summary = [];
+      for (let i = 0; i < ids.length; i += IN_BATCH) {
+        const { data, error } = await sb.from("monitoring_sites").select("id, external_id, name, site_type, source_key, feature_id")
+          .eq("source_key", "ecan-wq-sites").in("feature_id", ids.slice(i, i + IN_BATCH)).limit(IN_BATCH);
+        if (error) throw error;
+        siteRows.push(...list(data));
+      }
+      // one row per site AND parameter family, and the API answers at most 1000 rows a request: read in pages (M().summaryRows)
+      try { summary.push(...await M().summaryRows(sb, siteRows.map((r) => r.id))); }
+      catch { /* without it the sites still list, as having no results yet */ }
+      return { rows: M().boxRows(siteRows, features, summary), partial };
+    }
     const latestOf = (id) => once("latest|" + id, async () => W().latest(await rpc("wq_site_latest", { site: id })));
     // the council's summary, for shared sites only (M().record); a failed read is not kept and shows no line
     const recordOf = (site) => (!site.shared ? Promise.resolve(null) : once("record|" + site.id, async () => {
@@ -49,29 +92,54 @@
       if (error) throw error;
       return M().record(data, site);
     }).catch(() => null));
-    const seriesOf = (id, parameter, years, latestAt) => once(["series", id, parameter, years].join("|"), () => {
-      const from = M().windowStart(latestAt, years);
-      return rpc("measurement_series", { site: id, parameter_key: parameter, ...(from ? { from_time: from } : {}) });
+    // A measure's results in the window. A read that fails is tried once more as samples only (resolution "raw": no daily means),
+    // which is cheaper for the database; { rows, raw } says which was drawn.
+    const seriesOf = (id, parameter, years, latestAt) => once(["series", id, parameter, years].join("|"), async () => {
+      const from = M().windowStart(latestAt, years), args = { site: id, parameter_key: parameter, ...(from ? { from_time: from } : {}) };
+      try { return { rows: await rpc("measurement_series", args), raw: false }; }
+      catch { return { rows: await rpc("measurement_series", { ...args, resolution: "raw" }), raw: true }; }
     });
     const analysis = (tool, id, parameter, years) => {
       const body = M().analysisRequest(owner, tool, id, parameter, years);
       return body ? once("analysis|" + M().requestKey(body), () => A().request(sb, body), (r) => r?.kind === "error") : Promise.resolve(null);
     };
-    // LAWA reports on ECan's own sites only
     // { rows }, or { failed: true } when the read failed (said as such, and not kept), or null for a site LAWA does not report on
     const lawaOf = (site) => (site.shared && site.source_key === "ecan-wq-sites"
       ? once("lawa|" + site.id, () => rpc("wq_state_trend_for_site", { site: site.id })).then((rows) => ({ rows }), () => ({ failed: true })) : Promise.resolve(null));
     const byId = (id) => sites?.find((s) => s.id === id) || null;
 
-    // ---- the button on the map --------------------------------------------------------------------------------------------
+    // ---- the button over the map: placed under the viewer's own buttons, never on one ------------------------------------------
+    // The viewer's buttons differ per map (a compare control on some), and its "Whole property" button sits under them on a
+    // computer, so a fixed place would land on one. The button is the app's own, laid over the map, and moved to just below whichever
+    // of them reaches lowest down the right-hand side, each time they change size or the map does.
     const toggle = el("button", { type: "button", class: "wqs-toggle", "aria-pressed": "false", title: "Show the water quality monitoring sites on this map",
       onclick: () => (st.on ? switchOff() : switchOn()) }, el("span", { class: "wqs-drop", "aria-hidden": "true" }), el("span", {}, "Water quality"));
-    const control = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group wqs-ctrl" }, toggle);
-    const ctl = { onAdd: () => control, onRemove: () => control.remove() };
-    map.addControl(ctl, "top-right");
+    const control = el("div", { class: "wqs-ctrl" }, toggle);
+    holder.append(control);
+    function place() {
+      if (gone) return;
+      const h = holder.getBoundingClientRect(), stack = holder.querySelector(".maplibregl-ctrl-top-right");
+      const covers = [...(stack ? [stack] : []), ...holder.querySelectorAll(".rv-fit")].map((n) => n.getBoundingClientRect())
+        .filter((r) => r.width > 0 && r.height > 0 && r.right > h.left + h.width / 2);   // only what is on the right-hand side
+      const s = stack?.getBoundingClientRect();
+      const right = s && s.width ? Math.max(h.right - s.right, 0) + 10 : 10;
+      const top = M().buttonTop(covers.map((r) => ({ top: r.top - h.top, bottom: r.bottom - h.top, left: r.left - h.left, right: r.right - h.left })), h.width - right);
+      control.style.top = top + "px"; control.style.right = right + "px";
+    }
+    const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => place());
+    const changes = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => { observe(); place(); });
+    function observe() {
+      if (!watch) return;
+      watch.disconnect(); watch.observe(holder);
+      for (const n of holder.querySelectorAll(".maplibregl-ctrl-top-right, .maplibregl-ctrl-top-right > *, .rv-fit")) watch.observe(n);
+    }
+    observe();
+    changes?.observe(holder, { childList: true, subtree: true });
+    map.on("resize", place);
+    place();
 
     // ---- the panel ----------------------------------------------------------------------------------------------------------
-    const back = el("button", { type: "button", class: "wqs-back", hidden: true, onclick: () => { st.chosen = []; st.adding = false; mark(); render(); } }, "‹ All sites");
+    const back = el("button", { type: "button", class: "wqs-back", hidden: true, onclick: () => { st.chosen = []; st.adding = false; drawPins(); render(); } }, "‹ All sites");
     const close = el("button", { type: "button", class: "wqs-close", "aria-label": "Close water quality", onclick: () => closePanel(true) }, "×");
     const body = el("div", { class: "wqs-body" });
     const status = el("p", { class: "wqs-status", role: "status", "aria-live": "polite" });
@@ -80,9 +148,9 @@
     panel.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(true); } });
     holder.append(panel);
 
-    function openPanel() { panel.hidden = false; holder.classList.add("wqs-open"); }
+    function openPanel() { panel.hidden = false; holder.classList.add("wqs-open"); place(); }
     function closePanel(focusToggle) {
-      panel.hidden = true; holder.classList.remove("wqs-open"); token++;
+      panel.hidden = true; holder.classList.remove("wqs-open"); token++; place();
       chart?.destroy(); chart = null;
       if (focusToggle) toggle.focus({ preventScroll: true });
     }
@@ -92,11 +160,11 @@
     const near = () => holder.classList.toggle("wqs-near", map.getZoom() >= M().LABEL_ZOOM);
     function drawPins() {
       clearPins();
-      if (!gl?.Marker) return;
-      for (const s of sites.filter((x) => x.lngLat)) {
+      if (!gl?.Marker || !sites) return;
+      for (const s of M().pinned(sites, st.chosen).filter((x) => x.lngLat)) {
         const pin = el("button", { type: "button", class: "wqs-pin" + (s.recent ? "" : " wqs-older"), "data-wqs-site": s.id,
-          title: s.name + " · " + s.line, "aria-label": "Water quality site: " + s.name + ", " + s.line,
-          onclick: (e) => { e.stopPropagation(); pinned(s.id); } }, el("i", { "aria-hidden": "true" }), el("span", { class: "wqs-label" }, s.name));
+          title: s.name + (s.line ? " · " + s.line : ""), "aria-label": "Water quality site: " + s.name + (s.line ? ", " + s.line : ""),
+          onclick: (e) => { e.stopPropagation(); pinClicked(s.id); } }, el("i", { "aria-hidden": "true" }), el("span", { class: "wqs-label" }, s.name));
         markers.set(s.id, { pin, marker: new gl.Marker({ element: pin, anchor: "center" }).setLngLat(s.lngLat).addTo(map) });
       }
       mark(); near();
@@ -113,11 +181,10 @@
       }
     }
     // The first time the sites go on, the map widens (never zooms in) so every pin is clear of what sits over the map: the viewer's
-    // panel (left on a computer), the map's buttons and this panel (right), the sheet (bottom, on a phone). A pin under the Water
-    // quality button could not be tapped.
+    // panel (left on a computer), the map's buttons and this panel (right), the sheet (bottom, on a phone).
     function frame() {
       if (framed || !gl?.LngLatBounds) return;
-      const pts = sites.filter((s) => s.lngLat).map((s) => s.lngLat);
+      const pts = M().pinned(sites, st.chosen).filter((s) => s.lngLat).map((s) => s.lngLat);
       if (!pts.length) return;
       framed = st.framed = true;
       const w = holder.clientWidth, h = holder.clientHeight;
@@ -134,7 +201,7 @@
       st.on = true; toggle.setAttribute("aria-pressed", "true"); holder.classList.add("wqs-on");
       openPanel(); fill(body); say("Loading the water quality sites…");
       const t = ++token;
-      try { sites = M().siteList(await readSites(), owner, now()); }
+      try { const read = await readSites(); where = read.where; partial = !!read.partial; sites = M().siteList(read.rows, owner, now(), where); }
       catch { if (t === token && !gone) { say(""); fill(body, el("p", {}, "Couldn't load the water quality sites just now."), el("button", { type: "button", class: "wqs-button", onclick: switchOn }, "Try again")); } return; }
       if (gone || !st.on) return;
       drawPins(); frame();
@@ -145,7 +212,7 @@
       holder.classList.remove("wqs-on", "wqs-near", "wqs-comparing"); clearPins(); closePanel(false);
     }
     // A pin: the site alone, or added to the comparison when the person is adding sites (or already comparing).
-    function pinned(id) {
+    function pinClicked(id) {
       const adding = st.adding || st.chosen.length > 1;
       if (adding && !st.chosen.includes(id) && M().full(st.chosen)) { openPanel(); say("You can compare up to " + M().MAX_CHOSEN + " sites. Remove one to add another."); return; }
       pick(id, adding);
@@ -153,7 +220,8 @@
     function pick(id, add) {
       st.chosen = M().choose(st.chosen, id, { add });
       if (st.chosen.length > 1 || !add) st.adding = false;
-      mark(); openPanel(); render(true);
+      if (!markers.has(id)) drawPins(); else mark();
+      openPanel(); render(true);
     }
 
     // ---- what the panel shows ----------------------------------------------------------------------------------------------
@@ -166,21 +234,36 @@
       return view;
     }
     const heading = (text) => el("h2", { tabindex: "-1" }, text);
+    const siteButton = (s) => el("li", {}, el("button", { type: "button", class: "wqs-site" + (s.recent ? "" : " wqs-older"), onclick: () => pick(s.id, false) },
+      el("b", {}, s.name), s.line ? el("small", {}, s.line) : null));
 
+    // The list: sites sampled lately first, then older ones; those with no results folded away; a search over every site read.
     function showList() {
-      const recent = sites.filter((s) => s.recent).length;
-      fill(body, heading("Water quality sites"), el("p", { class: "wqs-meta" }, M().intro(sites, owner)),
+      const results = el("div", { class: "wqs-results" });
+      const search = el("input", { type: "search", class: "wqs-search", placeholder: "Search sites by name", "aria-label": "Search water quality sites by name", value: st.query });
+      const draw = () => {
+        const l = M().listing(sites, st.query);
+        fill(results,
+          l.shown.length ? el("ul", { class: "wqs-list" }, ...l.shown.map(siteButton)) : null,
+          l.more ? el("p", { class: "wqs-hint" }, l.more + " more " + (l.more === 1 ? "site is" : "sites are") + " not listed. Search by name to find " + (l.more === 1 ? "it." : "them.")) : null,
+          l.none.length ? el("details", { class: "wqs-none" }, el("summary", {}, "Sites with no results (" + l.none.length + ")"), el("ul", { class: "wqs-list" }, ...l.none.slice(0, M().MAX_SITES).map(siteButton))) : null,
+          st.query && !l.matched ? el("p", { class: "wqs-hint" }, "No site's name matches “" + st.query + "”.") : null);
+      };
+      search.addEventListener("input", () => { st.query = search.value; draw(); });
+      const recent = sites.filter((s) => s.recent).length, withResults = sites.filter((s) => s.hasResults).length;
+      fill(body, heading("Water quality sites"), el("p", { class: "wqs-meta" }, M().intro(sites, owner, where)),
+        partial ? el("p", { class: "wqs-hint wqs-partial" }, M().PARTIAL) : null,
         sites.length ? el("p", { class: "wqs-hint" }, "Choose a site on the map or in this list to see its results. You can then compare up to " + M().MAX_CHOSEN + " sites." +
-          (recent < sites.length ? " Paler pins have no sample in the last " + M().RECENT_YEARS + " years." : "")) : null,
-        sites.length ? el("ul", { class: "wqs-list" }, ...sites.map((s) => el("li", {}, el("button", { type: "button", class: "wqs-site" + (s.recent ? "" : " wqs-older"), onclick: () => pick(s.id, false) },
-          el("b", {}, s.name), el("small", {}, s.line))))) : null);
+          (recent < withResults ? " Paler pins have no sample in the last " + M().RECENT_YEARS + " years." : "")) : null,
+        sites.length ? search : null, results);
+      draw();
     }
 
-    // The control to add a site to the comparison: a list of the other sites (a keyboard or a phone need not find the pin).
+    // The control to add a site to the comparison: a list of the other sites with results (a keyboard or a phone need not find the pin).
     function adder() {
       if (M().full(st.chosen)) return el("p", { class: "wqs-hint" }, "You are comparing the most sites at once (" + M().MAX_CHOSEN + "). Remove one to add another.");
       const pickList = el("select", { class: "wqs-add", "aria-label": "Add a site to compare" }, el("option", { value: "" }, "Add a site…"),
-        ...sites.filter((s) => !st.chosen.includes(s.id)).map((s) => el("option", { value: String(s.id) }, s.name + (s.distance ? " (" + s.distance + ")" : ""))));
+        ...sites.filter((s) => s.hasResults && !st.chosen.includes(s.id)).slice(0, M().MAX_READ).map((s) => el("option", { value: String(s.id) }, s.name + (s.away ? " (" + s.away + ")" : ""))));
       pickList.addEventListener("change", () => { const id = Number(pickList.value); if (id) pick(id, true); });
       return el("div", { class: "wqs-adder" }, el("p", { class: "wqs-hint" }, "Tap another site on the map, or choose one here:"), pickList);
     }
@@ -204,8 +287,9 @@
         methods.length ? el("ul", {}, ...methods.map((m) => el("li", {}, m))) : null,
         caveats.length ? el("ul", { class: "wqs-caveats" }, ...caveats.map((c) => el("li", {}, c))) : null);
     }
+    const creditLine = (...latests) => { const c = M().credit(...latests); return c ? el("p", { class: "wqs-source" }, c) : null; };
 
-    // One site: its record, latest results, and the chosen measure's chart, band, trend and LAWA's results.
+    // One site: its facts, then the chosen measure (picker, chart, band, trend, LAWA), then the latest result of every measure.
     async function showSite(id) {
       const t = ++token, site = byId(id);
       if (!site) { st.chosen = []; return showList(); }
@@ -217,35 +301,43 @@
       say("");
       const offered = M().parameters({ [id]: latest }, [id]);
       st.parameter = M().pickParameter(offered, st.parameter);
-      const credit = latest.attribution || (latest.source ? "Source: " + latest.source + "." : "");
       const host = el("div", { class: "block-host wqs-chart" }), findings = el("div", { class: "wqs-findings", "aria-live": "polite" });
+      const measurePicker = select("Measure", "wqs-parameter", offered.map((p) => [p.key, p.name]), st.parameter, (v) => { st.parameter = v; pressed(); measure(); });
       const values = el("ul", { class: "wqs-values", "aria-label": "Latest results at " + site.name }, ...latest.rows.map((r) => {
         const own = M().recordOf(rec, r.parameter);
         return el("li", {}, el("button", { type: "button", class: "wqs-value", "data-parameter": r.parameter, "aria-pressed": String(r.parameter === st.parameter),
-          onclick: () => { st.parameter = r.parameter; for (const b of values.querySelectorAll(".wqs-value")) b.setAttribute("aria-pressed", String(b.dataset.parameter === r.parameter)); measure(); } },
-          el("span", { class: "wqs-name" }, r.name), el("span", { class: "wqs-val" }, r.value + (r.unit ? " " + r.unit : "")),
+          onclick: () => { st.parameter = r.parameter; measurePicker.querySelector("select").value = r.parameter; pressed(); measure(true); } },
+          el("span", { class: "wqs-name" }, r.name), el("span", { class: "wqs-val" }, M().tidy(r.value) + (r.unit ? " " + r.unit : "")),
           el("small", {}, r.date + (r.censored ? " · below or above a detection limit" : "") + (own ? " · " + own.text : ""))));
       }));
-      fill(body, heading(site.name), el("p", { class: "wqs-meta" }, site.line),
-        credit || latest.provisional ? el("p", { class: "wqs-credit" }, latest.provisional ? el("span", { class: "wqs-provisional" }, "Provisional") : null, latest.provisional ? " " : null, credit) : null,
+      const pressed = () => { for (const b of values.querySelectorAll(".wqs-value")) b.setAttribute("aria-pressed", String(b.dataset.parameter === st.parameter)); };
+      fill(body, heading(site.name), site.line ? el("p", { class: "wqs-meta" }, site.line) : null,
+        latest.provisional ? el("p", { class: "wqs-meta" }, el("span", { class: "wqs-provisional" }, "Provisional"), " The source says these results are provisional.") : null,
         rec ? el("p", { class: "wqs-meta" }, M().recordLine(rec, W().latestInstant(latest.rows.map((r) => r.sampled_at)))) : null,
-        ...(latest.rows.length ? [el("h3", {}, "Latest results"), el("p", { class: "wqs-hint" }, "Choose a measure to see it over time."), values,
-          el("div", { class: "wqs-controls" }, periodPicker(() => measure())), host, findings] : [el("p", {}, "No results are recorded for this site yet.")]),
-        el("div", { class: "wqs-actions" }, st.adding ? adder() : el("button", { type: "button", class: "wqs-button", onclick: () => { st.adding = true; render(); body.querySelector(".wqs-add")?.focus(); } }, "Compare with another site")));
+        ...(latest.rows.length ? [el("div", { class: "wqs-controls" }, measurePicker, periodPicker(() => measure())), host, findings,
+          el("h3", {}, "Latest results"), el("p", { class: "wqs-hint" }, "Choose one to see it over time."), values] : [el("p", {}, "No results are recorded for this site yet.")]),
+        el("div", { class: "wqs-actions" }, st.adding ? adder() : el("button", { type: "button", class: "wqs-button", onclick: () => { st.adding = true; render(); body.querySelector(".wqs-add")?.focus(); } }, "Compare with another site")),
+        creditLine(latest));
       if (!latest.rows.length) return;
-      async function measure() {
+      // focus: the person chose from the list below the chart: bring the chart up and say what it shows
+      async function measure(focus = false) {
         const m = ++token, parameter = st.parameter, years = st.years, row = latest.rows.find((r) => r.parameter === parameter);
         fill(host, el("p", { class: "wqs-status" }, "Loading the chart…")); fill(findings);
+        if (focus) { host.scrollIntoView?.({ block: "start" }); measurePicker.querySelector("select").focus({ preventScroll: true }); }
         const [series, band, trend, lawa] = await Promise.all([seriesOf(id, parameter, years, row?.sampled_at).catch(() => null), analysis("band", id, parameter, years), analysis("trend", id, parameter, years), lawaOf(site)]);
         if (m !== token || gone) return;
         if (!series) fill(host, el("p", {}, "Couldn't read this measure's results just now."));
-        else drawChart(host, M().chartData({ sites: [site], parameter, name: row?.name, unit: row?.unit, seriesBySite: { [id]: series }, latestBySite: { [id]: latest }, years }));
+        else {
+          drawChart(host, M().chartData({ sites: [site], parameter, name: row?.name, unit: row?.unit, seriesBySite: { [id]: series.rows }, latestBySite: { [id]: latest }, years }));
+          if (series.raw) host.append(el("p", { class: "wqs-hint" }, "Individual samples only: daily means couldn't be read just now."));
+        }
         const b = M().bandWords(band, parameter, offered), tr = M().trendWords(trend, years), l = M().lawaLine(lawa, parameter);
-        fill(findings, 
+        fill(findings,
           el("p", {}, el("b", {}, "NPS-FM band: "), b.long),
           el("p", { class: tr.little ? "wqs-little" : "" }, el("b", {}, "Trend (indicative): "), tr.long),
           l ? el("p", {}, el("b", {}, "LAWA: "), l) : null,
           how([band, trend]));
+        if (focus) host.scrollIntoView?.({ block: "start" });
       }
       return measure();
     }
@@ -273,14 +365,16 @@
       body.append(el("div", { class: "wqs-controls" },
         select("Measure", "wqs-parameter", offered.map((p) => [p.key, p.name + (p.sites < chosen.length ? " (" + p.sites + " of " + chosen.length + " sites)" : "")]), st.parameter, (v) => { st.parameter = v; draw(); }),
         periodPicker(() => draw())), host, table);
+      const credit = creditLine(...chosen.map((s) => latest[s.id]));
+      if (credit) body.append(credit);
       async function draw() {
         const m = ++token, parameter = st.parameter, years = st.years, p = offered.find((x) => x.key === parameter);
         fill(host, el("p", { class: "wqs-status" }, "Loading the chart…")); fill(table);
         const per = {}, series = {};
         await pool(chosen.map((s) => async () => {
           const row = list(latest[s.id]?.rows).find((r) => r.parameter === parameter);
-          const [rows, summary, band, trend] = row ? await Promise.all([seriesOf(s.id, parameter, years, row.sampled_at).catch(() => []), analysis("summary", s.id, parameter, years), analysis("band", s.id, parameter, years), analysis("trend", s.id, parameter, years)]) : [[], null, null, null];
-          series[s.id] = rows; per[s.id] = { latest: latest[s.id], summary, band, trend };
+          const [read, summary, band, trend] = row ? await Promise.all([seriesOf(s.id, parameter, years, row.sampled_at).catch(() => ({ rows: [] })), analysis("summary", s.id, parameter, years), analysis("band", s.id, parameter, years), analysis("trend", s.id, parameter, years)]) : [{ rows: [] }, null, null, null];
+          series[s.id] = read.rows; per[s.id] = { latest: latest[s.id], summary, band, trend };
         }), CONCURRENCY);
         if (m !== token || gone) return;
         drawChart(host, M().chartData({ sites: chosen, parameter, name: p?.name, unit: p?.unit, seriesBySite: series, latestBySite: latest, years }));
@@ -302,7 +396,8 @@
     return {
       remove() {
         gone = true; token++; chart?.destroy(); chart = null; clearPins();
-        try { map.off("zoom", near); map.removeControl(ctl); } catch { /* the map is going too */ }
+        watch?.disconnect(); changes?.disconnect();
+        try { map.off("zoom", near); map.off("resize", place); } catch { /* the map is going too */ }
         control.remove(); panel.remove(); holder.classList.remove("wqs-on", "wqs-near", "wqs-open", "wqs-comparing");
       },
     };
