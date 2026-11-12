@@ -199,6 +199,10 @@
     // (people.js); a role that may not read them is told so there and nothing is asked of the database
     if (route.view === "people") {
       document.title = group.name + " · " + G().viewLabel("people") + " | " + (FP.brand?.product || "");
+      // PF1: the same group's People already open (the address changed with its screen, or the route was drawn again as the app
+      // starts): the view follows the address itself, keeping what it has read and where the person was
+      const shown = $("#group-panel").firstElementChild;
+      if (shown?.peopleRoute && shown.dataset.group === group.id && FP.peopleModel?.canSee(group.role)) { shown.peopleRoute(route.tab || null); return; }
       const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
       if (current !== token) return;
       panel.replaceChildren(FP.groupPeople.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T09:00:00+13:00" : null, tab: route.tab || null }));

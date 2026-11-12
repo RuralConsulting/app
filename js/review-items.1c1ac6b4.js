@@ -50,16 +50,34 @@
     box.append(el("div", { class: "crm-chips", role: "group", "aria-label": "Show" }, ...M().FILTERS.map(([k, label]) =>
       el("button", { type: "button", class: "crm-chip", "aria-pressed": String(o.filter === k), "data-filter": k, onclick: () => o.onFilter(k) },
         label + (k === "open" ? " (" + open + ")" : k === "answered" ? " (" + (all.length - open) + ")" : "")))));
-    const shownItems = M().filter(all, o.filter);
-    box.append(el("p", { class: "crm-count", role: "status" }, M().countText(shownItems.length, o.filter)));
-    if (!shownItems.length) box.append(el("p", { class: "crm-empty" }, M().emptyText(o.filter, all.length)));
-    else box.append(el("ul", { class: "crm-list" }, ...shownItems.map((it) => el("li", { class: "crm-row rv-row" + (it.open ? "" : " ended") },
+    // PF1: a search (member number, or words in the topic or question), and the list in the order a person works through it:
+    // the items that stand out first, then the rest grouped by topic with a count, a long group folded (review-items-model.js arrange)
+    const search = el("input", { id: "rv-search", type: "search", autocomplete: "off", placeholder: "Member number, or words in the question", "aria-label": "Search the items" });
+    search.value = o.q || "";
+    const status = el("p", { class: "crm-count", role: "status" }), list = el("div", { class: "rv-sections" });
+    const row = (it) => el("li", { class: "crm-row rv-row" + (it.open ? "" : " ended") },
       el("button", { type: "button", "data-review": String(it.id), onclick: () => o.onOpen(it) },
         el("span", { class: "crm-row-main" }, el("b", {}, it.topic),
           it.open ? null : el("span", { class: "crm-badge" }, it.state === "not_needed" ? "Not needed" : "Answered")),
         el("span", { class: "rv-question" }, it.question),
         el("small", {}, M().raisedText(it))),
-      members(it.members, o.directory, o.onMember)))));
+      members(it.members, o.directory, o.onMember));
+    function fill() {
+      const sections = M().arrange(all, { filter: o.filter, q: search.value }), n = M().arrangedCount(sections);
+      status.textContent = M().countText(n, o.filter);
+      list.replaceChildren(...(!n ? [el("p", { class: "crm-empty" }, search.value.trim() ? "Nothing matches." : M().emptyText(o.filter, all.length))]
+        : sections.map((sec) => {
+          const ul = el("ul", { class: "crm-list" }, ...sec.items.map(row));
+          if (sec.answered && o.filter === "all") return el("section", { class: "rv-section" }, el("h4", {}, "Answered (" + sec.items.length + ")"), ul);
+          if (!sec.topic) return ul;
+          const group = el("details", { class: "rv-group", "data-topic": sec.topic, ...(sec.folded ? {} : { open: true }) },
+            el("summary", {}, sec.topic + " (" + sec.items.length + ")"), ul);
+          return group;
+        })));
+    }
+    search.addEventListener("input", () => { o.onSearch?.(search.value); fill(); });
+    box.append(el("div", { class: "crm-search" }, search), status, list);
+    fill();
     if (o.truncated) box.append(el("p", { class: "group-fine" }, "Only the newest " + M().CAP + " are listed."));
     return box;
   }

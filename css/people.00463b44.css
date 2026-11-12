@@ -43,6 +43,12 @@
 .crm-badge.due { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .crm-labels { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
 .crm-topics { margin: 2px 0 0; }
+/* PF1: placeholder rows while the lists are read (the size of a row, so nothing jumps when they arrive) */
+.crm-skeleton-row { display: grid; gap: 6px; padding: 12px; min-height: 44px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); box-sizing: border-box; }
+.crm-skeleton-row span { display: block; height: 12px; width: 45%; border-radius: 4px; background: var(--wash); animation: crm-wait 1.2s ease-in-out infinite alternate; }
+.crm-skeleton-row span + span { height: 10px; width: 70%; }
+@keyframes crm-wait { from { opacity: .5; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .crm-skeleton-row span { animation: none; } }
 .crm-labels li { font-size: var(--text-small); padding: 2px 10px; border-radius: 999px; background: var(--wash); border: 1px solid var(--rule); }
 
 /* a business or a person */
@@ -113,6 +119,11 @@
 .rv-row .rv-members { display: block; padding: 2px 12px 0; }
 .crm-sub .rv-members { font-size: inherit; }
 .rv-members button.link { min-height: 32px; padding: 0; }
+/* PF1: the To review list in sections: a group of items with the same topic under one heading with its count, foldable */
+.rv-sections { display: grid; gap: 10px; }
+.rv-group > summary { cursor: pointer; padding: 10px 0; font-weight: 700; overflow-wrap: anywhere; }
+.rv-group > .crm-list { margin-top: 4px; }
+.rv-section h4 { margin: 8px 0 6px; }
 .rv-facts { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; overflow-wrap: anywhere; }
 .rv-map { height: 220px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule); background: var(--wash); }
 .rv-answers { display: grid; gap: 6px; }

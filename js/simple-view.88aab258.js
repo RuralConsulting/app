@@ -52,7 +52,9 @@
   function notAvailable(decision, places) {
     const FP = root.FP, mine = decision.space && places[decision.space + "s"]?.some((p) => p.id === decision.id);
     const model = decision.space ? browserModels()[decision.space] : null;
-    const links = mine ? tabs(decision.space).map(([key, label]) => FP.el("a", { href: FP.href(model.href(decision.id, key)) }, label))
+    // (PF1: never a link to People for someone its role keeps out, as the group's own tabs)
+    const place = mine ? places[decision.space + "s"].find((p) => p.id === decision.id) : null;
+    const links = mine ? tabs(decision.space).filter(([key]) => key !== "people" || !!FP.peopleModel?.canSee(place?.role)).map(([key, label]) => FP.el("a", { href: FP.href(model.href(decision.id, key)) }, label))
       : [FP.el("a", { href: FP.href("") || "#/" }, "Your maps and files")];
     // A person with no farm and no group has nowhere to be sent: the same plain note the farms screen gives them, no link.
     const nowhere = !mine && !places.farms?.length && !places.groups?.length;

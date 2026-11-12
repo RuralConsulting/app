@@ -74,6 +74,41 @@
   function filter(list, which = "open") {
     return (list || []).filter((i) => which === "all" || (which === "open" ? i.open : !i.open));
   }
+  // PF1: whether an item matches what was typed in the list's search: every word is a member number it names (or the start of
+  // one), or is in its topic or question (ignoring case and accents).
+  const foldText = (v) => (P?.fold ? P.fold(v) : str(v).toLowerCase());
+  function matches(it, q) {
+    const words = foldText(q).split(/\s+/).filter(Boolean);
+    if (!words.length) return true;
+    const text = " " + foldText(it.topic + " " + it.question) + " ", numbers = (it.members || []).map((m) => foldText(m));
+    return words.every((w) => numbers.some((m) => m === w || m.startsWith(w)) || text.includes(w));
+  }
+  // PF1: the list in the order a person works through it, as sections. Open items first: an item naming more than one member, or
+  // the only one with its topic, comes first (newest first); then the rest by topic, so items with the same topic sit together
+  // under one heading with their count (newest first within it), folded when there are more than FOLD of them and nothing is
+  // searched for. Answered items, when shown, come after (newest first). Each section: { topic (null for a plain list), items,
+  // folded }.
+  const FOLD = 5;
+  const newest = (a, b) => str(b.created_at).localeCompare(str(a.created_at)) || (Number(b.id) - Number(a.id));
+  function arrange(list, { filter: which = "open", q = "" } = {}) {
+    const shown = filter(list, which).filter((it) => matches(it, q));
+    const open = shown.filter((it) => it.open), done = shown.filter((it) => !it.open).sort(newest);
+    const byTopic = new Map();
+    for (const it of open) byTopic.set(it.topic, (byTopic.get(it.topic) || 0) + 1);
+    const lead = open.filter((it) => it.members.length > 1 || byTopic.get(it.topic) === 1).sort(newest);
+    const groups = new Map();
+    for (const it of open) if (!lead.includes(it)) groups.set(it.topic, [...(groups.get(it.topic) || []), it]);
+    const sections = [];
+    if (lead.length) sections.push({ topic: null, items: lead, folded: false });
+    for (const topic of [...groups.keys()].sort((a, b) => a.localeCompare(b))) {
+      const items = groups.get(topic).sort(newest);
+      if (items.length === 1) sections.push({ topic: null, items, folded: false });   // the rest of its topic was put first
+      else sections.push({ topic, items, folded: items.length > FOLD && !foldText(q) });
+    }
+    if (done.length) sections.push({ topic: null, answered: true, items: done, folded: false });
+    return sections;
+  }
+  const arrangedCount = (sections) => sections.reduce((n, s) => n + s.items.length, 0);
   const countText = (n, which) => which === "open" ? plural(n, "item to review", "items to review")
     : which === "answered" ? plural(n, "item answered", "items answered") : plural(n, "item", "items");
   const emptyText = (which, total) => !total ? "Nothing to review. Questions about the member register that need someone who knows the farms show here."
@@ -118,5 +153,5 @@
   const otherLabel = (it) => (it?.answers || []).find((a) => a.action === "other")?.label || SPECIAL.other;
 
   return { ROLES, canSee, KIND, PREFIX, COLUMNS, LISTED, CAP, MAX_TEXT, FILTERS, SPECIAL, factLines, placeOf, placeText, item, items, openCount, filter,
-    countText, emptyText, memberLinks, raisedText, whoText, answerArgs, suggested, otherLabel };
+    countText, emptyText, memberLinks, matches, arrange, arrangedCount, FOLD, raisedText, whoText, answerArgs, suggested, otherLabel };
 });

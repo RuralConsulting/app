@@ -46,11 +46,49 @@
     if (badge) tab.append(badge);
   }
 
+  // PF1: the lists People reads (counted first): the directory as soon as it is in, the people and the team after it.
+  function readLists(sb, g) {
+    const nb = counted(sb, "group_members", g), np = counted(sb, "people", g);
+    const lists = {
+      directory: nb.then((n) => rows(sb.rpc("crm_directory", { g, max_rows: n }))),
+      people: np.then((n) => rows(sb.rpc("crm_people", { g, max_rows: n }))),
+      team: rows(sb.rpc("crm_team", { g })).catch(() => []),
+      truncated: Promise.all([nb, np]).then(([a, b]) => a >= CAP || b >= CAP),
+      review: readReview(sb, g),
+    };
+    for (const p of Object.values(lists)) p.catch(() => {});   // each is awaited by the view; none is left unhandled
+    return lists;
+  }
+  // RV1: the open review items, counted first, then at most that many (newest first). Never fails: a failure is its answer.
+  async function readReview(sb, g) {
+    try {
+      const head = await sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED);
+      if (head.error) throw head.error;
+      const n = typeof head.count === "number" ? Math.min(head.count, R().CAP) : R().CAP;
+      const got = n ? await rows(sb.from("proposals").select(R().COLUMNS).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED)
+        .order("created_at", { ascending: false }).limit(n)) : [];
+      return { rows: got, failed: null, truncated: typeof head.count === "number" && head.count > R().CAP };
+    } catch (e) { return { rows: [], failed: message(e), truncated: false }; }
+  }
+  // PF1: one read per opening. A second view of the same group made while the first read is still on its way (the route drawn
+  // again as the app starts) shares that read instead of asking the database twice. A refresh after a change always reads afresh.
+  let opening = null;
+  function openingLists(sb, g) {
+    if (opening && opening.sb === sb && opening.g === g) return opening.lists;
+    const lists = readLists(sb, g), mine = { sb, g, lists };
+    opening = mine;
+    const done = () => { if (opening === mine) opening = null; };
+    Promise.allSettled(Object.values(lists)).then(done);
+    return lists;
+  }
+  const FIRST = 60;        // rows drawn at once; the rest on the next frame
+  const later = (f) => (typeof root.requestAnimationFrame === "function" ? root.requestAnimationFrame(f) : setTimeout(f, 0));
+
   // ---- the view ----------------------------------------------------------------------------------------------------------------------
   // opts: { sb, person: {id}, today: "YYYY-MM-DD", now: ISO instant, tab: null | "log" | "follow-ups" | "add-person" }
   function view(group, opts = {}) {
     const sb = opts.sb || FP.sb, me = opts.person?.id || null, g = group.id;
-    const wrap = el("section", { class: "group-people", "data-view": "people" });
+    const wrap = el("section", { class: "group-people", "data-view": "people", "data-group": group.id });
     if (!M().canSee(group.role)) {
       wrap.append(el("h2", {}, "People"), el("p", { class: "crm-empty" }, "People and interactions are kept for the group's facilitators, advisors and admins."));
       return wrap;
@@ -58,32 +96,37 @@
     const today = () => String(opts.today || M().dayKey(Date.now())).slice(0, 10);
     const now = () => opts.now || new Date().toISOString();
     const st = { screen: "directory", stack: [], tab: "businesses", filters: { q: "", status: "current", label: "", due: false }, pq: "", archived: false,
-      directory: [], people: [], team: [], failed: null, page: null, form: null, errors: [], notice: null,
+      directory: [], people: [], team: [], failed: null, loading: "all", page: null, form: null, errors: [], notice: null,
       feed: { filters: { kinds: [], from: "", to: "", logger: "", followUp: "", topic: "" }, items: [], total: null, failed: null },
       // RV1: the register questions to review (public.proposals of kind register_review), the open one and its answer form
       review: { rows: [], failed: null, truncated: false, filter: "open", id: null, form: {}, busy: false } };
     const entryTab = opts.tab || null;
+    let fills = 0;
 
-    async function loadLists() {
+    // opening: the first read (shared, see openingLists), drawn in two steps: the businesses as soon as they are in, then the rest.
+    async function loadLists(opening = false) {
+      const lists = opening ? openingLists(sb, g) : readLists(sb, g);
       try {
-        const [nb, np] = await Promise.all([counted(sb, "group_members", g), counted(sb, "people", g)]);
-        const [directory, people, team] = await Promise.all([
-          rows(sb.rpc("crm_directory", { g, max_rows: nb })), rows(sb.rpc("crm_people", { g, max_rows: np })),
-          rows(sb.rpc("crm_team", { g })).catch(() => []), loadReview()]);
-        Object.assign(st, { directory, people, team, failed: null, truncated: nb >= CAP || np >= CAP });
-      } catch (e) { st.failed = message(e); }
+        const directory = await lists.directory;
+        if (opening) { Object.assign(st, { directory, failed: null, loading: "people" }); redrawDirectory(); }
+        const [people, team, truncated, review] = await Promise.all([lists.people, lists.team, lists.truncated, lists.review]);
+        Object.assign(st, { directory, people, team, failed: null, truncated, loading: null });
+        takeReview(review);
+      } catch (e) { Object.assign(st, { failed: message(e), loading: null }); }
     }
-    // RV1: counted first, then at most that many (newest first). Its own failure is said on its own screen, never the directory's.
-    async function loadReview() {
-      try {
-        const head = await sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED);
-        if (head.error) throw head.error;
-        const n = typeof head.count === "number" ? Math.min(head.count, R().CAP) : R().CAP;
-        const got = n ? await rows(sb.from("proposals").select(R().COLUMNS).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED)
-          .order("created_at", { ascending: false }).limit(n)) : [];
-        Object.assign(st.review, { rows: got, failed: null, truncated: typeof head.count === "number" && head.count > R().CAP });
-        setReviewCount(g, R().openCount(R().items(got)));
-      } catch (e) { st.review.failed = message(e); }
+    // Draws the directory again (when it is the screen shown), keeping the place in the search box.
+    function redrawDirectory() {
+      if (st.screen !== "directory") return;
+      const a = root.document?.activeElement, id = a && wrap.contains(a) ? a.id : null;
+      const at = id && typeof a.selectionStart === "number" ? a.selectionStart : null;
+      draw();
+      const n = id ? wrap.querySelector("#" + id) : null;
+      if (n) { n.focus(); if (at != null) try { n.setSelectionRange(at, at); } catch { /* not a text field */ } }
+    }
+    // RV1: the review items read with the lists (readReview); their own failure is said on their own screen, never the directory's.
+    function takeReview(r) {
+      Object.assign(st.review, r);
+      if (!r.failed) setReviewCount(g, R().openCount(R().items(r.rows)));
     }
     function draw() {
       const s = st.screen;
@@ -95,10 +138,34 @@
       st.notice = null;
     }
     // Screens stack: going forward remembers where the person was; back (and saving a form) returns there.
-    function go(screen, extra = {}) { st.stack.push({ screen: st.screen, page: st.page }); Object.assign(st, { screen, errors: [] }, extra); draw(); wrap.scrollIntoView?.({ block: "start" }); }
+    // PF1: a screen that has an address (people/review, people/log, people/add-person, people/follow-ups) is entered by changing the
+    // address when the person asks for it here; group-space.js then hands the address to this same view (route below), which opens
+    // the screen and remembers that it came with an address, so Back (here or the browser's) returns to where the person was.
+    let byAddress = false;
+    function go(screen, extra = {}) {
+      st.stack.push({ screen: st.screen, page: st.page, address: byAddress }); byAddress = false;
+      Object.assign(st, { screen, errors: [] }, extra); draw(); wrap.scrollIntoView?.({ block: "start" });
+    }
+    const SCREEN_OF = { review: ["review", "review-item"], log: ["log"], "add-person": ["person-form"], "follow-ups": ["feed"] };
+    function route(tab) {
+      if (!tab) {   // the bare People address: back to the screen the last address was opened from
+        const i = st.stack.map((f) => f.address).lastIndexOf(true);
+        if (i < 0) return;
+        Object.assign(st, st.stack[i], { errors: [] }); st.stack.length = i; draw();
+        return;
+      }
+      if (SCREEN_OF[tab]?.includes(st.screen)) return;
+      byAddress = true;
+      if (tab === "review") openReviewHere(); else if (tab === "log") openLog(null, []); else if (tab === "add-person") openPersonForm(null, null);
+      else if (tab === "follow-ups") openFeed({ followUp: "open" });
+      byAddress = false;
+    }
     async function back(refresh = false) {
+      if (st.stack.at(-1)?.address && root.history?.length > 1) { root.history.back(); return; }   // the address goes back with the screen
       const prev = st.stack.pop();
       if (!prev && entryTab && root.history?.length > 1) { root.history.back(); return; }
+      // opened from an address with nowhere to go back to: the directory, and the address with it (no new step in the history)
+      if (!prev && entryTab && FP.href && root.history?.replaceState) root.history.replaceState(null, "", FP.href(G().href(g, "people")));
       Object.assign(st, prev || { screen: "directory", page: null }, { errors: [] });
       if (refresh) await refreshCurrent();
       draw();
@@ -111,10 +178,17 @@
     }
 
     // ---- RV1: review items (questions about the register that need someone who knows the farms) -------------------------------------
-    const reviewLabel = () => "To review" + (st.review.failed ? "" : " (" + R().openCount(R().items(st.review.rows)) + ")");
-    function openReview() { go("review"); }
+    const reviewLabel = () => "To review" + (st.review.failed ? "" : " (" + (st.loading ? "…" : R().openCount(R().items(st.review.rows))) + ")");
+    // PF1: the list has an address (people/review): asking for it here changes the address, and the view opens it from there
+    function openReview() {
+      const to = FP.href?.(G().href(g, "people", "review"));
+      if (to && root.location && wrap.isConnected) root.location.hash = to; else openReviewHere();
+    }
+    function openReviewHere() { go("review"); }
     function reviewScreen() {
-      return RV().listScreen({ all: R().items(st.review.rows), filter: st.review.filter, failed: st.review.failed, truncated: st.review.truncated,
+      if (st.loading) return el("div", { class: "rv-list", "data-view": "review", "aria-busy": "true" }, backButton("Back to People"), el("h3", {}, "To review"),
+        el("p", { class: "crm-count", role: "status" }, "Reading the items to review…"));
+      return RV().listScreen({ all: R().items(st.review.rows), filter: st.review.filter, q: st.review.q || "", onSearch: (q) => { st.review.q = q; }, failed: st.review.failed, truncated: st.review.truncated,
         directory: st.directory, backButton, onFilter: (k) => { st.review.filter = k; draw(); },
         onOpen: (it) => { st.review.id = it.id; st.review.form = {}; go("review-item"); }, onMember: (id) => openBusiness(id) });
     }
@@ -151,8 +225,11 @@
         el("button", { type: "button", class: "secondary", "data-action": "review", onclick: () => openReview() }, reviewLabel()),
         el("button", { type: "button", class: "secondary", "data-action": "export", onclick: () => go("export") }, "Export")));
       if (st.failed) { box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the group's people just now: " + st.failed)); return box; }
-      const tabs = el("div", { class: "crm-tabs", role: "tablist" }, ...[["businesses", "Businesses", M().searchDirectory(st.directory, { status: "current" }).length], ["people", "People", M().searchPeople(st.people).length]]
-        .map(([k, label, n]) => el("button", { type: "button", role: "tab", "aria-selected": String(st.tab === k), onclick: () => { st.tab = k; draw(); } }, label + " (" + n + ")")));
+      // PF1: while the lists are read, the frame and controls are here at once, with a placeholder list in place of each list not yet in
+      box.setAttribute("aria-busy", String(!!st.loading));
+      const waiting = (k) => st.loading === "all" || (st.loading === "people" && k === "people");
+      const tabs = el("div", { class: "crm-tabs", role: "tablist" }, ...[["businesses", "Businesses", () => M().searchDirectory(st.directory, { status: "current" }).length], ["people", "People", () => M().searchPeople(st.people).length]]
+        .map(([k, label, n]) => el("button", { type: "button", role: "tab", "aria-selected": String(st.tab === k), onclick: () => { st.tab = k; draw(); } }, label + " (" + (waiting(k) ? "…" : n()) + ")")));
       box.append(tabs);
       const list = el("div", { class: "crm-results" });
       const search = el("input", { id: "crm-search", type: "search", autocomplete: "off", placeholder: st.tab === "businesses" ? "Business, person, member number or label" : "Name, email, phone or business", "aria-label": "Search" });
@@ -171,15 +248,25 @@
         box.append(el("div", { class: "crm-check" }, archived, el("label", { for: "crm-archived" }, "Show archived people")));
       }
       box.append(list);
+      // The first screenful is drawn at once and the rest of a long list on the next frame (a newer fill drops an older one's rest).
+      function listOf(shown, row) {
+        const ul = el("ul", { class: "crm-list" }, ...shown.slice(0, FIRST).map(row)), run = ++fills;
+        if (shown.length > FIRST) later(() => { if (run === fills && ul.isConnected) ul.append(...shown.slice(FIRST).map(row)); });
+        return ul;
+      }
       function fill() {
-        if (st.tab === "businesses") {
+        if (waiting(st.tab)) {
+          fills++;
+          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, "Reading the group's people…"),
+            el("ul", { class: "crm-list crm-skeleton", "aria-hidden": "true" }, ...Array.from({ length: 8 }, () => el("li", { class: "crm-skeleton-row" }, el("span"), el("span")))));
+        } else if (st.tab === "businesses") {
           const shown = M().searchDirectory(st.directory, st.filters);
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "business", "businesses")),
-            shown.length ? el("ul", { class: "crm-list" }, ...shown.map(businessRow)) : el("p", { class: "crm-empty" }, st.directory.length ? "No business matches." : "The group's member register is empty."));
+            shown.length ? listOf(shown, businessRow) : el("p", { class: "crm-empty" }, st.directory.length ? "No business matches." : "The group's member register is empty."));
         } else {
           const shown = M().searchPeople(st.people, { q: st.pq, archived: st.archived });
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "person", "people")),
-            shown.length ? el("ul", { class: "crm-list" }, ...shown.map(personRow)) : el("p", { class: "crm-empty" }, st.people.length ? "Nobody matches." : "No people recorded yet. Add one, or import the Apptivo contacts."));
+            shown.length ? listOf(shown, personRow) : el("p", { class: "crm-empty" }, st.people.length ? "Nobody matches." : "No people recorded yet. Add one, or import the Apptivo contacts."));
         }
       }
       fill();
@@ -588,16 +675,17 @@
         el("p", { class: "group-fine" }, "New Zealand dates. Cancelled entries are left out. A cell that starts with = + - or @ is written with an apostrophe in front, so a spreadsheet shows it as text. These files hold personal information: keep them where the group's records are kept."));
     }
 
-    wrap.append(el("h2", {}, "People"), el("p", { class: "group-status", role: "status" }, "Reading the group's people…"));
-    loadLists().then(() => {
-      // From the Add button or an address: the form opens on its own, and Back or Save returns to where the person was
-      if (entryTab === "log") openLog(null, []);
-      else if (entryTab === "add-person") openPersonForm(null, null);
-      else if (entryTab === "follow-ups") openFeed({ followUp: "open" });
-      else if (entryTab === "review") openReview();   // RV1
-      else return draw();
-      st.stack = [];
-    });
+    // PF1: the frame and controls at once, the lists filled in as they arrive (one read, however often the view is made).
+    // From the Add button or an address: the form opens on its own at once (the lists come in behind it), and Back or Save
+    // returns to where the person was.
+    draw();
+    if (entryTab === "log") openLog(null, []);
+    else if (entryTab === "add-person") openPersonForm(null, null);
+    else if (entryTab === "follow-ups") openFeed({ followUp: "open" });
+    else if (entryTab === "review") openReviewHere();   // RV1
+    if (entryTab) st.stack = [];
+    loadLists(true).then(() => { if (st.screen === "review") draw(); else redrawDirectory(); });
+    wrap.peopleRoute = route;   // PF1: group-space.js hands a later People address of the same group to this view
     return wrap;
   }
 
@@ -611,5 +699,5 @@
     { key: "person", label: "Add a person", shows: (group) => M().canSee(group?.role), run: (group) => addPerson(group.id) },
   ];
 
-  FP.groupPeople = { view, logInteraction, addPerson, addEntries, CAP, PAGE, countBadge };
+  FP.groupPeople = { view, logInteraction, addPerson, addEntries, CAP, PAGE, countBadge, openingLists };
 })(typeof window === "undefined" ? globalThis : window);

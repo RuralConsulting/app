@@ -11,6 +11,7 @@
     const hash = root.location.hash;
     const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash), group = api.isGroup(hash), queue = api.queueOf(hash);
     // V6: "?simple=client" (not staff), "staff" or "unreadable" (the staff flag can't be read) before the hash turns the simple view on in the demo
+    // (PF1: "facilitator", a client who is the group's facilitator)
     const simple = new URLSearchParams(root.location.search).get("simple");
     // N2b: "?groupsites=none" makes the demo group one the old model has no area for (an MCCC sub-group): group_wq_sites is empty
     const groupSites = new URLSearchParams(root.location.search).get("groupsites");
@@ -225,6 +226,11 @@
       data.tables.profiles = [{ user_id: USER, is_staff: false }];
       for (const m of data.groupTables?.org_members || []) m.role = "member";
       if (simple === "unreadable") delete data.tables.profiles;
+    }
+    // PF1: "?simple=facilitator": a client (not staff) who is the group's facilitator, as a catchment group's coordinator signs in
+    if (simple === "facilitator") {
+      data.tables.profiles = [{ user_id: USER, is_staff: false }];
+      for (const m of data.groupTables?.org_members || []) m.role = "facilitator";
     }
     if (multi) {
       // A second, small farm so the portfolio can be exercised: its own extent, one authorisation, two documents.
