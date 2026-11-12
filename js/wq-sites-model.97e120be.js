@@ -20,7 +20,9 @@
   const MAX_CHOSEN = 6;         // sites in one comparison
   const RECENT_YEARS = 5;       // a site with no sample in this many years is drawn as an older site
   const LABEL_ZOOM = 13;        // names show from this zoom (and always for a chosen site)
-  const WINDOWS = [{ years: 5, label: "Last 5 years" }, { years: 10, label: "Last 10 years" }, { years: 20, label: "Last 20 years" }];
+  // years 0 is the whole record (N2c): the chart then has no start; the median and trend use the library's longest window (20 years)
+  const WINDOWS = [{ years: 5, label: "Last 5 years" }, { years: 10, label: "Last 10 years" }, { years: 20, label: "Last 20 years" }, { years: 0, label: "Whole record" }];
+  const ANALYSIS_LONGEST = 20;
   const DEFAULT_YEARS = 10;
   // The parameters the analysis library takes (supabase/functions/_shared/wq/run.ts PARAMETERS; a test fails when they differ).
   const ANALYSED = ["nitrate-n", "nitrate-nitrite-n", "ammoniacal-n", "drp", "tp", "tn", "e-coli", "turbidity", "clarity", "tss",
@@ -56,8 +58,14 @@
   // farm's nearest first, a group's most recently sampled first (inside a group's area most sites are 0 m away). The list and the
   // pins show the first MAX_SITES with results (listing, pinned); a search reaches the rest.
   const MAX_READ = 1000;
+  // N2c (the owner, 12 Nov 2026: "filtering out monitoring sites that just dont have enough data to even mention or that the data is
+  // old"): a site is CURRENT when it has a result in the last CURRENT.years AND enough record to say something: at least
+  // CURRENT.minResults results of one measure (the most of any measure family, from site_record_summary's n). Shown by default; the
+  // rest ("older or sparse") only when the person switches them on. Where the count is not read up front (a farm's or group's own
+  // site list: the summary is read when a site is opened, refine()), recency alone decides until then.
+  const CURRENT = Object.freeze({ years: 5, minResults: 12 });
   function siteList(rows, owner, now, where = owner?.farm ? "farm" : "group") {
-    const farm = owner?.farm || null, org = owner?.org || null, since = now - RECENT_YEARS * 365.25 * 86400000;
+    const farm = owner?.farm || null, org = owner?.org || null, since = now - CURRENT.years * 365.25 * 86400000;
     const usable = list(rows).filter((r) => r && r.site_id != null).slice(0, MAX_READ);
     const out = W.sites(usable, farm, MAX_READ).map((s, i) => {
       const row = usable[i];
@@ -65,34 +73,77 @@
       const at = s.lastSampled ? Date.parse(s.lastSampled) : NaN, has = Number.isFinite(at);
       // a farm says how far a site is ("on the farm" at 0 m); a group or a map says nothing for a site inside it
       const away = where === "farm" ? s.away : Number(s.distance_m) > 0 ? s.distance + " away" : "";
-      return { ...s, owner: own, away, recent: has && at >= since, hasResults: has, lastAt: has ? at : null, shared: !row.owner_farm_id && !row.owner_org_id,
-        line: [away, s.last, own].filter(Boolean).join(" · ") };
+      const counted = Number.isFinite(Number(row.n_max)) && row.n_max !== null ? Number(row.n_max) : null, recent = has && at >= since;
+      // a farm's or group's OWN sampling site is never held back (its owners put it there), only said to have no recent results
+      const owned = !!(row.owner_farm_id || row.owner_org_id);
+      return { ...s, owner: own, away, recent, hasResults: has, lastAt: has ? at : null, shared: !owned, owned,
+        counted, current: owned || (recent && (counted === null || counted >= CURRENT.minResults)),
+        line: [away, s.last, own, owned && has && !recent ? "no recent results" : ""].filter(Boolean).join(" · ") };
     });
-    const tier = (s) => (s.recent ? 0 : s.hasResults ? 1 : 2);
+    const tier = (s) => (s.current ? 0 : s.recent ? 1 : s.hasResults ? 2 : 3);
     return out.map((s, i) => [s, i]).sort(([a, i], [b, j]) => tier(a) - tier(b) ||
       (where === "farm" ? (a.distance_m || 0) - (b.distance_m || 0) : (b.lastAt || 0) - (a.lastAt || 0)) || i - j).map(([s]) => s);
   }
-  // What the list shows for a search (names containing every word typed, any case): the sites with results, at most MAX_SITES, how
-  // many more match, and the sites with no results (folded away under their count).
-  function listing(sites, query = "") {
+  // What the list shows. With no search: the current sites (at most MAX_SITES, and how many more), and only when the person has
+  // switched them on (showAll) the older or sparse sites with results (`others`) and those with no results (`none`); `held` counts
+  // the older or sparse ones either way. A search (names containing every word typed, any case) looks through every site read,
+  // current or not, whatever the switch: each hit says whether it is held back (`held` on the site row), so it can be tagged.
+  function listing(sites, query = "", showAll = false) {
     const words = String(query || "").toLowerCase().split(/\s+/).filter(Boolean);
-    const hit = list(sites).filter((s) => words.every((w) => (s.name + " " + (s.externalId || "")).toLowerCase().includes(w)));
-    const withResults = hit.filter((s) => s.hasResults), none = hit.filter((s) => !s.hasResults);
-    return { shown: withResults.slice(0, MAX_SITES), more: Math.max(withResults.length - MAX_SITES, 0), none, matched: hit.length };
+    const all = list(sites), heldBack = all.filter((s) => !s.current);
+    if (words.length) {
+      const hit = all.filter((s) => words.every((w) => (s.name + " " + (s.externalId || "")).toLowerCase().includes(w))).map((s) => ({ ...s, held: !s.current }));
+      return { search: true, shown: hit.slice(0, MAX_SITES), more: Math.max(hit.length - MAX_SITES, 0), others: [], none: [], held: heldBack.length, left: 0, matched: hit.length };
+    }
+    const current = all.filter((s) => s.current);
+    const others = showAll ? heldBack.filter((s) => s.hasResults).slice(0, MAX_SITES) : [], none = showAll ? heldBack.filter((s) => !s.hasResults).slice(0, MAX_SITES) : [];
+    // left: held-back sites the fold does not list (beyond its MAX_SITES with results and MAX_SITES without): the fold says so
+    return { search: false, shown: current.slice(0, MAX_SITES), more: Math.max(current.length - MAX_SITES, 0), others, none,
+      held: heldBack.length, left: showAll ? heldBack.length - others.length - none.length : 0, matched: all.length };
   }
-  // The sites with a pin: the first MAX_SITES with results, and any site chosen (one found by a search gets its pin once it is opened).
-  function pinned(sites, also = []) {
-    const keep = new Set(list(sites).filter((s) => s.hasResults).slice(0, MAX_SITES).map((s) => s.id));
+  // The sites with a pin: the current ones (at most MAX_SITES); the older or sparse ones with results too when switched on (paler,
+  // smaller: their own MAX_SITES); and any site chosen, whatever the switch (one found by a search gets its pin once it is opened).
+  function pinned(sites, also = [], showAll = false) {
+    const all = list(sites);
+    const keep = new Set(all.filter((s) => s.current).slice(0, MAX_SITES).map((s) => s.id));
+    if (showAll) for (const s of all.filter((x) => !x.current && x.hasResults).slice(0, MAX_SITES)) keep.add(s.id);
     for (const id of list(also)) keep.add(id);
-    return list(sites).filter((s) => keep.has(s.id));
+    return all.filter((s) => keep.has(s.id));
   }
-  const intro = (sites, owner, where = owner?.farm ? "farm" : "group") => {
-    const n = list(sites).length, none = list(sites).filter((s) => !s.hasResults).length;
+  // The list's header: how many current sites are shown and how many are held back; or that there are none; then the source.
+  // searching: a search looks through every site whatever the switch, and no fold is shown, so the header says so instead.
+  const intro = (sites, owner, where = owner?.farm ? "farm" : "group", showAll = false, searching = false) => {
+    const all = list(sites), n = all.length, current = all.filter((s) => s.current).length, held = n - current;
     const scope = where === "farm" ? " within " + W.RADIUS_KM + " km of this farm" : where === "map" ? " in or near this map's area" : " in or near this group's area";
     if (!n) return where === "farm" ? "No water quality monitoring sites are recorded within " + W.RADIUS_KM + " km of this farm."
       : where === "map" ? "No water quality monitoring sites are recorded in or near this map's area." : "No sites are linked to this group yet.";
-    return plural(n, "monitoring site", "monitoring sites") + scope + (none ? " (" + none + " with no results yet)" : "") + ". " + W.sourcesLine(sites) + ".";
+    const lead = current ? plural(current, "monitoring site", "monitoring sites") + " with recent results" + scope + "." : "No sites here have recent results.";
+    return lead + (held ? " " + plural(held, "older or sparse site", "older or sparse sites") + (held === 1 ? " is " : " are ") + (searching ? "searched too, tagged in the results." : showAll ? "in the list below." : "hidden.") : "") +
+      " " + W.sourcesLine(all) + ".";
   };
+  // What "older or sparse" means, said beside the switch.
+  const HELD_WORDS = "Older or sparse: no result in the last " + CURRENT.years + " years, or fewer than " + CURRENT.minResults + " results of any measure.";
+  // A site's own count, once its record is read (opening it). A site with too few results of every measure is marked `sparse`: it stays
+  // where it is for the rest of this visit (tagged "few results", a paler pin) so nothing vanishes under the person, and is held back
+  // the next time the sites are switched on (holdBack). rec: record() of its site_record_summary rows (null for a farm's or group's
+  // own site, whose summary may be stale: unchanged, and never held back).
+  function refine(site, rec) {
+    if (!site || site.owned || !rec?.families?.length) return site;
+    const counted = Math.max(...rec.families.map((f) => Number(f.n) || 0));
+    return counted >= CURRENT.minResults ? { ...site, counted } : { ...site, counted, sparse: true };
+  }
+  // The sites found sparse on an earlier visit (ids), held back now: not current (a farm's or group's own site never).
+  const holdBack = (sites, ids) => list(sites).map((s) => (!s.owned && list(ids).includes(s.id) ? { ...s, current: false, sparse: true } : s));
+  // Sites found sparse in this visit (ids): still current, tagged "few results", a paler pin.
+  const markSparse = (sites, ids) => list(sites).map((s) => (!s.owned && list(ids).includes(s.id) ? { ...s, sparse: true } : s));
+  // The list as it stands when the sites are drawn (switched on, or drawn again when the map's links are renewed): sites found sparse
+  // in an EARLIER visit are held back (state.heldBack: moved there only when the person switched the sites off); sites found sparse in
+  // THIS visit stay where they were, tagged (state.sparse), so a renewal shows exactly what was on screen.
+  const restore = (sites, state) => markSparse(holdBack(sites, [...(state?.heldBack || [])]), [...(state?.sparse || [])]);
+  // The hint under the comparison table: the median and trend are over the period's hydrological years, or the library's longest
+  // window for the whole record; the band always over 5 years.
+  const compareHint = (years) => (pickYears(years) ? "The median and trend are over the hydrological years of the period chosen"
+    : "The median and trend are over the last " + ANALYSIS_LONGEST + " hydrological years") + "; the band always over 5 years. Open a site on its own for the reasons and LAWA's results.";
 
   // When the map's area holds more sites than are read (a box still too full after its splits, or more than MAX_READ), the list says so.
   const PARTIAL = "This map's area holds more sites than are listed here. Zoom in on the map or search by name to find one that is not listed.";
@@ -105,7 +156,7 @@
     const ids = [...new Set(list(siteIds))], out = [];
     for (let i = 0; i < ids.length; i += SUMMARY_IDS) {
       for (let page = 0; page < SUMMARY_PAGES; page++) {
-        const { data, error } = await sb.from("site_record_summary").select("site_id, family, last_sampled").in("site_id", ids.slice(i, i + SUMMARY_IDS))
+        const { data, error } = await sb.from("site_record_summary").select("site_id, family, n, last_sampled").in("site_id", ids.slice(i, i + SUMMARY_IDS))
           .order("site_id").order("family").range(page * SUMMARY_PAGE, (page + 1) * SUMMARY_PAGE - 1);
         if (error) throw error;
         out.push(...list(data));
@@ -132,11 +183,14 @@
   // from the council summary (site_record_summary rows: site_id, last_sampled). Inside the map, so 0 m away.
   function boxRows(siteRows, features, summaryRows) {
     const point = new Map(list(features).filter((f) => f && f.geometry?.type === "Point").map((f) => [Number(f.id), f.geometry]));
-    const last = new Map();
-    for (const r of list(summaryRows)) if (r && r.last_sampled && (!last.has(r.site_id) || r.last_sampled > last.get(r.site_id))) last.set(r.site_id, r.last_sampled);
+    const last = new Map(), most = new Map();
+    for (const r of list(summaryRows)) {
+      if (r && r.last_sampled && (!last.has(r.site_id) || r.last_sampled > last.get(r.site_id))) last.set(r.site_id, r.last_sampled);
+      if (r && Number.isFinite(Number(r.n))) most.set(r.site_id, Math.max(most.get(r.site_id) || 0, Number(r.n)));
+    }
     return list(siteRows).filter((r) => r && r.id != null && point.has(Number(r.feature_id))).map((r) => ({
       site_id: r.id, external_id: r.external_id, name: r.name, site_type: r.site_type, distance_m: 0, geom: point.get(Number(r.feature_id)),
-      last_sampled: last.get(r.id) || null, source_key: r.source_key, owner_farm_id: null, owner_org_id: null }));
+      last_sampled: last.get(r.id) || null, source_key: r.source_key, owner_farm_id: null, owner_org_id: null, n_max: most.has(r.id) ? most.get(r.id) : null }));
   }
 
   // ---- the chosen sites ----------------------------------------------------------------------------------------------------
@@ -164,7 +218,9 @@
   }
   // The measure to show: the one asked for when it is offered, else the first offered, else null.
   const pickParameter = (offered, wanted) => (list(offered).some((p) => p.key === wanted) ? wanted : list(offered)[0]?.key || null);
-  const pickYears = (years) => (WINDOWS.some((w) => w.years === Number(years)) ? Number(years) : DEFAULT_YEARS);
+  const pickYears = (years) => (WINDOWS.some((w) => w.years === Number(years)) && years !== "" && years !== null ? Number(years) : DEFAULT_YEARS);
+  // The years the library works over for a period: the period itself, or its longest for the whole record.
+  const analysisYears = (years) => pickYears(years) || ANALYSIS_LONGEST;
 
   // ---- the record (public.site_record_summary: one row per site and parameter family) ----------------------------------------
   // The summary is rebuilt only after a council load (tools/load_measurements.py), so it is used for shared (council) sites only, as
@@ -243,8 +299,13 @@
     if (width >= 720) return { top: 50, bottom: 50, left: 380, right: 430 + 24 + Math.round(button) + 24 };
     return { top: 60, bottom: Math.round(height * 0.47), left: 30, right: Math.round(button) + 24 };
   }
-  // Where a chart window starts: `years` before the latest result (an NZ date), or null for no limit.
-  const windowStart = (latestAt, years) => W.locationWindowStart(latestAt, years);
+  // Where a chart window starts: `years` before today (an NZ date; never before the latest result, N2c: a site last sampled in 2008 drew
+  // its 1998 to 2008 results under "Last 10 years"), or null for the whole record.
+  const windowStart = (today, years) => (pickYears(years) ? W.locationWindowStart(today, years) : null);
+  // What the chart says when the period holds none of a site's results: the period, the latest result's date, and the way to the whole
+  // record. latestAt: the site's latest result of the measure.
+  const emptyPeriod = (years, latestAt) => "No results in the " + (WINDOWS.find((w) => w.years === pickYears(years))?.label || "period").toLowerCase() + "." +
+    (latestAt ? " The latest is from " + W.date(latestAt) + "." : "");
   // The Chart block's data for one site, or for several (one line each, the site colours). seriesBySite: {id: rows of
   // measurement_series}. A site with no results in the window is still in the key ("no results").
   function chartData({ sites, parameter, name, unit, seriesBySite, latestBySite, years, limits = NO_LIMITS }) {
@@ -276,7 +337,7 @@
       const attribute = ATTRIBUTE_OF[parameter];
       return attribute ? { mode: "preview", owner: ownerOf(owner), params: { tool: "band", site_id: siteId, attribute } } : null;
     }
-    return { mode: "preview", owner: ownerOf(owner), params: { tool, site_id: siteId, parameter, years: pickYears(years) } };
+    return { mode: "preview", owner: ownerOf(owner), params: { tool, site_id: siteId, parameter, years: analysisYears(years) } };
   }
   const requestKey = (body) => JSON.stringify(body);
   const windowWords = (p) => (p?.parameters?.from && p?.parameters?.to ? day(p.parameters.from) + " to " + day(p.parameters.to) : "");
@@ -297,7 +358,7 @@
 
   // The trend in words: { short, long, little } (little: too little data). The library's trend is indicative and says so.
   function trendWords(res, years) {
-    const over = " over " + pickYears(years) + " years";
+    const over = " over " + analysisYears(years) + " years";
     if (!res) return { short: "No trend", long: "No trend is worked out for this measure.", little: false };
     if (res.kind !== "preview") return { short: "Couldn't be worked out", long: "The trend couldn't be worked out just now: " + text(res.message).replace(/\.$/, "") + ".", little: false };
     const p = res.preview, r = p.result;
@@ -314,7 +375,7 @@
       : null;
     const conf = Math.round(100 * Math.max(Number(r.p_decreasing) || 0, Number(r.p_increasing) || 0));
     const rests = plural(r.values, r.seasons === "quarterly" ? "quarterly value" : "monthly value", r.seasons === "quarterly" ? "quarterly values" : "monthly values") +
-      (r.coverage?.years_with_data ? " in " + r.coverage.years_with_data + " of " + pickYears(years) + " years" : "");
+      (r.coverage?.years_with_data ? " in " + r.coverage.years_with_data + " of " + analysisYears(years) + " years" : "");
     return { short: label + (slope ? ", " + slope.replace(/ \(.*\)$/, "") : ""), little: false,
       long: label + over + (r.direction ? " (" + r.direction + ", " + conf + "% confidence)" : " (" + conf + "% confidence either way)") + ". " +
         (slope ? "Sen slope " + slope + ". " : "Sen slope not given: results below or above a detection limit decide it. ") +
@@ -365,7 +426,7 @@
     });
   }
 
-  return { MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
+  return { CURRENT, HELD_WORDS, refine, holdBack, markSparse, restore, compareHint, analysisYears, ANALYSIS_LONGEST, emptyPeriod, MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
     tidy, credit, siteList, listing, pinned, intro, boxes, BOX_MARGIN_KM, quarters, boxRows, MAX_READ, PARTIAL, summaryRows, SUMMARY_IDS, SUMMARY_PAGE, framePadding, buttonTop, choose, remove, full, parameters, pickParameter, pickYears, record, recordLine, recordOf, bandRanges, windowStart, chartData,
     analysisRequest, requestKey, bandWords, trendWords, medianWords, lawaWords, lawaLine, latestWords, compareRows };
 });

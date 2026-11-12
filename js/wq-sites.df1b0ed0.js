@@ -17,7 +17,7 @@
 (function (root) {
   const FP = root.FP;
   const M = () => FP.wqSitesModel, W = () => FP.wqModel, A = () => FP.wqAnalysis;
-  const CONCURRENCY = 4, IN_BATCH = 200, MAX_SPLITS = 2;
+  const CONCURRENCY = 4, IN_BATCH = 200, MAX_SPLITS = 2, SHOW_KEY = "wqs-show-older";
   const list = (v) => (Array.isArray(v) ? v : []);
   // replaceChildren would print a left-out part (null) as the word "null": leave such parts out
   const fill = (node, ...kids) => node.replaceChildren(...kids.filter((k) => k != null && k !== false));
@@ -34,6 +34,8 @@
   function attach({ map, holder, sb, owner, state, bounds = null, el = FP.el, now = () => Date.now() }) {
     const st = state || {};
     st.chosen = list(st.chosen); st.years = M().pickYears(st.years); st.cache = st.cache || new Map(); st.query = st.query || "";
+    // N2c: older and sparse sites are hidden until the person switches them on; the choice is remembered on this device
+    if (st.showAll === undefined) { try { st.showAll = root.localStorage?.getItem(SHOW_KEY) === "1"; } catch { st.showAll = false; } }
     const gl = root.maplibregl;
     let sites = null, where = owner.farm ? "farm" : "group", partial = false, gone = false, token = 0, chart = null, framed = !!st.framed;
     const markers = new Map();
@@ -94,8 +96,8 @@
     }).catch(() => null));
     // A measure's results in the window. A read that fails is tried once more as samples only (resolution "raw": no daily means),
     // which is cheaper for the database; { rows, raw } says which was drawn.
-    const seriesOf = (id, parameter, years, latestAt) => once(["series", id, parameter, years].join("|"), async () => {
-      const from = M().windowStart(latestAt, years), args = { site: id, parameter_key: parameter, ...(from ? { from_time: from } : {}) };
+    const seriesOf = (id, parameter, years) => once(["series", id, parameter, years].join("|"), async () => {
+      const from = M().windowStart(new Date(now()).toISOString(), years), args = { site: id, parameter_key: parameter, ...(from ? { from_time: from } : {}) };
       try { return { rows: await rpc("measurement_series", args), raw: false }; }
       catch { return { rows: await rpc("measurement_series", { ...args, resolution: "raw" }), raw: true }; }
     });
@@ -161,8 +163,8 @@
     function drawPins() {
       clearPins();
       if (!gl?.Marker || !sites) return;
-      for (const s of M().pinned(sites, st.chosen).filter((x) => x.lngLat)) {
-        const pin = el("button", { type: "button", class: "wqs-pin" + (s.recent ? "" : " wqs-older"), "data-wqs-site": s.id,
+      for (const s of M().pinned(sites, st.chosen, st.showAll).filter((x) => x.lngLat)) {
+        const pin = el("button", { type: "button", class: "wqs-pin" + (s.current && !s.sparse ? "" : " wqs-older"), "data-wqs-site": s.id,
           title: s.name + (s.line ? " · " + s.line : ""), "aria-label": "Water quality site: " + s.name + (s.line ? ", " + s.line : ""),
           onclick: (e) => { e.stopPropagation(); pinClicked(s.id); } }, el("i", { "aria-hidden": "true" }), el("span", { class: "wqs-label" }, s.name));
         markers.set(s.id, { pin, marker: new gl.Marker({ element: pin, anchor: "center" }).setLngLat(s.lngLat).addTo(map) });
@@ -184,7 +186,7 @@
     // panel (left on a computer), the map's buttons and this panel (right), the sheet (bottom, on a phone).
     function frame() {
       if (framed || !gl?.LngLatBounds) return;
-      const pts = M().pinned(sites, st.chosen).filter((s) => s.lngLat).map((s) => s.lngLat);
+      const pts = M().pinned(sites, st.chosen, st.showAll).filter((s) => s.lngLat).map((s) => s.lngLat);
       if (!pts.length) return;
       framed = st.framed = true;
       const w = holder.clientWidth, h = holder.clientHeight;
@@ -201,13 +203,15 @@
       st.on = true; toggle.setAttribute("aria-pressed", "true"); holder.classList.add("wqs-on");
       openPanel(); fill(body); say("Loading the water quality sites…");
       const t = ++token;
-      try { const read = await readSites(); where = read.where; partial = !!read.partial; sites = M().siteList(read.rows, owner, now(), where); }
+      try { const read = await readSites(); where = read.where; partial = !!read.partial; sites = M().restore(M().siteList(read.rows, owner, now(), where), st); }
       catch { if (t === token && !gone) { say(""); fill(body, el("p", {}, "Couldn't load the water quality sites just now."), el("button", { type: "button", class: "wqs-button", onclick: switchOn }, "Try again")); } return; }
       if (gone || !st.on) return;
       drawPins(); frame();
       if (t === token) render();
     }
+    // The person switching the sites off ends the visit: sites found sparse in it are held back the next time they are switched on.
     function switchOff() {
+      st.heldBack = new Set([...(st.heldBack || []), ...(st.sparse || [])]); st.sparse = new Set();
       st.on = false; st.chosen = []; st.adding = false; toggle.setAttribute("aria-pressed", "false");
       holder.classList.remove("wqs-on", "wqs-near", "wqs-comparing"); clearPins(); closePanel(false);
     }
@@ -234,27 +238,38 @@
       return view;
     }
     const heading = (text) => el("h2", { tabindex: "-1" }, text);
-    const siteButton = (s) => el("li", {}, el("button", { type: "button", class: "wqs-site" + (s.recent ? "" : " wqs-older"), onclick: () => pick(s.id, false) },
-      el("b", {}, s.name), s.line ? el("small", {}, s.line) : null));
+    const siteButton = (s) => el("li", {}, el("button", { type: "button", class: "wqs-site" + (s.current ? "" : " wqs-older"), onclick: () => pick(s.id, false) },
+      el("b", {}, s.name), s.line || s.held || s.sparse ? el("small", {}, [s.line, s.held ? "older or sparse" : s.sparse ? "few results" : ""].filter(Boolean).join(" · ")) : null));
 
     // The list: sites sampled lately first, then older ones; those with no results folded away; a search over every site read.
     function showList() {
-      const results = el("div", { class: "wqs-results" });
-      const search = el("input", { type: "search", class: "wqs-search", placeholder: "Search sites by name", "aria-label": "Search water quality sites by name", value: st.query });
+      const results = el("div", { class: "wqs-results" }), intro = el("p", { class: "wqs-meta" });
+      const search = el("input", { type: "search", class: "wqs-search", placeholder: "Search every site by name", "aria-label": "Search water quality sites by name", value: st.query });
+      const toggleAll = el("input", { type: "checkbox", class: "wqs-show-all", role: "switch", ...(st.showAll ? { checked: true } : {}) });
+      const fold = (label, items, open) => el("details", { class: "wqs-none", ...(open ? { open: true } : {}) }, el("summary", {}, label + " (" + items.length + ")"), el("ul", { class: "wqs-list" }, ...items.map(siteButton)));
       const draw = () => {
-        const l = M().listing(sites, st.query);
+        const l = M().listing(sites, st.query, st.showAll);
+        intro.textContent = M().intro(sites, owner, where, st.showAll, l.search);
         fill(results,
           l.shown.length ? el("ul", { class: "wqs-list" }, ...l.shown.map(siteButton)) : null,
           l.more ? el("p", { class: "wqs-hint" }, l.more + " more " + (l.more === 1 ? "site is" : "sites are") + " not listed. Search by name to find " + (l.more === 1 ? "it." : "them.")) : null,
-          l.none.length ? el("details", { class: "wqs-none" }, el("summary", {}, "Sites with no results (" + l.none.length + ")"), el("ul", { class: "wqs-list" }, ...l.none.slice(0, M().MAX_SITES).map(siteButton))) : null,
+          l.others.length || l.none.length ? el("details", { class: "wqs-held", open: true }, el("summary", {}, "Older or sparse sites (" + l.held + ")"),
+            l.others.length ? el("ul", { class: "wqs-list" }, ...l.others.map(siteButton)) : null, l.none.length ? fold("Sites with no results", l.none, false) : null,
+            l.left ? el("p", { class: "wqs-hint" }, l.left + " more " + (l.left === 1 ? "is" : "are") + " not listed; search by name to find one.") : null) : null,
           st.query && !l.matched ? el("p", { class: "wqs-hint" }, "No site's name matches “" + st.query + "”.") : null);
       };
       search.addEventListener("input", () => { st.query = search.value; draw(); });
-      const recent = sites.filter((s) => s.recent).length, withResults = sites.filter((s) => s.hasResults).length;
-      fill(body, heading("Water quality sites"), el("p", { class: "wqs-meta" }, M().intro(sites, owner, where)),
+      toggleAll.addEventListener("change", () => {
+        st.showAll = toggleAll.checked;
+        try { root.localStorage?.setItem(SHOW_KEY, st.showAll ? "1" : "0"); } catch { /* not remembered: still applies now */ }
+        drawPins(); draw();
+      });
+      const held = sites.filter((s) => !s.current).length;
+      fill(body, heading("Water quality sites"), intro,
+        held ? el("label", { class: "wqs-switch" }, toggleAll, el("span", {}, "Show older and sparse sites")) : null,
+        held ? el("p", { class: "wqs-hint" }, M().HELD_WORDS) : null,
         partial ? el("p", { class: "wqs-hint wqs-partial" }, M().PARTIAL) : null,
-        sites.length ? el("p", { class: "wqs-hint" }, "Choose a site on the map or in this list to see its results. You can then compare up to " + M().MAX_CHOSEN + " sites." +
-          (recent < withResults ? " Paler pins have no sample in the last " + M().RECENT_YEARS + " years." : "")) : null,
+        sites.length ? el("p", { class: "wqs-hint" }, "Choose a site on the map or in this list to see its results. You can then compare up to " + M().MAX_CHOSEN + " sites.") : null,
         sites.length ? search : null, results);
       draw();
     }
@@ -273,6 +288,10 @@
       return el("label", { class: "wqs-field" }, el("span", {}, label), s);
     };
     const periodPicker = (redraw) => select("Period", "wqs-years", M().WINDOWS.map((w) => [w.years, w.label]), st.years, (v) => { st.years = M().pickYears(v); redraw(); });
+    // N2c: the period holds none of the results: one tap to the whole record (the period picker follows)
+    const wholeRecord = (redraw) => el("button", { type: "button", class: "wqs-button", onclick: () => {
+      st.years = 0; for (const p of body.querySelectorAll(".wqs-years")) p.value = "0"; redraw();
+    } }, "Show the whole record");
     function drawChart(host, data) {
       chart?.destroy();
       chart = FP.blocks.render(host, { block: "chart", owner: owner.farm ? { farm: owner.farm } : { org: owner.org } }, { read: () => data, level: 3, href: FP.href });
@@ -299,6 +318,12 @@
       catch { if (t === token) { say(""); body.append(el("p", {}, "Couldn't read this site's results just now.")); } return; }
       if (t !== token || gone) return;
       say("");
+      // N2c: the site's own count, now it is read: too few results of every measure and it is "sparse" (its pin goes paler)
+      const refined = M().refine(site, rec);
+      if (refined !== site) {
+        sites = sites.map((x) => (x.id === id ? refined : x));
+        if (refined.sparse) { st.sparse = new Set([...(st.sparse || []), id]); markers.get(id)?.pin.classList.add("wqs-older"); }
+      }
       const offered = M().parameters({ [id]: latest }, [id]);
       st.parameter = M().pickParameter(offered, st.parameter);
       const host = el("div", { class: "block-host wqs-chart" }), findings = el("div", { class: "wqs-findings", "aria-live": "polite" });
@@ -324,9 +349,10 @@
         const m = ++token, parameter = st.parameter, years = st.years, row = latest.rows.find((r) => r.parameter === parameter);
         fill(host, el("p", { class: "wqs-status" }, "Loading the chart…")); fill(findings);
         if (focus) { host.scrollIntoView?.({ block: "start" }); measurePicker.querySelector("select").focus({ preventScroll: true }); }
-        const [series, band, trend, lawa] = await Promise.all([seriesOf(id, parameter, years, row?.sampled_at).catch(() => null), analysis("band", id, parameter, years), analysis("trend", id, parameter, years), lawaOf(site)]);
+        const [series, band, trend, lawa] = await Promise.all([seriesOf(id, parameter, years).catch(() => null), analysis("band", id, parameter, years), analysis("trend", id, parameter, years), lawaOf(site)]);
         if (m !== token || gone) return;
         if (!series) fill(host, el("p", {}, "Couldn't read this measure's results just now."));
+        else if (!series.rows.length && years) fill(host, el("p", { class: "wqs-empty" }, M().emptyPeriod(years, row?.sampled_at)), wholeRecord(() => measure()));
         else {
           drawChart(host, M().chartData({ sites: [site], parameter, name: row?.name, unit: row?.unit, seriesBySite: { [id]: series.rows }, latestBySite: { [id]: latest }, years }));
           if (series.raw) host.append(el("p", { class: "wqs-hint" }, "Individual samples only: daily means couldn't be read just now."));
@@ -352,7 +378,7 @@
       const t = ++token, chosen = st.chosen.map(byId).filter(Boolean);
       const chips = el("ul", { class: "wqs-chips", "aria-label": "Sites compared" }, ...chosen.map((s, i) => el("li", { class: "wqs-chip", "data-slot": String(i + 1) },
         el("i", { "aria-hidden": "true" }, String(i + 1)), el("span", {}, s.name),
-        el("button", { type: "button", "aria-label": "Remove " + s.name + " from the comparison", onclick: () => { st.chosen = M().remove(st.chosen, s.id); st.adding = false; mark(); render(); body.querySelector("h2")?.focus({ preventScroll: true }); } }, "×"))));
+        el("button", { type: "button", "aria-label": "Remove " + s.name + " from the comparison", onclick: () => { st.chosen = M().remove(st.chosen, s.id); st.adding = false; drawPins(); render(); body.querySelector("h2")?.focus({ preventScroll: true }); } }, "×"))));
       fill(body, heading("Comparing " + chosen.length + " sites"), chips, adder()); say("Loading the sites' results…");
       const latest = {};
       await pool(chosen.map((s) => async () => { try { latest[s.id] = await latestOf(s.id); } catch { latest[s.id] = { rows: [] }; } }), CONCURRENCY);
@@ -373,18 +399,21 @@
         const per = {}, series = {};
         await pool(chosen.map((s) => async () => {
           const row = list(latest[s.id]?.rows).find((r) => r.parameter === parameter);
-          const [read, summary, band, trend] = row ? await Promise.all([seriesOf(s.id, parameter, years, row.sampled_at).catch(() => ({ rows: [] })), analysis("summary", s.id, parameter, years), analysis("band", s.id, parameter, years), analysis("trend", s.id, parameter, years)]) : [{ rows: [] }, null, null, null];
+          const [read, summary, band, trend] = row ? await Promise.all([seriesOf(s.id, parameter, years).catch(() => ({ rows: [] })), analysis("summary", s.id, parameter, years), analysis("band", s.id, parameter, years), analysis("trend", s.id, parameter, years)]) : [{ rows: [] }, null, null, null];
           series[s.id] = read.rows; per[s.id] = { latest: latest[s.id], summary, band, trend };
         }), CONCURRENCY);
         if (m !== token || gone) return;
-        drawChart(host, M().chartData({ sites: chosen, parameter, name: p?.name, unit: p?.unit, seriesBySite: series, latestBySite: latest, years }));
+        if (years && Object.values(series).every((r) => !list(r).length)) {
+          const last = W().latestInstant(chosen.map((s) => list(latest[s.id]?.rows).find((r) => r.parameter === parameter)?.sampled_at));
+          fill(host, el("p", { class: "wqs-empty" }, M().emptyPeriod(years, last)), wholeRecord(() => draw()));
+        } else drawChart(host, M().chartData({ sites: chosen, parameter, name: p?.name, unit: p?.unit, seriesBySite: series, latestBySite: latest, years }));
         const rows = M().compareRows(chosen, parameter, per, years, offered);
         const windowLabel = M().WINDOWS.find((w) => w.years === years)?.label.toLowerCase() || "";
         fill(table, el("table", { class: "wqs-table" }, el("caption", {}, (p?.name || parameter) + ", " + windowLabel),
           el("thead", {}, el("tr", {}, ...["Site", "Latest", "Median", "NPS-FM band", "Trend (indicative)"].map((h) => el("th", { scope: "col" }, h)))),
           el("tbody", {}, ...rows.map((r) => el("tr", { "data-slot": String(r.slot) }, el("th", { scope: "row" }, el("i", { "aria-hidden": "true" }, String(r.slot)), r.name),
             cell(r.latest, ", "), cell(r.median, " ("), el("td", {}, r.band), cell(r.trend, ", "))))),
-          el("p", { class: "wqs-hint" }, "The median and trend are over the hydrological years of the period chosen; the band always over 5 years. Open a site on its own for the reasons and LAWA's results."),
+          el("p", { class: "wqs-hint" }, M().compareHint(years)),
           how(Object.values(per).flatMap((x) => [x.band, x.trend])));
       }
       return draw();

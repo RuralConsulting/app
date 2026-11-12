@@ -109,3 +109,7 @@
   .wqs-panel[data-view="list"] { max-height: 45%; }
 }
 @media print { .wqs-pin, .wqs-ctrl, .wqs-panel { display: none; } }
+/* N2c: the switch for older and sparse sites, beside the list's header */
+.wqs-switch { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
+.wqs-held { margin-top: 8px; }
+.wqs-held > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: var(--text-small); }
