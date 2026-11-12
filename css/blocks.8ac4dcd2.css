@@ -207,6 +207,29 @@
 .chart-mark.chart-censored.chart-s1 { stroke: var(--ink); }
 .chart-mark.chart-censored.chart-s2 { stroke: var(--accent); }
 .chart-mark.chart-censored.chart-s3 { stroke: var(--ink-2); }
+/* N2: a fifth and sixth series (a comparison of up to six sites), and the site colours: each its own colour, dash and marker */
+.chart-line.chart-s4 { stroke: var(--ink); stroke-dasharray: 12 4; }
+.chart-line.chart-s5 { stroke: var(--ink-2); stroke-dasharray: 6 2 2 2 2 2; }
+.chart-line.chart-line-censored:is(.chart-s4, .chart-s5) { stroke-dasharray: 1 5; }   /* a censored stretch stays dotted */
+.chart-mark.chart-s4 { fill: var(--ink); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s5 { fill: var(--ink-2); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-censored.chart-s4 { stroke: var(--ink); }
+.chart-mark.chart-censored.chart-s5 { stroke: var(--ink-2); }
+.chart-palette-sites .chart-s0 { --series: var(--series-1); }
+.chart-palette-sites .chart-s1 { --series: var(--series-2); }
+.chart-palette-sites .chart-s2 { --series: var(--series-3); }
+.chart-palette-sites .chart-s3 { --series: var(--series-4); }
+.chart-palette-sites .chart-s4 { --series: var(--series-5); }
+.chart-palette-sites .chart-s5 { --series: var(--series-6); }
+.chart-palette-sites .chart-line { stroke: var(--series); }
+.chart-palette-sites .chart-mark { fill: var(--series); }
+.chart-palette-sites .chart-mark.chart-censored { fill: var(--panel); stroke: var(--series); }
+.chart-palette-sites .chart-band { fill: var(--ink-3); }
+/* N2: limit lines the caller gives (none yet; N3's adjustable lines), labelled at the right */
+.chart-limit { stroke: var(--ink); stroke-width: 1.5; }
+.chart-limit-dashed { stroke-dasharray: 8 4; }
+.chart-limit-dotted { stroke-dasharray: 2 3; stroke-linecap: round; }
+.chart-limit-label { font: 600 var(--text-small) var(--f-ui); fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
 .chart-legend { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font: 400 var(--text-small)/1.35 var(--f-ui); }
 .chart-key { display: flex; gap: 8px; align-items: center; }
 .chart-key > span { min-width: 0; overflow-wrap: anywhere; }

@@ -1,0 +1,105 @@
+/* V4: Maps in the farm and group spaces. The space's header stays; the viewer (vendor/viewer.css) fills what is under it, on a
+   phone and on a computer. The viewer's own layout is its stylesheet's. */
+#screen-maps { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--demo-banner-height) + var(--farm-header-height)); background: var(--wash); color: var(--ink); font-family: var(--f-ui); overflow: auto; }
+.group-maps { display: none; }
+#farm-actions a { white-space: nowrap; }   /* five tabs on a phone, each on one line */
+/* a phone's group space otherwise scrolls as a page, which gives the viewer no height to fill */
+#screen-group[data-view="maps"] { position: fixed; inset: var(--demo-banner-height, 0px) 0 0 0; padding-top: 0; min-height: 0; }
+#screen-group[data-view="maps"] .group-body { display: none; }
+#screen-group[data-view="maps"] .group-maps { display: block; flex: 1; min-height: 0; position: relative; overflow: auto; }
+.maps-viewer { height: 100%; }
+.maps-message { max-width: 34em; margin: 0 auto; padding: var(--space); text-align: center; }
+.maps-again { min-height: 44px; padding: 0 16px; font: inherit; cursor: pointer; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); }
+.maps-list { max-width: 40em; margin: 0 auto; padding: var(--space); }
+.maps-list h2 { margin: 0 0 8px; font-family: var(--f-display); font-size: var(--text-heading); }
+.maps-list ul { list-style: none; margin: 0; padding: 0; }
+.maps-list li + li { margin-top: 8px; }
+.maps-list a { display: block; min-height: 44px; padding: 10px 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); text-decoration: none; overflow-wrap: anywhere; }
+.maps-list a:hover { border-color: var(--brand); }
+.maps-list small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+
+/* N2: water quality sites in Maps (js/wq-sites.js): a button among the map's controls, pins named at close zoom, and a panel beside
+   the map on a computer or a sheet from the bottom on a phone (the viewer's own breakpoint, 720px). Tokens only. */
+.maplibregl-ctrl-group button.wqs-toggle { width: auto; height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; font: 600 var(--text-small) var(--f-ui); color: var(--ink); background: var(--panel); white-space: nowrap; }
+.maplibregl-ctrl-group button.wqs-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.wqs-drop { width: 10px; height: 10px; border-radius: 50% 0 50% 50%; transform: rotate(-45deg); background: var(--map-wq); flex: none; }
+.wqs-toggle[aria-pressed="true"] .wqs-drop { background: var(--accent-ink); }
+.wqs-pin { display: block; border: 0; background: none; padding: 6px; cursor: pointer; color: var(--map-label); font: 600 var(--text-small) var(--f-ui); text-shadow: var(--map-label-shadow); }
+.wqs-pin i { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--map-wq); border: 2px solid var(--map-label); box-shadow: var(--map-pin-shadow); font-style: normal; text-shadow: none; color: var(--map-label); }
+.wqs-pin.wqs-older i { width: 12px; height: 12px; background: var(--map-wq-older); }
+.wqs-pin .wqs-label { display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 160px; margin-top: -4px; text-align: center; line-height: 1.15; pointer-events: none; }
+.wqs-near .wqs-pin .wqs-label, .wqs-pin.wqs-chosen .wqs-label, .wqs-pin:focus-visible .wqs-label, .wqs-pin:hover .wqs-label { display: block; }
+/* comparing: the pins carry their numbers, so names show only close in (or on hover and focus), never piled on each other */
+.wqs-comparing:not(.wqs-near) .wqs-pin.wqs-chosen:not(:hover, :focus-visible) .wqs-label { display: none; }
+/* the panel sits at the right on a computer: the map's own controls move to its left while it is open, so none is hidden */
+@media (min-width: 721px) {
+  .wqs-open .maplibregl-ctrl-top-right, .wqs-open .maplibregl-ctrl-bottom-right { right: 454px; }
+}
+.wqs-pin.wqs-chosen { z-index: 2; }
+.wqs-pin.wqs-chosen i { width: 22px; height: 22px; outline: 2px solid var(--map-halo); color: var(--panel); }
+.wqs-pin:focus-visible { outline: none; }
+.wqs-pin:focus-visible i { outline: 3px solid var(--map-label); outline-offset: 2px; }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="1"] i { background: var(--series-1); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="2"] i { background: var(--series-2); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="3"] i { background: var(--series-3); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="4"] i { background: var(--series-4); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="5"] i { background: var(--series-5); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="6"] i { background: var(--series-6); }
+.wqs-panel { position: absolute; z-index: 10; top: 12px; right: 12px; bottom: 34px; width: 430px; max-width: calc(100% - 24px); display: flex; flex-direction: column;
+  background: var(--panel); color: var(--ink); border-radius: var(--radius); box-shadow: var(--shadow); font: 400 var(--text-body)/1.4 var(--f-ui); overflow: hidden; }
+.wqs-panel[hidden] { display: none; }
+.wqs-bar { display: flex; align-items: center; gap: 8px; padding: 4px 4px 0 8px; flex: none; }
+.wqs-back { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; text-decoration: underline; }
+.wqs-close { margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--wash); color: var(--ink-2); font: 400 var(--text-heading)/1 var(--f-ui); cursor: pointer; }
+.wqs-status { margin: 0 16px; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-status:empty { display: none; }
+.wqs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; }
+.wqs-body h2 { margin: 0 0 4px; font: 600 var(--text-heading)/1.2 var(--f-head); overflow-wrap: anywhere; }
+.wqs-body h2:focus { outline: none; }
+.wqs-body h3 { margin: 16px 0 4px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.wqs-meta, .wqs-hint, .wqs-credit { margin: 4px 0; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-provisional { display: inline-block; padding: 0 8px; border: 1px solid var(--ink-2); border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.wqs-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.wqs-site { display: block; width: 100%; min-height: 44px; padding: 8px 4px; border: 0; border-top: 1px solid var(--rule); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.wqs-site:hover { background: var(--wash); }
+.wqs-site b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.wqs-site small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-site.wqs-older b { font-weight: 400; }
+.wqs-values { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.wqs-value { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; width: 100%; min-height: 44px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.wqs-value[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--wash); padding: 5px 9px; }
+.wqs-value .wqs-name { font-weight: 600; overflow-wrap: anywhere; }
+.wqs-value .wqs-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wqs-value small { grid-column: 1 / -1; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 12px 0 0; }
+.wqs-field { display: grid; gap: 2px; min-width: 0; flex: 1 1 14em; }
+.wqs-field > span { color: var(--ink-2); font-size: var(--text-small); font-weight: 600; }
+.wqs-panel select { min-height: 44px; max-width: 100%; padding: 0 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; }
+.wqs-chart .chart-block { padding: 8px 0 0; border: 0; background: none; }
+.wqs-findings p { margin: 8px 0; font-size: var(--text-small); }
+.wqs-how { margin-top: 8px; font-size: var(--text-small); color: var(--ink-2); }
+.wqs-how > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--ink); }
+.wqs-how ul { margin: 4px 0; padding-left: 1.2em; }
+.wqs-actions { margin-top: 12px; }
+.wqs-button { min-height: 44px; padding: 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); font: 600 var(--text-body) var(--f-ui); cursor: pointer; }
+.wqs-button:hover { border-color: var(--accent); }
+.wqs-adder select { width: 100%; }
+.wqs-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; padding: 0; }
+.wqs-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 2px 2px 4px; border: 1px solid var(--rule); border-radius: 999px; font-size: var(--text-small); }
+.wqs-chip > span { overflow-wrap: anywhere; }
+.wqs-chip button { flex: none; width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--wash); color: var(--ink); font: 600 var(--text-body)/1 var(--f-ui); cursor: pointer; }
+:is(.wqs-chip, .wqs-table th) > i { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; margin-right: 4px; border-radius: 50%; color: var(--panel); font: 700 var(--text-small)/1 var(--f-ui); font-style: normal; vertical-align: -4px; }
+.wqs-table-wrap { overflow-x: auto; margin-top: 8px; }
+.wqs-table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+.wqs-table caption { text-align: left; font-weight: 600; padding: 4px 0; }
+.wqs-table :is(th, td) { text-align: left; vertical-align: top; padding: 6px 4px; border-top: 1px solid var(--rule); }
+.wqs-table thead th { color: var(--ink-2); border-top: 0; }
+.wqs-table tbody th { font-weight: 600; min-width: 7em; overflow-wrap: anywhere; }
+.wqs-table .wqs-figure { display: block; font-variant-numeric: tabular-nums; }
+.wqs-table td:is(:nth-child(2), :nth-child(3)) .wqs-figure { white-space: nowrap; }
+.wqs-table td small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+@media (max-width: 720px) {
+  .wqs-panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; max-height: 72%; border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .wqs-panel[data-view="list"] { max-height: 45%; }
+}
+@media print { .wqs-pin, .wqs-ctrl, .wqs-panel { display: none; } }

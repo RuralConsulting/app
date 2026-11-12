@@ -54,6 +54,8 @@
   --card-swatch-ground: #4b5843;
   /* LP1: the home map's farms and groups (map colours, the same in both themes: they sit on the aerial) */
   --map-farm: #ffc94a; --map-group: #62d2ff;
+  /* N2: water quality site pins on a published map (the same in both themes: they sit on the aerial and the topographic map) */
+  --map-wq: #0a8fd6; --map-wq-older: #7f95a3;
   --backdrop: rgba(21, 26, 20, .55);
   --banner-panel: #302f28; --banner-ink: #fffdf7;
   --print-panel: #ffffff; --print-ink: #000000;
@@ -68,6 +70,8 @@
   --map-background: #e4e6da;
   --qr-ground: #fff;   /* the same in both themes: a phone reads a QR code only on white */
   --map-icon-filter: none;
+  /* N2: the sites in a water quality comparison, one colour each (chart lines, chips and map pins), readable on the panel */
+  --series-1: #0b62a4; --series-2: #b34700; --series-3: #11734f; --series-4: #7247a0; --series-5: #b0255f; --series-6: #6b5a12;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -76,6 +80,7 @@
   --shadow: 0 6px 24px rgba(0, 0, 0, .4);
   --map-background: #363a31;
   --map-icon-filter: invert(1);
+  --series-1: #62b0ec; --series-2: #ff9a52; --series-3: #4cc79a; --series-4: #c2a0ee; --series-5: #ff86b8; --series-6: #e2c35c;
   color-scheme: dark;
   }
 }
@@ -84,5 +89,6 @@
   --shadow: 0 6px 24px rgba(0, 0, 0, .4);
   --map-background: #363a31;
   --map-icon-filter: invert(1);
+  --series-1: #62b0ec; --series-2: #ff9a52; --series-3: #4cc79a; --series-4: #c2a0ee; --series-5: #ff86b8; --series-6: #e2c35c;
   color-scheme: dark;
 }

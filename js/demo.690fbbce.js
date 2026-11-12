@@ -1182,6 +1182,8 @@
     });
   }
   function demoAnalysis(d, body) {
+    // N2: the Maps panel asks for a site's band, trend or summary with no preset and no end year (the library's own window)
+    if (!body?.preset_id && body?.params && body.params.end_year === undefined && body.params.location_id === undefined) return demoSiteAnalysis(d, body);
     const loc = body?.params?.location_id === DEMO_LOCATION.id ? DEMO_LOCATION : null;
     const site = wqOf(d).sites.find((s) => s.site_id === (loc ? loc.current_site_id : body?.params?.site_id)), res = DEMO_RESULTS[site?.site_id];
     if (!site || body.mode !== "preview") return null;
@@ -1208,6 +1210,78 @@
       result, unavailable, caveats, statement: "", ai_proposed_inputs: null, advisor_overrides: {}, note_allowed: false,
       preview_sha256: (site.site_id.toString(16) + (band ? "b" : "5") + parameter.length.toString(16)).padStart(64, "0") };
   }
+  // N2: the Maps panel's previews, in the function's reply shape, over the demo's invented series. The browser cannot run the library,
+  // so these are stand-in figures (a count, a plain median, an invented band and trend) with the library's record rules on the demo's
+  // months, so a short record says "too little data" as the real function does; the real path is tested in supabase/functions/analysis.
+  // The window is the library's default: hydrological years ending 30 June 2026 (the demo's results run to Sep 2026).
+  const DEMO_BANDS = { "9101|nitrate-toxicity": "B", "9102|nitrate-toxicity": "C", "9101|drp": "B", "9102|drp": "C", "9101|e-coli": "D", "9102|e-coli": "E" };
+  const DEMO_TRENDS = { "9101|nitrate-nitrite-n": ["likely", "increasing", 0.031], "9102|nitrate-nitrite-n": ["very likely", "decreasing", -0.052], "9101|e-coli": ["likely", "increasing", 4.2] };
+  const BAND_TABLES = { "nitrate-toxicity": "Appendix 2A Table 6 – Nitrate (toxicity)", "e-coli": "Appendix 2A Table 9 – Escherichia coli (E. coli)", drp: "Appendix 2B Table 20 – Dissolved reactive phosphorus" };
+  const DEMO_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const demoDay = (t) => Number(t.slice(8, 10)) + " " + DEMO_MONTHS[Number(t.slice(5, 7)) - 1] + " " + t.slice(0, 4);
+  function demoSiteAnalysis(d, body) {
+    const p = body.params, wq = wqOf(d), site = wq.sites.find((s) => s.site_id === p.site_id);
+    if (!site || body.mode !== "preview" || !["summary", "band", "trend"].includes(p.tool)) return null;
+    const band = p.tool === "band", years = band ? 5 : Number(p.years) || (p.tool === "trend" ? 10 : 5), end = 2026;
+    const from = end - years + "-07-01", to = end + "-06-30";
+    const parameter = !band ? p.parameter : p.attribute === "nitrate-toxicity" ? (wq.series[site.site_id + "|nitrate-n"] ? "nitrate-n" : "nitrate-nitrite-n") : p.attribute === "suspended-fine-sediment" ? "clarity" : p.attribute;
+    const rows = (wq.series[site.site_id + "|" + parameter] || []).filter((r) => r.sampled_at.slice(0, 10) >= from && r.sampled_at.slice(0, 10) <= to);
+    const ds = site.source_key === "ecan-wq-sites" ? "ecan-wq" : site.source_key, src = WQ_SOURCES[ds], unit = WQ_PARAMS[parameter]?.[1] || "";
+    const months = new Set(rows.map((r) => r.sampled_at.slice(0, 7))).size, quarters = new Set(rows.map((r) => r.sampled_at.slice(0, 4) + "q" + Math.floor((Number(r.sampled_at.slice(5, 7)) - 1) / 3))).size;
+    const hydro = new Set(rows.map((r) => Number(r.sampled_at.slice(0, 4)) + (Number(r.sampled_at.slice(5, 7)) >= 7 ? 1 : 0))).size;
+    const coverage = { months, quarters, years_with_data: hydro, expected_months: years * 12, expected_quarters: years * 4 };
+    let result = null, unavailable = null;
+    if (!rows.length) unavailable = { reason: "no_results", detail: "No " + parameter + " results you can read at this site between " + demoDay(from) + " and " + demoDay(to) + "." };
+    else if (p.tool === "summary") {
+      const v = rows.map((r) => r.value).sort((a, b) => a - b), mid = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2, med = Number(mid.toPrecision(3));
+      result = { samples: rows.length, censored_below: rows.filter((r) => r.qualifier === "<").length, censored_above: rows.filter((r) => r.qualifier === ">").length, median: { lo: med, hi: med, exact: true }, unit };
+    } else if (band) {
+      const b = DEMO_BANDS[site.site_id + "|" + p.attribute];
+      if (!BAND_TABLES[p.attribute]) unavailable = { reason: "missing_class", detail: "The suspended sediment class of this site (Appendix 2C Table 23, from its REC group) is not recorded. An advisor can give the class and REC group at confirmation." };
+      else if (months < 54 || quarters < 18) unavailable = { reason: "insufficient_record", detail: "Not enough data for a band: " + months + " of 60 months and " + quarters + " of 20 quarters have a result; the rule (LAWA factsheet: Calculating water quality state for rivers) needs at least 54 months and 18 quarters over 5 years." };
+      else if (b) result = { attribute: p.attribute, table: BAND_TABLES[p.attribute], band: b, monthly_values: months, statistics: [], bottom_line: null, notes: [], coverage };
+      else unavailable = { reason: "censoring_indeterminate", detail: "Results below or above detection limits leave the band undecided here (invented for the demo)." };
+    } else {
+      const t = DEMO_TRENDS[site.site_id + "|" + parameter] || ["indeterminate", null, 0.001];
+      const enough = years === 5 ? months >= 54 : months >= Math.ceil(0.9 * years * 12) && hydro >= Math.ceil(0.9 * years);
+      if (!enough) unavailable = { reason: "insufficient_record", detail: years === 5 ? "A 5-year trend needs monthly values in at least 54 of 60 months; this series has " + months + "."
+        : "A " + years + "-year trend needs values in 90% of months (or of quarters) and 90% of years; this series has " + months + " of " + years * 12 + " months, " + quarters + " of " + years * 4 + " quarters and " + hydro + " of " + years + " years." };
+      else {
+        const conf = t[0] === "very likely" ? 0.96 : t[0] === "likely" ? 0.81 : 0.55, dec = t[1] === "decreasing" ? conf : 1 - conf;
+        result = { seasons: "monthly", seasonal: false, seasonality_p: 0.4, values: months, censored_values: 0, s: 0, var_s: 0, z: 0, p_decreasing: dec, p_increasing: 1 - dec, category: t[0], direction: t[1],
+          assessment: t[1] === null ? "indeterminate" : t[1] === "decreasing" ? "improving" : "degrading", sen_slope: { per_year: t[2], percent_per_year: null, unit: unit + "/year" }, coverage,
+          caveat: "Indicative: calculated by the platform in the LAWA style; not LWP-Trends output and not checked against it." };
+      }
+    }
+    const caveats = rows.length ? [...(src.provisional ? [src.name + ": Provisional until reviewed by ECan."] : []), ...(p.tool === "trend" && result ? [result.caveat] : []),
+      "The source does not report the laboratory or method of each result, so method comparability is not checked."] : [];
+    const methods = { summary: ["x1-summary v1", "Summary statistics of every sample (replicates collapsed)"], band: ["x1-band v1", "NPS-FM attribute band"], trend: ["x1-trend v1", "Mann-Kendall / seasonal Kendall test with Sen slope, LAWA-style confidence categories (indicative)"] }[p.tool];
+    return { preset: null, tool: p.tool, tool_version: "x1-wq 1.0.0", method: { id: methods[0], name: methods[1], ...(band && BAND_TABLES[p.attribute] ? { table: BAND_TABLES[p.attribute] } : {}), percentile: "Hazen", censoring: "x1-censored-bounds v1" },
+      parameters: { ...p, parameter, end_year: end, years, from, to }, site: { monitoring_site_id: site.site_id, source_key: site.source_key, external_id: site.external_id, name: site.name },
+      measurement_sources: rows.length ? [ds] : [], source_versions: {}, attribution: rows.length ? [{ dataset: ds, name: src.name, statement: src.attribution, provisional: src.provisional ? "Provisional until reviewed by ECan." : null }] : [],
+      result, unavailable, caveats, statement: "", ai_proposed_inputs: null, advisor_overrides: {}, note_allowed: false,
+      preview_sha256: (site.site_id.toString(16) + p.tool.length.toString(16) + years.toString(16) + parameter.length.toString(16)).padStart(64, "0") };
+  }
+  // N2, as public.site_record_summary: each listed demo site's record per parameter family (distinct sampling times, first, last, years).
+  function demoRecordSummary(d) {
+    const wq = wqOf(d), M = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel, out = [];
+    for (const site of wq.sites) {
+      const fams = new Map();
+      for (const [k, rows] of Object.entries(wq.series)) {
+        const [id, key] = k.split("|");
+        if (Number(id) !== site.site_id || !rows.length) continue;
+        const f = M.familyOf(key), v = fams.get(f) || { times: new Set(), keys: new Set() };
+        for (const r of rows) v.times.add(r.sampled_at);
+        v.keys.add(key); fams.set(f, v);
+      }
+      for (const [family, v] of fams) {
+        const t = [...v.times].sort();
+        out.push({ site_id: site.site_id, source_key: site.source_key, external_id: site.external_id, site_name: site.name, family, parameters: [...v.keys].sort(), n: t.length,
+          first_sampled: t[0], last_sampled: t[t.length - 1], years: new Set(t.map((x) => x.slice(0, 4))).size });
+      }
+    }
+    return out;
+  }
   // D3, as public.wq_state_trend_for_site: the one invented ECan site matched to a LAWA site (invented values, LAWA's layout).
   function demoLawa(site) {
     if (site !== 9101) return [];
@@ -1231,7 +1305,7 @@
         then(resolve, reject) { return execute().then(resolve, reject); },
       };
       async function execute() {
-        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : d.tables[table];
+        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : table === "site_record_summary" ? demoRecordSummary(d) : d.tables[table];
         if (write && adding && KEPT.includes(table)) {
           const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
             ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));

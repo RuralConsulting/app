@@ -8,6 +8,9 @@
 // CL1: every map offers the reference layers (roads, waterways) stored once on the platform under core/, signed and renewed with the
 // map's own files and passed as the viewer's referenceLayers; one whose file is not there is left out and the map opens without it.
 // CL2: so is every core layer marked to be offered on every map with its own style (tools/load_core_reference.py --batch).
+// N2: each map drawn is given the water quality sites overlay (js/wq-sites.js): a "Water quality" button on the map the viewer
+// returns, the sites of this farm or group, and a panel for a site or a comparison. What the person had open is kept while the
+// links are renewed (the map is drawn again where it was). An overlay that fails to start leaves the map as it is.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) { module.exports = api; return; }
@@ -27,6 +30,7 @@
     sb: () => FP.sb, el: (...a) => FP.el(...a), mount, backgrounds: () => api.backgrounds(linzKey()),
     // The viewer's stylesheet sets page-wide rules and is on only while a map is shown (index.html loads it as media="not all").
     styles: (on) => { const link = document.querySelector("link[data-viewer-styles]"); if (link) link.media = on ? "all" : "not all"; },
+    overlay: (map, holder, owner, state) => FP.wqSites?.attach({ map, holder, sb: FP.sb, owner, state }) || null,
     go: (hash) => { location.hash = hash; }, now: () => Date.now(), visible: () => document.visibilityState === "visible",
     setTimer: (f, ms) => setTimeout(f, ms), clearTimer: (t) => clearTimeout(t),
   });
@@ -159,6 +163,8 @@
 
     function dropMap(s) {
       env.clearTimer(s.timer); s.timer = null; s.renewAt = Infinity;
+      try { s.overlay?.remove(); } catch {}
+      s.overlay = null;
       try { s.map?.remove(); } catch {}
       s.map = null;
       env.styles(false);
@@ -199,6 +205,7 @@
         });
         if (at) s.map.jumpTo(at);
       } catch { say(s, UNAVAILABLE, tryAgain(s)); return; }
+      try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq) : null; } catch { s.overlay = null; }
       s.renewAt = env.now() + RENEW_MS;
       s.timer = env.setTimer(wake, RENEW_MS);
     }
@@ -216,7 +223,7 @@
     // host: the element to fill. opts: { owner: { farm } or { org }, name, item (a map's id, or none), href(mapId or null) }.
     async function open(host, opts) {
       close();
-      const s = shown = { host, opts, map: null, timer: null, renewAt: Infinity, chosen: null, several: false };
+      const s = shown = { host, opts, map: null, timer: null, renewAt: Infinity, chosen: null, several: false, overlay: null, wq: {} };
       say(s, "Loading maps…");
       let maps;
       try { maps = await readMaps(opts.owner); }

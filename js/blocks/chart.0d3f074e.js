@@ -10,7 +10,11 @@
 //         (a second series may carry a `note`, which the key shows in place of "comparison": WQ6, another member's different key)
 //         (WQ8: up to four series, each its own line, never joined to another; a series with `part: true` is the first's place in
 //         another dataset, kept when the comparison is turned off)
-//         bands?: { label, demo?, ranges: [{ label, from, to }] } }                         // from/to numbers, null = open ended
+//         bands?: { label, demo?, ranges: [{ label, from, to }] },                          // from/to numbers, null = open ended
+//         limits?: [{ value, label, style? }],   // N2: horizontal limit lines the caller gives (style "solid", "dashed" or "dotted";
+//                                                // dashed when not said), drawn across the plot and labelled; the scale reaches them
+//         assess?: "a line in place of 'Bands and trend: not assessed.'" (when no band ranges are given),
+//         palette?: "sites" }                    // N2: several sites side by side, each its own colour (and dash and marker)
 // t is an ISO time or epoch ms; value is the number (the limit, for a censored result); qualifier is "<", ">", "≤" or "≥";
 // text is the value as reported ("<0.002"), shown where given.
 (function (root, factory) {
@@ -51,7 +55,7 @@
 
   // The series drawn: at most MAX_SERIES. Without the comparison (compare: false), the first and the `part` series right after it
   // (WQ8: the same place's record in another dataset), never a comparison.
-  const MAX_SERIES = 4;
+  const MAX_SERIES = 6;   // N2: a comparison of up to six sites
   function shownSeries(data, o = {}) {
     const all = clean(data?.series);
     if (o.compare !== false) return all.slice(0, MAX_SERIES);
@@ -59,6 +63,11 @@
     for (const s of all.slice(1)) { if (!s.part || out.length >= MAX_SERIES) break; out.push(s); }
     return out;
   }
+
+  // N2: the limit lines the caller gives, each a finite value with a label; at most MAX_LIMITS. The block never makes one.
+  const MAX_LIMITS = 8, LIMIT_STYLES = ["solid", "dashed", "dotted"];
+  const limitLines = (data) => list(data?.limits).filter((l) => l && l.value !== null && l.value !== "" && Number.isFinite(Number(l.value)))
+    .slice(0, MAX_LIMITS).map((l) => ({ value: Number(l.value), label: text(l.label) || "Limit", style: LIMIT_STYLES.includes(l.style) ? l.style : "dashed" }));
 
   // "Nice" axis values: about n steps of 1, 2 or 5 times a power of ten, covering [lo, hi].
   function niceScale(lo, hi, n = 5) {
@@ -145,6 +154,8 @@
     let t0 = Infinity, t1 = -Infinity, vmin = 0, vmax = -Infinity;
     for (const p of all) { if (p.ms < t0) t0 = p.ms; if (p.ms > t1) t1 = p.ms; if (p.value < vmin) vmin = p.value; if (p.value > vmax) vmax = p.value; }
     if (!all.length) { t0 = t1 = 0; vmax = 1; }
+    const limits = limitLines(data);
+    for (const l of limits) { if (l.value < vmin) vmin = l.value; if (l.value > vmax) vmax = l.value; }   // a limit is always on the scale
     if (t1 - t0 < 1) { t0 -= 15 * 86400000; t1 += 15 * 86400000; }
     const y = niceScale(vmin, vmax * 1.05, 4);
     const x = (t) => m.l + ((t - t0) / (t1 - t0)) * w, yy = (v) => m.t + h - ((v - y.lo) / (y.hi - y.lo)) * h;
@@ -157,16 +168,20 @@
     }).filter(Boolean);
     const drawn = series.map((s) => ({ ...s, total: s.points.length, points: thin(s.points).map((p) => ({ ...p, cx: x(p.ms), cy: yy(p.value), censored: censored(p) })) }));
     placeBandLabels(bands, drawn, { x0: m.l, x1: m.l + w, y0: m.t, y1: m.t + h });
+    // each limit's label sits just above its line at the right; one that would touch the label above it goes under its line
+    const placed = limits.map((l) => ({ ...l, y: yy(l.value) })).sort((a, b) => a.y - b.y);
+    let lastLabel = -Infinity;
+    for (const l of placed) { l.labelY = l.y - 4 - LABEL_H + 2 < lastLabel + 2 ? l.y + LABEL_H : l.y - 4; lastLabel = l.labelY; }
     return {
       width, height, margin: m, plot: { x0: m.l, x1: m.l + w, y0: m.t, y1: m.t + h }, t0, t1, y, x, y_: yy,
       xticks: tt.ticks.map((t) => ({ t, x: x(t), label: timeLabel(t, tt.step, t1 - t0) })),
-      yticks: y.ticks.map((v) => ({ v, y: yy(v), label: number(v) })), bands,
+      yticks: y.ticks.map((v) => ({ v, y: yy(v), label: number(v) })), bands, limits: placed,
       series: drawn,
     };
   }
 
   let seq = 0;   // ids for the picture's title and description, so two charts on a page never share them
-  const MARK = ["circle", "square", "diamond", "circle"];
+  const MARK = ["circle", "square", "diamond", "circle", "square", "diamond"];
   const tagOf = (kind) => kind === "square" ? "rect" : kind === "diamond" ? "path" : "circle";
   function marker(kind, c, p) {
     const cx = p.cx.toFixed(1), cy = p.cy.toFixed(1), cls = "chart-mark chart-s" + c;
@@ -195,6 +210,11 @@
       }
       for (const p of s.points) parts.push(marker(MARK[c], c, p).replace("/>", "><title>" + esc(s.label + ", " + when(p.ms) + ": " + shown(p) + (unit ? " " + unit : "")) + "</title></" + (p.censored ? "path" : tagOf(MARK[c])) + ">"));
     });
+    // N2: the limit lines over the results, each labelled with its name and value at the right end (a halo keeps the label readable)
+    for (const l of g.limits) {
+      parts.push('<line class="chart-limit chart-limit-' + l.style + '" x1="' + P.x0 + '" x2="' + P.x1 + '" y1="' + l.y.toFixed(1) + '" y2="' + l.y.toFixed(1) + '"/>' +
+        '<text class="chart-limit-label" x="' + (P.x1 - 4) + '" y="' + l.labelY.toFixed(1) + '" text-anchor="end">' + esc(l.label + ": " + number(l.value) + (unit ? " " + unit : "")) + "</text>");
+    }
     // Band labels last, so they sit above the lines and markers (a halo in the panel colour keeps them readable), at a corner the data does not cross.
     for (const b of g.bands) if (b.labelAt) parts.push('<text class="chart-band-label" x="' + b.labelAt.x.toFixed(1) + '" y="' + b.labelAt.y.toFixed(1) + '" text-anchor="' + b.labelAt.anchor + '">' + esc(b.label) + "</text>");
     return '<svg class="chart-svg" viewBox="0 0 ' + width + " " + height + '" width="' + width + '" height="' + height + '" role="img" aria-labelledby="' + id + '-t ' + id + '-d" focusable="false">' +
@@ -204,24 +224,26 @@
   // The sentence the picture is read from: how many results, the period, the latest (and the comparison's, the same way).
   function describe(data, o = {}) {
     const series = shownSeries(data, o), unit = text(data?.parameter?.unit);
+    const limits = limitLines(data).map((l) => l.label + " at " + number(l.value) + (unit ? " " + unit : ""));
     return series.map((s) => {
       if (!s.points.length) return s.label + ": no results.";
       const first = s.points[0], last = s.points[s.points.length - 1], n = s.points.length;
       const cens = s.points.filter(censored).length;
       return s.label + ": " + n + (n === 1 ? " result" : " results") + (n > 1 ? " from " + when(first.ms) + " to " + when(last.ms) : "") + "; latest " + shown(last) + (unit ? " " + unit : "") + " on " + when(last.ms) +
         (cens ? "; " + cens + (cens === 1 ? " is" : " are") + " below or above a detection limit, not an exact value" : "") + ".";
-    }).join(" ");
+    }).join(" ") + (limits.length ? " " + (limits.length === 1 ? "Limit line: " : "Limit lines: ") + limits.join("; ") + "." : "");
   }
 
   function state(data) {
-    const n = clean(data?.series)[0]?.points.length || 0;
+    // N2: a comparison of sites is as full as its fullest site (the first chosen may have none of this measure)
+    const all = clean(data?.series), n = data?.palette === "sites" ? Math.max(0, ...all.map((s) => s.points.length)) : all[0]?.points.length || 0;
     return n === 0 ? "empty" : n < SPARSE_BELOW ? "sparse" : "full";
   }
 
   function legend(series, any, o, data) {
     const items = series.map((s, c) => '<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><line class="chart-line chart-s' + c + '" x1="1" x2="27" y1="6" y2="6"/>' +
       (MARK[c] === "square" ? '<rect class="chart-mark chart-s' + c + '" x="10.5" y="2.5" width="7" height="7"/>' : MARK[c] === "diamond" ? '<path class="chart-mark chart-s' + c + '" d="M14 1.5 l4.5 4.5 l-4.5 4.5 l-4.5 -4.5 z"/>' : '<circle class="chart-mark chart-s' + c + '" cx="14" cy="6" r="3.8"/>') + "</svg>" +
-      "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c ? " (" + (s.note || "comparison") + ")" : "") + "</span></li>");
+      "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c && (s.note || data?.palette !== "sites") ? " (" + (s.note || "comparison") + ")" : "") + (s.points.length || data?.palette !== "sites" ? "" : " · no results in this window") + "</span></li>");
     if (any) items.push('<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><path class="chart-mark chart-s0 chart-censored" d="M14 9.5 l-5.5 -9.4 h11 z"/></svg><span>Open triangle: below (&lt;) or above (&gt;) a detection limit, so not an exact value</span></li>');
     return '<ul class="chart-legend" aria-label="Key">' + items.join("") + "</ul>";
   }
@@ -233,7 +255,7 @@
 
   function render(data, o, ctx, width = 560) {
     const series = shownSeries(data, o);
-    if (!series[0]?.points.length) return "";
+    if (!(data?.palette === "sites" ? series.some((s) => s.points.length) : series[0]?.points.length)) return "";
     const h = ctx.level, id = "chart-" + ++seq;
     const unit = text(data?.parameter?.unit), height = width < 480 ? 250 : 300;
     const anyCensored = series.some((s) => s.points.some(censored));
@@ -247,8 +269,8 @@
       rows.map(({ s, p }) => "<tr><td>" + esc(when(p.ms)) + "</td>" + (series.length > 1 ? "<td>" + esc(s.label) + "</td>" : "") + "<td>" + esc(shown(p)) + (censored(p) ? " (limit, not exact)" : "") + "</td></tr>").join("") + "</tbody></table></div></details>";
     const assess = rangesGiven
       ? '<p class="chart-assess" data-assessed="true">Bands: ' + esc(text(bands.label) || "no method named") + (bands.demo ? ' <span class="chart-demo">· invented for the demo, not a standard or a grading</span>' : "") + "</p>"
-      : '<p class="chart-assess" data-assessed="false">Bands and trend: not assessed.</p>';
-    return '<section class="chart-block" data-chart-series="' + series.length + '">' +
+      : '<p class="chart-assess" data-assessed="false">' + esc(text(data?.assess) || "Bands and trend: not assessed.") + "</p>";
+    return '<section class="chart-block' + (data?.palette === "sites" ? " chart-palette-sites" : "") + '" data-chart-series="' + series.length + '">' +
       "<h" + h + ' class="block-title">' + esc(title) + (data?.provisional ? ' <span class="chart-provisional" title="The source says these results are provisional">Provisional</span>' : "") + "</h" + h + ">" +
       '<p class="chart-summary">' + esc(describe(data, o)) + "</p>" +
       '<div class="chart-plot" data-chart-width="' + width + '">' + svg(data, o, width, height, id) + "</div>" + legend(series, anyCensored, o, data) + assess +
@@ -283,5 +305,5 @@
     },
     state, render, mounted,
   });
-  return { block, state, layout, thin, DRAW_MAX, MAX_SERIES, shownSeries, niceScale, timeTicks, describe, clean, shown, svg, SPARSE_BELOW };
+  return { block, state, layout, thin, DRAW_MAX, MAX_SERIES, MAX_LIMITS, limitLines, shownSeries, niceScale, timeTicks, describe, clean, shown, svg, SPARSE_BELOW };
 });
