@@ -12,6 +12,8 @@
 // returns, the sites of this farm or group, and a panel for a site or a comparison. What the person had open is kept while the
 // links are renewed (the map is drawn again where it was). An overlay that fails to start leaves the map as it is.
 // N2b: the map's bounds go with it: a group the old model has no area for lists the shared sites inside its published map.
+// CTX2: on a group's map, the context layers the loader marked starts_on (native vegetation, protected places) are on as it first
+// opens on a device; a farm's map starts them all off, as before.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) { module.exports = api; return; }
@@ -20,7 +22,15 @@
   const linzKey = () => (FP.demo?.active || typeof FP_CONFIG === "undefined" ? null : FP_CONFIG.linzKey);
   // The viewer reads the person's remembered background as it starts. With no LINZ key (the demo) nothing is to be fetched,
   // so it starts on None; what the person had remembered is put back at once.
+  // CTX2: a context layer marked startOn (a group's map, tools/core_layers/layers.json "starts_on") is on as the map opens unless the
+  // person has switched it on or off on this device before: the viewer reads its remembered switch ("rv-ctx-<key>") only as it
+  // starts, so it is set for the start and taken away again; once the person switches it, the viewer remembers their choice.
   function mount(holder, options) {
+    let store = null;
+    try { store = localStorage; } catch {}
+    return api.seedStartOn(store, options.referenceLayers, () => mountWith(holder, options));
+  }
+  function mountWith(holder, options) {
     if (linzKey()) return root.RCLViewer.mount(holder, options);
     let was = null;
     try { was = localStorage.getItem(BASEMAP_KEY); localStorage.setItem(BASEMAP_KEY, "none"); } catch {}
@@ -114,7 +124,7 @@
       const usable = shared.map((L) => (L && [L.tiles, ...(L.tile_parts || []).map((p) => p.tiles)].every((f) => urls[f]) ? L : null));
       // a reference layer whose file did not get a link (not uploaded yet, or removed) is left out: the map opens without it
       const referenceLayers = reference.filter((r) => urls[r.rel]).map((r) => ({ key: r.key, title: r.title, credit: r.credit, url: urls[r.rel], ...(r.style ? { style: r.style } : {}),
-        ...(r.group ? { group: r.group } : {}), ...(r.order !== undefined ? { order: r.order } : {}) }));
+        ...(r.group ? { group: r.group } : {}), ...(r.order !== undefined ? { order: r.order } : {}), ...(r.startsOn ? { startsOn: true } : {}) }));
       return { manifest: pkg.manifest, urls, shared: usable, referenceLayers };
     }
 
@@ -144,7 +154,8 @@
           // N1: its theme heading in the Layers panel and its place, from the loader (style.reference.group, .order)
           return { rel, key: row.key, title: row.title, credit, style: ref.style,
             ...(typeof ref.group === "string" && ref.group.trim() ? { group: ref.group.trim() } : {}),
-            ...(Number.isFinite(ref.order) ? { order: ref.order } : {}) };
+            ...(Number.isFinite(ref.order) ? { order: ref.order } : {}),
+            ...(ref.starts_on === true ? { startsOn: true } : {}) };     // CTX2: on as a group's map opens
         });
     }
 
@@ -212,7 +223,7 @@
           manifest: { ...read.manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
           url: (rel) => read.urls[rel] || "",
           ...(read.shared.length ? { shared: read.shared } : {}),
-          referenceLayers: read.referenceLayers,
+          referenceLayers: startOn(read.referenceLayers, s.opts.owner),
           onBack: s.several ? () => env.go(s.opts.href(null)) : null, backLabel: "All maps",
           ...env.backgrounds(),
         });
@@ -259,5 +270,25 @@
     }
     return { open, close, wake, listMaps };
   }
-  return { create, backgrounds, filesByPath, BUCKET, MAX_MAPS, MAX_REFERENCE, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
+  // CTX2: where the viewer remembers a context layer's switch on this device (its contextDefs: "rv-ctx-" and the key as it cleans it)
+  const ctxStore = (key) => { const k = String(key || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 80); return k ? "rv-ctx-" + k : null; };
+  // CTX2: the viewer's reference layers for an owner: a group's map marks the layers that start on (startOn); a farm's map starts
+  // every context layer off, as before. The internal startsOn mark is never passed on.
+  function startOn(layers, owner) {
+    const group = !!(owner && owner.org && !owner.farm);
+    return (layers || []).map((r) => { const { startsOn, ...rest } = r; return startsOn && group ? { ...rest, startOn: true } : rest; });
+  }
+  // CTX2: run `start` (the viewer's mount) with each startOn layer's switch set on in `store` (localStorage) where the person has no
+  // choice of their own remembered, then take away only what was set here. A store that cannot be used changes nothing.
+  function seedStartOn(store, layers, start) {
+    const seeded = [];
+    for (const r of layers || []) {
+      if (!r || r.startOn !== true || !r.style) continue;
+      const k = ctxStore(r.key);
+      try { if (k && store && store.getItem(k) === null) { store.setItem(k, "1"); seeded.push(k); } } catch {}
+    }
+    try { return start(); }
+    finally { for (const k of seeded) try { if (store.getItem(k) === "1") store.removeItem(k); } catch {} }
+  }
+  return { create, backgrounds, filesByPath, ctxStore, startOn, seedStartOn, BUCKET, MAX_MAPS, MAX_REFERENCE, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
 });
