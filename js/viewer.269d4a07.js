@@ -12,6 +12,8 @@
  *                                  // shown it, so the viewer shows no popup of its own; anything else: the viewer's popup as usual
  * })
  * Every heading in the layer list folds; whether it is folded is remembered on this device per map and heading.
+ * Point layers drawn from their QGIS style are sized for the web (smaller further out, over a thin halo, set side by side
+ * where several layers share a place; see webPointPaint); a layer entry with "web_points": "as_published" keeps its exact sizes.
  * Works for the local preview (url = identity) and the customer portal (url = signed link).
  */
 (function () {
@@ -372,6 +374,174 @@
     return e;
   }
 
+  // ---- PT1: point symbols that suit the web ----------------------------------------------------------------------------------
+  // A point layer the web map draws from its QGIS style ("vector": {"geom": "circle"}) carries QGIS print sizes turned into pixels
+  // (13 to 22 px radius is usual): drawn as they are at every zoom they blanket a catchment in big discs with dark rims. Unless the
+  // layer says "web_points": "as_published", the published radius is read as the size close up (z15 and closer): the layer's own
+  // smallest..largest radius goes to 5..9 px (a layer already within 9 px keeps its sizes, at least 4 px; a single size is 7 px),
+  // so a graduated layer still reads small to large; wider out every point shrinks smoothly (x0.8 at z12, x0.6 at z8 and wider)
+  // to no less than 4.5 px. Outlines keep their colour, thinned in proportion and at most 1.2 px. Under each point a thin halo
+  // (1.25 px) parts it from the background and its neighbours: white on the aerial, a dark casing on the pale map (haloPaint).
+  // Colours, their order and the legend stay QGIS's.
+  const WEB_PT = { lo: 5, hi: 9, one: 7, min: 4, floor: 4.5, stroke: 1.2, minStroke: 0.5, halo: 1.25, haloColor: "#ffffff", haloOpacity: 0.9,
+    casingColor: "#1b2a24", casingOpacity: 0.6 };
+  const WEB_PT_ZOOMS = [[8, 0.6], [12, 0.8], [15, 1]];          // [zoom, share of the close-up size]
+  // the halo for the background showing: white on the aerial; a thin dark casing on the pale topographic map or no background,
+  // where a white halo adds nothing and pale points fade into the paper
+  function haloPaint(basemap) {
+    return basemap === "aerial" ? { "circle-color": WEB_PT.haloColor, "circle-opacity": WEB_PT.haloOpacity }
+      : { "circle-color": WEB_PT.casingColor, "circle-opacity": WEB_PT.casingOpacity };
+  }
+  const PT_STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.71, 0.71], [-0.71, -0.71], [0.71, -0.71], [-0.71, 0.71]];   // stacked: right, left, below, above, ...
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const webPoints = (L) => !!(L && L.vector && L.vector.geom === "circle" && Array.isArray(L.vector.layers) && L.web_points !== "as_published");
+  // the close-up radius for each published radius of a layer, from all its radii
+  function webRadius(radii) {
+    const rs = radii.filter((r) => typeof r === "number" && Number.isFinite(r) && r > 0);
+    if (!rs.length) return () => WEB_PT.one;
+    const lo = Math.min(...rs), hi = Math.max(...rs);
+    if (hi <= WEB_PT.hi) return (r) => Math.max(r, WEB_PT.min);           // already web-sized: as published
+    if (hi - lo < 0.5) return () => WEB_PT.one;                              // one size, too big: a plain web size
+    return (r) => WEB_PT.lo + ((Math.min(Math.max(r, lo), hi) - lo) / (hi - lo)) * (WEB_PT.hi - WEB_PT.lo);
+  }
+  // share of the close-up size at zoom z
+  function webShare(z) {
+    const S = WEB_PT_ZOOMS;
+    if (z <= S[0][0]) return S[0][1];
+    for (let i = 1; i < S.length; i++) if (z <= S[i][0]) return S[i - 1][1] + ((z - S[i - 1][0]) / (S[i][0] - S[i - 1][0])) * (S[i][1] - S[i - 1][1]);
+    return S[S.length - 1][1];
+  }
+  // a layer's close-up sizes: parts[j][class] = { r, sw } for each circle part of its symbol (bottom first), and the largest
+  // extent (radius and outline) of any class
+  function webPointSizes(L) {
+    const parts = L.vector.layers.map((v) => (v && v.type === "circle" && v.by && typeof v.by === "object" ? v.by : {}));
+    const f = webRadius(parts.flatMap((by) => Object.values(by).map((p) => p && p.radius)));
+    const sized = parts.map((by) => Object.fromEntries(Object.entries(by).map(([k, p]) => {
+      const r0 = p && typeof p.radius === "number" && p.radius > 0 ? p.radius : WEB_PT.one, r = r2(f(r0));
+      const sw0 = p && p.stroke && Number(p.stroke_width) > 0 ? Number(p.stroke_width) : 0;
+      return [k, { r, sw: sw0 ? r2(Math.min(WEB_PT.stroke, Math.max(0.6, (sw0 * r) / r0))) : 0 }];
+    })));
+    const max = Math.max(0, ...sized.flatMap((s) => Object.values(s).map((x) => x.r + x.sw)));
+    return { parts: sized, max };
+  }
+  // at one zoom stop: a class's radius, outline and halo radius
+  const ptRadius = (x, s) => r2(Math.max(WEB_PT.floor, x.r * s));
+  const ptStroke = (x, s) => (x.sw ? r2(Math.max(WEB_PT.minStroke, x.sw * s)) : 0);
+  // the paint for a web-sized point layer: { parts: [circle paint for each part], halo: circle paint drawn under them, keys }.
+  // cls: the expression giving a feature's class key ("0", "1", ... or "*" for a single symbol)
+  function webPointPaint(L, cls) {
+    const sz = webPointSizes(L);
+    const byClass = (by, fallback, val) => {
+      const keys = Object.keys(by);
+      if (keys.length === 1 && keys[0] === "*") return val(by["*"]);
+      const e = ["match", cls]; keys.forEach((k) => e.push(k, val(by[k]))); e.push(fallback); return e;
+    };
+    const zoomed = (by, fallback, val) => ["interpolate", ["linear"], ["zoom"], ...WEB_PT_ZOOMS.flatMap(([z, s]) => [z, byClass(by, fallback, (x) => val(x, s))])];
+    const parts = L.vector.layers.map((v, j) => {
+      const by = (v && v.by) || {}, size = sz.parts[j];
+      const get = (prop, fallback) => byClass(by, fallback, (p) => (p[prop] == null ? fallback : p[prop]));
+      return { "circle-color": get("color", "#000000"), "circle-opacity": get("opacity", 1),
+        "circle-radius": zoomed(size, WEB_PT.floor, ptRadius), "circle-stroke-color": get("stroke", "#000000"),
+        "circle-stroke-width": zoomed(size, 0, ptStroke), "circle-stroke-opacity": get("stroke_opacity", 1) };
+    });
+    // the halo: just outside the widest part of each class
+    const outer = {};
+    sz.parts.forEach((by) => Object.entries(by).forEach(([k, x]) => { if (!outer[k] || x.r + x.sw > outer[k].r + outer[k].sw) outer[k] = x; }));
+    const halo = { "circle-color": WEB_PT.haloColor, "circle-opacity": WEB_PT.haloOpacity, "circle-blur": 0,
+      "circle-radius": zoomed(outer, WEB_PT.floor + WEB_PT.halo, (x, s) => r2(ptRadius(x, s) + ptStroke(x, s) + WEB_PT.halo)) };
+    return { parts, halo, keys: Object.keys(outer), max: sz.max };
+  }
+  // how far out from its symbol's centre a point's label goes at zoom z: clear of the symbol, its outline and halo
+  function pointGap(L, z) {
+    if (webPoints(L)) {
+      const sz = webPointSizes(L), s = webShare(z);
+      let ext = 0;
+      sz.parts.forEach((by) => Object.values(by).forEach((x) => { ext = Math.max(ext, ptRadius(x, s) + ptStroke(x, s)); }));
+      return r2(ext + WEB_PT.halo + 3);
+    }
+    if (L && L.vector && L.vector.geom === "circle") {           // "as_published": its own pixel sizes
+      let ext = 0;
+      (L.vector.layers || []).forEach((v) => Object.values((v && v.by) || {}).forEach((p) => {
+        ext = Math.max(ext, (typeof p.radius === "number" ? p.radius : 0) + (Number(p.stroke_width) || 0) / 2); }));
+      return r2(Math.max(10, ext + 3));
+    }
+    return 10;
+  }
+  // the zoom a layer's labels start from: QGIS's own label scale limit if it set one; else, for a point layer with many points
+  // (more than 25), from z11 (or two zooms after the points themselves appear), so a regional view is not a wall of names
+  function labelFrom(L) {
+    const st = (L && L.labels) || {};
+    if (st.minzoom != null) return st.minzoom;
+    const from = L.visible_from || 0;
+    if (L.geometry === "point" && Number(L.feature_count) > 25) return Math.max(11, from + 2);
+    return from;
+  }
+  // points of several point layers in the same place: where does each layer's point go so none is hidden in a bullseye.
+  // entries: the web-sized point layers top first, { id, on, pts: [[feature id, place key]] }. The top layer that is on draws
+  // every point where it is; a layer under it draws a point that a layer above it also has at that place a little to one side
+  // (the second layer on to the right, the third to the left, then below, above...), the rest where they are.
+  // Returns { id: { k: its place among the layers on (0 = top), ids: [feature ids moved aside] } }.
+  function stackPlan(entries) {
+    const out = {}, above = new Set();
+    let k = 0;
+    entries.forEach((E) => {
+      if (!E.on) return;
+      const ids = k ? (E.pts || []).filter(([, key]) => above.has(key)).map(([id]) => id) : [];
+      out[E.id] = { k, ids };
+      (E.pts || []).forEach(([, key]) => above.add(key));
+      k += 1;
+    });
+    return out;
+  }
+  // a point's place key: its position to about a metre (a MultiPoint by its first point)
+  function placeKey(g) {
+    if (!g) return null;
+    const c = g.type === "Point" ? g.coordinates : g.type === "MultiPoint" && g.coordinates && g.coordinates[0];
+    return Array.isArray(c) && c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]) ? c[0].toFixed(5) + "," + c[1].toFixed(5) : null;
+  }
+  // the offset (screen pixels) of a layer's moved-aside points at place k, as a zoom expression: the step is about one symbol
+  // across (the largest of the stacked layers), so the two sit side by side, touching, their halos between them
+  function stackOffset(k, max) {
+    if (!k) return ["literal", [0, 0]];
+    const [ux, uy] = PT_STEPS[(k - 1) % PT_STEPS.length];
+    return ["interpolate", ["linear"], ["zoom"], ...WEB_PT_ZOOMS.flatMap(([z, s]) => {
+      const d = Math.max(WEB_PT.floor * 2, max * s * 2) + WEB_PT.halo;
+      return [z, ["literal", [r2(ux * d), r2(uy * d)]]];
+    })];
+  }
+  function stackOffsetAt(k, max, z) {
+    if (!k) return [0, 0];
+    const [ux, uy] = PT_STEPS[(k - 1) % PT_STEPS.length], d = Math.max(WEB_PT.floor * 2, max * webShare(z) * 2) + WEB_PT.halo;
+    return [ux * d, uy * d];
+  }
+  // a circle point layer's legend picture for class key k, drawn from its style as on the map (at a fixed legend size, the classes
+  // in proportion to each other, largest 7.5 px), or null when the style isn't a simple circle (then QGIS's own legend icon)
+  function pointSwatch(L, k) {
+    if (!L || !L.vector || L.vector.geom !== "circle" || !Array.isArray(L.vector.layers) || !L.vector.layers.length) return null;
+    if (!L.vector.layers.every((v) => v && v.type === "circle" && v.by && typeof v.by === "object")) return null;
+    const web = webPoints(L), key = (by) => (by[String(k)] ? String(k) : by["*"] ? "*" : null);
+    if (L.vector.layers.some((v) => !key(v.by))) return null;
+    const hex = (c, d) => (/^#[0-9a-f]{3,8}$/i.test(String(c || "")) ? c : d);
+    const num = (v, d) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+    // sizes as the map draws them close up (the outline outside the radius, as MapLibre draws it)
+    const sizes = web ? webPointSizes(L).parts
+      : L.vector.layers.map((v) => Object.fromEntries(Object.entries(v.by).map(([kk, p]) => [kk, { r: num(p.radius, WEB_PT.one), sw: p.stroke ? num(p.stroke_width, 1) : 0 }])));
+    const max = Math.max(0, ...sizes.flatMap((by) => Object.values(by).map((x) => x.r + x.sw)));
+    const f = max > 7.5 ? 7.5 / max : 1;                       // the largest class fits the 20 px picture with its halo
+    const parts = L.vector.layers.map((v, j) => ({ p: v.by[key(v.by)], x: sizes[j][key(v.by)] }));
+    let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">';
+    if (web) {
+      const o = parts.reduce((a, b) => (b.x.r + b.x.sw > a.x.r + a.x.sw ? b : a)).x;
+      svg += `<circle cx="10" cy="10" r="${r2((o.r + o.sw) * f + WEB_PT.halo)}" fill="${WEB_PT.haloColor}" fill-opacity="${WEB_PT.haloOpacity}"/>`;
+    }
+    parts.forEach(({ p, x }) => {
+      const r = Math.max(1.5, x.r * f), sw = x.sw ? Math.max(0.6, x.sw * f) : 0;
+      svg += `<circle cx="10" cy="10" r="${r2(r + sw / 2)}" fill="${hex(p.color, "#000000")}" fill-opacity="${num(p.opacity, 1)}"`
+        + (sw ? ` stroke="${hex(p.stroke, "#000000")}" stroke-width="${r2(sw)}" stroke-opacity="${num(p.stroke_opacity, 1)}"` : "") + "/>";
+    });
+    return "data:image/svg+xml," + encodeURIComponent(svg + "</svg>");
+  }
+
   // ---- labels written by the web map: crisp text, placed in the visible part of each area ------------------------
   // pole of inaccessibility (the point inside a polygon furthest from its edges), after Mapbox's polylabel (ISC)
   function polylabel(poly, precision, maxSteps) {
@@ -490,6 +660,7 @@
     }
 
     const bm = storeGet("rv-basemap") || "aerial";
+    let bmNow = bm;                                // PT1: the point halos follow the background showing
     const style = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#dfe5e1" } }] };
     ["aerial", "map"].forEach((k) => {
       style.sources["bm-" + k] = { type: "raster", tiles: BASEMAPS[k].tiles, tileSize: 256, maxzoom: BASEMAPS[k].maxzoom, attribution: BASEMAPS[k].attribution };
@@ -579,6 +750,8 @@
     const hitIds = [];
     const coneIds = [];                            // photo cones are clickable too: a cone picks the photo facing that way
     const mapIds = {};                             // web layer id -> map layer ids (for the on/off switch)
+    const fetched = {};                            // layer id -> its features, fetched once (featuresOf); before setup() can run
+    let selected = null;                           // PT1: the feature ringed on the map (select), kept with its set-aside place
     const own = (L, id) => { (mapIds[L.id] = mapIds[L.id] || []).push(id); return id; };
     let suggestions = [];
     let maskOn = true;
@@ -816,6 +989,28 @@
         if (!metres) return pick(by, keys, prop, 0, 1);
         return ["interpolate", ["exponential", 2], ["zoom"], 0, pick(by, keys, prop, 0, 1), 24, pick(by, keys, prop, 0, 2 ** 24)];
       };
+      // PT1: a point layer sized for the web (see webPointPaint), over a thin halo (haloPaint). Each of its map layers has a twin that
+      // draws, a little to one side, the points a point layer above it also has in that place (see restack); empty until then.
+      const web = webPoints(L) ? webPointPaint(L, cls) : null;
+      const twin = (def, base) => {
+        const not = ["!", ["in", ["id"], ["literal", []]]], yes = ["in", ["id"], ["literal", []]];
+        def.filter = base ? ["all", base, not] : not;
+        map.addLayer(def);
+        const t = JSON.parse(JSON.stringify(def));
+        t.id = own(L, def.id + "-aside"); t.filter = base ? ["all", base, yes] : yes;
+        t.paint["circle-translate"] = ["literal", [0, 0]];
+        map.addLayer(t);
+        L._pt.maps.push({ id: def.id, aside: t.id, base });
+      };
+      if (web) {
+        L._pt = { maps: [], max: web.max, sig: "" };
+        const base = web.keys.length === 1 && web.keys[0] === "*" ? null : ["in", cls, ["literal", web.keys]];
+        const def = { id: own(L, `v-${L.id}-halo`), type: "circle", source: "f-" + L.id, layout: { visibility: vis },
+          paint: Object.assign({}, web.halo, haloPaint(bmNow)),
+          minzoom: Math.max(0, (L.visible_from || 0) - 0.5) };
+        if (L.visible_to) def.maxzoom = L.visible_to;
+        twin(def, base);
+      }
       L.vector.layers.forEach((v, j) => {
         // dashes can't vary by class in one map layer, so one layer per dash pattern
         const groups = {};
@@ -832,6 +1027,9 @@
               paint: { "line-color": pick(v.by, keys, "color", "#000"), "line-opacity": pick(v.by, keys, "opacity", 1, 1), "line-width": size(v.by, keys, "width") } });
             const d = JSON.parse(dash);
             if (d) { def.paint["line-dasharray"] = d; def.layout["line-cap"] = "butt"; }
+          } else if (web) {
+            Object.assign(def, { type: "circle", paint: Object.assign({}, web.parts[j]) });
+            return twin(def, def.filter || null);
           } else {
             Object.assign(def, { type: "circle", paint: { "circle-color": pick(v.by, keys, "color", "#000"), "circle-opacity": pick(v.by, keys, "opacity", 1, 1),
               "circle-radius": size(v.by, keys, "radius"), "circle-stroke-color": pick(v.by, keys, "stroke", "#000"),
@@ -840,12 +1038,71 @@
           map.addLayer(def);
         });
       });
+      if (web) loadPlaces(L);
     }
+    // a layer's features, fetched once for the labels and the stacked points (the map's own source loads them separately)
+    function featuresOf(L) {
+      if (!fetched[L.id]) fetched[L.id] = fetch(url(L.features)).then((r) => r.json());
+      return fetched[L.id];
+    }
+    // PT1: where two or more point layers drawn on the web have points in the same place, the top one that is on draws its point
+    // there and the ones under it draw theirs just beside it (see stackPlan), so they never stack into rings; a click there lists
+    // every one of them. Worked out again when a layer is switched on or off, or the zoom passes a layer's limits.
+    function loadPlaces(L) {
+      featuresOf(L).then((fc) => {
+        const g = (f) => f.geometry && (f.geometry.type === "Point" ? f.geometry.coordinates : f.geometry.coordinates && f.geometry.coordinates[0]);
+        L._pt.pts = (fc.features || []).map((f) => [f.id, placeKey(f.geometry)]).filter(([id, k]) => id != null && k);
+        L._pt.at = (fc.features || []).filter((f) => placeKey(f.geometry)).map((f) => [f.id, g(f)]);   // for keeping labels off them
+        restack();
+        setTimeout(placeLabels, 0);
+      }).catch(() => {});
+    }
+    // a web-sized point layer is drawn now: switched on and within its zooms
+    function ptOn(L) {
+      const z = map.getZoom();
+      return map.getLayoutProperty(L._pt.maps[0].id, "visibility") !== "none"
+        && z >= (L.visible_from || 0) - 0.5 && !(L.visible_to && z >= L.visible_to);
+    }
+    // the ring round the selected point follows it when it moves aside or back; if its layer is switched off or out of its
+    // zooms, the selection and its details close, as they do when it is clicked away
+    function syncSelection() {
+      const L = selected && selected.layer ? layerOf(selected) : null;
+      if (!L || !L._pt || !L._pt.maps.length || !map.getLayer("sel-point")) return;
+      if (!ptOn(L)) { clearSelection(); closeSheet(); return; }
+      const aside = L._pt.aside && L._pt.aside.has(selected.id);
+      map.setPaintProperty("sel-point", "circle-translate", aside ? stackOffset(L._pt.k, L._pt.step) : ["literal", [0, 0]]);
+    }
+    function restack() {
+      const pts = layers.filter((L) => L._pt && L._pt.maps.length);
+      if (pts.length < 2) { try { syncSelection(); } catch (e) { /* the map is gone */ } return; }
+      try {
+        const on = ptOn;
+        const plan = stackPlan(pts.map((L) => ({ id: L.id, on: on(L), pts: L._pt.pts || [] })));
+        const max = Math.max(...pts.map((L) => L._pt.max));
+        pts.forEach((L) => {
+          const p = plan[L.id] || { k: 0, ids: [] }, sig = p.k + ":" + max + ":" + p.ids.join(",");
+          L._pt.k = p.k; L._pt.step = max; L._pt.aside = new Set(p.ids);
+          if (sig === L._pt.sig) return;
+          L._pt.sig = sig;
+          L._pt.maps.forEach(({ id, aside, base }) => {
+            const not = ["!", ["in", ["id"], ["literal", p.ids]]], yes = ["in", ["id"], ["literal", p.ids]];
+            map.setFilter(id, base ? ["all", base, not] : not);
+            map.setFilter(aside, base ? ["all", base, yes] : yes);
+            map.setPaintProperty(aside, "circle-translate", stackOffset(p.k, max));
+          });
+        });
+        syncSelection();
+      } catch (e) { /* the map is gone: nothing to arrange */ }
+    }
+    map.on("zoomend", restack);
 
-    const targetIds = () => (map.getLayer("sugg") && suggOn ? ["sugg"] : []).concat(coneIds, hitIds);
+    // PT1: a point set aside beside its site is clicked where it is drawn: its halo's "-aside" twin is a target too
+    const asideIds = () => layers.flatMap((L) => (L._pt && L._pt.maps.length && L.clickable !== false ? [L._pt.maps[0].aside] : [])).filter((id) => map.getLayer(id));
+    const targetIds = () => (map.getLayer("sugg") && suggOn ? ["sugg"] : []).concat(coneIds, hitIds, asideIds());
     function rank(id) { const L = layers.find((l) => "hit-" + l.id === id); return L ? ({ point: 3, line: 2, polygon: 1 }[L.geometry] || 0) : 0; }
     function box(p, r) { return [[p.x - r, p.y - r], [p.x + r, p.y + r]]; }
-    const layerOf = (feat) => layers.find((l) => "hit-" + l.id === feat.layer.id || "d-" + l.id + "-cone" === feat.layer.id);
+    const layerOf = (feat) => layers.find((l) => "hit-" + l.id === feat.layer.id || "d-" + l.id + "-cone" === feat.layer.id
+      || (l._pt && l._pt.maps.length && l._pt.maps[0].aside === feat.layer.id));
     const rankOf = (feat) => { const L = layerOf(feat); return L ? ({ point: 3, line: 2, polygon: 1 }[L.geometry] || 0) : 0; };
 
     // Everything under a click, one entry per feature: points before lines before areas. Where photos sit on top of
@@ -867,8 +1124,17 @@
         const diff = Math.abs(((Number(d) - bearing) % 360 + 540) % 360 - 180);
         return Math.min(diff, 90);
       };
-      const order = list.map((h, i) => ({ h, i, r: rankOf(h), c: coneScore(h) }));
-      order.sort((a, b) => b.r - a.r || a.c - b.c || a.i - b.i);
+      // PT1: then the point nearest the click first (where it is drawn: a stacked point set aside counts from there); points in
+      // one place keep the layer order, top layer first
+      const near = (h) => {
+        if (!h.geometry || h.geometry.type !== "Point") return 0;
+        const L = layerOf(h), q = map.project(h.geometry.coordinates);
+        let d = [0, 0];
+        if (L && L._pt && L._pt.aside && L._pt.aside.has(h.id)) d = stackOffsetAt(L._pt.k, L._pt.step, map.getZoom());
+        return Math.round(Math.hypot(pt.x - q.x - d[0], pt.y - q.y - d[1]) / 3);
+      };
+      const order = list.map((h, i) => ({ h, i, r: rankOf(h), c: coneScore(h), d: near(h) }));
+      order.sort((a, b) => b.r - a.r || a.c - b.c || a.d - b.d || a.i - b.i);
       return order.map((o) => o.h);
     }
 
@@ -876,13 +1142,17 @@
     let popup = null;
     function select(feat) {
       map.getSource("sel") && map.getSource("sel").setData({ type: "FeatureCollection", features: feat ? [{ type: "Feature", properties: {}, geometry: feat.geometry }] : [] });
+      // PT1: a point drawn set aside beside its site is ringed where it is drawn (and kept there by restack: syncSelection)
+      selected = feat && feat.layer ? feat : null;
+      const L = selected ? layerOf(feat) : null, aside = L && L._pt && L._pt.aside && L._pt.aside.has(feat.id);
+      if (map.getLayer("sel-point")) map.setPaintProperty("sel-point", "circle-translate", aside ? stackOffset(L._pt.k, L._pt.step) : ["literal", [0, 0]]);
     }
     function clearSelection() { select(null); if (popup) { popup.remove(); popup = null; } }
 
-    function featureHtml(L, p, pager) {
+    function featureHtml(L, p, pager, here) {
       const cls = classLabel(L, p);
       const icon = L.draw ? `<img alt="" src="${legendIcon((L.draw.colors || [])[p._cls || 0] || "#e8590c", L.draw.type === "direction")}">`
-        : p._cls != null && L.legend[p._cls] ? `<img alt="" src="${esc(url(L.legend[p._cls].icon))}">` : "";
+        : p._cls != null && L.legend[p._cls] ? `<img alt="" src="${esc(pointSwatch(L, p._cls) || url(L.legend[p._cls].icon))}">` : "";
       const title = featureTitle(L, p, cls);
       const rows = (L.fields || []).filter((f) => p[f.name] !== undefined && p[f.name] !== null && p[f.name] !== "");
       let html = `<div class="rv-pop">${pager || ""}<div class="rv-pop-kicker">${icon}<span>${esc(L.title)}${cls && cls !== title ? " · " + esc(cls) : ""}</span></div>`;
@@ -896,6 +1166,7 @@
           return `<dt>${esc(f.alias || f.name)}</dt><dd>${esc(v)}</dd>`;
         }).join("") + "</dl>";
       }
+      if (here) html += here;
       if (suggest) html += `<button type="button" class="rv-link rv-suggest-this">Suggest a change to this</button>`;
       return html + "</div>";
     }
@@ -910,18 +1181,32 @@
         if (prev) prev.addEventListener("click", () => ctx.page(-1));
         if (next) next.addEventListener("click", () => ctx.page(1));
       }
+      if (ctx && ctx.go) container.querySelectorAll(".rv-here button").forEach((b) => b.addEventListener("click", () => ctx.go(Number(b.dataset.i))));
     }
 
+    // PT1: several features under the click (up to 8): every one listed under the details, each with its layer's title and its
+    // class or name, the one shown marked; a tap shows that one. Points of several layers in one place are all found this way.
+    function hereList(list, i) {
+      if (list.length < 2 || list.length > 8) return "";
+      return `<div class="rv-here"><div class="rv-here-h">Here</div><ul>${list.map((f, j) => {
+        const L = layerOf(f), p = f.properties || {}, cls = classLabel(L, p), title = featureTitle(L, p, cls);
+        const what = cls && cls !== title ? cls : title;
+        const icon = !L.draw && p._cls != null && L.legend && L.legend[p._cls] ? pointSwatch(L, p._cls) || url(L.legend[p._cls].icon) : "";
+        return `<li><button type="button" data-i="${j}"${j === i ? ' aria-current="true"' : ""}>${icon ? `<img alt="" src="${esc(icon)}">` : ""}`
+          + `<span><b>${esc(L.title)}</b>${what && what !== L.title ? " · " + esc(what) : ""}</span></button></li>`;
+      }).join("")}</ul></div>`;
+    }
     // list: the features under the click (see stack); i: which one to show. Several: "1 of 3 here" with ‹ ›.
     function showFeature(list, i, lngLat) {
       const n = list.length, feat = list[i];
       const L = layerOf(feat);
       const pager = n > 1 ? `<div class="rv-pager"><button type="button" class="rv-prev" aria-label="Previous">‹</button>`
         + `<span>${i + 1} of ${n} here</span><button type="button" class="rv-next" aria-label="Next">›</button></div>` : "";
-      const html = featureHtml(L, feat.properties, pager);
+      const html = featureHtml(L, feat.properties, pager, hereList(list, i));
       const ctx = { lngLat: feat.geometry.type === "Point" ? { lng: feat.geometry.coordinates[0], lat: feat.geometry.coordinates[1] } : lngLat,
         layer_id: L.id, layer_title: L.title, feature_id: String(feat.id ?? ""), feature_label: feat.properties._label || classLabel(L, feat.properties) || "" };
       if (n > 1) ctx.page = (step) => showFeature(list, (i + step + n) % n, lngLat);
+      if (n > 1) ctx.go = (j) => showFeature(list, j, lngLat);
       select(feat);
       showDetails(html, lngLat, ctx, photoView(feat, L));
     }
@@ -1066,7 +1351,7 @@
     }
     function pickAt(e) {
       picking = false; banner.hidden = true; root.classList.remove("rv-picking");
-      const f = map.queryRenderedFeatures(box(e.point, 8), { layers: hitIds }).sort((a, b) => rank(b.layer.id) - rank(a.layer.id))[0];
+      const f = map.queryRenderedFeatures(box(e.point, 8), { layers: hitIds.concat(asideIds()) }).sort((a, b) => rankOf(b) - rankOf(a))[0];
       const L = f && layerOf(f);
       openForm({ lngLat: e.lngLat, layer_id: L ? L.id : null, layer_title: L ? L.title : null,
         feature_id: f ? String(f.id ?? "") : null, feature_label: f ? (f.properties._label || classLabel(L, f.properties) || "") : null });
@@ -1183,7 +1468,7 @@
       walk(coords); return [a, b, c, d];
     }
     labelLayers.forEach((L) => {
-      fetch(url(L.features)).then((r) => r.json()).then((fc) => {
+      featuresOf(L).then((fc) => {
         labelData[L.id] = [];
         // every piece of a feature's shape, including shapes mixed with stray edge lines where an area was cut to the
         // boundary along its own edge (older builds wrote these): the area pieces carry its label, not the lines
@@ -1428,6 +1713,25 @@
       if (!REFS.concat(CTX).some((R) => R.src === e.sourceId) || (!e.tile && !e.isSourceLoaded)) return;
       clearTimeout(refTimer); refTimer = setTimeout(placeLabels, 350);
     });
+    // PT1: the point symbols drawn on the web in view (where they are drawn, a stacked one set aside included), as boxes no
+    // label may cover, so a name never sits on another point. From the layers' own points, not what was last drawn on screen
+    // (labels are placed as a move ends, before the new view has been drawn).
+    function pointMarks(x0, y0, x1, y1) {
+      const z = map.getZoom(), b = map.getBounds(), out = [];
+      layers.forEach((L) => {
+        if (!L._pt || !L._pt.at || !L._pt.maps.length || map.getLayoutProperty(L._pt.maps[0].id, "visibility") === "none") return;
+        if (z < (L.visible_from || 0) - 0.5 || (L.visible_to && z >= L.visible_to)) return;
+        const r = pointGap(L, z) - 3, off = stackOffsetAt(L._pt.k || 0, L._pt.step || 0, z), aside = L._pt.aside;
+        L._pt.at.forEach(([id, c]) => {
+          if (out.length > 5000 || c[0] < b.getWest() || c[0] > b.getEast() || c[1] < b.getSouth() || c[1] > b.getNorth()) return;
+          const q = map.project(c), d = aside && aside.has(id) ? off : [0, 0];
+          const cx = q.x + d[0], cy = q.y + d[1];
+          if (cx < x0 - r || cx > x1 + r || cy < y0 - r || cy > y1 + r) return;
+          out.push({ cx, cy, hw: r, hh: r, ang: 0 });
+        });
+      });
+      return out;
+    }
     function placeLabelsNow() {
       refLabels();
       ctxLabels();
@@ -1441,8 +1745,8 @@
       const cands = [], terrain3d = !!map.getTerrain();
       labelLayers.forEach((L, order) => {
         const st = L.labels || {};
-        if (!layerOn(L) || !labelData[L.id] || z < (st.minzoom ?? L.visible_from ?? 0) - 0.25 || (st.maxzoom && z > st.maxzoom)) return;
-        const size = st.size || 12;
+        if (!layerOn(L) || !labelData[L.id] || z < labelFrom(L) - 0.25 || (st.maxzoom && z > st.maxzoom)) return;
+        const size = st.size || 12, gap = pointGap(L, z);
         labelData[L.id].forEach((f) => {
           if (f.bbox[2] < b.getWest() || f.bbox[0] > b.getEast() || f.bbox[3] < b.getSouth() || f.bbox[1] > b.getNorth()) return;
           let tw = f.text.length * size * 0.58 + 6, th = size * 1.3;
@@ -1527,8 +1831,8 @@
           } else {
             const q = map.project(f.coords);
             if (q.x < x0 || q.x > x1 || q.y < y0 || q.y > y1) return;
-            // beside the point: right, left, above, below, whichever is free first
-            alts = [[q.x + tw / 2 + 10, q.y], [q.x - tw / 2 - 10, q.y], [q.x, q.y - th / 2 - 9], [q.x, q.y + th / 2 + 9]];
+            // beside the point, clear of its symbol (PT1: pointGap): right, left, above, below, whichever is free first
+            alts = [[q.x + tw / 2 + gap, q.y], [q.x - tw / 2 - gap, q.y], [q.x, q.y - th / 2 - gap + 1], [q.x, q.y + th / 2 + gap - 1]];
             at = alts[0]; weight = 0;
           }
           cands.push({ L, f, at, alts, tw, th, weight, st, order });
@@ -1536,8 +1840,9 @@
       });
       // every area's own label before any repeats; layers higher in the list win; then bigger areas (longer lines) first
       cands.sort((a, b) => (a.again ? 1 : 0) - (b.again ? 1 : 0) || a.order - b.order || b.weight - a.weight);
+      const marks = pointMarks(x0, y0, x1, y1);
       const free = (o) => corners(o).every(([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)
-        && !placed.some((p) => overlaps(o, p.box));
+        && !placed.some((p) => overlaps(o, p.box)) && !marks.some((p) => overlaps(o, p));
       const sameName = {};                                  // layer + name -> where it is already written (lines)
       // in 3D a hill can hide part of the map: only label what can actually be seen at that spot
       const terrain = !!map.getTerrain();
@@ -1710,7 +2015,7 @@
       let legend = L.legend || [];
       if (L.draw) {
         legend = drawLegend(L).map((g) => ({ label: g.label, src: legendIcon(g.color, L.draw.type === "direction") }));
-      } else legend = legend.map((g) => ({ label: g.label, src: url(g.icon) }));
+      } else legend = legend.map((g, i) => ({ label: g.label, src: pointSwatch(L, i) || url(g.icon) }));   // PT1: points as drawn
       if (legend.length > 1 || (legend.length === 1 && legend[0].label && L.draw)) {
         row.innerHTML += `<ul class="rv-legend">${legend.map((g) => `<li><img alt="" src="${esc(g.src)}"><span>${esc(g.label)}</span></li>`).join("")}</ul>`;
       } else if (legend.length === 1) {
@@ -1726,6 +2031,7 @@
         row.querySelector(".rv-switch").checked = on;
         row.classList.toggle("off", !on);
         (mapIds[L.id] || []).forEach((id) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
+        if (L._pt) { restack(); setTimeout(placeLabels, 0); }   // PT1: stacked points move aside or back; labels keep clear of them
         if (L.labels) setTimeout(placeLabels, 0);
         countOn();
       };
@@ -1798,6 +2104,11 @@
       panel.querySelectorAll("[data-bm]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       ["aerial", "map"].forEach((n) => map.setLayoutProperty("bm-" + n, "visibility", n === k ? "visible" : "none"));
       storeSet("rv-basemap", k);
+      bmNow = k;
+      const look = haloPaint(k);                   // PT1: white halo on the aerial, dark casing on the pale map
+      layers.forEach((L) => L._pt && L._pt.maps.slice(0, 1).forEach((h) => [h.id, h.aside].forEach((id) => {
+        if (map.getLayer(id)) Object.entries(look).forEach(([prop, v]) => map.setPaintProperty(id, prop, v));
+      })));
     }));
 
     const fit = el("button", { class: "rv-btn rv-fit", type: "button" }, "Whole property");
@@ -2061,7 +2372,7 @@
         const lg = drawLegend(L);
         return lg.map((g) => ({ label: lg.length > 1 ? g.label : "", src: legendIcon(g.color, L.draw.type === "direction") }));
       }
-      return (L.legend || []).map((g) => ({ label: g.label, src: url(g.icon) }));
+      return (L.legend || []).map((g, i) => ({ label: g.label, src: pointSwatch(L, i) || url(g.icon) }));
     }
     // one A4 landscape page, always: the map drawn again at print resolution for the space it has on the page, labels
     // painted into the picture, a legend of what's on (and in view) that shrinks to fit, scale, north arrow, credits
@@ -2078,7 +2389,7 @@
       if (L.draw) {
         const lg = drawLegend(L);
         items = lg.map((g) => ({ i: g.i, label: lg.length > 1 ? g.label : "", src: legendIcon(g.color, L.draw.type === "direction") }));
-      } else items = (L.legend || []).map((g, i) => ({ i, label: g.label, src: url(g.icon) }));
+      } else items = (L.legend || []).map((g, i) => ({ i, label: g.label, src: pointSwatch(L, i) || url(g.icon) }));
       if (present && items.length > 1) items = items.filter((g) => present.has(g.i));
       return items;
     }
@@ -2258,6 +2569,7 @@
     }));
   }
 
-  const RCLViewer = { mount, mergeShared, referenceDefs, contextDefs, contextText, contextGroups, featureContext, handOff, sourceFeatures, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
+  const RCLViewer = { mount, haloPaint, webPoints, webRadius, webShare, webPointSizes, webPointPaint, pointGap, labelFrom, stackPlan, placeKey,
+    stackOffset, stackOffsetAt, pointSwatch, WEB_PT, mergeShared, referenceDefs, contextDefs, contextText, contextGroups, featureContext, handOff, sourceFeatures, rasterParts, featureTitle, drawLegend, wholeView, photoViewState, lightboxWire, terrain: null, stats: {} };
   window.RCLViewer = RCLViewer;
 })();

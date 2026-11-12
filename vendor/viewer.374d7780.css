@@ -209,6 +209,16 @@ button.rv-group:focus-visible { outline-offset: -2px; }
 .rv-pager button { width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--rule); background: var(--wash);
   color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 0 2px; }
 .rv-pager button:hover { border-color: var(--brand); }
+/* PT1: everything under the click, each with its layer: points of several layers in one place are all listed */
+.rv-here { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 6px; }
+.rv-here-h { font-size: 11.5px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+.rv-here ul { list-style: none; margin: 0; padding: 0; }
+.rv-here button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 3px 6px; border: 0; border-radius: 6px;
+  background: none; color: var(--ink-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.rv-here button:hover { background: var(--wash); }
+.rv-here button[aria-current="true"] { background: var(--wash); color: var(--ink); }
+.rv-here button b { font-weight: 600; color: var(--ink); }
+.rv-here img { width: 16px; height: 16px; flex: none; }
 .rv-group-note { font-weight: 500; }
 
 /* labels written by the web map (Layer "Labels" ticked in QGIS) */
