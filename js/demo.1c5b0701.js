@@ -414,6 +414,12 @@
     data.tables.interaction_links = [L(1, 1, "b", 1), L(2, 1, "p", 1), L(3, 2, "b", 1), L(4, 2, "p", 2), L(5, 3, "b", 2), L(6, 3, "p", 3), L(7, 4, "b", 6), L(8, 4, "p", 7), L(9, 4, "e", "de000000-0000-4000-8000-000000000402"),
       L(10, 5, "b", 3), L(11, 5, "p", 4), L(12, 6, "b", 4), L(13, 7, "b", 4), L(14, 7, "p", 5)];
     data.crmTeam = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: OTHER, name: "Mere Example (synthetic)", role: "facilitator" }];
+    // SG2: two invented sub-groups of the group and which of its businesses are in them (public.subgroup_businesses); the demo's
+    // person is a member of the first. Member 1 is in both; member 3 left the second.
+    const sg = (n, sub, b, extra = {}) => ({ id: "de000000-0000-4000-8000-0000000007" + String(n).padStart(2, "0"), org_id: sub, parent_org_id: GROUP, group_member_id: B(b),
+      joined_on: null, left_on: null, note: null, source: "gis", external_id: null, created_by: null, created_at: made, updated_by: null, updated_at: made, ...extra });
+    data.tables.subgroup_businesses = [sg(1, SUBGROUPS[0].id, 1, { joined_on: "2025-04-01" }), sg(2, SUBGROUPS[0].id, 2), sg(3, SUBGROUPS[1].id, 1, { source: "apptivo" }),
+      sg(4, SUBGROUPS[1].id, 3, { joined_on: "2024-01-01", left_on: "2025-06-30", source: "manual" })];
     // RV1: questions about the register for the group's advisers to come back to (public.proposals of kind register_review, as
     // tools/load_review_items.py writes them), beside the farm's proposals so Manage's counts and queue are as before. Invented.
     const answers = (...pairs) => [...pairs.map(([action, label]) => ({ action, label })), { action: "other", label: "Something else" }, { action: "not_needed", label: "Not needed" }];
@@ -437,6 +443,23 @@
         answers(["same_farm", "Yes: the same farm"], ["lease", "No: member 7 leases it"]), "2026-10-20T21:00:00Z",
         { status: "accepted", decision: { candidate: { action: "lease", label: "No: member 7 leases it" }, chosen_from: "candidates", note: "Confirmed with the owner at the field day (synthetic)", action: "lease", answer: null },
           decided_by: OTHER, decided_at: "2026-10-22T02:00:00Z" })];
+  }
+  // SG2: the invented sub-groups of "HDLG (example)" (not among the demo person's own groups: their spaces are not part of the demo).
+  const SUBGROUPS = [{ id: "de000000-0000-4000-8000-0000000003c1", name: "Ford Creek sub-group (synthetic)", slug: "demo-ford-creek", member: true },
+    { id: "de000000-0000-4000-8000-0000000003c2", name: "Hill Country sub-group (synthetic)", slug: "demo-hill-country", member: false }];
+  // SG2, as public.subgroup_counts, business_subgroups and subgroup_business_list: for the group's members (any role), as the
+  // database answers them; anyone else gets no rows. [data, error], or null for a name it does not know.
+  function subgroupRpc(d, name, args) {
+    const role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role, rows = d.tables.subgroup_businesses || [];
+    const register = d.groupTables?.group_members || [], sub = (id) => SUBGROUPS.find((s) => s.id === id);
+    if (!["subgroup_counts", "business_subgroups", "subgroup_business_list"].includes(name)) return null;
+    if (!role) return [[]];
+    if (name === "subgroup_counts") return [args.parent_org !== GROUP ? [] : SUBGROUPS.map((s) => ({ subgroup_id: s.id, subgroup_name: s.name, subgroup_slug: s.slug,
+      current_businesses: rows.filter((r) => r.org_id === s.id && !r.left_on).length, is_member: s.member })).sort((a, b) => a.subgroup_name.localeCompare(b.subgroup_name))];
+    if (name === "business_subgroups") return [rows.filter((r) => r.group_member_id === args.b && sub(r.org_id)).map((r) => ({ id: r.id, subgroup_id: r.org_id, subgroup_name: sub(r.org_id).name,
+      subgroup_slug: sub(r.org_id).slug, joined_on: r.joined_on, left_on: r.left_on, note: r.note, source: r.source, is_member: sub(r.org_id).member }))];
+    return [rows.filter((r) => r.org_id === args.sub_org).map((r) => ({ r, b: register.find((x) => x.id === r.group_member_id) })).filter((x) => x.b)
+      .map(({ r, b }) => ({ member_number: b.member_number, business_name: b.business_name, joined_on: r.joined_on, left_on: r.left_on }))];
   }
   // RV1, as public.register_review_answer: the group's facilitators, advisors and admins answer an open item (one of its answers;
   // "other" with the typed answer; "not_needed" sets it aside); recorded in memory only, nothing else changes. [data, error].
@@ -1017,8 +1040,10 @@
   // B4b: the capture queue's entries and entry files too (ids made on the phone; a second insert of one id is refused as
   // the database refuses it, 23505, which the queue reads as "already written").
   const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes", "group_events", "group_event_attendees",   // N4: the group's events
-    "people", "group_member_people", "group_member_details"];   // PE1: the group's people
-  const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees", "people", "group_member_people", "group_member_details", "interactions"];   // and the tables whose rows the demo changes (the Layers page; a new block's note)
+    "people", "group_member_people", "group_member_details",   // PE1: the group's people
+    "subgroup_businesses"];   // SG2: a business added to a sub-group
+  const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees", "people", "group_member_people", "group_member_details", "interactions",
+    "subgroup_businesses"];   // SG2: ended   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
@@ -1515,6 +1540,7 @@
           if (added.some((r) => rows.some((x) => x.id === r.id))) return result(null, { code: "23505", message: "duplicate key value violates unique constraint" });
           for (const r of added) {
             if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
+            if (table === "subgroup_businesses") Object.assign(r, { parent_org_id: GROUP, joined_on: r.joined_on ?? String(d.asAt).slice(0, 10), left_on: null, created_by: d.user.id });   // SG2: as the guard stamps it
             rows.push(r);
             if (table === "documents") d.tables.document_relations.push({ id: r.id, tier: r.tier, relates_to: r.relates_to || null, superseded_by: null });
           }
@@ -1564,6 +1590,7 @@
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
         if (String(name).startsWith("crm_")) { const r = crmRpc(d, name, args || {}); if (r) return result(...r); }   // PE1
         if (name === "register_review_answer") return result(...reviewAnswer(d, args || {}));   // RV1
+        { const r = subgroupRpc(d, name, args || {}); if (r) return result(...r); }   // SG2
         // PERF1b, as public.farm_reference_counts and public.farm_reference_context (PERF1a): the farm's reference entries
         // (d.reference by farm; the fixture's `reference`, none in the demo) counted, and one served source's entry read on
         // its own (no features here: its entry with none; not served or no such farm: null). farm_map's `reference` is [].

@@ -149,7 +149,7 @@
     // ON3b: the manage space is linked for the group's admins, advisors and facilitators only (a plain member never sees the link)
     // V6: a client's tabs are the allow-list (simple-view.js)
     // PE1: People (personal information) is linked for the group's facilitators, advisors and admins only, in either view
-    const people = ([k]) => k !== "people" || !!FP.peopleModel?.canSee(group.role);
+    const people = ([k]) => k !== "people" || !!FP.peopleModel?.canSeeTab(group, groups);   // SG2: and, in a sub-group, its parent's too
     const tabs = [];   // UI1: the views drawn, for Add
     nav.replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).map(([key, label]) => (tabs.push([key, label]),
       el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", "data-tab": key, ...(route.view === key ? { "aria-current": "page" } : {}) }, FP.icon ? FP.icon(FP.icons.forView(key)) : null, el("span", {}, label),
@@ -202,10 +202,11 @@
       // PF1: the same group's People already open (the address changed with its screen, or the route was drawn again as the app
       // starts): the view follows the address itself, keeping what it has read and where the person was
       const shown = $("#group-panel").firstElementChild;
-      if (shown?.peopleRoute && shown.dataset.group === group.id && FP.peopleModel?.canSee(group.role)) { shown.peopleRoute(route.tab || null); return; }
+      if (shown?.peopleRoute && shown.dataset.group === group.id && FP.peopleModel?.canSeeTab(group, groups)) { shown.peopleRoute(route.tab || null); return; }
       const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
       if (current !== token) return;
-      panel.replaceChildren(FP.groupPeople.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T09:00:00+13:00" : null, tab: route.tab || null }));
+      panel.replaceChildren(FP.groupPeople.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T09:00:00+13:00" : null, tab: route.tab || null,
+        parent: group.parent_org_id ? groups.find((x) => x.id === group.parent_org_id) || null : null }));   // SG2: a sub-group's parent, when the person is in it
       panel.scrollTop = 0;
       return;
     }

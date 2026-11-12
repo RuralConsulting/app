@@ -152,7 +152,7 @@
     const groupRoute = FP.groupModel.match(hash), group = groupRoute && FP.groupSpace.find(groupRoute.group);
     // PF1: People is the group's facilitators', advisors' and admins' only; decided here, with the group's role already read (this
     // runs only once the groups are known), so an address of People answers "not available" to anyone else and never to them
-    if (group && groupRoute.view === "people" && !FP.peopleModel?.canSee(group.role)) { closeAll(); FP.simpleView.notAvailable({ space: "group", id: group.id }, { farms: allFarms, groups }); return; }
+    if (group && groupRoute.view === "people" && !FP.peopleModel?.canSeeTab(group, groups)) { closeAll(); FP.simpleView.notAvailable({ space: "group", id: group.id }, { farms: allFarms, groups }); return; }
     if (group) { FP.farmSpace.close(); markFiles(groupRoute.view); FP.groupSpace.open(group, groupRoute); return; }
     if (!farms.length && groups.length === 1 && !FP.farmModel.match(hash)) { const view = homeView("group"); FP.farmSpace.close(); markFiles(view); FP.groupSpace.open(groups[0], { group: groups[0].id, view }); return; }
     FP.groupSpace.close();

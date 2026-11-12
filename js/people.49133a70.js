@@ -88,6 +88,8 @@
   // opts: { sb, person: {id}, today: "YYYY-MM-DD", now: ISO instant, tab: null | "log" | "follow-ups" | "add-person" }
   function view(group, opts = {}) {
     const sb = opts.sb || FP.sb, me = opts.person?.id || null, g = group.id;
+    // SG2: in a sub-group, one of its parent's facilitators, advisors or admins (who does not hold that role here) sees its members (subgroups.js)
+    if (!M().canSee(group.role) && M().isSubgroup(group) && M().canSee(opts.parent?.role) && FP.subgroups) return FP.subgroups.view(group, opts);
     const wrap = el("section", { class: "group-people", "data-view": "people", "data-group": group.id });
     if (!M().canSee(group.role)) {
       wrap.append(el("h2", {}, "People"), el("p", { class: "crm-empty" }, "People and interactions are kept for the group's facilitators, advisors and admins."));
@@ -99,7 +101,9 @@
       directory: [], people: [], team: [], failed: null, loading: "all", page: null, form: null, errors: [], notice: null,
       feed: { filters: { kinds: [], from: "", to: "", logger: "", followUp: "", topic: "" }, items: [], total: null, failed: null },
       // RV1: the register questions to review (public.proposals of kind register_review), the open one and its answer form
-      review: { rows: [], failed: null, truncated: false, filter: "open", id: null, form: {}, busy: false } };
+      review: { rows: [], failed: null, truncated: false, filter: "open", id: null, form: {}, busy: false },
+      // SG2: the directory's Sub-group filter (read when first opened) and, in a sub-group, its businesses (read once)
+      sg: { open: false, loading: false, counts: null, index: null, failed: null, truncated: false, chosen: [] }, roster: null };
     const entryTab = opts.tab || null;
     let fills = 0;
 
@@ -163,6 +167,7 @@
     async function back(refresh = false) {
       if (st.stack.at(-1)?.address && root.history?.length > 1) { root.history.back(); return; }   // the address goes back with the screen
       const prev = st.stack.pop();
+      if (!prev && opts.onBack) { opts.onBack(); return; }   // SG2: opened on one business from a sub-group's list
       if (!prev && entryTab && root.history?.length > 1) { root.history.back(); return; }
       // opened from an address with nowhere to go back to: the directory, and the address with it (no new step in the history)
       if (!prev && entryTab && FP.href && root.history?.replaceState) root.history.replaceState(null, "", FP.href(G().href(g, "people")));
@@ -224,6 +229,8 @@
         el("button", { type: "button", class: "secondary", "data-action": "follow-ups", onclick: () => openFeed({ followUp: "open" }) }, "Follow-ups"),
         el("button", { type: "button", class: "secondary", "data-action": "review", onclick: () => openReview() }, reviewLabel()),
         el("button", { type: "button", class: "secondary", "data-action": "export", onclick: () => go("export") }, "Export")));
+      // SG2: a sub-group's businesses (from its parent's register), above the sub-group's own records
+      if (M().isSubgroup(group) && FP.subgroups) box.append(st.roster ||= FP.subgroups.roster(group, { sb, parent: opts.parent || null, person: opts.person, today: today(), now: opts.now || null }));
       if (st.failed) { box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the group's people just now: " + st.failed)); return box; }
       // PF1: while the lists are read, the frame and controls are here at once, with a placeholder list in place of each list not yet in
       box.setAttribute("aria-busy", String(!!st.loading));
@@ -241,7 +248,10 @@
         box.append(el("div", { class: "crm-chips", role: "group", "aria-label": "Show" },
           ...[["current", "Current"], ["ended", "Ended"], ["all", "All"]].map(([k, label]) => chip(label, f.status === k, () => { f.status = k; draw(); }, { "data-status": k })),
           chip("Follow-up due", f.due, () => { f.due = !f.due; draw(); }, { "data-chip": "due" }),
-          ...M().labels(st.directory).slice(0, 8).map(({ label }) => chip(label, f.label.toLowerCase() === label.toLowerCase(), () => { f.label = f.label === label ? "" : label; draw(); }, { "data-label": label }))));
+          ...M().labels(st.directory).slice(0, 8).map(({ label }) => chip(label, f.label.toLowerCase() === label.toLowerCase(), () => { f.label = f.label === label ? "" : label; draw(); }, { "data-label": label })),
+          // SG2: Sub-group, for a group that may have sub-groups; what is in them is read when it is first opened
+          M().isSubgroup(group) || !FP.subgroups ? null : chip("Sub-group" + (st.sg.chosen.length ? " (" + st.sg.chosen.length + ")" : ""), st.sg.open, toggleSubgroups, { "data-chip": "subgroup", "aria-expanded": String(st.sg.open) })));
+        if (st.sg.open) box.append(subgroupFilter(chip));
       } else {
         const archived = el("input", { id: "crm-archived", type: "checkbox", ...(st.archived ? { checked: true } : {}) });
         archived.addEventListener("change", () => { st.archived = archived.checked; fill(); });
@@ -260,7 +270,7 @@
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, "Reading the group's people…"),
             el("ul", { class: "crm-list crm-skeleton", "aria-hidden": "true" }, ...Array.from({ length: 8 }, () => el("li", { class: "crm-skeleton-row" }, el("span"), el("span")))));
         } else if (st.tab === "businesses") {
-          const shown = M().searchDirectory(st.directory, st.filters);
+          const shown = M().searchDirectory(st.directory, { ...st.filters, subgroups: st.sg.chosen, subgroupIndex: st.sg.index });
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "business", "businesses")),
             shown.length ? listOf(shown, businessRow) : el("p", { class: "crm-empty" }, st.directory.length ? "No business matches." : "The group's member register is empty."));
         } else {
@@ -271,6 +281,26 @@
       }
       fill();
       if (st.truncated) box.append(el("p", { class: "group-fine" }, "Only the first " + CAP.toLocaleString("en-NZ") + " are listed."));
+      return box;
+    }
+    // SG2: the Sub-group filter: opened, it reads the sub-groups and who is in them once (subgroups.js readFilter); several may be chosen
+    async function toggleSubgroups() {
+      st.sg.open = !st.sg.open;
+      if (st.sg.open && !st.sg.counts && !st.sg.loading) {
+        st.sg.loading = true; draw();
+        try { Object.assign(st.sg, await FP.subgroups.readFilter(sb, g), { failed: null }); } catch (e) { st.sg.failed = message(e); }
+        st.sg.loading = false;
+      }
+      redrawDirectory();
+    }
+    function subgroupFilter(chip) {
+      const s = st.sg, box = el("div", { class: "crm-chips sg-filter", role: "group", "aria-label": "Sub-groups", "aria-busy": String(s.loading) });
+      if (s.loading) return box.appendChild(el("p", { class: "crm-count", role: "status" }, "Reading the sub-groups…")), box;
+      if (s.failed) return box.appendChild(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the sub-groups just now: " + s.failed)), box;
+      if (!(s.counts || []).length) return box.appendChild(el("p", { class: "crm-empty" }, "This group has no sub-groups yet.")), box;
+      box.append(...s.counts.map((c) => chip(M().subgroupLabel(c), s.chosen.includes(c.subgroup_id),
+        () => { s.chosen = s.chosen.includes(c.subgroup_id) ? s.chosen.filter((x) => x !== c.subgroup_id) : [...s.chosen, c.subgroup_id]; redrawDirectory(); }, { "data-subgroup": c.subgroup_id })));
+      if (s.truncated) box.append(el("p", { class: "group-fine" }, "Only the first " + M().SUBGROUP_CAP.toLocaleString("en-NZ") + " sub-group places are read."));
       return box;
     }
     function businessRow(r) {
@@ -321,6 +351,8 @@
           el("button", { type: "button", class: "primary", "data-action": "log", onclick: () => openLog(null, [{ kind: "business", id: b.id, name: b.business_name, member_number: b.member_number }]) }, "Log an interaction"),
           el("button", { type: "button", class: "secondary", "data-action": "edit-details", onclick: () => go("details-form", { form: M().detailsForm(p.details), target: b }) }, "Edit details"),
           el("button", { type: "button", class: "secondary", "data-action": "add-person", onclick: () => openPersonForm(null, b) }, "Add a person here")));
+      // SG2: the sub-groups this business is in (read when the page is drawn first; kept with the page)
+      if (!M().isSubgroup(group) && FP.subgroups) box.append(p.subgroups ||= FP.subgroups.chips(b, { sb, group, today: today() }));
       const facts = contactLines(d);
       box.append(el("section", { class: "crm-section" }, el("h4", {}, "Contact details"),
         facts.length ? el("dl", { class: "crm-facts" }, ...facts) : el("p", { class: "crm-empty" }, "No contact details recorded for the business."),
@@ -684,6 +716,7 @@
     else if (entryTab === "follow-ups") openFeed({ followUp: "open" });
     else if (entryTab === "review") openReviewHere();   // RV1
     if (entryTab) st.stack = [];
+    if (opts.business) { openBusiness(opts.business); st.stack = []; }   // SG2: one business, opened from a sub-group's list
     loadLists(true).then(() => { if (st.screen === "review") draw(); else redrawDirectory(); });
     wrap.peopleRoute = route;   // PF1: group-space.js hands a later People address of the same group to this view
     return wrap;

@@ -54,7 +54,7 @@
     const model = decision.space ? browserModels()[decision.space] : null;
     // (PF1: never a link to People for someone its role keeps out, as the group's own tabs)
     const place = mine ? places[decision.space + "s"].find((p) => p.id === decision.id) : null;
-    const links = mine ? tabs(decision.space).filter(([key]) => key !== "people" || !!FP.peopleModel?.canSee(place?.role)).map(([key, label]) => FP.el("a", { href: FP.href(model.href(decision.id, key)) }, label))
+    const links = mine ? tabs(decision.space).filter(([key]) => key !== "people" || !!FP.peopleModel?.canSeeTab(place, places.groups)).map(([key, label]) => FP.el("a", { href: FP.href(model.href(decision.id, key)) }, label))
       : [FP.el("a", { href: FP.href("") || "#/" }, "Your maps and files")];
     // A person with no farm and no group has nowhere to be sent: the same plain note the farms screen gives them, no link.
     const nowhere = !mine && !places.farms?.length && !places.groups?.length;

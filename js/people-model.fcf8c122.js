@@ -70,6 +70,7 @@
       if (status === "ended" && !r.ended_at) return false;
       if (filters.label && !(r.labels || []).some((l) => l.toLowerCase() === filters.label.toLowerCase())) return false;
       if (filters.due && !(Number(r.due_follow_ups) > 0)) return false;
+      if (filters.subgroups?.length && !inSubgroups(filters.subgroupIndex, r.group_member_id, filters.subgroups)) return false;   // SG2
       if (!words.length) return true;
       const hay = fold([r.business_name, r.trading_name, r.member_number, "member " + r.member_number, ...(r.people_names || []), ...(r.labels || []), r.status].join(" | "));
       return words.every((w) => hay.includes(w));
@@ -271,7 +272,58 @@
   }
   const fileName = (group, what, from, to) => E.fileName(group, what, from, to, "csv");
 
+  // ---- SG2: sub-groups a member business belongs to ------------------------------------------------------------------------------
+  // public.subgroup_businesses (migration 20261112060000): a business on a parent group's register in one or more of its
+  // sub-groups. The parent's members read them; the parent's and the sub-group's facilitators, advisors and admins add and end them.
+  const isSubgroup = (group) => !!group?.parent_org_id;
+  // The People tab: the place's facilitators, advisors and admins (PE1; docs/PRODUCT.md, People is for coordinators). In a sub-group,
+  // also a person who holds one of those roles in its parent (found among the person's own groups). Plain members and editors never.
+  const parentOf = (group, groups) => (isSubgroup(group) ? (groups || []).find((g) => g.id === group.parent_org_id) || null : null);
+  const canSeeTab = (group, groups) => canSee(group?.role) || canSee(parentOf(group, groups)?.role);
+  // Who adds a business to a sub-group, or ends it, on a parent's business page: the parent's facilitators, advisors and admins.
+  const canWriteSubgroups = (role) => canSee(role);
+  const SUBGROUP_CAP = 5000;   // rows of the business-to-sub-group map read for the directory's filter (subgroup_counts first)
+  // The map read for the filter is at most the sum of the sub-groups' current counts (and the cap).
+  const subgroupMapSize = (counts) => Math.min(SUBGROUP_CAP, (counts || []).reduce((n, c) => n + (Number(c.current_businesses) || 0), 0));
+  // subgroup_businesses rows ({ org_id, group_member_id, left_on }) to: business id -> Set of the sub-groups it is currently in.
+  function subgroupIndex(rows) {
+    const m = new Map();
+    for (const r of rows || []) {
+      if (r.left_on) continue;
+      if (!m.has(r.group_member_id)) m.set(r.group_member_id, new Set());
+      m.get(r.group_member_id).add(r.org_id);
+    }
+    return m;
+  }
+  // Whether a business is in any of the chosen sub-groups.
+  const inSubgroups = (index, id, chosen) => { const s = index?.get(id); return !!s && chosen.some((x) => s.has(x)); };
+  // A business's sub-groups (business_subgroups rows) as chips: the current ones (A-Z), then the ones it left.
+  function subgroupChips(rows) {
+    const chip = (r) => ({ rowId: r.id, id: r.subgroup_id, name: r.subgroup_name, member: !!r.is_member, current: !r.left_on, joined_on: r.joined_on || null, left_on: r.left_on || null, source: r.source || null });
+    const all = (rows || []).map(chip), by = (a, b) => String(a.name).localeCompare(String(b.name));
+    return { current: all.filter((c) => c.current).sort(by), past: all.filter((c) => !c.current).sort(by) };
+  }
+  // The sub-groups (subgroup_counts rows) a business may be added to: those it is not currently in.
+  function addChoices(counts, chips) {
+    const have = new Set((chips?.current || []).map((c) => c.id));
+    return (counts || []).filter((c) => !have.has(c.subgroup_id)).map((c) => ({ id: c.subgroup_id, name: c.subgroup_name }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  }
+  // The directory filter's choices: "Blythe (12)".
+  const subgroupLabel = (c) => c.subgroup_name + " (" + (Number(c.current_businesses) || 0) + ")";
+  // A sub-group's own list (subgroup_business_list rows): the businesses in it now (A-Z), then those that left (most recent first).
+  function roster(rows) {
+    const list = (rows || []).map((r) => ({ member_number: r.member_number, business_name: r.business_name, joined_on: r.joined_on || null, left_on: r.left_on || null }));
+    return { current: list.filter((r) => !r.left_on).sort((a, b) => a.business_name.localeCompare(b.business_name)),
+      past: list.filter((r) => r.left_on).sort((a, b) => String(b.left_on).localeCompare(String(a.left_on)) || a.business_name.localeCompare(b.business_name)) };
+  }
+  // One roster line's quiet words: "Member 12 · joined 1 Apr 2025" or "Member 12 · left 30 Jun 2025".
+  const rosterLine = (r) => ["Member " + r.member_number, r.left_on ? "left " + dateText(r.left_on) : r.joined_on ? "joined " + dateText(r.joined_on) : null].filter(Boolean).join(" · ");
+  // Whose contact details these are: a sub-group's People shows names and numbers only.
+  const contactsNote = (parentName) => "Contact details are kept by " + (parentName || "the parent group") + ".";
+
   return { ROLES, canSee, canArchive, KINDS, KIND_TEXT, DIRECTIONS, DIRECTED, FOLLOW_UPS, FOLLOW_TEXT, fold, plural, splitList, dayKey, whenText, dateText, ago,
     followUp, topicsOf, searchDirectory, labels, searchPeople, whoWith, linkText, feedArgs, groupByDay, heading, loggedBy, toForm, toSave, PERSON_FIELDS, personForm, toPerson,
-    detailsForm, toDetails, cell, toCsv, DIRECTORY_COLUMNS, FEED_COLUMNS, directoryCsv, feedCsv, fileName };
+    detailsForm, toDetails, cell, toCsv, DIRECTORY_COLUMNS, FEED_COLUMNS, directoryCsv, feedCsv, fileName,
+    isSubgroup, parentOf, canSeeTab, canWriteSubgroups, SUBGROUP_CAP, subgroupMapSize, subgroupIndex, inSubgroups, subgroupChips, addChoices, subgroupLabel, roster, rosterLine, contactsNote };
 });
