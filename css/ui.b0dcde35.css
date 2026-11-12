@@ -447,6 +447,14 @@ body.simple-files .group-documents { margin: 0 auto; }
 .map-bg-switch button { min-height: 30px; width: auto !important; height: auto !important; padding: 0 12px !important; border: 0; border-radius: var(--radius-pill) !important; background: none; color: var(--ink-2);
   font: 600 var(--text-small)/1 var(--f-ui); cursor: pointer; }
 .map-bg-switch button[aria-pressed="true"] { background: var(--accent) !important; color: var(--accent-ink); }
+/* UI2d: on a phone the Places panel spans the map up to the column of map controls on the right, and covered the Map half of the
+   switch. There the switch stands upright in that column (Map above Aerial) and the panel leaves room for it (10 px margin, the
+   62 px switch, 8 px clear). A computer, and the group's Overview map (no panel over it), keep the switch as it is. */
+@media (max-width: 800px) {
+  body.portfolio-active #portfolio { right: 80px; }
+  body.portfolio-active #map .map-bg-switch { flex-direction: column; width: 62px; }
+  body.portfolio-active #map .map-bg-switch button { width: 100% !important; min-height: 34px; padding: 0 6px !important; }
+}
 .home-label { pointer-events: none; }
 .home-label span { display: block; transform: translateY(-50%); max-width: 160px; padding: 2px 8px; border-radius: var(--radius-pill); background: var(--raised); color: var(--ink);
   font: 600 var(--text-small)/1.25 var(--f-ui); text-align: center; box-shadow: var(--map-label-lift); white-space: normal; overflow-wrap: anywhere; }
