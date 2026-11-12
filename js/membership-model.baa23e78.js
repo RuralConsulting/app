@@ -61,16 +61,21 @@
       if (c.before && (empty || String(v).slice(0, 10) >= c.before)) return false;
       if (c.after && (empty || String(v).slice(0, 10) <= c.after)) return false;
     }
-    return true;
+    // M2: the subscription that year (f.sub = { year, status: [...] })
+    return subMatches(row, f.sub);
   }
   const filterRows = (rows, f) => (rows || []).filter((r) => matches(r, f));
-  // The chips for what is chosen here: [{ key, label }] (key "type:<name>" or "field:<key>").
-  function chips(f = {}, fields = []) {
+  // The chips for what is chosen here: [{ key, label }] (key "type:<name>", "field:<key>" or, M2, "sub:<year id>"; years names them).
+  function chips(f = {}, fields = [], years = []) {
     const out = (f.types || []).map((t) => ({ key: "type:" + t, label: t }));
     for (const [key, c] of Object.entries(f.fieldf || {})) {
       const fd = (fields || []).find((x) => x.key === key), name = fd?.label || key;
       const what = c.none ? "none" : c.is ? c.is.join(" or ") : c.ticked != null ? (c.ticked ? "yes" : "no") : c.before ? "before " + P.dateText(c.before) : c.after ? "after " + P.dateText(c.after) : null;
       if (what) out.push({ key: "field:" + key, label: name + ": " + what });
+    }
+    if (f.sub?.year && (f.sub.status || []).length) {
+      const y = (years || []).find((x) => x.id === f.sub.year);
+      out.push({ key: "sub:" + f.sub.year, label: "Subscription " + (y?.label || "") + ": " + f.sub.status.map((k) => (STATUS_TEXT[k] || k).toLowerCase()).join(" or ") });
     }
     return out;
   }
@@ -79,9 +84,10 @@
     const next = { ...f, types: [...(f.types || [])], fieldf: { ...(f.fieldf || {}) } };
     if (String(key).startsWith("type:")) { const t = String(key).slice(5).toLowerCase(); next.types = next.types.filter((x) => x.toLowerCase() !== t); }
     else if (String(key).startsWith("field:")) delete next.fieldf[String(key).slice(6)];
+    else if (String(key).startsWith("sub:")) next.sub = null;
     return next;
   }
-  const clear = (f = {}) => ({ ...f, types: [], fieldf: {} });
+  const clear = (f = {}) => { const { sub, ...rest } = f; return { ...rest, types: [], fieldf: {} }; };
   const toggleType = (f = {}, name) => {
     const have = (f.types || []).some((t) => t.toLowerCase() === String(name).toLowerCase());
     return { ...f, types: have ? f.types.filter((t) => t.toLowerCase() !== String(name).toLowerCase()) : [...(f.types || []), name] };
@@ -231,7 +237,127 @@
   }
   const contactLine = (c) => [c.organisation_name, c.contact_kind ? c.contact_kind[0].toUpperCase() + c.contact_kind.slice(1) : null, c.job_title].filter(Boolean).join(" · ");
 
+  // ---- M2: subscriptions year by year, and agreements -------------------------------------------------------------------------------
+  // (migration 20261113020000: group_subscription_years, group_agreements, crm_directory's subscriptions {year id: status},
+  // crm_subscriptions_agreements, crm_save_subscription, crm_mark_subscriptions, crm_save_member_agreement)
+  const MAX_YEARS = 30, MAX_AGREEMENTS = 20;
+  const STATUS = [["not_invoiced", "Not invoiced"], ["invoiced", "Invoiced, unpaid"], ["paid", "Paid"], ["not_required", "Not required"]];
+  const STATUS_TEXT = Object.fromEntries(STATUS);
+  // A row's status, as the database derives it: paid, else not required, else invoiced, else not invoiced (also no row at all).
+  const subStatus = (s) => (!s ? "not_invoiced" : s.paid_on ? "paid" : s.not_required ? "not_required" : s.invoiced_on ? "invoiced" : "not_invoiced");
+  // A member's status for a year from the directory row ({year id: status}; no entry: not invoiced).
+  const statusIn = (row, year) => (row?.subscriptions && row.subscriptions[year]) || "not_invoiced";
+  // An amount in dollars: "$150", "$150.50" (NZD; no tax logic).
+  function money(n) {
+    if (n == null || n === "" || !Number.isFinite(Number(n))) return "";
+    const v = Number(n);
+    return "$" + v.toLocaleString("en-NZ", { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  }
+  // A year's quiet line: "Paid 20 Jul 2025 · invoiced 1 Jul 2025 · INV-0101 · $150", "Not required · Life member".
+  function subLine(s) {
+    const st = s?.status || subStatus(s), parts = [];
+    if (st === "paid") parts.push("Paid " + P.dateText(s.paid_on), s.invoiced_on ? "invoiced " + P.dateText(s.invoiced_on) : null);
+    else if (st === "invoiced") parts.push("Invoiced " + P.dateText(s.invoiced_on));
+    else if (st === "not_required") parts.push("Not required this year");
+    else parts.push("Not invoiced");
+    if (st !== "not_required") parts.push(s?.invoice_ref || null, money(s?.amount ?? (st === "not_invoiced" ? s?.default_amount : null)) || null);
+    parts.push(s?.note || null);
+    return parts.filter(Boolean).join(" · ");
+  }
+  // What a facilitator, advisor or admin may do with a year on a member's page: mark it invoiced, mark it paid, change it.
+  function subActions(role, s) {
+    if (!canEdit(role) || !s) return [];
+    const st = s.status || subStatus(s);
+    if (st === "not_invoiced") return s.archived ? ["edit"] : ["invoiced", "paid", "edit"];
+    if (st === "invoiced") return ["paid", "edit"];
+    return ["edit"];
+  }
+  // The years in the order shown (newest label first) and the open ones (not archived).
+  const byLabel = (a, b) => String(b.label).toLowerCase().localeCompare(String(a.label).toLowerCase()) || String(a.id).localeCompare(String(b.id));
+  const openYears = (years) => (years || []).filter((y) => !y.archived_at).sort(byLabel);
+  const activeAgreements = (list) => (list || []).filter((a) => !a.archived_at).sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0) || String(a.name).localeCompare(String(b.name)));
+
+  // A year's form (amount, invoiced on and reference, paid on, not required, note) to crm_save_subscription's arguments.
+  function toSubscription(form) {
+    const errors = [], day = (v) => (String(v ?? "").trim() ? String(v).trim().slice(0, 10) : null);
+    const a = String(form?.amount ?? "").trim().replace(/^\$/, "").replace(/,/g, "");
+    const amount = a === "" ? null : Number(a);
+    if (amount != null && !(Number.isFinite(amount) && amount >= 0 && amount <= 1000000)) errors.push("The amount is a number of dollars, 0 to 1,000,000.");
+    const invoiced_on = day(form?.invoiced_on), paid_on = day(form?.paid_on), not_required = !!form?.not_required;
+    for (const [d, w] of [[invoiced_on, "invoiced"], [paid_on, "paid"]]) if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) errors.push("Give the " + w + " date as a date.");
+    if (not_required && paid_on) errors.push("A year marked not required has no paid date: clear one of them.");
+    const invoice_ref = String(form?.invoice_ref ?? "").trim().replace(/\s+/g, " ") || null, note = String(form?.note ?? "").trim() || null;
+    if (invoice_ref && invoice_ref.length > 60) errors.push("An invoice reference is at most 60 characters.");
+    if (note && note.length > 500) errors.push("A note is at most 500 characters.");
+    if (errors.length) return { errors };
+    return { errors: [], args: { amount: amount == null ? null : Math.round(amount * 100) / 100, invoiced_on, invoice_ref, paid_on, not_required, note } };
+  }
+  // "Mark invoiced" or "Mark paid" on one year: the row kept as it is, with that date (and the year's default amount where none).
+  function markArgs(s, what, day) {
+    const keep = { amount: s?.amount ?? s?.default_amount ?? null, invoiced_on: s?.invoiced_on || null, invoice_ref: s?.invoice_ref || null, paid_on: s?.paid_on || null,
+      not_required: false, note: s?.note || null };
+    return { ...keep, [what === "paid" ? "paid_on" : "invoiced_on"]: String(day || "").slice(0, 10) || null };
+  }
+  // Marking many at once (crm_mark_subscriptions): of the rows shown, those it changes for that year (invoiced: not invoiced yet;
+  // paid: not invoiced or invoiced and unpaid), and only their ids are sent, so the database never touches a member the sheet said
+  // would stay as they are (a row paid with no invoice date included). A year not required is passed over.
+  function markPlan(rows, year, what) {
+    const all = rows || [];
+    const ids = all.filter((r) => {
+      const st = statusIn(r, year);
+      return what === "paid" ? st === "not_invoiced" || st === "invoiced" : st === "not_invoiced";
+    }).map((r) => r.group_member_id);
+    return { ids, changes: ids.length, unchanged: all.length - ids.length };
+  }
+
+  // The directory's subscription filter: f.sub = { year, status: [status ...] } (any of those listed; no row is not invoiced).
+  const subMatches = (row, sub) => !sub?.year || !(sub.status || []).length || sub.status.includes(statusIn(row, sub.year));
+  const setSubYear = (f = {}, year) => ({ ...f, sub: year ? { year, status: [...(f.sub?.status || [])] } : null });
+  function toggleSubStatus(f = {}, year, status) {
+    const have = f.sub?.year === year ? f.sub.status || [] : [], on = have.includes(status);
+    return { ...f, sub: { year, status: on ? have.filter((x) => x !== status) : [...have, status] } };
+  }
+  const subFilterArg = (sub) => (sub?.year && (sub.status || []).length ? { year: sub.year, status: [...sub.status] } : null);
+  // The counts beside each status in the filter, for the members shown before this filter.
+  const subCounts = (rows, year) => Object.fromEntries(STATUS.map(([k]) => [k, (rows || []).filter((r) => statusIn(r, year) === k).length]));
+
+  // An agreement's quiet line: "Signed 1 Apr 2024 by Aroha", "Not signed".
+  function agreementLine(a) {
+    if (!a?.signed_on) return a?.note || "";   // ("Not signed" is the status at the right)
+    return ["Signed " + P.dateText(a.signed_on) + (a.signed_by ? " by " + a.signed_by : ""), a.note || null].filter(Boolean).join(" · ");
+  }
+  function toAgreement(form) {
+    const errors = [], signed_on = String(form?.signed_on ?? "").trim().slice(0, 10) || null;
+    if (signed_on && !/^\d{4}-\d{2}-\d{2}$/.test(signed_on)) errors.push("Give the signed date as a date.");
+    const signed_by = String(form?.signed_by ?? "").trim().replace(/\s+/g, " ") || null, note = String(form?.note ?? "").trim() || null;
+    if (signed_by && signed_by.length > 120) errors.push("Who signed is at most 120 characters.");
+    if (note && note.length > 500) errors.push("A note is at most 500 characters.");
+    if (!signed_on && form?.file) errors.push("Give the date it was signed, or save it without the file.");
+    return errors.length ? { errors } : { errors: [], args: { signed_on, signed_by, note } };
+  }
+  // The signed copy's title in Files: "Membership form, Kowhai Downs (signed 1 Apr 2026)".
+  const copyTitle = (agreement, member, signedOn) => (agreement + ", " + member + (signedOn ? " (signed " + P.dateText(signedOn) + ")" : "")).slice(0, 300);
+  function toYear(form, years = [], self = null) {
+    const label = String(form?.label ?? "").trim().replace(/\s+/g, " "), a = String(form?.default_amount ?? "").trim().replace(/^\$/, "").replace(/,/g, "");
+    if (!label) return { errors: ["Give the year a label, such as 2026 or 2026/27."] };
+    if (label.length > 20) return { errors: ["A year's label is at most 20 characters."] };
+    if ((years || []).some((y) => y.id !== self?.id && String(y.label).toLowerCase() === label.toLowerCase())) return { errors: ["The group has a year with that label."] };
+    const amount = a === "" ? null : Number(a);
+    if (amount != null && !(Number.isFinite(amount) && amount >= 0 && amount <= 1000000)) return { errors: ["The default amount is a number of dollars, 0 to 1,000,000."] };
+    return { errors: [], row: { label, default_amount: amount } };
+  }
+  function toAgreementName(name, list = [], self = null) {
+    const n = String(name ?? "").trim().replace(/\s+/g, " ");
+    if (!n) return { errors: ["Give the agreement a name."] };
+    if (n.length > 80) return { errors: ["An agreement's name is at most 80 characters."] };
+    if ((list || []).some((a) => a.id !== self?.id && String(a.name).toLowerCase() === n.toLowerCase())) return { errors: ["The group has an agreement with that name."] };
+    return { errors: [], name: n };
+  }
+
   return { canDefine, canEnd, canEdit, memberActions, endNote, colTemplate, colOf, KINDS, KIND_TEXT, CONTACT_KINDS, MAX_FIELDS, MAX_CHOICES, MAX_TYPES, ORPHAN, active, listFields, filterFields, activeTypes, valueText, termText,
     matches, filterRows, chips, remove, clear, toggleType, setField, toggleChoice, typeChoices, choiceChoices, columns, sortBy, emailText, emailNotice, listCsv,
-    fieldForm, toField, removedChoices, toType, valueArg, searchContacts, contactLine };
+    fieldForm, toField, removedChoices, toType, valueArg, searchContacts, contactLine,
+    // M2
+    MAX_YEARS, MAX_AGREEMENTS, STATUS, STATUS_TEXT, subStatus, statusIn, money, subLine, subActions, openYears, activeAgreements, toSubscription, markArgs, markPlan,
+    subMatches, setSubYear, toggleSubStatus, subFilterArg, subCounts, agreementLine, toAgreement, copyTitle, toYear, toAgreementName };
 });

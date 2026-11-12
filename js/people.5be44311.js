@@ -98,9 +98,9 @@
     }
     const today = () => String(opts.today || M().dayKey(Date.now())).slice(0, 10);
     const now = () => opts.now || new Date().toISOString();
-    const st = { screen: "directory", stack: [], tab: "businesses", filters: { q: String(opts.q || ""), status: "current", label: "", labels: [], due: false, types: [], fieldf: {} }, pq: "", archived: false, sort: { by: null, dir: 1 },
+    const st = { screen: "directory", stack: [], tab: "businesses", filters: { q: String(opts.q || ""), status: "current", label: "", labels: [], due: false, types: [], fieldf: {}, sub: null }, pq: "", archived: false, sort: { by: null, dir: 1 },
       // M1b: the group's own fields and membership types (read with the lists), and other contacts (read when first shown)
-      defs: { fields: [], types: [], failed: null }, contacts: { rows: null, failed: null, q: "" },
+      defs: { fields: [], types: [], years: [], agreements: [], failed: null }, contacts: { rows: null, failed: null, q: "" },
       directory: [], people: [], team: [], failed: null, loading: "all", page: null, form: null, errors: [], notice: null,
       feed: { filters: { kinds: [], from: "", to: "", logger: "", followUp: "", topic: "" }, items: [], total: null, failed: null },
       // RV1: the register questions to review (public.proposals of kind register_review), the open one and its answer form
@@ -113,7 +113,9 @@
     // opening: the first read (shared, see openingLists), drawn in two steps: the businesses as soon as they are in, then the rest.
     async function loadLists(opening = false) {
       const lists = opening ? openingLists(sb, g) : readLists(sb, g);
-      const defs = FP.membership ? FP.membership.readDefinitions(sb, g) : Promise.resolve(st.defs);   // M1b: never fails
+      // M1b and M2: the fields and types, the subscription years and agreements (never fail: a failure is said on the list)
+      const defs = FP.membership ? Promise.all([FP.membership.readDefinitions(sb, g), FP.membership.readM2(sb, g)])
+        .then(([a, b]) => ({ ...a, years: b.years, agreements: b.agreements, failed: [a.failed, b.failed].filter(Boolean).join("; ") || null })) : Promise.resolve(st.defs);
       try {
         const directory = await lists.directory;
         st.defs = await defs;
@@ -143,7 +145,7 @@
       RV().release();   // RV1: the item's map preview, if one was open
       const body = s === "business" ? businessScreen() : s === "person" ? personScreen() : s === "log" ? logScreen() : s === "person-form" ? personFormScreen()
         : s === "details-form" ? detailsFormScreen() : s === "feed" ? feedScreen() : s === "export" ? exportScreen()
-        : s === "review" ? reviewScreen() : s === "review-item" ? reviewItemScreen() : s === "fields" ? fieldsScreen() : directoryScreen();
+        : s === "review" ? reviewScreen() : s === "review-item" ? reviewItemScreen() : s === "fields" ? fieldsScreen() : s === "sub-settings" ? subSettingsScreen() : directoryScreen();
       // UI2: on the directory the title row carries the one primary action and a "…" menu for the quieter ones
       // M1b: add a contact; copy the email addresses or download the list of the members shown; the admins' Fields and types
       const title = s === "directory" ? el("div", { class: "crm-titlebar" }, el("h2", {}, "People"),
@@ -154,9 +156,12 @@
             { label: "Add a contact", hint: "Someone the group works with who is not a member", icon: "person", action: "add-contact", run: () => openPersonForm(null, null, true) },
             { label: "Copy email addresses", hint: "Of the members shown, for your own email program", icon: "note", action: "copy-emails", run: () => copyEmails() },
             { label: "Download list", hint: "The members shown, as a spreadsheet", icon: "download", action: "download-list", run: () => downloadList() },
+            // M2: the members shown marked invoiced or paid for one year, at once
+            ...(FP.membership ? [{ label: "Mark invoiced or paid", hint: "The members shown, for one subscription year", icon: "note", action: "mark-subscriptions", run: () => openMark() }] : []),
             { label: "Export", hint: "A spreadsheet for reporting", icon: "download", action: "export", run: () => go("export") },
-            ...(FP.membership && FP.membershipModel?.canDefine(group.role) ? [{ label: "Fields and types", hint: "The group's own fields and membership types", icon: "manage", action: "fields", run: () => go("fields") }] : [])]))) : el("h2", {}, "People");
-      wrap.replaceChildren(title, ...(st.notice ? [el("p", { class: "crm-notice", role: "status" }, st.notice)] : []), body);
+            ...(FP.membership && FP.membershipModel?.canDefine(group.role) ? [{ label: "Fields and types", hint: "The group's own fields and membership types", icon: "manage", action: "fields", run: () => go("fields") },
+              { label: "Subscriptions and agreements", hint: "The group's subscription years and agreements", icon: "manage", action: "sub-settings", run: () => go("sub-settings") }] : [])]))) : el("h2", {}, "People");
+      wrap.replaceChildren(title, ...(st.notice ? [el("p", { class: "crm-notice", role: "status", tabindex: "-1" }, st.notice)] : []), body);
       st.notice = null;
     }
     // Screens stack: going forward remembers where the person was; back (and saving a form) returns there.
@@ -185,7 +190,15 @@
     }
     async function back(refresh = false) {
       if (st.stack.at(-1)?.address && root.history?.length > 1) { root.history.back(); return; }   // the address goes back with the screen
-      const prev = st.stack.pop();
+      const prev = st.stack.pop(), leaving = st.screen;
+      // M2 (#522 review): back from the group's settings (years, agreements, fields) to a member's page: that page is read again, so what
+      // was just added there shows (the first years and agreements are added from a member's empty state)
+      if ((leaving === "sub-settings" || leaving === "fields") && prev?.screen === "business" && prev.page?.business && !refresh) {
+        Object.assign(st, prev, { errors: [] });
+        await openBusiness(prev.page.business.id, false);
+        draw();
+        return;
+      }
       if (!prev && opts.onBack) { opts.onBack(); return; }   // SG2: opened on one business from a sub-group's list
       if (!prev && entryTab && root.history?.length > 1) { root.history.back(); return; }
       // opened from an address with nowhere to go back to: the directory, and the address with it (no new step in the history)
@@ -269,8 +282,8 @@
       search.addEventListener("input", () => { if (st.tab === "businesses") st.filters.q = search.value; else if (st.tab === "contacts") st.contacts.q = search.value; else st.pq = search.value; fill(); });
       const current = () => (st.tab === "businesses" ? { ...st.filters, subgroups: st.sg.chosen } : { archived: st.archived });
       // M1b: the membership type and field chips beside PE1's and SG2's
-      const allChips = () => [...M().filterChips(current(), st.tab === "contacts" ? "people" : st.tab, sgNames()), ...(st.tab === "businesses" && FP.membershipModel ? MM().chips(st.filters, st.defs.fields) : [])];
-      const removeChip = (key) => (/^(type|field):/.test(key) ? MM().remove(current(), key) : M().removeFilter(current(), key));
+      const allChips = () => [...M().filterChips(current(), st.tab === "contacts" ? "people" : st.tab, sgNames()), ...(st.tab === "businesses" && FP.membershipModel ? MM().chips(st.filters, st.defs.fields, st.defs.years) : [])];
+      const removeChip = (key) => (/^(type|field|sub):/.test(key) ? MM().remove(current(), key) : M().removeFilter(current(), key));
       const sgNames = () => new Map((st.sg.counts || []).map((c) => [c.subgroup_id, c.subgroup_name]));
       const filterButton = el("button", { type: "button", class: "crm-filter", "data-action": "filter", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => openFilters(filterButton) },
         FP.icon("filter", 18), el("span", {}, "Filter"));
@@ -284,7 +297,7 @@
         if (on.length) filterButton.append(el("span", { class: "crm-filter-n" }, el("span", { class: "visually-hidden" }, ", chosen: "), String(on.length)));
         chips.hidden = !on.length;
         chips.replaceChildren(...on.map((c) => el("button", { type: "button", class: "crm-chip-on", "data-remove": c.key, "aria-label": "Remove the filter " + c.label, onclick: () => setFilters(removeChip(c.key)) },
-          el("span", {}, c.label), FP.icon("close", 14))), ...(on.length ? [el("button", { type: "button", class: "link crm-clear", "data-action": "clear", onclick: () => setFilters(FP.membershipModel ? MM().clear(M().clearFilters(current())) : M().clearFilters(current())) }, "Clear")] : []));
+          el("span", {}, c.label), FP.icon("close", 14))), ...(on.length ? [el("button", { type: "button", class: "link crm-clear", "data-action": "clear", onclick: () => setFilters(FP.membershipModel ? { ...MM().clear(M().clearFilters(current())), sub: null } : M().clearFilters(current())) }, "Clear")] : []));
       }
       let sheetBody = null;
       function setFilters(f) {
@@ -328,8 +341,23 @@
           holder.replaceChildren(el("h3", { class: "crm-filter-h" }, "Status"), status,
             el("label", { class: "crm-switch-row", for: "crm-due" }, el("span", {}, "Follow-up due"), due),
             el("h3", { class: "crm-filter-h" }, "Labels"), ...(all.length > 6 ? [find] : []), labelList, ...subgroupSection((id) => setFilters({ subgroups: st.sg.chosen.includes(id) ? st.sg.chosen.filter((x) => x !== id) : [...st.sg.chosen, id] })),
-            ...membershipFilters());
+            ...membershipFilters(), ...subscriptionFilter());
         };
+        // M2: Subscription <year>: not invoiced / invoiced, unpaid / paid / not required (any of those chosen), each with its count
+        function subscriptionFilter() {
+          if (!FP.membershipModel) return [];
+          const years = MM().openYears(st.defs.years);
+          if (!years.length) return [];
+          // the counts are of the members the list shows with every other filter (current members by default), so a tick gives that many
+          const f = st.filters, year = f.sub?.year || years[0].id;
+          const counts = MM().subCounts(MM().filterRows(M().searchDirectory(st.directory, { ...f, subgroups: st.sg.chosen, subgroupIndex: st.sg.index }), { ...f, sub: null }), year);
+          const pick = el("select", { id: "ms-filter-year", "aria-label": "Subscription year", onchange: () => setFilters(MM().setSubYear(st.filters, pick.value)) },
+            ...years.map((y) => el("option", { value: y.id, ...(y.id === year ? { selected: true } : {}) }, y.label)));
+          return [el("h3", { class: "crm-filter-h" }, "Subscription"), pick,
+            el("ul", { class: "crm-label-list ms-filter-status" }, ...MM().STATUS.map(([k, label]) => el("li", {}, el("label", { class: "crm-label-row" },
+              el("input", { type: "checkbox", id: "ms-filter-" + k, "data-sub": k, ...(f.sub?.year === year && (f.sub.status || []).includes(k) ? { checked: true } : {}), onchange: () => setFilters(MM().toggleSubStatus(st.filters, year, k)) }),
+              el("span", {}, label), el("small", {}, String(counts[k])))))) ];
+        }
         // M1b: Membership type (any of those chosen), and each of the group's choice, tick and date fields
         function membershipFilters() {
           if (!FP.membershipModel) return [];
@@ -498,7 +526,9 @@
     async function membersShownEmails() {
       const shown = shownMembers();
       if (!shown.length) return { shown, rows: [] };
-      return { shown, rows: await pagedRpc("crm_email_list", { g, filter: { ids: shown.map((r) => r.group_member_id) } }) };
+      // (M2: the subscription filter goes too, so the database picks the same members)
+      const sub = FP.membershipModel ? MM().subFilterArg(st.filters.sub) : null;
+      return { shown, rows: await pagedRpc("crm_email_list", { g, filter: { ids: shown.map((r) => r.group_member_id), ...(sub ? { subscription: sub } : {}) } }) };
     }
     async function copyEmails() {
       try {
@@ -534,9 +564,11 @@
       try {
         // M1b: the membership and the group's fields are read beside the page (their failure is said in their own place)
         const member = MS() ? MS().readMember(sb, id).catch((e) => ({ failed: message(e) })) : Promise.resolve(null);
+        const subs = MS()?.readSubs ? MS().readSubs(sb, id).catch((e) => ({ failed: message(e) })) : Promise.resolve(null);   // M2
         const page = await one(sb.rpc("crm_business", { b: id }));
         if (!page) throw new Error("not found, or not yours to read");
         page.membership = await member;
+        page.subs = await subs;
         st.page = page;
       } catch (e) { st.page = { failed: message(e) }; }
       if (push) draw();
@@ -572,13 +604,16 @@
         linkExisting(b, people),
         past.length ? el("details", { class: "crm-past" }, el("summary", {}, "Earlier (" + past.length + ")"), el("ul", { class: "crm-people" }, ...past.map((x) => linkedPerson(x, b)))) : null));
       const memberCtx = { sb, group, business: b, page: mem, types: st.defs.types, today: today(), openSettings: () => go("fields"),
-        done: async (notice) => {
+        // focus (M2): the ids to put the focus back on once the page is drawn again (the first that is there), else the notice
+        done: async (notice, focus) => {
           const here = () => st.screen === "business" && st.page?.business?.id === b.id;   // still on this member's page
           if (!here()) return;
           st.notice = notice; await loadLists();
           if (!here()) return;
           await openBusiness(b.id, false);
-          if (here()) draw();
+          if (!here()) return;
+          draw();
+          if (focus) (([].concat(focus).map((id) => wrap.querySelector("#" + CSS.escape(id))).find(Boolean)) || wrap.querySelector(".crm-notice"))?.focus();
         },
         changed: (f) => { const r = st.directory.find((x) => x.group_member_id === b.id); if (r) r.fields = { ...(r.fields || {}), [f.key]: f.value }; } };
       if (MS() && mem && !mem.failed) box.append(MS().membershipSection(memberCtx));
@@ -591,6 +626,11 @@
       if ((d.labels || []).length) tags.append(...(chips ? [] : [el("h4", {}, "Labels")]), el("ul", { class: "crm-labels" }, ...d.labels.map((l) => el("li", {}, l))));
       if (tags.childElementCount) box.append(tags);
       if (MS() && mem && !mem.failed) box.append(MS().fieldsSection(memberCtx));
+      // M2: subscriptions year by year, then agreements and forms (after Where they are at, before Notes)
+      if (MS()?.subscriptionsSection && p.subs && !p.subs.failed) {
+        const subCtx = { ...memberCtx, page: p.subs, openSettings: () => go("sub-settings") };
+        box.append(MS().subscriptionsSection(subCtx), MS().agreementsSection(subCtx));
+      } else if (p.subs?.failed) box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the subscriptions and agreements just now: " + p.subs.failed));
       box.append(el("section", { class: "crm-section", "data-section": "notes" }, el("h4", {}, "Notes"),
         d.notes ? el("p", { class: "crm-notes" }, d.notes) : el("p", { class: "crm-empty" }, "No notes. Add them with Edit details.")));
       box.append(el("section", { class: "crm-section" }, el("h4", {}, "Interactions (" + p.interactions_total + ")"),
@@ -790,6 +830,21 @@
     function fieldsScreen() {
       return MS().settingsScreen({ sb, group, defs: st.defs, rows: st.directory, backButton: (label) => backButton(label),
         reload: async () => { const d = await MS().readDefinitions(sb, g); st.defs = d; await loadLists(); return d; } });
+    }
+    // M2: the Subscriptions and agreements screen (the group's admins), and marking the members shown invoiced or paid at once
+    function subSettingsScreen() {
+      return MS().m2SettingsScreen({ sb, group, m2: { years: st.defs.years, agreements: st.defs.agreements }, backButton: (label) => backButton(label),
+        reload: async () => { await loadLists(); return { years: st.defs.years, agreements: st.defs.agreements }; } });
+    }
+    function openMark() {
+      MS().markSheet({ sb, group, rows: shownMembers(), years: st.defs.years, year: st.filters.sub?.year || null, today: today(),
+        opener: wrap.querySelector(".crm-title-actions .more-button"),
+        done: async (notice) => {
+          st.notice = notice; await loadLists();
+          if (st.screen !== "directory") return;
+          redrawDirectory();
+          wrap.querySelector(".crm-title-actions .more-button")?.focus();   // back on the control that opened the sheet
+        } });
     }
     function personFormScreen() {
       const f = st.form, { person: x, business: b, contact } = st.target;

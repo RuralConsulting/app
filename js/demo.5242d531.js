@@ -1713,9 +1713,11 @@
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
     function query(table) {
-      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false, span = null;
+      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false, span = null, counting = false;
       const q = {
-        select() { return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
+        // M2b (#522 review): select(columns, { count: "exact", head: true }) gives the count as the API does (a head read: the count and no
+        // rows), so a count-first read (people.js counted) never falls back to its cap and says "Only the first 2,000 are listed"
+        select(_columns, options) { if (options?.count) counting = { head: !!options.head }; return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
         order(key, options) { orders.push([key, options?.ascending !== false]); return q; }, limit() { return q; },
         // ON3b: `is(key, null)` and `range(from, to)` (inclusive), as PostgREST pages a long read
         is(key, val) { filters.push([key, { is: val }]); return q; }, range(from, to) { span = [from, to]; return q; },
@@ -1751,10 +1753,12 @@
         if (!rows) return error("This demo does not provide " + table);
         let selected = [...rows, ...(d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => matches(row, key, val)));
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
+        const total = selected.length;   // (the count is of every row the filters pick, before a range)
         if (span) selected = selected.slice(span[0], span[1] + 1);
         // N2b: as the real API, at most 1000 rows a request (the stand-in for site_record_summary keeps the cap, so a reader that trusts a
         // full page is caught by a test)
         if (table === "site_record_summary") selected = selected.slice(0, 1000);
+        if (counting) return { ...result(counting.head ? null : selected), count: total };
         if (singular && selected.length !== 1) return maybe && !selected.length ? result(null) : error("Demo row not found");
         return result(singular ? selected[0] : selected);
       }

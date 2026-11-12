@@ -194,3 +194,32 @@
   /* the list clips its corners without being a scroll box of its own (overflow: hidden would be one, and stop the name column staying put) */
   .crm-table.mf-wide .crm-list { overflow: clip; }
 }
+
+/* ---- M2: a member's subscriptions and agreements (one quiet row each, the status at the right) --------------------------------- */
+.ms-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; }
+.ms-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.ms-row:last-child { border-bottom: 0; }
+.ms-row-main { display: grid; gap: 2px; min-width: 0; }
+.ms-row-main small { color: var(--ink-2); font-size: var(--text-small); overflow-wrap: anywhere; }
+.ms-status { color: var(--ink-2); font-size: var(--text-small); text-align: right; white-space: nowrap; }
+.ms-status.ms-invoiced { color: var(--ink); font-weight: 700; }
+.ms-actions, .ms-form { grid-column: 1 / -1; }
+.ms-actions { display: flex; flex-wrap: wrap; gap: 0 16px; }
+.ms-actions button.link { min-height: 40px; padding: 0; }
+.ms-form .ms-edit { flex-basis: 100%; max-width: none; margin-top: 4px; }
+.ms-form input[type="file"] { min-height: 44px; padding: 8px 0; border: 0; background: none; }
+.ms-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.ms-filter-status { margin-top: 6px; }
+#ms-filter-year, .ms-mark select, .ms-mark input { font: inherit; min-height: 44px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); max-width: 100%; }
+.ms-mark { padding: 0 var(--s-4) var(--s-2); gap: var(--s-3); }
+.ms-mark .crm-field label { font-weight: 600; }
+.ms-mark .crm-seg { margin-top: 2px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ms-mark .group-fine { margin: 0; }
+.ms-mark .crm-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+/* the sheet sits outside the group panel, so its one filled button is styled here (the same look as .group-panel button.primary) */
+.ms-mark button.primary { width: 100%; min-height: var(--tap); padding: 0 var(--s-5); border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer; }
+.ms-mark button.primary:hover { background: var(--accent-hover); }
+.ms-mark button.primary:disabled { background: var(--fill); color: var(--ink-3); cursor: default; }
+@media (min-width: 761px) {
+  .ms-mark .ms-form-actions button { width: auto; }
+}
