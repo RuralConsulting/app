@@ -4,12 +4,21 @@
 // person through row-level security (public.group_events, public.group_event_attendees; migration 20261112020000): any member of
 // the group reads, its editors write, its admins or the person who added an event cancel it. The words and the logic are in
 // events-model.js; this file reads, writes and draws.
+// NP1 (20261113061000, the owner's decision of 13 Nov 2026): an event's notes and each attendee's note are the coordinators'. No
+// one selects those columns any more (a read naming them is refused); the group's facilitators, advisors and admins read them
+// through group_event_notes and group_event_attendee_notes and write them through group_event_set_notes and
+// group_event_attendee_set_note (or on a new row). Everyone else never sees a notes field, and the calendar file never carries them.
 (function (root) {
   const FP = root.FP;
   const M = () => FP.eventsModel, G = () => FP.groupModel;
   const el = (...a) => FP.el(...a);
-  const COLS = "id,org_id,title,starts_at,ends_at,all_day,place_name,latitude,longitude,topics,notes,head_count,cancelled_at,cancelled_by,created_by,created_at,updated_at";
-  const ATT_COLS = "id,event_id,user_id,group_member_id,name,note,added_at";
+  const COLS = "id,org_id,title,starts_at,ends_at,all_day,place_name,latitude,longitude,topics,head_count,cancelled_at,cancelled_by,created_by,created_at,updated_at";
+  const ATT_COLS = "id,event_id,user_id,group_member_id,name,added_at";
+  // NP1: who reads and writes the notes (the database decides; this only says whether to ask)
+  const NOTE_ROLES = ["facilitator", "advisor", "admin"];
+  const canNotes = (role) => NOTE_ROLES.includes(role);
+  // A row as read, never with a note on it (whatever a reader hands back), so a note is only ever one read through the functions.
+  const bare = (r) => { const { notes, note, ...rest } = r || {}; return rest; };
   const CAP = 2000;          // at most this many events are read for a group (counted first)
   const ATT_CAP = 1000;      // attendees read for one event
   const NARROW = 760;
@@ -23,14 +32,24 @@
     const total = typeof head.count === "number" ? head.count : null;
     if (total === 0) return { events: [], total: 0, truncated: false };
     const want = Math.min(total ?? CAP, CAP);
-    const events = await rows(sb.from("group_events").select(COLS).eq("org_id", org).order("starts_at", { ascending: true }).range(0, want - 1));
+    const events = (await rows(sb.from("group_events").select(COLS).eq("org_id", org).order("starts_at", { ascending: true }).range(0, want - 1))).map(bare);
     return { events, total: total ?? events.length, truncated: (total ?? 0) > CAP };
   }
-  const readAttendees = (sb, id) => rows(sb.from("group_event_attendees").select(ATT_COLS).eq("event_id", id).order("name", { ascending: true }).range(0, ATT_CAP - 1));
+  // NP1: the notes, for the group's facilitators, advisors and admins (anyone else: no rows). Merged onto the rows as `notes` / `note`.
+  async function withNotes(sb, org, events) {
+    const got = await rows(sb.rpc("group_event_notes", { g: org })), by = new Map(got.map((n) => [n.event_id, n.notes]));
+    return events.map((e) => ({ ...e, notes: by.get(e.id) ?? null }));
+  }
+  async function withAttendeeNotes(sb, org, attendees, eventIds) {
+    const out = new Map();
+    for (let i = 0; i < eventIds.length; i += 1000) for (const n of await rows(sb.rpc("group_event_attendee_notes", { g: org, event_ids: eventIds.slice(i, i + 1000) }))) out.set(n.attendee_id, n.note);
+    return attendees.map((a) => ({ ...a, note: out.get(a.id) ?? null }));
+  }
+  const readAttendees = async (sb, id) => (await rows(sb.from("group_event_attendees").select(ATT_COLS).eq("event_id", id).order("name", { ascending: true }).range(0, ATT_CAP - 1))).map(bare);
   async function readAttendeesOf(sb, ids) {
     const out = [];
     for (let i = 0; i < ids.length; i += 100) out.push(...await rows(sb.from("group_event_attendees").select(ATT_COLS).in("event_id", ids.slice(i, i + 100)).range(0, 9999)));
-    return out;
+    return out.map(bare);
   }
   function download(name, text, type) {
     const url = URL.createObjectURL(new Blob([text], { type })), a = el("a", { href: url, download: name, hidden: true });
@@ -42,7 +61,7 @@
   // The view for one group: a node that redraws itself. opts: { sb, person: {id}, today: "YYYY-MM-DD", now: ISO instant }
   function view(group, opts = {}) {
     const sb = opts.sb || FP.sb, person = opts.person || null;
-    const canWrite = G().canWrite(group.role), isAdmin = G().canManage(group.role);
+    const canWrite = G().canWrite(group.role), isAdmin = G().canManage(group.role), notesToo = canNotes(group.role);
     const wrap = el("section", { class: "group-events", "data-view": "events" });
     const st = { events: [], total: 0, truncated: false, mode: narrow() ? "list" : "month", month: String(opts.today || M().dayKey(Date.now())).slice(0, 7),
       tab: "upcoming", screen: "calendar", current: null, attendees: [], people: null, register: null, notice: null, preview: null, failed: null };
@@ -51,8 +70,12 @@
     const canCancel = (ev) => isAdmin || (!!person?.id && ev.created_by === person.id);
 
     async function reload() {
-      try { Object.assign(st, await readEvents(sb, group.id)); st.failed = null; }
-      catch (e) { st.failed = e?.message || String(e); }
+      try {
+        const r = await readEvents(sb, group.id);
+        // NP1: the notes only for the group's facilitators, advisors and admins; a failed notes read leaves the events as they are
+        if (notesToo && r.events.length) r.events = await withNotes(sb, group.id, r.events).catch(() => r.events);
+        Object.assign(st, r); st.failed = null;
+      } catch (e) { st.failed = e?.message || String(e); }
     }
     function draw() {
       const body = st.screen === "event" ? eventScreen() : st.screen === "form" ? formScreen() : st.screen === "export" ? exportScreen() : st.screen === "import" ? importScreen() : calendarScreen();
@@ -136,6 +159,7 @@
       go("event");
       try {
         st.attendees = await readAttendees(sb, id);
+        if (notesToo && st.attendees.length) st.attendees = await withAttendeeNotes(sb, group.id, st.attendees, [id]).catch(() => st.attendees);
         if (canWrite && !st.current.cancelled_at) await pickers();
       } catch (e) { st.notice = "Couldn't read the attendance just now: " + (e?.message || e); }
       if (st.screen === "event" && st.current?.id === id) draw();
@@ -155,7 +179,7 @@
           el("dt", {}, "Where"), el("dd", {}, ev.place_name || "No place recorded", ev.latitude != null ? el("small", {}, " (" + Number(ev.latitude).toFixed(5) + ", " + Number(ev.longitude).toFixed(5) + ")") : null),
           ...(topics.length ? [el("dt", {}, "Topics"), el("dd", {}, el("ul", { class: "events-topic-chips" }, ...topics.map((t) => el("li", {}, t))))] : []),
           ...(ev.head_count != null ? [el("dt", {}, "Head count"), el("dd", {}, String(ev.head_count))] : [])),
-        ev.notes ? el("div", { class: "events-notes" }, el("h4", {}, "Notes"), el("p", {}, ev.notes)) : null);
+        notesToo && ev.notes ? el("div", { class: "events-notes" }, el("h4", {}, "Notes"), el("p", {}, ev.notes), el("small", { class: "events-private" }, "Not shown to members")) : null);
       if (ev.cancelled_at) box.append(el("p", { class: "group-fine" }, "Cancelled " + G().shortDate(ev.cancelled_at) + ". A cancelled event stays on record; it can't be changed until it is restored."));
       const buttons = el("div", { class: "events-actions" });
       if (canWrite && !ev.cancelled_at) buttons.append(el("button", { type: "button", class: "secondary", "data-action": "edit", onclick: () => openForm(ev) }, "Edit"));
@@ -163,7 +187,7 @@
       if (buttons.childNodes.length) box.append(buttons);
       box.append(el("h4", {}, "Attendance (" + st.attendees.length + (ev.head_count != null ? " named, head count " + ev.head_count : "") + ")"));
       box.append(st.attendees.length ? el("ul", { class: "events-attendees" }, ...st.attendees.map((a) => el("li", { "data-kind": M().ATTENDEE_KIND(a) },
-        el("span", {}, el("b", {}, a.name), el("small", {}, KIND[M().ATTENDEE_KIND(a)] + (a.note ? " · " + a.note : ""))),
+        el("span", {}, el("b", {}, a.name), el("small", {}, KIND[M().ATTENDEE_KIND(a)] + (notesToo && a.note ? " · " + a.note : ""))),
         canWrite && !ev.cancelled_at ? el("button", { type: "button", class: "link", "aria-label": "Remove " + a.name, onclick: () => removeAttendee(a) }, "Remove") : null)))
         : el("p", { class: "events-empty-tab" }, "No names recorded." + (ev.head_count == null ? "" : " The head count is " + ev.head_count + ".")));
       if (canWrite && !ev.cancelled_at) box.append(attendeeForm(ev));
@@ -175,22 +199,24 @@
         (st.people || []).length ? el("optgroup", { label: "People with a sign-in" }, ...st.people.filter((p) => !taken.has(p.user_id)).map((p) => el("option", { value: "u:" + p.user_id, "data-name": p.name }, p.name))) : null,
         (st.register || []).length ? el("optgroup", { label: "Members" }, ...st.register.filter((b) => !taken.has(b.id)).map((b) => el("option", { value: "b:" + b.id, "data-name": b.business_name }, b.business_name + (b.member_number ? " (" + b.member_number + ")" : "")))) : null);
       const name = el("input", { id: "attendee-name", type: "text", maxlength: "200", autocomplete: "off" });
-      const note = el("input", { id: "attendee-note", type: "text", maxlength: "200", placeholder: "For example: committee, regional council", autocomplete: "off" });
+      // NP1: a note on an attendee is the coordinators' (facilitators, advisors, admins); an editor adds names only
+      const note = notesToo ? el("input", { id: "attendee-note", type: "text", maxlength: "200", placeholder: "For example: committee, regional council", autocomplete: "off", "aria-describedby": "attendee-note-hint" }) : null;
       const msg = el("p", { class: "events-msg", role: "status" });
       who.addEventListener("change", () => { const o = who.selectedOptions[0]; if (o?.dataset.name) name.value = o.dataset.name; });
       const form = el("form", { class: "events-attendee-form" }, el("h4", {}, "Add someone"),
-        el("label", { for: "attendee-who" }, "Who"), who, el("label", { for: "attendee-name" }, "Name"), name, el("label", { for: "attendee-note" }, "Role or organisation (optional)"), note,
+        el("label", { for: "attendee-who" }, "Who"), who, el("label", { for: "attendee-name" }, "Name"), name,
+        ...(note ? [el("label", { for: "attendee-note" }, "Note (optional)"), note, el("small", { id: "attendee-note-hint", class: "events-private" }, "Not shown to members")] : []),
         el("button", { type: "submit", class: "primary" }, "Add"), msg,
         el("p", { class: "group-fine" }, "Names only: no phone numbers or emails are kept. People with a sign-in are listed once their sign-in has a name."));
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!name.value.trim()) { msg.textContent = "Type their name."; return; }
         const [kind, id] = (who.value || ":").split(":");
-        const row = { event_id: ev.id, name: name.value.trim(), note: note.value.trim() || null, ...(kind === "u" ? { user_id: id } : kind === "b" ? { group_member_id: id } : {}) };
+        const row = { event_id: ev.id, name: name.value.trim(), ...(note && note.value.trim() ? { note: note.value.trim() } : {}), ...(kind === "u" ? { user_id: id } : kind === "b" ? { group_member_id: id } : {}) };
         form.querySelector("button[type=submit]").disabled = true;
         const { data, error } = await sb.from("group_event_attendees").insert(row).select(ATT_COLS).single();
         if (error) { msg.textContent = "Couldn't add them: " + error.message; form.querySelector("button[type=submit]").disabled = false; return; }
-        st.attendees = [...st.attendees, { org_id: group.id, ...row, ...(data || {}) }].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        st.attendees = [...st.attendees, { org_id: group.id, note: null, ...row, ...bare(data) }].sort((a, b) => String(a.name).localeCompare(String(b.name)));
         draw(); document.getElementById("attendee-name")?.focus();
       });
       return form;
@@ -204,7 +230,7 @@
     async function setCancelled(ev, cancel) {
       const { data, error } = await sb.from("group_events").update({ cancelled_at: cancel ? new Date().toISOString() : null }).eq("id", ev.id).select(COLS).single();
       if (error) { st.notice = "Couldn't " + (cancel ? "cancel" : "restore") + " the event: " + error.message; return draw(); }
-      Object.assign(ev, data || { cancelled_at: cancel ? new Date().toISOString() : null });
+      Object.assign(ev, data ? bare(data) : { cancelled_at: cancel ? new Date().toISOString() : null });
       st.notice = cancel ? "The event is cancelled. It stays on record and can be restored." : "The event is restored.";
       draw();
     }
@@ -240,7 +266,9 @@
           ...(suggest.length ? [el("p", { class: "events-suggest" }, el("small", {}, "Used before: "), ...suggest.map((t) => el("button", { type: "button", class: "events-suggestion", onclick: () => { f.topics = M().cleanTopics([...f.topics, t]); drawTopics(); } }, t)))] : []));
       };
       drawTopics();
-      const notes = el("textarea", { id: "ev-notes", rows: "4", maxlength: "10000" }); notes.value = f.notes || ""; notes.addEventListener("input", () => { f.notes = notes.value; });
+      // NP1: the notes field only for the group's facilitators, advisors and admins, and said plainly to be theirs
+      const notes = notesToo ? el("textarea", { id: "ev-notes", rows: "4", maxlength: "10000" }) : null;
+      if (notes) { notes.value = f.notes || ""; notes.addEventListener("input", () => { f.notes = notes.value; }); }
       const mapSlot = el("div", { class: "events-pick-map", hidden: true });
       const pick = typeof root.maplibregl === "object" || typeof root.maplibregl === "function"
         ? el("button", { type: "button", class: "link", "aria-expanded": "false", onclick: () => togglePick(mapSlot, pick, lat, lon, f) }, "Pick the point on a map") : null;
@@ -257,20 +285,28 @@
         field("place_name", "Place", input("place_name", { type: "text", maxlength: "200", placeholder: "For example: the ford on Ford Road", autocomplete: "off" })),
         el("fieldset", { class: "events-point" }, el("legend", {}, "Map point (optional)"), el("div", { class: "events-row" }, field("latitude", "Latitude", lat), field("longitude", "Longitude", lon)), pick, mapSlot),
         el("div", { class: "events-field", "data-field": "topics" }, el("label", { for: "ev-topic" }, "Topics"), topicBox),
-        field("notes", "Notes", notes),
+        notes ? field("notes", "Notes", notes, "Not shown to members.") : null,
         field("head_count", "Head count (optional)", input("head_count", { type: "number", min: "0", step: "1", inputmode: "numeric" }), "For when names aren't recorded."),
         el("div", { class: "events-actions" }, save, el("button", { type: "button", class: "secondary", onclick: () => (ev ? go("event") : go("calendar")) }, "Cancel")));
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const { errors: problems, row } = M().toRow(f);
+        const { errors: problems, row: full } = M().toRow(f);
         if (problems.length) { st.errors = problems; draw(); return; }
         save.disabled = true;
-        const q = ev ? sb.from("group_events").update(row).eq("id", ev.id) : sb.from("group_events").insert({ org_id: group.id, ...row });
+        // NP1: nobody updates the notes column: a new event carries them (the coordinators' only), a change goes through
+        // group_event_set_notes; an editor's row never names them
+        const { notes: newNotes, ...row } = full;
+        const q = ev ? sb.from("group_events").update(row).eq("id", ev.id) : sb.from("group_events").insert({ org_id: group.id, ...row, ...(notesToo && newNotes ? { notes: newNotes } : {}) });
         const { data, error } = await q.select(COLS).single();
         if (error) { st.errors = ["Couldn't save: " + error.message]; save.disabled = false; draw(); return; }
-        const saved = { ...(ev || { org_id: group.id, created_by: person?.id || null }), ...row, ...(data || {}) };
+        let notesNow = ev ? ev.notes ?? null : (notesToo ? newNotes : null), notesFailed = null;
+        if (ev && notesToo && (newNotes || null) !== (ev.notes || null)) {
+          const r = await sb.rpc("group_event_set_notes", { e: ev.id, notes: newNotes });
+          if (r?.error) notesFailed = r.error.message; else notesNow = r?.data ?? newNotes ?? null;
+        }
+        const saved = { ...(ev || { org_id: group.id, created_by: person?.id || null }), ...row, ...bare(data), notes: notesToo ? notesNow : null };
         st.events = ev ? st.events.map((x) => (x.id === ev.id ? saved : x)) : [...st.events, saved];
-        st.notice = ev ? "Saved." : "Added “" + saved.title + "”.";
+        st.notice = (ev ? "Saved." : "Added “" + saved.title + "”.") + (notesFailed ? " The notes weren't saved: " + notesFailed : "");
         st.current = saved; st.attendees = ev ? st.attendees : [];
         if (!ev) openEvent(saved.id); else go("event");
       });
@@ -315,12 +351,18 @@
           el("button", { type: "button", class: "secondary", "data-export": "attendance", onclick: async (e) => {
             const { a, b } = range(), evs = M().inRange(st.events, a, b);
             e.target.disabled = true; msg.textContent = "Reading the attendance…";
-            try { download(name("attendance", "csv"), M().attendanceCsv(evs, await readAttendeesOf(sb, evs.map((x) => x.id)), a, b), "text/csv;charset=utf-8"); count(); }
+            try {
+              let att = await readAttendeesOf(sb, evs.map((x) => x.id));
+              if (notesToo && att.length) att = await withAttendeeNotes(sb, group.id, att, evs.map((x) => x.id));   // NP1: the coordinators' file has the notes
+              download(name("attendance", "csv"), M().attendanceCsv(evs, att, a, b), "text/csv;charset=utf-8"); count();
+            }
             catch (err) { msg.textContent = "Couldn't read the attendance: " + (err?.message || err); }
             e.target.disabled = false;
           } }, "Attendance (CSV)"),
-          el("button", { type: "button", class: "secondary", "data-export": "ics", onclick: () => { const { a, b } = range(); download(name("calendar", "ics"), M().ics(M().inRange(st.events, a, b), { name: group.name + " events", now: now() }), "text/calendar;charset=utf-8"); } }, "Calendar file (.ics)")),
-        el("p", { class: "group-fine" }, "Times are New Zealand time. The events spreadsheet has the same columns the import takes, so it can be edited and imported again: a row keeps its id to update that event."));
+          // NP1: a calendar file is for sharing, so it never carries the coordinators' notes
+          el("button", { type: "button", class: "secondary", "data-export": "ics", onclick: () => { const { a, b } = range(); download(name("calendar", "ics"), M().ics(M().inRange(st.events, a, b).map(bare), { name: group.name + " events", now: now() }), "text/calendar;charset=utf-8"); } }, "Calendar file (.ics)")),
+        el("p", { class: "group-fine" }, "Times are New Zealand time. The events spreadsheet has the same columns the import takes, so it can be edited and imported again: a row keeps its id to update that event."),
+        notesToo ? el("p", { class: "group-fine events-private" }, "The spreadsheets include the notes, which are not shown to members: keep them to the group's coordinators. The calendar file leaves the notes out.") : null);
       count();
       return box;
     }
@@ -339,7 +381,7 @@
         const f = file.files?.[0];
         if (!f) return;
         const text = await f.text();
-        st.preview = { name: f.name, ...M().importPreview(text, st.events) };
+        st.preview = { name: f.name, ...M().importPreview(text, st.events, { notes: notesToo }) };
         draw();
       });
       box.append(el("div", { class: "events-field" }, el("label", { for: "import-file" }, "Choose a CSV file"), file));
@@ -370,12 +412,20 @@
       let added = 0, updated = 0; const failed = [];
       for (let i = 0; i < adds.length; i += 100) {
         const part = adds.slice(i, i + 100);
+        // (importPreview leaves the notes out of a row unless the person writes them: NP1)
         const { data, error } = await sb.from("group_events").insert(part.map((r) => ({ org_id: group.id, ...r.row }))).select("id");
         if (error) failed.push("Lines " + part[0].line + "–" + part[part.length - 1].line + ": " + error.message); else added += Array.isArray(data) ? data.length : part.length;
       }
       for (const r of updates) {
-        const { error } = await sb.from("group_events").update(r.row).eq("id", r.id);
-        if (error) failed.push("Line " + r.line + ": " + error.message); else updated++;
+        // NP1: the notes column is never updated directly: a changed note goes through group_event_set_notes
+        const { notes, ...row } = r.row;
+        const { error } = await sb.from("group_events").update(row).eq("id", r.id);
+        if (error) { failed.push("Line " + r.line + ": " + error.message); continue; }
+        if (notesToo && "notes" in r.row && (notes || null) !== (r.was?.notes || null)) {
+          const n = await sb.rpc("group_event_set_notes", { e: r.id, notes: notes ?? null });
+          if (n?.error) { failed.push("Line " + r.line + " (notes): " + n.error.message); continue; }
+        }
+        updated++;
       }
       await reload();
       st.notice = "Imported: " + added + " added, " + updated + " updated." + (failed.length ? " Not saved: " + failed.join("; ") : "");

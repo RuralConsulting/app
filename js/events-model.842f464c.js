@@ -254,18 +254,21 @@
     return h < 24 && mi < 60 ? pad(h) + ":" + pad(mi) : null;
   }
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const comparable = (r) => ({ title: r.title, all_day: !!r.all_day, starts_at: Date.parse(r.starts_at), ends_at: r.ends_at ? Date.parse(r.ends_at) : null, place_name: r.place_name || null,
-    latitude: r.latitude == null ? null : Number(r.latitude), longitude: r.longitude == null ? null : Number(r.longitude), topics: cleanTopics(r.topics), notes: r.notes || null,
+  const comparable = (r, withNotes = true) => ({ title: r.title, all_day: !!r.all_day, starts_at: Date.parse(r.starts_at), ends_at: r.ends_at ? Date.parse(r.ends_at) : null, place_name: r.place_name || null,
+    latitude: r.latitude == null ? null : Number(r.latitude), longitude: r.longitude == null ? null : Number(r.longitude), topics: cleanTopics(r.topics), notes: withNotes ? r.notes || null : null,
     head_count: r.head_count == null ? null : Number(r.head_count) });
   // Each row of a CSV against the group's events as the person reads them: "add", "update" (its id is one of the group's events),
   // "same" (nothing would change) or "reject" with the plain reason. Nothing is written here. Over max rows: nothing at all.
-  function importPreview(text, existing, { max = MAX_IMPORT } = {}) {
+  // NP1: `notes` says whether the person writes events' notes (the group's facilitators, advisors and admins). When not, or when the
+  // file has no notes column, a row carries no notes at all (an import never clears or writes them) and they are not compared.
+  function importPreview(text, existing, { max = MAX_IMPORT, notes = true } = {}) {
     const rows = parseCsv(text);
     if (!rows.length) return { error: "The file is empty.", rows: [], counts: {} };
     const header = rows[0].cells.map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
     const missing = ["title", "start_date"].filter((c) => !header.includes(c));
     if (missing.length) return { error: "The file needs the columns " + missing.join(" and ") + " in its first row. Download the template to see them all.", rows: [], counts: {} };
-    const unknown = header.filter((h) => h && !EVENT_COLUMNS.includes(h));
+    const withNotes = notes !== false && header.includes("notes");
+    const unknown = header.filter((h) => h && (!EVENT_COLUMNS.includes(h) || (h === "notes" && !withNotes)));
     const body = rows.slice(1);
     if (body.length > max) return { error: "The file has " + body.length + " rows. Import at most " + max + " at a time: split the file and import each part.", rows: [], counts: {} };
     const byId = new Map((existing || []).map((e) => [String(e.id).toLowerCase(), e])), seen = new Set();
@@ -283,6 +286,7 @@
       const { errors, row } = toRow({ title: v.title, all_day: allDay, start_date: sd, start_time: st, end_date: ed, end_time: et, place_name: v.place_name,
         latitude: v.latitude, longitude: v.longitude, topics: v.topics, notes: v.notes, head_count: v.head_count });
       if (errors.length) return reject(errors.join(" "));
+      if (!withNotes) delete row.notes;
       const id = (v.id || "").trim();
       if (!id) return { line, action: "add", title: row.title, row };
       const key = id.toLowerCase();
@@ -291,7 +295,7 @@
       const ev = byId.get(key);
       if (!ev) return reject("No event of this group has this id. Leave the id empty to add it as a new event.");
       if (ev.cancelled_at) return reject("That event is cancelled: restore it in Events before changing it.");
-      if (same(comparable(ev), comparable(row))) return { line, action: "same", id: ev.id, title: row.title, row };
+      if (same(comparable(ev, withNotes), comparable(row, withNotes))) return { line, action: "same", id: ev.id, title: row.title, row };
       return { line, action: "update", id: ev.id, title: row.title, row, was: ev };
     });
     const counts = { add: 0, update: 0, same: 0, reject: 0 };

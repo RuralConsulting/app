@@ -122,3 +122,6 @@ button.events-day-num:hover, button.events-day-num:focus-visible { background: v
   .events-toggle button { flex: 1; }
   .events-actions > button { flex: 1 1 auto; }
 }
+
+/* NP1: said quietly wherever a coordinator reads or types a note: it is not shown to members */
+.events-private { display: block; color: var(--ink-3); font-size: var(--text-small); }

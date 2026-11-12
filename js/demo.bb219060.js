@@ -195,6 +195,12 @@
       ai_recipes: f.ops.recipes || [],
       // The Layers page (LN1): invented reference sources and advisor notes; the advisor's organisation is a group scope.
       reference_sources: f.ops.sources || [], layer_notes: f.ops.layer_notes || [],
+      // NP1b: staff's working notes on the farm (public.farm_working_notes), not shown to the farm; invented
+      farm_working_notes: [
+        { id: "de000000-0000-4000-8000-000000000701", farm_id: FARM, about_kind: null, about_id: null, body: "Owner wants the riparian plan before the spring field day (synthetic).",
+          created_by: USER, created_at: "2026-10-20T01:00:00Z", updated_by: USER, updated_at: "2026-10-20T01:00:00Z", archived_at: null, archived_by: null },
+        { id: "de000000-0000-4000-8000-000000000702", farm_id: FARM, about_kind: null, about_id: null, body: "Consent renewal: check the take figures with the irrigation scheme first (synthetic).",
+          created_by: "de000000-0000-4000-8000-000000000499", created_at: "2026-10-27T02:30:00Z", updated_by: null, updated_at: "2026-10-27T02:30:00Z", archived_at: null, archived_by: null }],
       map_layers: map.layers.map((l) => ({ id: l.id, name: l.name, theme: l.theme, farm_id: FARM, org_id: null })),
       organisations: [{ id: ORG, name: "Example Advisory Ltd (synthetic)", kind: "consultancy" }],
       // FB1: the farm's holding and farmed boundary start empty; the parcels around it are invented (parcels()).
@@ -380,6 +386,29 @@
       { id: id(55), event_id: id(2), org_id: GROUP, user_id: null, group_member_id: null, name: "Pat Example (synthetic)", note: "Chair", added_at: made },
     ];
     data.eventPeople = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: "de000000-0000-4000-8000-000000000499", name: "Mere Example (synthetic)", role: "member" }];
+  }
+  // NP1: the coordinators' notes on events and attendees, as public.group_event_notes, group_event_attendee_notes, group_event_set_notes
+  // and group_event_attendee_set_note: for the group's facilitators, advisors and admins only (the demo person's role in the group;
+  // "?simple=client" makes it a plain member, who gets no rows and is refused a write). In memory.
+  function eventNotesRpc(d, name, a) {
+    const role = (d.groupTables?.org_members || []).find((m) => m.org_id === GROUP && m.user_id === USER)?.role;
+    const may = ["facilitator", "advisor", "admin"].includes(role);
+    const evs = d.tables.group_events || [], att = d.tables.group_event_attendees || [], tidy = (v) => String(v ?? "").trim() || null;
+    if (name === "group_event_notes") return [may && a.g === GROUP ? evs.filter((e) => e.notes).map((e) => ({ event_id: e.id, notes: e.notes })) : []];
+    if (name === "group_event_attendee_notes") return [may && a.g === GROUP ? att.filter((x) => x.note && (!a.event_ids || a.event_ids.includes(x.event_id))).map((x) => ({ attendee_id: x.id, event_id: x.event_id, note: x.note })) : []];
+    const refused = [null, { code: "42501", message: "Only the group's facilitators, advisors and admins write " + (name === "group_event_set_notes" ? "an event's notes" : "a note on an attendee") }];
+    if (!may) return refused;
+    if (name === "group_event_set_notes") {
+      const e = evs.find((x) => x.id === a.e);
+      if (!e) return refused;
+      if (e.cancelled_at) return [null, { code: "42501", message: "A cancelled event cannot be changed: restore it first" }];
+      Object.assign(e, { notes: tidy(a.notes), updated_at: new Date().toISOString() });
+      return [e.notes];
+    }
+    const x = att.find((r) => r.id === a.a);
+    if (!x) return refused;
+    x.note = tidy(a.note);
+    return [x.note];
   }
   // PE1: the group's people, the people at its businesses, more about some businesses and an interaction log with follow-ups
   // (public.people, group_member_people, group_member_details, interactions, interaction_links), all invented, around the
@@ -1256,11 +1285,13 @@
     "people", "group_member_people", "group_member_details",   // PE1: the group's people
     "subgroup_businesses",   // SG2: a business added to a sub-group
     "group_fields", "group_membership_types",   // M1b: a field or type added by the group's admin
-    "group_subscription_years", "group_agreements"];   // M2: a year or agreement added by the group's admin
+    "group_subscription_years", "group_agreements",   // M2: a year or agreement added by the group's admin
+    "farm_working_notes"];   // NP1b: a working note added on a farm
   const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees", "people", "group_member_people", "group_member_details", "interactions",
     "subgroup_businesses",   // SG2: ended
     "group_fields", "group_membership_types",   // M1b: renamed, reordered, archived
-    "group_subscription_years", "group_agreements"];   // M2: changed, archived   // and the tables whose rows the demo changes (the Layers page; a new block's note)
+    "group_subscription_years", "group_agreements",   // M2: changed, archived
+    "farm_working_notes"];   // NP1b: archived   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
@@ -1765,6 +1796,7 @@
             if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
             if (table === "subgroup_businesses") Object.assign(r, { parent_org_id: GROUP, joined_on: r.joined_on ?? String(d.asAt).slice(0, 10), left_on: null, created_by: d.user.id });   // SG2: as the guard stamps it
             if (table === "group_fields") Object.assign(r, { key: r.key || String(r.label).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field", archived_at: null });   // M1b: as the guard makes the key
+            if (table === "farm_working_notes") Object.assign(r, { body: String(r.body || "").trim(), created_by: d.user.id, updated_by: d.user.id, updated_at: r.created_at, archived_at: null, archived_by: null });   // NP1b: as the guard stamps it
             rows.push(r);
             if (table === "documents") d.tables.document_relations.push({ id: r.id, tier: r.tier, relates_to: r.relates_to || null, superseded_by: null });
           }
@@ -1814,6 +1846,9 @@
         }
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
+        if (/^group_event_(notes|attendee_notes|set_notes|attendee_set_note)$/.test(name)) return result(...eventNotesRpc(d, name, args || {}));   // NP1
+        // NP1b, as public.farm_working_notes_allowed: RCL staff on the farm (the demo person when staff); a client: no
+        if (name === "farm_working_notes_allowed") return result(!!d.tables.profiles?.[0]?.is_staff && (args.f === FARM || args.f === FARM2));
         if (String(name).startsWith("crm_")) { const r = crmRpc(d, name, args || {}); if (r) return result(...r); }   // PE1
         if (name === "register_review_answer") return result(...reviewAnswer(d, args || {}));   // RV1
         { const r = subgroupRpc(d, name, args || {}); if (r) return result(...r); }   // SG2

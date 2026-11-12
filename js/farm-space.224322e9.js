@@ -1523,6 +1523,9 @@
     const addCtx = farmRole(farm).then(({ role, tiers }) => ({ space: "farm", id: farm.id, name: farm.name, role, documentTiers: tiers, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: "home" }));
     const host = $("#screen-farm-home");
     host.replaceChildren(FP.placeHome.view({ space: "farm", place: { id: farm.id, name: farm.name }, sections: tabs, addCtx, sb: FP.sb }));
+    // NP1b: the working notes, drawn only for those the database lets read them (RCL staff on the farm; a member group's coordinators)
+    const notes = FP.workingNotes?.view(farm.id, { sb: FP.sb });
+    if (notes) host.querySelector(".place-home")?.append(notes);
     host.scrollTop = 0;
   }
   async function open(farm, route) {

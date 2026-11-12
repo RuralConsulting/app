@@ -108,6 +108,10 @@
     return all.map((i) => i === first ? nameOnlyGroupHtml(members, o) : i.rule === NAME_ONLY ? "" : itemHtml(i, o)).join("");
   }
   // report: FP.onboardingModel.build() or fromDocument(); o: { farmName, canDecide, userId, listed (false: the farm's rows could not be brought up), open (an item key to leave open), canSave, saved, message, minutes }
+  // NP1 (Josh, 13 Nov 2026): a private record RCL staff make on a farm is not read by the farm's owner, so the line never promises the
+  // owner to staff (o.staff); a farm's own person keeps the original sense.
+  const privateLine = (o = {}) => (o.staff ? "It lists a private file, so it is saved private: only you can read it."
+    : "It lists a private file, so it is saved private: you and the farm's owner can read it.");
   function html(report, o = {}) {
     if (!report) return '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2><p>' + esc(o.message || "This farm's onboarding checklist isn't available to you.") + "</p></section>";
     const n = report.counts || {}, parts = [[n.propose, "to confirm"], [n.verify, "to check"], [n.gap, "missing"], [n.found, "found"], [n.done, "done"]].filter(([x]) => x > 0).map(([x, w]) => x + " " + w);
@@ -118,7 +122,7 @@
     const effort = model().effortLines(report.effort);
     const save = o.canSave && !o.saved ? '<form class="onboarding-save" data-onboarding-save><label for="ob-minutes">Minutes spent on this farm\'s onboarding by hand (optional)</label>' +
       '<input id="ob-minutes" name="minutes" type="number" inputmode="numeric" min="0" max="100000" step="1"' + (o.minutes != null ? ' value="' + esc(o.minutes) + '"' : "") + ">" +
-      '<button type="submit">Save to Files</button>' + (report.audience === "private" ? '<p class="onboarding-private">It lists a private file, so it is saved private: you and the farm\'s owner can read it.</p>' : "") + "</form>" : "";
+      '<button type="submit">Save to Files</button>' + (report.audience === "private" ? '<p class="onboarding-private">' + esc(privateLine(o)) + "</p>" : "") + "</form>" : "";
     return '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2>' +
       '<p class="onboarding-status" role="status">' + esc(status) + (o.saved ? ' <a href="' + esc(o.liveHref || "#") + '" data-onboarding-live>See it as it is now</a>' : "") + "</p>" +
       '<p class="onboarding-intro">What the platform already holds for ' + esc(report.farm?.name || "this farm") + ", what it can propose, and what needs a person. Nothing here changes the farm's records: each proposal is confirmed where it belongs.</p>" +
@@ -166,7 +170,7 @@
     let inputs = null, report = null, plans = {}, saved = null, draft = readDraft(user, farm), message = null, minutes = null, started = 0, proposals = null, requests = [], listed = true;
     // DEC1b: the farm's documents (with their storage paths) let a finding's card open the file it rests on
     const docs = () => [...list(env.docs), ...list(inputs?.documents)];
-    const draw = (o = {}) => { host.innerHTML = html(report, { canDecide: !!env.canEdit, userId: user, canSave: !!env.canEdit, liveHref: env.liveHref, listed, message, minutes, docs: docs(), ...o }); };
+    const draw = (o = {}) => { host.innerHTML = html(report, { canDecide: !!env.canEdit, userId: user, canSave: !!env.canEdit, staff: !!root.FP?.ops?.isStaff?.(), liveHref: env.liveHref, listed, message, minutes, docs: docs(), ...o }); };
     const rebuild = (o) => { report = M.build(inputs, { now: new Date().toISOString(), plans, saved, draft, proposals, requests, client_ms: (globalThis.performance?.now() || 0) - started }); draw(o); };
     host.innerHTML = '<section class="space-view onboarding-view" data-view="onboarding"><h2>Onboarding checklist</h2><p class="onboarding-status" role="status">Reading what the platform holds for this farm…</p></section>';
     // A saved report: drawn as it was saved.
