@@ -58,5 +58,12 @@
     if (Object.prototype.hasOwnProperty.call(p, "leased")) return ["yes", "y", "true", "1"].includes(String(p.leased ?? "").trim().toLowerCase());
     return String(p.tenure ?? p.Tenure ?? p.ownership ?? p.status ?? "").toLowerCase().includes("lease");
   }
-  return { HUES, DEFAULT_HUES, LIGHT_GROUND, hueIndex, tone, look, farmMarker, hues, contrast, isLeased };
+  // UI2b: the background an overview map (Places, a group's or farm's Overview) opens on: the person's stored choice when it is one
+  // of the backgrounds this map can draw, otherwise the plain map ("topolite"); the aerial only when there is no plain map to draw.
+  // choices: the backgrounds this map offers (none without a LINZ key, except the demo's stand-ins).
+  function startBackground(stored, choices) {
+    const c = Array.isArray(choices) ? choices : [];
+    return c.includes(stored) ? stored : c.includes("topolite") ? "topolite" : c[0] || "aerial";
+  }
+  return { HUES, DEFAULT_HUES, LIGHT_GROUND, startBackground, hueIndex, tone, look, farmMarker, hues, contrast, isLeased };
 });

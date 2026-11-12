@@ -57,7 +57,7 @@
 
     // 1. the gaps: first
     html += '<section class="draft-gaps" data-section="gaps" aria-labelledby="draft-gaps-h"><h2 id="draft-gaps-h">What this draft still needs (' + gaps.length + ")</h2>" +
-      "<p>Parts the Freshwater Farm Plan asks for that the Farm Environment Plan did not carry, in their order. Each needs a person.</p><ol class=\"draft-gap-list\">";
+      "<p>Parts the Freshwater Farm Plan asks for that the Farm Environment Plan did not carry, in the order the Freshwater Farm Plan sets them out. Each needs a person.</p><ol class=\"draft-gap-list\">";
     for (const g of gaps) {
       const fields = (g.fields || []).map((f) => fieldLabel(definition, g.node, f).field);
       const rows = (g.instances || []).length;

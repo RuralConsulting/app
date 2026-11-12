@@ -33,7 +33,7 @@
   const ruleRef = (a) => { const r = typeof a?.rule_ref === "string" ? a.rule_ref.trim() : ""; return r && !PLACEHOLDER_REF.test(r) ? r : null; };
   const authName = (a) => [a.consent_no || ruleRef(a), title(a.title)].filter(Boolean).join(" · ") || "Recorded authorisation";
   const count = (n, one, many) => (n === 1 ? "One " + one : n + " " + many);
-  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", plan_issue: "Issued file", onboarding_report: "Onboarding report", consent_decision: "Consent decision", consent_application: "Consent application",
+  const docKinds = { fep: "Farm Environment Plan", fwfp: "Freshwater Farm Plan", plan_issue: "Issued version", onboarding_report: "Onboarding report", consent_decision: "Consent decision", consent_application: "Consent application",
     overseer_report: "Nutrient budget", memo: "Notes", aee: "Assessment of environmental effects", luc_report: "Land use capability report",
     ghg_report: "Greenhouse gas report", consent_correspondence: "Consent correspondence", correspondence: "Correspondence",
     smap_factsheet: "S-map soil fact sheet", gis_artifact: "Map extract", map_extract: "Map extract", fep_audit: "FEP audit", nzfap_checklist: "NZFAP+ checklist", land_unit_map: "Land unit map",

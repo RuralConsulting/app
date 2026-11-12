@@ -61,7 +61,7 @@
     fep_not_in_register: "Add the member to the register, or correct the number in the file name; then re-run the group load.",
     paddock_held: "Give each paddock its member's id in the paddock layer, then re-run the group load.",
   };
-  const SIGNAL_WORD = { member_number: "member number", business_name: "name", fep_title: "the plan's title", member_blocks: "inside the member's blocks" };
+  const SIGNAL_WORD = { member_number: "member number", business_name: "member's name", fep_title: "the plan's title", member_blocks: "inside the member's blocks" };
   const ROLE_WORD = { current: "current site", successor: "successor", predecessor: "predecessor", co_located: "co-located" };
 
   // ---- the count line -----------------------------------------------------------------------------------------------------

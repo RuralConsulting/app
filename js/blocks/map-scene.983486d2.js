@@ -82,10 +82,13 @@
     if (map) return map;
     maplibregl.setWorkerUrl("vendor/maplibre-gl-csp-worker.f950e7b1.js");
     map = new maplibregl.Map({
-      container, style: FP.basemaps.style("aerial"),
+      // UI2b: an overview map is made on the plain ground (no aerial), a farm's own map on the aerial
+      container, style: FP.basemaps.style(startBase || "aerial"),
       bounds: [[166.3, -47.4], [178.6, -34.3]], maxZoom: 21,
       attributionControl: { compact: true, customAttribution: FP.brand.org_legal },
     });
+    // (made on the plain ground for an overview: no background is drawn until the one asked for has come)
+    base = startBase && startBase !== "aerial" && baseNames().includes(startBase) ? "ground" : "aerial";
     // #259: on a phone the attribution starts as the (i) and opens on tap (MapLibre starts a compact one open until the map
     // is first moved, which put two lines over the map above the sheet). Folded once the map is up, and again when a narrow
     // canvas follows a wide one; a person who opened it is not folded again while the canvas stays narrow.
@@ -156,31 +159,51 @@
   // background tiles: its plain ground is the map background token.
   const OVERVIEW_BASE = "fp-overview-basemap";
   const baseNames = () => FP.basemaps?.names || [];
-  let base = "aerial", farmBase = "aerial", quiet = null, quietOff = null, paletteHooks = [], bgControl = null;
+  // The backgrounds an overview offers: LINZ's, or (the demo, which fetches no tiles) the same two choices over the plain ground,
+  // so the choice can be made and seen without a key
+  const choices = () => (baseNames().length >= 2 ? baseNames() : FP.demo?.active ? ["topolite", "aerial"] : []);
+  // base: the background drawn now ("ground" while none is); want: the one asked for, the only one the switch marks;
+  // startBase: the background a map not made yet opens on
+  let base = "aerial", want = null, startBase = null, asks = 0, farmBase = "aerial", quiet = null, quietOff = null, paletteHooks = [], bgControl = null;
   const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const darkTheme = () => /dark/.test(getComputedStyle(document.documentElement).colorScheme || "");
   // Lines and labels are drawn for a dark ground on the aerial, or on the plain ground of a dark theme where there are no tiles
-  const onDark = () => (FP.basemaps?.missingKey !== false ? darkTheme() : base === "aerial");
+  const onDark = () => (FP.basemaps?.missingKey !== false ? darkTheme() : base === "aerial" || (base === "ground" && darkTheme()));
+  // UI2b: with nothing stored, the plain map (map-palette.js startBackground); the stored choice wins
   function overviewBase() {
-    const names = baseNames();
     let k = null;
     try { k = localStorage.getItem(OVERVIEW_BASE); } catch { /* no storage: the default */ }
-    return names.includes(k) ? k : names.includes("topolite") ? "topolite" : "aerial";
+    return FP.mapPalette.startBackground(k, choices());
   }
+  // The background asked for is the one marked at once; until it is drawn the map shows its plain ground, never the one before.
+  // If it can't be drawn (the style couldn't be fetched) the aerial is drawn and marked instead, and the console says why.
   async function useBase(k) {
-    if (!baseNames().includes(k) || k === base) return;
-    base = k;
-    try { await FP.basemaps.pick(init(), k); } catch { base = "aerial"; try { await FP.basemaps.pick(init(), "aerial"); } catch { /* the plain ground */ } }
-    markBg(); paletteChanged();
+    if (!choices().includes(k) && k !== "aerial") return;
+    want = k; markBg();
+    if (k === base) return;
+    const mine = ++asks;
+    if (!baseNames().includes(k)) { base = k; paletteChanged(); return; }   // the demo: the plain ground stands for every background
+    const m = init();
+    if (k !== "aerial") { FP.basemaps.ground?.(m); base = "ground"; }
+    try { await FP.basemaps.pick(m, k); }
+    catch (e) {
+      console.warn("The " + k + " background couldn't be drawn:", e?.message || e);
+      if (mine !== asks) return;
+      want = "aerial"; markBg();
+      try { await FP.basemaps.pick(m, "aerial"); base = "aerial"; } catch { base = "ground"; }
+      paletteChanged(); return;
+    }
+    if (mine !== asks) return;
+    base = k; markBg(); paletteChanged();
   }
   function paletteChanged() { for (const f of paletteHooks) { try { f(); } catch { /* a hook for a map already cleared */ } } }
   // A small floating Map | Aerial switch, on the overview maps only
-  function markBg() { for (const b of bgControl?.querySelectorAll("button") || []) b.setAttribute("aria-pressed", String(b.dataset.base === base)); }
+  function markBg() { for (const b of bgControl?.querySelectorAll("button") || []) b.setAttribute("aria-pressed", String(b.dataset.base === want)); }
   function showBg(on) {
-    if (baseNames().length < 2) return;
+    if (choices().length < 2) return;
     if (on && !bgControl) {
       bgControl = FP.el("div", { class: "maplibregl-ctrl map-bg-switch", role: "group", "aria-label": "Background" },
-        ...[["topolite", "Map"], ["aerial", "Aerial"]].filter(([k]) => baseNames().includes(k)).map(([k, label]) =>
+        ...[["topolite", "Map"], ["aerial", "Aerial"]].filter(([k]) => choices().includes(k)).map(([k, label]) =>
           FP.el("button", { type: "button", "data-base": k, onclick: () => { try { localStorage.setItem(OVERVIEW_BASE, k); } catch { /* kept for this visit */ } useBase(k); } }, label)));
       init().addControl({ onAdd: () => bgControl, onRemove: () => {} }, "top-right");
     }
@@ -188,7 +211,7 @@
     markBg();
   }
   // The background a scene opens on: an overview's (the plain map unless the person chose the aerial), or the farm's own
-  function overviewMode(on) { showBg(on); useBase(on ? overviewBase() : farmBase); }
+  function overviewMode(on) { if (on) want = overviewBase(); showBg(on); useBase(on ? want : farmBase); }
 
   // ---- TIM1 (#410): the outline at once, and when it was first on screen -----------------------------------------------
   // styleAt: when this map's style finished loading (performance.now()); outlineAt: when the open scene's outline was first
@@ -952,6 +975,7 @@
   let homeOff = null, homeItems = [], homeChosen = null;
   async function home(items, onSelect, padding) {
     const request = ++opening;
+    if (!map) startBase = overviewBase();   // UI2b: a map made for Places opens on the plain ground
     init(); await loaded();
     if (request !== opening) return;
     clear(); flightKey = null; framed = null; removeSketch(); hasShown = true;
@@ -1065,6 +1089,7 @@
   // stylePreview (LK1): proposed style records to draw as if accepted, for a preview only; no other open passes it.
   async function open(farmId, supplied = null, { show = null, photo: wanted = null, stylePreview = null } = {}) {
     const request = ++opening;
+    if (!map && supplied?.group && FP.mapPalette) startBase = overviewBase();   // UI2b: a group's Overview map opens on the plain ground
     init();
     const { data, error } = supplied ? { data: supplied, error: null } : await FP.sb.rpc("farm_map", { f: farmId });
     if (error) throw error;

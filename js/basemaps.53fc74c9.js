@@ -69,24 +69,32 @@ FP.basemaps = (() => {
     }
     return own;
   }
-  const merged = new Map();   // name -> {sources, layers}: a set is fetched once and kept (hidden) afterwards
-  let token = 0;
+  // UI2b: what each map has merged and its latest pick are its own (they were shared by every map on the page: a set merged into
+  // one map was taken to be on another, and a pick on one map could cancel a pick on another)
+  const perMap = new WeakMap();   // map -> { merged: name -> {sources, layers} (fetched once per map, kept hidden afterwards), token }
+  const stateOf = (map) => { let s = perMap.get(map); if (!s) perMap.set(map, (s = { merged: new Map(), token: 0 })); return s; };
+  // The plain ground alone (every background hidden), shown while a chosen background is fetched
+  function ground(map) {
+    if (map.getLayer?.("bm-aerial")) map.setLayoutProperty("bm-aerial", "visibility", "none");
+    for (const [, o] of stateOf(map).merged) for (const id of o.layers) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+  }
   async function pick(map, which) {
     if (!names.includes(which)) return;
-    const mine = ++token;
+    const st = stateOf(map), merged = st.merged;
+    const mine = ++st.token;
     let own = merged.get(which);
     if (VECTOR[which] && !own) {
       const res = await fetch(`${ROOT}/styles/${STYLE[which]}.json?${api}`);
       if (!res.ok) throw new Error("basemap " + which + ": " + res.status);
       const json = await res.json();
-      if (mine !== token) return;
+      if (mine !== st.token) return;
       if (json.glyphs && map.setGlyphs) map.setGlyphs(json.glyphs);
       if (json.sprite && map.setSprite) map.setSprite(json.sprite);
       own = merge(map, which, json); merged.set(which, own);
     }
-    if (mine !== token) return;
+    if (mine !== st.token) return;
     map.setLayoutProperty("bm-aerial", "visibility", which === "aerial" ? "visible" : "none");
     for (const [name, o] of merged) for (const id of o.layers) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", name === which ? "visible" : "none");
   }
-  return { style, pick, setTerrain, terrainDefault, names, labels, missingKey: !key, exaggeration: EXAGGERATION };
+  return { style, pick, ground, setTerrain, terrainDefault, names, labels, missingKey: !key, exaggeration: EXAGGERATION };
 })();
