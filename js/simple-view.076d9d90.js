@@ -10,7 +10,7 @@
 })(typeof window === "undefined" ? globalThis : window, function (root) {
   // The allow-list. Each space: [view, the word the client reads], in tab order; the first the router knows is the landing.
   // "documents" is the Files store (its route name stays). "maps" is V4's view; until the router knows it, no tab is drawn for it.
-  const CLIENT_VIEWS = { farm: [["maps", "Maps"], ["documents", "Files"]], group: [["maps", "Maps"], ["documents", "Files"], ["events", "Events"]] };   // N4: a group's Events
+  const CLIENT_VIEWS = { farm: [["maps", "Maps"], ["documents", "Files"]], group: [["maps", "Maps"], ["documents", "Files"], ["events", "Events"], ["people", "People"]] };   // N4: a group's Events; PE1: People (its tab is drawn only for the group's facilitators, advisors and admins, group-space.js)
   // Pages outside a farm or group a client may open, as their address after "#/" (for example "account/qgis"). V8: the privacy
   // and terms note, which everyone can read.
   const CLIENT_PAGES = ["privacy"];

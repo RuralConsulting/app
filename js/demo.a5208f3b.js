@@ -59,7 +59,7 @@
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
-      return /^(?:\/(?:documents|events|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:documents|events|people(?:\/(?:log|follow-ups|add-person))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -335,6 +335,7 @@
       sharedDocs: [{ id: "demo-g-sd1", farm: MEMBERS[0].id, title: "Riparian planting plan (synthetic)", doc_type: "memo", created_at: "2026-09-20T03:00:00Z", tier: "primary", storage_path: "demo/riparian.pdf" }] };
     manageDemo(data, queue);
     eventsDemo(data);
+    peopleDemo(data);
   }
   // N4: the group's events (public.group_events) and attendance (public.group_event_attendees), invented: past and coming ones
   // around the fixture's date (29 Oct 2026), one all-day on the day daylight saving starts, one cancelled, one with a macron and
@@ -363,6 +364,139 @@
       { id: id(55), event_id: id(2), org_id: GROUP, user_id: null, group_member_id: null, name: "Pat Example (synthetic)", note: "Chair", added_at: made },
     ];
     data.eventPeople = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: "de000000-0000-4000-8000-000000000499", name: "Mere Example (synthetic)", role: "member" }];
+  }
+  // PE1: the group's people, the people at its businesses, more about some businesses and an interaction log with follow-ups
+  // (public.people, group_member_people, group_member_details, interactions, interaction_links), all invented, around the
+  // fixture's date (29 Oct 2026): one follow-up due, one coming, one done, one cancelled entry, one imported call. Saved in memory.
+  function peopleDemo(data) {
+    const pid = (n) => "de000000-0000-4000-8000-0000000005" + String(n).padStart(2, "0"), iid = (n) => "de000000-0000-4000-8000-0000000006" + String(n).padStart(2, "0");
+    const B = (n) => GROUP_MEMBERS[n - 1].id, made = "2026-08-01T00:00:00Z", OTHER = "de000000-0000-4000-8000-000000000499";
+    const person = (n, given, family, extra = {}) => ({ id: pid(n), org_id: GROUP, given_name: given, family_name: family, display_name: given + " " + family, job_title: null, emails: [], phones: [],
+      postal_address: null, physical_address: null, notes: null, user_id: null, source: "manual", external_id: null, archived_at: null, archived_by: null, created_by: USER, created_at: made, updated_by: USER, updated_at: made, ...extra });
+    data.tables.people = [
+      person(1, "Aroha", "Example (synthetic)", { job_title: "Owner and director", emails: ["aroha@example.invalid"], phones: ["021 000 0101"], physical_address: "12 Invented Road, Example Valley" }),
+      person(2, "Ben", "Sample (synthetic)", { job_title: "Farm manager", phones: ["027 000 0102"] }),
+      person(3, "Cara", "Placeholder (synthetic)", { job_title: "Accounts", emails: ["accounts@bravo.example.invalid"] }),
+      person(4, "Dan", "Fictional (synthetic)", { emails: ["dan@example.invalid"], phones: ["03 000 0104"], source: "apptivo", external_id: "C-104", created_by: null }),
+      person(5, "Eru", "Madeup (synthetic)", { job_title: "Sharemilker" }),
+      person(6, "Fern", "Notreal (synthetic)", { archived_at: "2026-06-30T00:00:00Z", archived_by: USER, notes: "Sold up and left the catchment." }),
+      person(7, "Hemi", "Invented (synthetic)", { job_title: "Committee chair", phones: ["021 000 0107"] }),
+    ];
+    const link = (n, b, p, relationship, extra = {}) => ({ id: pid(50 + n), org_id: GROUP, group_member_id: B(b), person_id: pid(p), relationship, is_primary: false, started_on: null, ended_on: null,
+      source: "manual", external_id: null, created_by: USER, created_at: made, updated_by: USER, updated_at: made, ...extra });
+    data.tables.group_member_people = [link(1, 1, 1, "owner", { is_primary: true }), link(2, 1, 2, "manager"), link(3, 2, 3, "accounts", { is_primary: true }), link(4, 3, 4, "owner", { is_primary: true }),
+      link(5, 4, 5, "sharemilker"), link(6, 5, 6, "owner", { ended_on: "2026-06-30" }), link(7, 6, 7, "owner", { is_primary: true }), link(8, 2, 1, "contact")];
+    const details = (b, extra) => ({ group_member_id: B(b), org_id: GROUP, trading_name: null, emails: [], phones: [], postal_address: null, physical_address: null, labels: [], status: null, notes: null,
+      source: "manual", external_id: null, created_by: USER, created_at: made, updated_by: USER, updated_at: made, ...extra });
+    data.tables.group_member_details = [
+      details(1, { trading_name: "Alpha Downs (synthetic)", labels: ["Dairy", "Riparian"], emails: ["office@alpha.example.invalid"], phones: ["03 000 0001"], postal_address: "PO Box 1, Example Town", status: "Active" }),
+      details(2, { labels: ["Sheep and beef"], status: "Active" }),
+      details(3, { labels: ["Dairy", "Committee"], status: "Active", source: "apptivo", external_id: "9003", created_by: null }),
+      details(6, { labels: ["Sheep and beef", "Committee"], status: "Active" })];
+    const act = (n, kind, direction, happened_at, extra = {}) => ({ id: iid(n), org_id: GROUP, kind, direction, happened_at, duration_minutes: null, subject: null, summary: null, follow_up_on: null,
+      follow_up_done_at: null, follow_up_done_by: null, topics: [], logged_by: USER, on_behalf_of: null, source: "manual", external_id: null, cancelled_at: null, cancelled_by: null, created_at: happened_at, updated_by: USER, updated_at: happened_at, ...extra });
+    data.tables.interactions = [
+      act(1, "call", "outgoing", "2026-10-28T01:30:00Z", { duration_minutes: 15, subject: "Fencing grant application", summary: "Talked through the grant form. Aroha will send the fencing quote by Friday.", follow_up_on: "2026-10-27", topics: ["Fencing", "Grants"] }),
+      act(2, "visit", "none", "2026-10-21T22:00:00Z", { duration_minutes: 90, subject: "Farm walk with the facilitator", summary: "Walked the creek margin; looked at the new planting and two crossing points.\nAgreed to look at a culvert in spring.", follow_up_on: "2026-11-10", topics: ["FEP", "Riparian planting"] }),
+      act(3, "email", "incoming", "2026-10-15T03:12:00Z", { subject: "Accounts query", summary: "Asked for a copy of the membership invoice.", follow_up_on: "2026-10-20", follow_up_done_at: "2026-10-19T21:00:00Z", follow_up_done_by: USER }),
+      act(4, "meeting", "none", "2026-10-07T06:00:00Z", { duration_minutes: 120, subject: "Committee meeting", summary: "Spring planting order agreed." }),
+      act(5, "call", "incoming", "2026-09-30T20:45:00Z", { duration_minutes: 5, subject: "Missed water sampling day", logged_by: null, on_behalf_of: "Pat Coordinator (synthetic)", source: "apptivo", external_id: "7002" }),
+      act(6, "note", "none", "2026-09-12T02:00:00Z", { subject: "Wrong business", summary: "Logged against the wrong member.", cancelled_at: "2026-09-12T03:00:00Z", cancelled_by: USER }),
+      act(7, "message", "outgoing", "2026-10-29T00:10:00Z", { subject: "Reminder: field day", summary: "Texted a reminder about the field day at the ford.", logged_by: OTHER }),
+    ];
+    const L = (n, i, k, id) => ({ id: iid(50 + n), interaction_id: iid(i), org_id: GROUP, group_member_id: k === "b" ? B(id) : null, person_id: k === "p" ? pid(id) : null, event_id: k === "e" ? id : null, added_by: USER, added_at: made });
+    data.tables.interaction_links = [L(1, 1, "b", 1), L(2, 1, "p", 1), L(3, 2, "b", 1), L(4, 2, "p", 2), L(5, 3, "b", 2), L(6, 3, "p", 3), L(7, 4, "b", 6), L(8, 4, "p", 7), L(9, 4, "e", "de000000-0000-4000-8000-000000000402"),
+      L(10, 5, "b", 3), L(11, 5, "p", 4), L(12, 6, "b", 4), L(13, 7, "b", 4), L(14, 7, "p", 5)];
+    data.crmTeam = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: OTHER, name: "Mere Example (synthetic)", role: "facilitator" }];
+  }
+  // PE1, as the crm_* read functions and crm_save_interaction: the group's facilitators, advisors and admins only (anyone else gets
+  // no rows or null), bounded as the database bounds them. Returns [data, error], or null for a name it does not know.
+  function crmRpc(d, name, args) {
+    const T = d.tables, role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role, today = String(d.asAt).slice(0, 10);
+    const allowed = ["facilitator", "advisor", "admin"].includes(role);
+    const register = d.groupTables?.group_members || [], current = (l) => !l.ended_on || l.ended_on > today;
+    const byBusiness = (id) => register.find((b) => b.id === id), byPerson = (id) => (T.people || []).find((p) => p.id === id);
+    const linksOf = (iid) => T.interaction_links.filter((k) => k.interaction_id === iid).map((k) => {
+      const b = byBusiness(k.group_member_id), p = byPerson(k.person_id), e = (T.group_events || []).find((x) => x.id === k.event_id);
+      return { id: k.id, kind: k.group_member_id ? "business" : k.person_id ? "person" : "event", group_member_id: k.group_member_id, person_id: k.person_id, event_id: k.event_id,
+        name: b?.business_name || p?.display_name || e?.title || null, member_number: b?.member_number || null };
+    });
+    const json = (i) => ({ ...i, links: linksOf(i.id) });
+    const newest = (a, b) => String(b.happened_at).localeCompare(String(a.happened_at));
+    const withLink = (key, id) => T.interactions.filter((i) => T.interaction_links.some((k) => k.interaction_id === i.id && k[key] === id));
+    const open = (i) => !!i.follow_up_on && !i.follow_up_done_at && !i.cancelled_at;
+    if (!T.people) return name === "crm_business" || name === "crm_person" || name === "crm_feed_count" ? [null] : [[]];
+    if (["crm_directory", "crm_people", "crm_feed", "crm_team"].includes(name) && (!allowed || args.g !== GROUP)) return [[]];
+    if (["crm_business", "crm_person", "crm_feed_count"].includes(name) && !allowed) return [null];
+    if (name === "crm_directory") {
+      return [[...register].sort((a, b) => (!!a.ended_at - !!b.ended_at) || a.business_name.localeCompare(b.business_name)).slice(0, args.max_rows ?? 2000).map((b) => {
+        const dt = T.group_member_details.find((x) => x.group_member_id === b.id);
+        const here = T.group_member_people.filter((l) => l.group_member_id === b.id && current(l)).map((l) => ({ l, p: byPerson(l.person_id) })).filter((x) => !x.p.archived_at);
+        const first = [...here].sort((x, y) => (y.l.is_primary - x.l.is_primary) || x.p.display_name.localeCompare(y.p.display_name))[0];
+        const its = withLink("group_member_id", b.id);
+        return { group_member_id: b.id, member_number: b.member_number, business_name: b.business_name, ended_at: b.ended_at, trading_name: dt?.trading_name || null, labels: dt?.labels || [], status: dt?.status || null,
+          primary_person_id: first?.p.id || null, primary_name: first?.p.display_name || null, people_names: here.map((x) => x.p.display_name).sort(), people_count: here.length,
+          last_interaction_at: its.filter((i) => !i.cancelled_at).sort(newest)[0]?.happened_at || null, open_follow_ups: its.filter(open).length, due_follow_ups: its.filter((i) => open(i) && i.follow_up_on <= today).length };
+      })];
+    }
+    if (name === "crm_people") {
+      return [[...T.people].sort((a, b) => (!!a.archived_at - !!b.archived_at) || a.display_name.localeCompare(b.display_name)).slice(0, args.max_rows ?? 2000).map((p) => {
+        const its = withLink("person_id", p.id);
+        return { person_id: p.id, display_name: p.display_name, given_name: p.given_name, family_name: p.family_name, job_title: p.job_title, emails: p.emails, phones: p.phones, has_sign_in: !!p.user_id,
+          archived_at: p.archived_at, source: p.source, last_interaction_at: its.filter((i) => !i.cancelled_at).sort(newest)[0]?.happened_at || null, open_follow_ups: its.filter(open).length,
+          businesses: T.group_member_people.filter((l) => l.person_id === p.id && current(l)).map((l) => ({ group_member_id: l.group_member_id, business_name: byBusiness(l.group_member_id)?.business_name,
+            member_number: byBusiness(l.group_member_id)?.member_number, relationship: l.relationship, is_primary: l.is_primary })) };
+      })];
+    }
+    if (name === "crm_business") {
+      const b = byBusiness(args.b);
+      if (!b) return [null];
+      const its = withLink("group_member_id", b.id).sort(newest);
+      return [{ business: { id: b.id, org_id: GROUP, member_number: b.member_number, business_name: b.business_name, ended_at: b.ended_at },
+        details: T.group_member_details.find((x) => x.group_member_id === b.id) || null,
+        people: T.group_member_people.filter((l) => l.group_member_id === b.id).map((l) => { const p = byPerson(l.person_id); return { link_id: l.id, person_id: p.id, display_name: p.display_name, job_title: p.job_title,
+          emails: p.emails, phones: p.phones, relationship: l.relationship, is_primary: l.is_primary, started_on: l.started_on, ended_on: l.ended_on, current: current(l), archived: !!p.archived_at }; })
+          .sort((x, y) => (!x.current - !y.current) || (y.is_primary - x.is_primary) || x.display_name.localeCompare(y.display_name)),
+        interactions_total: its.length, interactions: its.slice(0, 200).map(json), held_files: b.member_number === "1" ? 2 : 0 }];
+    }
+    if (name === "crm_person") {
+      const p = byPerson(args.p);
+      if (!p) return [null];
+      const its = withLink("person_id", p.id).sort(newest);
+      return [{ person: p, businesses: T.group_member_people.filter((l) => l.person_id === p.id).map((l) => ({ link_id: l.id, group_member_id: l.group_member_id, business_name: byBusiness(l.group_member_id)?.business_name,
+        member_number: byBusiness(l.group_member_id)?.member_number, relationship: l.relationship, is_primary: l.is_primary, started_on: l.started_on, ended_on: l.ended_on, current: current(l) })),
+        interactions_total: its.length, interactions: its.slice(0, 200).map(json) }];
+    }
+    if (name === "crm_feed" || name === "crm_feed_count") {
+      if (args.g !== GROUP) return [name === "crm_feed" ? [] : null];
+      const has = (i, key, id) => T.interaction_links.some((k) => k.interaction_id === i.id && k[key] === id);
+      let list = T.interactions.filter((i) => (!args.kinds?.length || args.kinds.includes(i.kind)) && (!args.from_at || Date.parse(i.happened_at) >= Date.parse(args.from_at))
+        && (!args.to_at || Date.parse(i.happened_at) < Date.parse(args.to_at)) && (!args.business || has(i, "group_member_id", args.business)) && (!args.person || has(i, "person_id", args.person))
+        && (!args.logger || i.logged_by === args.logger) && (args.with_cancelled || !i.cancelled_at)
+        && (!args.topic || (i.topics || []).some((t) => t.toLowerCase() === String(args.topic).toLowerCase()))
+        && (!args.follow_up || (args.follow_up === "open" && open(i)) || (args.follow_up === "due" && open(i) && i.follow_up_on <= today) || (args.follow_up === "done" && !!i.follow_up_done_at)));
+      if (name === "crm_feed_count") return [list.length];
+      list = list.sort((a, b) => (["open", "due"].includes(args.follow_up) ? String(a.follow_up_on).localeCompare(String(b.follow_up_on)) : 0) || newest(a, b));
+      const from = args.row_offset || 0;
+      return [list.slice(from, from + Math.min(args.max_rows ?? 200, 1000)).map(json)];
+    }
+    if (name === "crm_team") return [d.crmTeam || []];
+    if (name === "crm_save_interaction") {
+      if (!allowed || args.g !== GROUP) return [null, { message: "Only the organisation's facilitators, advisors and admins log interactions" }];
+      const f = args.fields || {}, at = new Date().toISOString();
+      let row = args.interaction ? T.interactions.find((i) => i.id === args.interaction) : null;
+      if (args.interaction && !row) return [null, { message: "No such interaction" }];
+      if (row?.cancelled_at) return [null, { message: "A cancelled interaction cannot be changed: restore it first" }];
+      if (!row) { row = { id: "demo-new-" + ++made, org_id: GROUP, logged_by: USER, source: "manual", external_id: null, cancelled_at: null, follow_up_done_at: null, created_at: at, on_behalf_of: null }; T.interactions.push(row); }
+      Object.assign(row, { kind: f.kind, direction: f.direction || "none", happened_at: f.happened_at, duration_minutes: f.duration_minutes ?? null, subject: f.subject || null, summary: f.summary || null,
+        follow_up_on: f.follow_up_on || null, topics: Array.isArray(f.topics) ? f.topics : [], updated_at: at });
+      const want = (args.links || []).map((l) => ({ group_member_id: l.group_member_id || null, person_id: l.person_id || null, event_id: l.event_id || null }));
+      const same = (k, l) => k.group_member_id === l.group_member_id && k.person_id === l.person_id && k.event_id === l.event_id;
+      T.interaction_links = T.interaction_links.filter((k) => k.interaction_id !== row.id || want.some((l) => same(k, l)));
+      for (const l of want) if (!T.interaction_links.some((k) => k.interaction_id === row.id && same(k, l))) T.interaction_links.push({ id: "demo-new-" + ++made, interaction_id: row.id, org_id: GROUP, ...l, added_by: USER, added_at: at });
+      return [row.id];
+    }
+    return null;
   }
   // ON3b: the group's manage space. An invented business register (group_members) with farm associations, DQ1's gaps for the
   // group (group_load_gaps), ON3a's proposals about them as tools/reconcile_group.py writes them (subject, evidence, candidates),
@@ -831,8 +965,9 @@
   // The tables the demo adds rows to, in memory: What's due's Done (checks) and Add the record (documents, entries, links).
   // B4b: the capture queue's entries and entry files too (ids made on the phone; a second insert of one id is refused as
   // the database refuses it, 23505, which the queue reads as "already written").
-  const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes", "group_events", "group_event_attendees"];   // N4: the group's events
-  const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees"];   // and the tables whose rows the demo changes (the Layers page; a new block's note)
+  const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes", "group_events", "group_event_attendees",   // N4: the group's events
+    "people", "group_member_people", "group_member_details"];   // PE1: the group's people
+  const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees", "people", "group_member_people", "group_member_details", "interactions"];   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
@@ -1376,6 +1511,7 @@
         }
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
+        if (String(name).startsWith("crm_")) { const r = crmRpc(d, name, args || {}); if (r) return result(...r); }   // PE1
         // PERF1b, as public.farm_reference_counts and public.farm_reference_context (PERF1a): the farm's reference entries
         // (d.reference by farm; the fixture's `reference`, none in the demo) counted, and one served source's entry read on
         // its own (no features here: its entry with none; not served or no such farm: null). farm_map's `reference` is [].

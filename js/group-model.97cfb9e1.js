@@ -9,17 +9,20 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   // ON3b: `/manage[/members|gaps|updates|sites|settings]` is the group's manage space (group-manage.js); the member-detail form moved
   // there, so the old `/settings` address opens the manage space's Settings tab.
-  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(maps|documents|events|create|settings|manage)(?:\/(members|gaps|updates|sites|settings))?)?(?:\?item=([0-9a-f-]{36}))?$/;
-  // N4: `/events` is the group's Events view (events.js)
-  const views = [["map", "Map"], ["maps", "Maps"], ["documents", "Documents"], ["events", "Events"], ["create", "Create"], ["manage", "Manage"]];
+  const ROUTE = /^#\/group\/([0-9a-f-]{36})(?:\/(maps|documents|events|people|create|settings|manage)(?:\/(members|gaps|updates|sites|settings|log|follow-ups|add-person))?)?(?:\?item=([0-9a-f-]{36}))?$/;
+  // N4: `/events` is the group's Events view (events.js). PE1: `/people[/log|follow-ups|add-person]` is the group's People view
+  // (people.js; shown only to its facilitators, advisors and admins), the tab opening a form or the follow-ups straight away.
+  const views = [["map", "Map"], ["maps", "Maps"], ["documents", "Documents"], ["events", "Events"], ["people", "People"], ["create", "Create"], ["manage", "Manage"]];
+  const TABS = { manage: ["members", "gaps", "updates", "sites", "settings"], people: ["log", "follow-ups", "add-person"] };
   function match(hash) {
     const m = String(hash || "").match(ROUTE);
-    if (!m || (m[3] && m[2] !== "manage") || (m[4] && m[2] !== "maps")) return null;
+    if (!m || (m[3] && !TABS[m[2]]?.includes(m[3])) || (m[4] && m[2] !== "maps")) return null;
+    if (m[2] === "people") return { group: m[1], view: "people", tab: m[3] || null };
     if (m[2] === "maps") return { group: m[1], view: "maps", item: m[4] || null };   // V4: a published map, or the group's list
     if (m[2] === "settings") return { group: m[1], view: "manage", tab: "settings" };
     return m[2] === "manage" ? { group: m[1], view: "manage", tab: m[3] || null } : { group: m[1], view: m[2] || "map" };
   }
-  const href = (id, view = "map", tab = null) => "#/group/" + id + (view && view !== "map" ? "/" + view : "") + (view === "manage" && tab ? "/" + tab : "") + (view === "maps" && tab ? "?item=" + encodeURIComponent(tab) : "");
+  const href = (id, view = "map", tab = null) => "#/group/" + id + (view && view !== "map" ? "/" + view : "") + ((view === "manage" || view === "people") && tab ? "/" + tab : "") + (view === "maps" && tab ? "?item=" + encodeURIComponent(tab) : "");
   const viewLabel = (key) => views.find(([k]) => k === key)?.[1] || null;
 
   // ---- levels -------------------------------------------------------------------------------------------------------------

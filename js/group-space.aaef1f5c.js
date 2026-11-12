@@ -1,7 +1,7 @@
 // The catchment group's space (S5, docs/CATCHMENT-SPACE.md): the farm space's shape at catchment scale. Map (the group's
 // own layers, member farms at the level the group and each farm allow, shared reference areas and sites) with the group's
 // standing answers (members, what's due, what's changed, water quality nearby); Documents (the group's own, tiered, and
-// what member farms shared); Events (N4, events.js: the group's events and attendance, a calendar, export and import); Create → Monthly update (drafted by code, edited here, stored as a group document); Settings
+// what member farms shared); Events (N4, events.js: the group's events and attendance, a calendar, export and import); People (PE1, people.js: businesses, people and an interaction log, for the group's facilitators, advisors and admins); Create → Monthly update (drafted by code, edited here, stored as a group document); Settings
 // (a group admin chooses how member farms are shown). Every read is as the signed-in person, through row-level security
 // and the group functions (group_map, group_member_summary, group_member_farms, group_shared_entries/documents,
 // group_wq_sites); nothing needs AI. The water-quality card opens with the group's standing answer, "What does our
@@ -137,7 +137,9 @@
     const nav = $("#group-nav");
     // ON3b: the manage space is linked for the group's admins, advisors and facilitators only (a plain member never sees the link)
     // V6: a client's tabs are the allow-list (simple-view.js)
-    nav.replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).map(([key, label]) =>
+    // PE1: People (personal information) is linked for the group's facilitators, advisors and admins only, in either view
+    const people = ([k]) => k !== "people" || !!FP.peopleModel?.canSee(group.role);
+    nav.replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).map(([key, label]) =>
       el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", ...(route.view === key ? { "aria-current": "page" } : {}) }, label)));
     $("#group-back").hidden = !(FP.groupSpace.hasPortfolio?.());
     $("#group-back").setAttribute("href", FP.href("") || "#/");
@@ -154,7 +156,7 @@
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage" || route.view === "maps" || route.view === "events") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
@@ -172,6 +174,16 @@
       const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
       if (current !== token) return;
       panel.replaceChildren(FP.groupEvents.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T00:00:00Z" : null }));
+      panel.scrollTop = 0;
+      return;
+    }
+    // PE1: People is a list, not a map: the panel takes the width and the view reads and writes the group's people itself
+    // (people.js); a role that may not read them is told so there and nothing is asked of the database
+    if (route.view === "people") {
+      document.title = group.name + " · " + G().viewLabel("people") + " | " + (FP.brand?.product || "");
+      const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
+      if (current !== token) return;
+      panel.replaceChildren(FP.groupPeople.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T09:00:00+13:00" : null, tab: route.tab || null }));
       panel.scrollTop = 0;
       return;
     }
