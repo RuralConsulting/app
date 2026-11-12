@@ -438,6 +438,15 @@
     data.tables.group_member_field_values = [val(1, 1, 1, "Final"), val(2, 1, 2, true), val(3, 1, 3, "2027-03-31"), val(4, 2, 1, "Draft"), val(5, 3, 1, "Awaiting audit"), val(6, 3, 2, true),
       val(7, 4, 2, false), val(8, 6, 1, "Draft"), val(9, 6, 3, "2026-12-01")];
     data.tables.people.push(person(8, "Iris", "Council (synthetic)", { job_title: "Land management advisor", organisation_name: "Regional council (synthetic)", contact_kind: "council", emails: ["iris@council.example.invalid"] }));
+    // M2: the group's subscription years and agreements, some members' subscriptions (paid, invoiced and unpaid, not required) and
+    // agreements (one signed, no copy attached yet). All invented.
+    data.tables.group_subscription_years = [{ id: mid("e", 1), org_id: GROUP, label: "2025/26", default_amount: 150, archived_at: null }, { id: mid("e", 2), org_id: GROUP, label: "2026/27", default_amount: 160, archived_at: null }];
+    data.tables.group_agreements = [{ id: mid("e", 11), org_id: GROUP, name: "Membership form", sort_order: 1, archived_at: null }, { id: mid("e", 12), org_id: GROUP, name: "Data sharing agreement", sort_order: 2, archived_at: null }];
+    const subRow = (n, b, y, extra) => ({ id: mid("e", 20 + n), org_id: GROUP, group_member_id: B(b), year_id: mid("e", y), amount: null, invoiced_on: null, invoice_ref: null, paid_on: null, not_required: false, note: null, updated_at: made, ...extra });
+    data.tables.group_member_subscriptions = [subRow(1, 1, 1, { amount: 150, invoiced_on: "2025-07-01", invoice_ref: "INV-0101", paid_on: "2025-07-20" }), subRow(2, 2, 1, { amount: 150, invoiced_on: "2025-07-01", paid_on: "2025-08-04" }),
+      subRow(3, 3, 1, { amount: 150, invoiced_on: "2025-07-01", invoice_ref: "INV-0103" }), subRow(4, 1, 2, { amount: 160, invoiced_on: "2026-07-01", invoice_ref: "INV-0201" }),
+      subRow(5, 6, 2, { not_required: true, note: "Life member (synthetic)" })];
+    data.tables.group_member_agreements = [{ id: mid("e", 40), org_id: GROUP, group_member_id: B(1), agreement_id: mid("e", 11), signed_on: "2024-04-01", signed_by: "Aroha Example (synthetic)", note: null, document_id: null, updated_at: made }];
     // RV1: questions about the register for the group's advisers to come back to (public.proposals of kind register_review, as
     // tools/load_review_items.py writes them), beside the farm's proposals so Manage's counts and queue are as before. Invented.
     const answers = (...pairs) => [...pairs.map(([action, label]) => ({ action, label })), { action: "other", label: "Something else" }, { action: "not_needed", label: "Not needed" }];
@@ -510,6 +519,78 @@
     }
     return out;
   }
+  // M2: a subscription row's status, as the database derives it (no row: not invoiced), and a member's {year id: status}.
+  const subStatus = (s) => (!s ? "not_invoiced" : s.paid_on ? "paid" : s.not_required ? "not_required" : s.invoiced_on ? "invoiced" : "not_invoiced");
+  const subValues = (T, b) => Object.fromEntries((T.group_member_subscriptions || []).filter((s) => s.group_member_id === b).map((s) => [s.year_id, subStatus(s)]));
+  // M2, as crm_subscriptions_agreements, crm_save_subscription, crm_mark_subscriptions and crm_save_member_agreement (the caller is
+  // one of the group's facilitators, advisors or admins: crmRpc checked), with the same refusals as the database's guards.
+  function subscriptionsRpc(d, name, args, k) {
+    const T = d.tables, refuse = (message) => [null, { message }], reg = d.groupTables?.group_members || [];
+    const years = T.group_subscription_years || (T.group_subscription_years = []), ags = T.group_agreements || (T.group_agreements = []);
+    const subs = T.group_member_subscriptions || (T.group_member_subscriptions = []), mags = T.group_member_agreements || (T.group_member_agreements = []);
+    const now = new Date().toISOString(), docs = () => [...(T.documents || []), ...(d.groupTables?.documents || [])];
+    if (name === "crm_subscriptions_agreements") {
+      const b = k.byBusiness(args.b);
+      if (!b) return [null];
+      const has = (key, id, list) => list.some((x) => x[key] === id && x.group_member_id === b.id);
+      return [{ group_member_id: b.id,
+        subscriptions: years.filter((y) => !y.archived_at || has("year_id", y.id, subs)).sort((x, y) => y.label.toLowerCase().localeCompare(x.label.toLowerCase())).map((y) => {
+          const s = subs.find((x) => x.year_id === y.id && x.group_member_id === b.id);
+          return { year_id: y.id, label: y.label, default_amount: y.default_amount ?? null, archived: !!y.archived_at, id: s?.id ?? null, amount: s?.amount ?? null, invoiced_on: s?.invoiced_on ?? null,
+            invoice_ref: s?.invoice_ref ?? null, paid_on: s?.paid_on ?? null, not_required: !!s?.not_required, note: s?.note ?? null, status: subStatus(s), updated_at: s?.updated_at ?? null };
+        }),
+        agreements: ags.filter((a) => !a.archived_at || has("agreement_id", a.id, mags)).sort((x, y) => (x.sort_order - y.sort_order) || x.name.toLowerCase().localeCompare(y.name.toLowerCase())).map((a) => {
+          const x = mags.find((r) => r.agreement_id === a.id && r.group_member_id === b.id), doc = x?.document_id ? docs().find((dd) => dd.id === x.document_id) : null;
+          return { agreement_id: a.id, name: a.name, archived: !!a.archived_at, id: x?.id ?? null, signed_on: x?.signed_on ?? null, signed_by: x?.signed_by ?? null, note: x?.note ?? null,
+            document_id: x?.document_id ?? null, document: doc ? { id: doc.id, title: doc.title, original_name: doc.original_name ?? null, storage_path: doc.storage_path ?? null, mime_type: doc.mime_type ?? null } : null,
+            updated_at: x?.updated_at ?? null };
+        }) }];
+    }
+    if (name === "crm_save_subscription") {
+      const b = k.byBusiness(args.b), y = years.find((x) => x.id === args.yr);
+      if (!b) return refuse("Only the group's facilitators, advisors and admins record subscriptions");
+      if (!y) return refuse("That subscription year is not this member's group's");
+      let s = subs.find((x) => x.group_member_id === b.id && x.year_id === y.id);
+      if (!s && y.archived_at) return refuse("That subscription year is archived");
+      if (args.not_required && args.paid_on) return refuse("new row for relation \"group_member_subscriptions\" violates check constraint \"group_member_subscriptions_paid_or_not_required\"");
+      const tidy = (v) => (v == null ? null : String(v).trim().replace(/\s+/g, " ") || null);
+      if (!s) { s = { id: "demo-new-" + ++made, org_id: GROUP, group_member_id: b.id, year_id: y.id }; subs.push(s); }
+      Object.assign(s, { amount: args.amount ?? null, invoiced_on: args.invoiced_on || null, invoice_ref: tidy(args.invoice_ref), paid_on: args.paid_on || null, not_required: !!args.not_required,
+        note: args.note == null ? null : String(args.note).trim() || null, updated_at: now });
+      return [s.id];
+    }
+    if (name === "crm_mark_subscriptions") {
+      if (!["invoiced", "paid"].includes(args.what)) return refuse("Mark them invoiced or paid");
+      const y = years.find((x) => x.id === args.yr && x.org_id === args.g && !x.archived_at);
+      if (!y) return refuse("That subscription year is not one of this group's open years");
+      const day = args.on_date || k.today, key = args.what === "invoiced" ? "invoiced_on" : "paid_on";
+      let n = 0;
+      for (const b of reg.filter((x) => (args.ids || []).includes(x.id))) {
+        let s = subs.find((x) => x.group_member_id === b.id && x.year_id === y.id);
+        if (s && (s.not_required || s[key])) continue;
+        if (!s) { s = { id: "demo-new-" + ++made, org_id: GROUP, group_member_id: b.id, year_id: y.id, amount: null, invoiced_on: null, invoice_ref: null, paid_on: null, not_required: false, note: null }; subs.push(s); }
+        Object.assign(s, { [key]: day, amount: s.amount ?? y.default_amount ?? null, updated_at: now });
+        n++;
+      }
+      return [n];
+    }
+    if (name === "crm_save_member_agreement") {
+      const b = k.byBusiness(args.b), a = ags.find((x) => x.id === args.agreement);
+      if (!b) return refuse("Only the group's facilitators, advisors and admins record agreements");
+      if (!a) return refuse("That agreement is not this member's group's");
+      let x = mags.find((r) => r.group_member_id === b.id && r.agreement_id === a.id);
+      if (!x && a.archived_at) return refuse("That agreement is archived");
+      if (args.document && args.document !== x?.document_id) {
+        const doc = docs().find((dd) => dd.id === args.document);
+        if (!doc || doc.org_id !== GROUP || doc.visibility !== "held" || doc.group_member_id !== b.id) return refuse("The signed copy must be a file the group holds for this member");
+      }
+      if (!x) { x = { id: "demo-new-" + ++made, org_id: GROUP, group_member_id: b.id, agreement_id: a.id }; mags.push(x); }
+      Object.assign(x, { signed_on: args.signed_on || null, signed_by: args.signed_by == null ? null : String(args.signed_by).trim().replace(/\s+/g, " ") || null,
+        note: args.note == null ? null : String(args.note).trim() || null, document_id: args.document || null, updated_at: now });
+      return [x.id];
+    }
+    return null;
+  }
   // M1b, as crm_membership, crm_contacts, crm_email_list and the membership writes (the caller is one of the group's facilitators,
   // advisors or admins: crmRpc checked). Ending and reopening a membership: its admins only, as the database's guard says.
   function membershipRpc(d, name, args, k) {
@@ -535,8 +616,9 @@
         last_interaction_at: k.withLink("person_id", p.id).filter((i) => !i.cancelled_at).sort(k.newest)[0]?.happened_at || null }))];
     }
     if (name === "crm_email_list") {
-      const ids = args.filter?.ids || reg.map((b) => b.id);
-      return [reg.filter((b) => ids.includes(b.id)).map((b) => {
+      const ids = args.filter?.ids || reg.map((b) => b.id), sub = args.filter?.subscription;   // M2: the subscription filter
+      const subOk = (b) => !sub?.year || !(sub.status || []).length || sub.status.includes(subStatus((T.group_member_subscriptions || []).find((s) => s.group_member_id === b.id && s.year_id === sub.year)));
+      return [reg.filter((b) => ids.includes(b.id) && subOk(b)).map((b) => {
         const here = T.group_member_people.filter((l) => l.group_member_id === b.id && k.current(l)).map((l) => ({ l, p: k.byPerson(l.person_id) })).filter((x) => !x.p.archived_at)
           .sort((x, y) => (y.l.is_primary - x.l.is_primary) || x.p.display_name.localeCompare(y.p.display_name))[0];
         return { group_member_id: b.id, member_number: b.member_number, business_name: b.business_name, primary_name: here?.p.display_name || null, emails: here?.p.emails || [],
@@ -595,9 +677,13 @@
     // M1b: the membership types are read by any member of the group (the defaults are already there in the demo)
     if (name === "crm_membership_types") return [role && args.g === GROUP ? [...(T.group_membership_types || [])].sort((a, b) => (!!a.archived_at - !!b.archived_at) || a.sort_order - b.sort_order) : []];
     if (["crm_directory", "crm_people", "crm_feed", "crm_team", "crm_contacts", "crm_email_list"].includes(name) && (!allowed || args.g !== GROUP)) return [[]];
-    if (["crm_business", "crm_person", "crm_feed_count", "crm_membership"].includes(name) && !allowed) return [null];
+    if (["crm_business", "crm_person", "crm_feed_count", "crm_membership", "crm_subscriptions_agreements"].includes(name) && !allowed) return [null];
+    // M2: the writes refused for anyone else, as the database refuses them
+    if (["crm_save_subscription", "crm_mark_subscriptions", "crm_save_member_agreement"].includes(name) && (!allowed || (args.g && args.g !== GROUP))) return [null, { message: "Only the group's facilitators, advisors and admins record subscriptions and agreements" }];
     const m1 = membershipRpc(d, name, args, { today, current, byBusiness, byPerson, withLink, newest, allowed, role });
     if (m1) return m1;
+    const m2 = subscriptionsRpc(d, name, args, { today, byBusiness });
+    if (m2) return m2;
     if (name === "crm_directory") {
       return [[...register].sort((a, b) => (!!a.ended_at - !!b.ended_at) || a.business_name.localeCompare(b.business_name)).slice(0, args.max_rows ?? 2000).map((b) => {
         const dt = T.group_member_details.find((x) => x.group_member_id === b.id);
@@ -608,7 +694,7 @@
         return { group_member_id: b.id, member_number: b.member_number, business_name: b.business_name, ended_at: b.ended_at, trading_name: dt?.trading_name || null, labels: dt?.labels || [], status: dt?.status || null,
           primary_person_id: first?.p.id || null, primary_name: first?.p.display_name || null, people_names: here.map((x) => x.p.display_name).sort(), people_count: here.length,
           last_interaction_at: its.filter((i) => !i.cancelled_at).sort(newest)[0]?.happened_at || null, open_follow_ups: its.filter(open).length, due_follow_ups: its.filter((i) => open(i) && i.follow_up_on <= today).length,
-          membership_type: cur ? (T.group_membership_types || []).find((t) => t.id === cur.membership_type_id)?.name || null : null, joined_on: cur?.joined_on || null, fields: listValues(T, b.id) };
+          membership_type: cur ? (T.group_membership_types || []).find((t) => t.id === cur.membership_type_id)?.name || null : null, joined_on: cur?.joined_on || null, fields: listValues(T, b.id), subscriptions: subValues(T, b.id) };
       })];
     }
     if (name === "crm_people") {
@@ -1141,10 +1227,12 @@
   const KEPT = ["checks", "documents", "entries", "entry_links", "entry_files", "layer_notes", "group_events", "group_event_attendees",   // N4: the group's events
     "people", "group_member_people", "group_member_details",   // PE1: the group's people
     "subgroup_businesses",   // SG2: a business added to a sub-group
-    "group_fields", "group_membership_types"];   // M1b: a field or type added by the group's admin
+    "group_fields", "group_membership_types",   // M1b: a field or type added by the group's admin
+    "group_subscription_years", "group_agreements"];   // M2: a year or agreement added by the group's admin
   const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees", "people", "group_member_people", "group_member_details", "interactions",
     "subgroup_businesses",   // SG2: ended
-    "group_fields", "group_membership_types"];   // M1b: renamed, reordered, archived   // and the tables whose rows the demo changes (the Layers page; a new block's note)
+    "group_fields", "group_membership_types",   // M1b: renamed, reordered, archived
+    "group_subscription_years", "group_agreements"];   // M2: changed, archived   // and the tables whose rows the demo changes (the Layers page; a new block's note)
   let made = 0;
   // The fixture's answer whose words the question contains (the same rule as the app's FP.ask.demoReply).
   function askReply(answers, question) {
