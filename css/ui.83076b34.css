@@ -137,11 +137,11 @@ body.demo-mode .account-menu .password-link { display: none; }
   #farm-space-header.space-head, .group-head.space-head { display: flex; padding: var(--s-2) var(--s-5) var(--s-2) var(--s-3); }
   .space-head > .space-bar { display: contents; }
   .space-head .space-back { order: 1; }
-  .space-head .space-identity { order: 2; flex: 0 0 auto; max-width: 45%; min-width: 120px; }
+  /* J2b: the place's name gives way (an ellipsis) before any section does; the sections never shrink, scroll or hide */
+  .space-head .space-identity { order: 2; flex: 0 1 auto; min-width: 0; }
   .space-head .space-title { overflow: hidden; }
   .space-head .command-bar, #farm-space-header .command-bar { order: 3; flex: 1 1 220px; min-width: 160px; max-width: 400px; }
-  .space-head .space-tabs { order: 4; margin-left: auto; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  .space-head .space-tabs::-webkit-scrollbar { display: none; }
+  .space-head .space-tabs { order: 4; margin-left: auto; flex: none; }
   .space-head .space-actions { order: 5; }
   .space-mark { width: 40px; height: 40px; border-radius: var(--radius); }
   .space-title h1, #farm-space-header .space-title h1 { font-size: var(--text-heading); font-weight: 650; }
@@ -152,6 +152,17 @@ body.demo-mode .account-menu .password-link { display: none; }
   .space-tabs a .icon, #farm-actions a .icon, .group-nav .group-tab .icon { display: none; }
   .space-tabs a:hover, #farm-actions a:hover, .group-nav .group-tab:hover { color: var(--ink); }
   .space-tabs a[aria-current], #farm-actions a[aria-current], .group-nav .group-tab[aria-current="page"] { background: var(--selected); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-1); }
+}
+/* J2b: a laptop window or a tablet on its side (801-1279 px) has no room for the name, the sections, Add and the account on one
+   line once a place has five sections: the sections take a row of their own under the name. 1280 px and wider keep one row. */
+@media (min-width: 801px) and (max-width: 1279px) {
+  .space-head, #farm-space-header.space-head, .group-head.space-head { flex-wrap: wrap; row-gap: 0; }
+  .space-head::after { content: ""; order: 6; flex: 0 0 100%; height: 0; }
+  .space-head .space-tabs { order: 7; margin: 2px 0 var(--s-1); }
+  /* the name starts from nothing and takes what is left, so it shortens before Add and the account would wrap (two rows, never three);
+     the command bar keeps its own size rather than growing into the name's room */
+  .space-head .space-identity { flex: 1 1 0; }
+  .space-head .command-bar, #farm-space-header .command-bar { flex-grow: 0; }
 }
 
 /* ---- Add ------------------------------------------------------------------------------------------------------------------------ */
