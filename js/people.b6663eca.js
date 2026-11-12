@@ -5,9 +5,11 @@
 // file only stops asking). Every read and write is as the signed-in person. The words and the logic are in people-model.js.
 // For the global Add button (UI1's registry): FP.groupPeople.addEntries, and the plain functions logInteraction(groupId) and
 // addPerson(groupId), which open the log form or the person form from anywhere (route `/people/log`, `/people/add-person`).
+// RV1: "To review" (route `/people/review`): questions about the register raised by RCL's tools for these same roles to answer when
+// they can (review-items.js draws them; public.register_review_answer records the answer and applies nothing).
 (function (root) {
   const FP = root.FP;
-  const M = () => FP.peopleModel, G = () => FP.groupModel;
+  const M = () => FP.peopleModel, G = () => FP.groupModel, R = () => FP.reviewItemsModel, RV = () => FP.reviewItems;   // RV1: review items
   const el = (...a) => FP.el(...a);
   const CAP = 2000;        // businesses and people read for a group (counted first)
   const PAGE = 100;        // feed rows read at a time (counted first)
@@ -28,6 +30,22 @@
   }
   const message = (e) => e?.message || String(e);
 
+  // RV1: the open review items per group, as People last read them this session (no read of its own): a small count on the People
+  // tab, only when there are some. Drawn by group-space.js with the tabs, and kept up to date here when People reads or answers.
+  const reviewOpen = new Map();
+  function countBadge(groupId) {
+    const n = reviewOpen.get(groupId) || 0;
+    return n > 0 ? el("span", { class: "crm-badge due review-count", title: M().plural(n, "item", "items") + " to review" }, String(n)) : null;
+  }
+  function setReviewCount(groupId, n) {
+    reviewOpen.set(groupId, n);
+    const tab = typeof document === "undefined" ? null : document.querySelector('#group-nav a[data-tab="people"]');
+    if (!tab) return;
+    tab.querySelector(".review-count")?.remove();
+    const badge = countBadge(groupId);
+    if (badge) tab.append(badge);
+  }
+
   // ---- the view ----------------------------------------------------------------------------------------------------------------------
   // opts: { sb, person: {id}, today: "YYYY-MM-DD", now: ISO instant, tab: null | "log" | "follow-ups" | "add-person" }
   function view(group, opts = {}) {
@@ -41,7 +59,9 @@
     const now = () => opts.now || new Date().toISOString();
     const st = { screen: "directory", stack: [], tab: "businesses", filters: { q: "", status: "current", label: "", due: false }, pq: "", archived: false,
       directory: [], people: [], team: [], failed: null, page: null, form: null, errors: [], notice: null,
-      feed: { filters: { kinds: [], from: "", to: "", logger: "", followUp: "", topic: "" }, items: [], total: null, failed: null } };
+      feed: { filters: { kinds: [], from: "", to: "", logger: "", followUp: "", topic: "" }, items: [], total: null, failed: null },
+      // RV1: the register questions to review (public.proposals of kind register_review), the open one and its answer form
+      review: { rows: [], failed: null, truncated: false, filter: "open", id: null, form: {}, busy: false } };
     const entryTab = opts.tab || null;
 
     async function loadLists() {
@@ -49,14 +69,28 @@
         const [nb, np] = await Promise.all([counted(sb, "group_members", g), counted(sb, "people", g)]);
         const [directory, people, team] = await Promise.all([
           rows(sb.rpc("crm_directory", { g, max_rows: nb })), rows(sb.rpc("crm_people", { g, max_rows: np })),
-          rows(sb.rpc("crm_team", { g })).catch(() => [])]);
+          rows(sb.rpc("crm_team", { g })).catch(() => []), loadReview()]);
         Object.assign(st, { directory, people, team, failed: null, truncated: nb >= CAP || np >= CAP });
       } catch (e) { st.failed = message(e); }
     }
+    // RV1: counted first, then at most that many (newest first). Its own failure is said on its own screen, never the directory's.
+    async function loadReview() {
+      try {
+        const head = await sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED);
+        if (head.error) throw head.error;
+        const n = typeof head.count === "number" ? Math.min(head.count, R().CAP) : R().CAP;
+        const got = n ? await rows(sb.from("proposals").select(R().COLUMNS).eq("org_id", g).eq("kind", R().KIND).in("status", R().LISTED)
+          .order("created_at", { ascending: false }).limit(n)) : [];
+        Object.assign(st.review, { rows: got, failed: null, truncated: typeof head.count === "number" && head.count > R().CAP });
+        setReviewCount(g, R().openCount(R().items(got)));
+      } catch (e) { st.review.failed = message(e); }
+    }
     function draw() {
       const s = st.screen;
+      RV().release();   // RV1: the item's map preview, if one was open
       const body = s === "business" ? businessScreen() : s === "person" ? personScreen() : s === "log" ? logScreen() : s === "person-form" ? personFormScreen()
-        : s === "details-form" ? detailsFormScreen() : s === "feed" ? feedScreen() : s === "export" ? exportScreen() : directoryScreen();
+        : s === "details-form" ? detailsFormScreen() : s === "feed" ? feedScreen() : s === "export" ? exportScreen()
+        : s === "review" ? reviewScreen() : s === "review-item" ? reviewItemScreen() : directoryScreen();
       wrap.replaceChildren(el("h2", {}, "People"), ...(st.notice ? [el("p", { class: "crm-notice", role: "status" }, st.notice)] : []), body);
       st.notice = null;
     }
@@ -75,6 +109,35 @@
       else if (st.screen === "person" && st.page?.person) await openPerson(st.page.person.id, false);
       else if (st.screen === "feed") await readFeed(false);
     }
+
+    // ---- RV1: review items (questions about the register that need someone who knows the farms) -------------------------------------
+    const reviewLabel = () => "To review" + (st.review.failed ? "" : " (" + R().openCount(R().items(st.review.rows)) + ")");
+    function openReview() { go("review"); }
+    function reviewScreen() {
+      return RV().listScreen({ all: R().items(st.review.rows), filter: st.review.filter, failed: st.review.failed, truncated: st.review.truncated,
+        directory: st.directory, backButton, onFilter: (k) => { st.review.filter = k; draw(); },
+        onOpen: (it) => { st.review.id = it.id; st.review.form = {}; go("review-item"); }, onMember: (id) => openBusiness(id) });
+    }
+    function reviewItemScreen() {
+      const it = R().items(st.review.rows).find((x) => x.id === st.review.id);
+      if (!it) return el("div", {}, backButton(), el("p", { class: "crm-empty" }, "This item is no longer listed."));
+      return RV().itemScreen({ item: it, team: st.team, me, directory: st.directory, form: st.review.form, errors: st.errors, busy: st.review.busy,
+        backButton, onMember: (id) => openBusiness(id), onAnswer: (form) => answerReview(it, form) });
+    }
+    async function answerReview(it, form) {
+      st.review.form = form;
+      const r = R().answerArgs(it, form);
+      if (r.errors.length) { st.errors = r.errors; draw(); return; }
+      st.errors = []; st.review.busy = true; draw();
+      const { data, error } = await sb.rpc("register_review_answer", r.args);
+      st.review.busy = false;
+      if (error || !data) { st.errors = ["Couldn't save the answer: " + (error ? message(error) : "no reply") + "."]; draw(); return; }
+      st.review.rows = st.review.rows.map((x) => (x.id === data.id ? data : x));
+      setReviewCount(g, R().openCount(R().items(st.review.rows)));
+      st.review.form = {};
+      st.notice = "Answer saved. Nothing changes on the register by itself: RCL staff act on it.";
+      draw();
+    }
     const backButton = (label = "Back") => el("button", { type: "button", class: "link crm-back", onclick: () => back() }, label);
 
     // ---- the directory -----------------------------------------------------------------------------------------------------------
@@ -85,6 +148,7 @@
         el("button", { type: "button", class: "secondary", "data-action": "add-person", onclick: () => openPersonForm(null, null) }, "Add a person"),
         el("button", { type: "button", class: "secondary", "data-action": "feed", onclick: () => openFeed({}) }, "Interactions"),
         el("button", { type: "button", class: "secondary", "data-action": "follow-ups", onclick: () => openFeed({ followUp: "open" }) }, "Follow-ups"),
+        el("button", { type: "button", class: "secondary", "data-action": "review", onclick: () => openReview() }, reviewLabel()),
         el("button", { type: "button", class: "secondary", "data-action": "export", onclick: () => go("export") }, "Export")));
       if (st.failed) { box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the group's people just now: " + st.failed)); return box; }
       const tabs = el("div", { class: "crm-tabs", role: "tablist" }, ...[["businesses", "Businesses", M().searchDirectory(st.directory, { status: "current" }).length], ["people", "People", M().searchPeople(st.people).length]]
@@ -184,6 +248,9 @@
       const links = [];
       if (p.held_files) links.push(el("a", { href: FP.href(G().href(g, "documents")) }, M().plural(Number(p.held_files), "file", "files") + " held for this member, in Files"));
       if (FP.groupManageModel?.showsLink?.(group.role) !== false) links.push(el("a", { href: FP.href(G().href(g, "manage", "members")) }, "Farm links and map extent, in Manage → Members"));
+      // RV1: open register questions that name this member
+      const asks = R().items(st.review.rows).filter((it) => it.open && it.members.includes(String(b.member_number))).length;
+      if (asks) links.push(el("button", { type: "button", class: "link", "data-action": "review", onclick: () => openReview() }, M().plural(asks, "question to review names", "questions to review name") + " this member"));
       if (links.length) box.append(el("p", { class: "crm-quiet" }, ...links.flatMap((a, n) => (n ? [" · ", a] : [a]))));
       return box;
     }
@@ -527,6 +594,7 @@
       if (entryTab === "log") openLog(null, []);
       else if (entryTab === "add-person") openPersonForm(null, null);
       else if (entryTab === "follow-ups") openFeed({ followUp: "open" });
+      else if (entryTab === "review") openReview();   // RV1
       else return draw();
       st.stack = [];
     });
@@ -543,5 +611,5 @@
     { key: "person", label: "Add a person", shows: (group) => M().canSee(group?.role), run: (group) => addPerson(group.id) },
   ];
 
-  FP.groupPeople = { view, logInteraction, addPerson, addEntries, CAP, PAGE };
+  FP.groupPeople = { view, logInteraction, addPerson, addEntries, CAP, PAGE, countBadge };
 })(typeof window === "undefined" ? globalThis : window);

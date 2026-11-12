@@ -152,7 +152,8 @@
     const people = ([k]) => k !== "people" || !!FP.peopleModel?.canSee(group.role);
     const tabs = [];   // UI1: the views drawn, for Add
     nav.replaceChildren(...(FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).map(([key, label]) => (tabs.push([key, label]),
-      el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", "data-tab": key, ...(route.view === key ? { "aria-current": "page" } : {}) }, FP.icon ? FP.icon(FP.icons.forView(key)) : null, el("span", {}, label)))));
+      el("a", { href: FP.href(G().href(group.id, key)), class: "group-tab", "data-tab": key, ...(route.view === key ? { "aria-current": "page" } : {}) }, FP.icon ? FP.icon(FP.icons.forView(key)) : null, el("span", {}, label),
+        key === "people" ? FP.groupPeople?.countBadge?.(group.id) : null))));   // RV1: open review items, once People has read them
     const back = $("#group-back");
     back.hidden = !(FP.groupSpace.hasPortfolio?.());
     back.setAttribute("href", FP.href("") || "#/");

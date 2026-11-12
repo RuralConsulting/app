@@ -59,7 +59,7 @@
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
-      return /^(?:\/(?:documents|events|people(?:\/(?:log|follow-ups|add-person))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:documents|events|people(?:\/(?:log|follow-ups|add-person|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -408,6 +408,51 @@
     data.tables.interaction_links = [L(1, 1, "b", 1), L(2, 1, "p", 1), L(3, 2, "b", 1), L(4, 2, "p", 2), L(5, 3, "b", 2), L(6, 3, "p", 3), L(7, 4, "b", 6), L(8, 4, "p", 7), L(9, 4, "e", "de000000-0000-4000-8000-000000000402"),
       L(10, 5, "b", 3), L(11, 5, "p", 4), L(12, 6, "b", 4), L(13, 7, "b", 4), L(14, 7, "p", 5)];
     data.crmTeam = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: OTHER, name: "Mere Example (synthetic)", role: "facilitator" }];
+    // RV1: questions about the register for the group's advisers to come back to (public.proposals of kind register_review, as
+    // tools/load_review_items.py writes them), beside the farm's proposals so Manage's counts and queue are as before. Invented.
+    const answers = (...pairs) => [...pairs.map(([action, label]) => ({ action, label })), { action: "other", label: "Something else" }, { action: "not_needed", label: "Not needed" }];
+    const ask = (id, key, subject, evidence, candidates, created_at, extra = {}) => ({ id, farm_id: null, org_id: GROUP, kind: "register_review", subject, subject_key: "register:" + key,
+      document_id: null, evidence, candidates, status: "proposed", decision: null, decided_by: null, decided_at: null, method_version: "load_review_items v1",
+      run_id: "de000000-0000-4000-8000-000000000a07", created_at, applied_at: null, outcome: null, superseded_by: null, proposed_by: null, ...extra });
+    data.tables.proposals = [...(data.tables.proposals || []),
+      ask(201, "split-hill-block", { topic: "Block split between three owners (synthetic)", question: "The hill block was split into three titles in 2025. Which of the three owners are members of the group? (synthetic)",
+        member_numbers: ["3", "5"], place: { lon: 172.689, lat: -42.881 }, ref: "register-check:split:1" },
+        ["Title split recorded in 2025 (synthetic)", "Two of the three owners are on the register: members 3 and 5 (synthetic)", "The third owner is not on the register (synthetic)"],
+        answers(["all_three", "All three are members"], ["two_on_register", "Only the two on the register"], ["ask_owner", "Ask the third owner to join"]), "2026-10-27T21:00:00Z"),
+      ask(202, "company-also-member", { topic: "Company is also another member (synthetic)", question: "Bravo Invented Ltd also appears as member 2's parent company. Does the land under member 9 belong with member 2? (synthetic)",
+        member_numbers: ["2", "9"] },
+        { "register name": "Bravo Invented Ltd (synthetic)", "same address": true, "shared blocks": 2 },
+        answers(["belongs_to_2", "Yes: the land belongs with member 2"], ["separate", "No: they are separate members"]), "2026-10-26T21:00:00Z"),
+      ask(203, "no-apptivo-4-42", { topic: "No Apptivo record (synthetic)", question: "Members 4 and 42 have no record in Apptivo. Are they still members? (synthetic)",
+        member_numbers: ["4", "42"] }, ["Not found in the Apptivo export of Nov 2026 (synthetic)"],
+        answers(["both_current", "Both are current members"], ["left", "They have left"]), "2026-10-25T21:00:00Z"),
+      ask(204, "inside-6-7", { topic: "Block inside another member's blocks (synthetic)", question: "Member 7's block sits wholly inside member 6's blocks. Is it the same farm? (synthetic)",
+        member_numbers: ["6", "7"], place: { lon: 172.702, lat: -42.874 } }, ["Member 7's block: 12 ha, inside member 6's 340 ha (synthetic)"],
+        answers(["same_farm", "Yes: the same farm"], ["lease", "No: member 7 leases it"]), "2026-10-20T21:00:00Z",
+        { status: "accepted", decision: { candidate: { action: "lease", label: "No: member 7 leases it" }, chosen_from: "candidates", note: "Confirmed with the owner at the field day (synthetic)", action: "lease", answer: null },
+          decided_by: OTHER, decided_at: "2026-10-22T02:00:00Z" })];
+  }
+  // RV1, as public.register_review_answer: the group's facilitators, advisors and admins answer an open item (one of its answers;
+  // "other" with the typed answer; "not_needed" sets it aside); recorded in memory only, nothing else changes. [data, error].
+  function reviewAnswer(d, args) {
+    const role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role;
+    const row = (d.tables.proposals || []).find((p) => p.id === args.id && p.kind === "register_review");
+    const refuse = (message) => [null, { message }];
+    if (!row || !["admin", "advisor", "facilitator"].includes(role)) return refuse("review item " + args.id + " is not open for you to answer");
+    if (row.status !== "proposed") return refuse("review item " + args.id + " is already answered");
+    const action = String(args.action || "").trim(), answer = String(args.answer || "").trim() || null, note = String(args.note || "").trim() || null;
+    if (action === "not_needed") {
+      if (answer) return refuse("\"Not needed\" takes no typed answer: say why in the note");
+      Object.assign(row, { status: "rejected", decision: { candidate: null, note, action, answer: null } });
+    } else {
+      const chosen = row.candidates.find((c) => c.action === action);
+      if (!chosen) return refuse("that is not one of this item's answers");
+      if (action === "other" && !answer) return refuse("type the answer for \"Other\"");
+      if (action !== "other" && answer) return refuse("only \"Other\" takes a typed answer: use the note");
+      Object.assign(row, { status: "accepted", decision: { candidate: chosen, chosen_from: "candidates", note, action, answer } });
+    }
+    Object.assign(row, { decided_by: USER, decided_at: new Date().toISOString() });
+    return [row];
   }
   // PE1, as the crm_* read functions and crm_save_interaction: the group's facilitators, advisors and admins only (anyone else gets
   // no rows or null), bounded as the database bounds them. Returns [data, error], or null for a name it does not know.
@@ -1512,6 +1557,7 @@
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
         if (String(name).startsWith("crm_")) { const r = crmRpc(d, name, args || {}); if (r) return result(...r); }   // PE1
+        if (name === "register_review_answer") return result(...reviewAnswer(d, args || {}));   // RV1
         // PERF1b, as public.farm_reference_counts and public.farm_reference_context (PERF1a): the farm's reference entries
         // (d.reference by farm; the fixture's `reference`, none in the demo) counted, and one served source's entry read on
         // its own (no features here: its entry with none; not served or no such farm: null). farm_map's `reference` is [].

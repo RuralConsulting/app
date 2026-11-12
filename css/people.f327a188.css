@@ -101,6 +101,24 @@
 .crm-save button { width: 100%; min-height: 48px; }
 .crm-filters { margin: 8px 0; }
 .crm-msg { min-height: 1.5em; }
+/* RV1: the open review count on the People tab (on the phone's bottom bar a corner badge, clear of the word) */
+.group-nav .group-tab .review-count { margin-left: 0; font-size: var(--text-small); line-height: 1.2; padding: 0 5px; border-radius: 999px; }
+@media (max-width: 800px) {
+  .group-nav .group-tab:has(.review-count) { position: relative; }
+  .group-nav .group-tab .review-count { position: absolute; top: 2px; left: calc(50% + 6px); }
+}
+/* RV1: review items (the list reuses .crm-row; the answers reuse the .crm-segments look, one per line) */
+.rv-question { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.rv-members { font-size: var(--text-small); color: var(--ink-2); overflow-wrap: anywhere; }
+.rv-row .rv-members { display: block; padding: 2px 12px 0; }
+.crm-sub .rv-members { font-size: inherit; }
+.rv-members button.link { min-height: 32px; padding: 0; }
+.rv-facts { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; overflow-wrap: anywhere; }
+.rv-map { height: 220px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule); background: var(--wash); }
+.rv-answers { display: grid; gap: 6px; }
+.rv-form [hidden] { display: none; }
+.rv-answers button { font: inherit; min-height: 48px; padding: 8px 12px; text-align: left; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); cursor: pointer; overflow-wrap: anywhere; }
+.rv-answers button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
 
 @media (min-width: 761px) {
   .crm-segments { grid-template-columns: repeat(6, minmax(0, 1fr)); }

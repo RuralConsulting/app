@@ -46,6 +46,8 @@
   const DECIDE_KINDS = [...MEMBER_KINDS, "document_tier"];
   // ON3c: the feed's kinds. A person marks each seen or follow up (its two candidates, through proposals_decide); never "to decide".
   const FEED_KINDS = ["review_due", "load_gap", "reference_change"];
+  // RV1: questions about the register (register_review) are answered in People → To review; Manage only counts them
+  const REVIEW_KIND = "register_review";
   const OPEN = ["proposed", "ambiguous"];
   const GAP_WORDS = {
     fep_unmatched: { what: "FEP file with no member number in its name", one: "FEP file not linked to a member", many: "FEP files not linked to a member" },
@@ -84,8 +86,9 @@
     if (access === "none") return { parts: [], empty: false, unknown: true, noAccess: true,
       text: "No access: only the group's members and RCL staff see what is open for it." };
     const c = access === "ok" && counts && typeof counts === "object" ? counts : null, g = gaps && typeof gaps === "object" ? gaps : null;
-    const decide = c ? Object.entries(c).filter(([k]) => k !== "site_succession" && !FEED_KINDS.includes(k)).reduce((n, [, v]) => n + (Number(v) || 0), 0) : null;
+    const decide = c ? Object.entries(c).filter(([k]) => k !== "site_succession" && k !== REVIEW_KIND && !FEED_KINDS.includes(k)).reduce((n, [, v]) => n + (Number(v) || 0), 0) : null;
     const site = c ? Number(c.site_succession) || 0 : null;
+    const review = c ? Number(c[REVIEW_KIND]) || 0 : null;   // RV1: answered in People → To review, not here
     const updates = c ? FEED_KINDS.reduce((n, k) => n + (Number(c[k]) || 0), 0) : null;
     const noExtent = g ? Number(g.counts?.member_no_extent) || 0 : null;
     const held = g ? noEvidence(g, waiting) : { paddock_held: 0, fep: 0 };
@@ -100,6 +103,7 @@
     if (noExtent) parts.push({ key: "no_extent", n: noExtent, text: plural(noExtent, "member without an extent", "members without an extent") });
     if (site) parts.push({ key: "site", n: site, text: plural(site, "site question", "site questions") });
     if (updates) parts.push({ key: "updates", n: updates, text: plural(updates, "update", "updates") });
+    if (review) parts.push({ key: "review", n: review, text: plural(review, "register question to review (in People)", "register questions to review (in People)") });
     const unread = [...(!c ? ["the open proposals could not be read"] : []), ...(gapsAccess === "error" ? ["the group load's gaps could not be read"] : [])];
     if (unread.length) return { parts, empty: false, unknown: true, noAccess: false, text: [...parts.map((p) => p.text), ...unread].join(" · ") };
     return { parts, empty: !parts.length, unknown: false, noAccess: false, text: parts.length ? parts.map((p) => p.text).join(" · ") : "Nothing open" };
@@ -473,7 +477,8 @@
   // ---- "since you last looked" (ON3c) -------------------------------------------------------------------------------------------------
   // From public.proposals_since_seen ({seen_at, since: {kind: n}}); null (no access) or an unread answer draws no line.
   const SINCE_WORDS = [["review_due", "analysis due for review", "analyses due for review"], ["load_gap", "new gap update from a group load", "new gap updates from group loads"],
-    ["reference_change", "reference change near members", "reference changes near members"], ["site_succession", "site question", "site questions"]];
+    ["reference_change", "reference change near members", "reference changes near members"], ["site_succession", "site question", "site questions"],
+    ["register_review", "register question to review", "register questions to review"]];   // RV1
   function sinceLine(r) {
     if (!r || typeof r !== "object" || typeof r.since !== "object" || r.since == null) return null;
     const c = r.since, parts = [];
