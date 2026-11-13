@@ -50,14 +50,27 @@
   // people-model canSee, the group's facilitators, advisors and admins), and only where the People tab is the person's
   const mayAddPeople = (ctx) => ctx.space === "group" && views(ctx).includes("people") && !!models().people?.canSee(ctx.role);
 
+  // CAP1: a photo with tags (and a water sample or pest control, built on it), for any member of a group or sub-group, where its
+  // Records are the person's (the simple view's allow-list rules here too). Saved to the group the person is in; a member's own
+  // capture is read by them and the group's coordinators (public.captures). Not offered in a farm in this version.
+  const MEMBER_ROLES = ["member", "editor", "facilitator", "advisor", "admin"];
+  const mayCapture = (ctx) => ctx.space === "group" && MEMBER_ROLES.includes(ctx.role) && views(ctx).includes("records");
+
   const registry = createRegistry();
-  registry.register({ id: "file", label: "File", hint: "A plan, consent or report, to the space's Files", icon: "file", where: ["farm", "group"], order: 10, verb: "Add a file",
+  // short: the one line under an option in the phone's + ring (capture-ring.js), where there is room for a word or two
+  registry.register({ id: "photo", label: "Photo", short: "Photo", hint: "A photo with tags: anything worth keeping", icon: "camera", where: ["group"], order: 1, verb: "Take a photo",
+    can: mayCapture, run: (ctx) => root.FP.captures.start(ctx, "photo") });
+  registry.register({ id: "water_sample", label: "Water sample", short: "Water", hint: "A photo of the sample or tester, with readings", icon: "water", where: ["group"], order: 2, verb: "Record a water sample",
+    can: mayCapture, run: (ctx) => root.FP.captures.start(ctx, "water_sample") });
+  registry.register({ id: "pest_control", label: "Pest control", short: "Pests", hint: "What you saw or shot, and how many", icon: "pest", where: ["group"], order: 3, verb: "Record pest control",
+    can: mayCapture, run: (ctx) => root.FP.captures.start(ctx, "pest_control") });
+  registry.register({ id: "file", label: "File", short: "File", hint: "A plan, consent or report, to the space's Files", icon: "file", where: ["farm", "group"], order: 10, verb: "Add a file",
     can: mayAddFile, run: (ctx) => addFile(ctx) });
-  registry.register({ id: "event", label: "Event", hint: "A meeting, field day or workshop", icon: "event", where: ["group"], order: 20, verb: "Add an event",
+  registry.register({ id: "event", label: "Event", short: "Event", hint: "A meeting, field day or workshop", icon: "event", where: ["group"], order: 20, verb: "Add an event",
     can: mayAddEvent, run: (ctx) => root.FP.groupEvents.openNew(ctx.id) });
-  registry.register({ id: "interaction", label: "Call or meeting note", hint: "A call, visit or meeting, in the group's log", icon: "note", where: ["group"], order: 30, verb: "Log a call or visit",
+  registry.register({ id: "interaction", label: "Call or meeting note", short: "Call", hint: "A call, visit or meeting, in the group's log", icon: "note", where: ["group"], order: 30, verb: "Log a call or visit",
     can: mayAddPeople, run: (ctx) => root.FP.groupPeople.logInteraction(ctx.id) });
-  registry.register({ id: "person", label: "Person", hint: "Someone the group works with", icon: "person", where: ["group"], order: 40, verb: "Add a person",
+  registry.register({ id: "person", label: "Person", short: "Person", hint: "Someone the group works with", icon: "person", where: ["group"], order: 40, verb: "Add a person",
     can: mayAddPeople, run: (ctx) => root.FP.groupPeople.addPerson(ctx.id) });
 
   // ---- the actions, in the browser ------------------------------------------------------------------------------------------
@@ -152,7 +165,7 @@
     if (!slot || buttons.has(space)) return buttons.get(space) || null;
     const b = el("button", { type: "button", class: "add-button", "aria-haspopup": "dialog", "aria-expanded": "false", hidden: true, "data-add-space": space },
       FP().icon("plus", 20), el("span", { class: "add-label" }, "Add"));
-    b.addEventListener("click", () => (sheet && !sheet.hidden ? close() : open(b)));
+    b.addEventListener("click", () => (sheet && !sheet.hidden ? close() : FP()?.captureRing?.isOpen?.() ? FP().captureRing.close() : open(b)));
     slot.append(b);
     buttons.set(space, b);
     return b;
@@ -166,6 +179,7 @@
       b.setAttribute("aria-label", "Add" + (ctx?.name ? " to " + ctx.name : ""));
     }
     if (sheet && !sheet.hidden) close(false);
+    FP()?.captureRing?.close(false);
     watch();
   }
   // On a phone the round button floats over the bottom right. A sheet along the bottom (the map viewer's, a farm's What's due)
@@ -249,7 +263,16 @@
     // the pointer sits under the button's middle
     panel.style.setProperty("--add-pointer", Math.round(root.innerWidth - right - (r.left + r.width / 2)) + "px");
   }
+  // CAP1: on a phone, in a group (where the captures are), the + opens the ring of options around it (capture-ring.js), built from the
+  // same available(ctx); its More opens this sheet. Where the ring can't fit (a short window, the + lifted by a map's sheet), and in a
+  // farm (one action, a file), the sheet opens as before.
   function open(button) {
+    const ctx = current, items = registry.available(ctx);
+    if (!items.length) return;
+    if (phone() && ctx.space === "group" && FP()?.captureRing?.open({ button, ctx, available: items, more: () => openSheet(button) })) return;
+    openSheet(button);
+  }
+  function openSheet(button) {
     const ctx = current, items = registry.available(ctx);
     if (!items.length) return;
     if (!sheet) build();
@@ -258,7 +281,11 @@
     sheet.querySelector(".add-list").replaceChildren(...items.map((a) => el("li", {},
       el("button", { type: "button", class: "add-item", "data-add-action": a.id, onclick: () => { close(false); a.run(ctx); } },
         el("span", { class: "add-item-icon" }, FP().icon(a.icon, 22)),
-        el("span", { class: "add-item-text" }, el("b", {}, a.label), a.hint ? el("small", {}, a.hint) : null)))));
+        el("span", { class: "add-item-text" }, el("b", {}, a.label), a.hint ? el("small", {}, a.hint) : null)))),
+      // CAP1: on a phone, in a group, the add menu's own choice sits here, after the actions (never among them in the menu itself)
+      ...(phone() && ctx.space === "group" && FP()?.captureRing ? [el("li", {}, el("button", { type: "button", class: "add-item add-choose", "data-add-choose": "",
+        onclick: () => { close(false); FP().captureRing.edit(button, ctx, items); } },
+        el("span", { class: "add-item-icon" }, FP().icon("create", 22)), el("span", { class: "add-item-text" }, el("b", {}, "Choose what's in the add menu"), el("small", {}, "On this phone: which, and in what order"))))] : []));
     sheet.classList.toggle("is-phone", !!phone());
     sheet.hidden = false;
     place();
@@ -274,5 +301,6 @@
     if (refocus && opener && !opener.hidden) opener.focus();
   }
 
-  return { createRegistry, registry, register: registry.register, available: registry.available, mount, update, open, close, toast, mayAddFile, mayAddEvent, mayAddPeople };
+  return { createRegistry, registry, register: registry.register, available: registry.available, mount, update, open, openSheet, close, toast, mayAddFile, mayAddEvent, mayAddPeople, mayCapture,
+    get context() { return current; }, buttons: () => [...buttons.values()] };
 });

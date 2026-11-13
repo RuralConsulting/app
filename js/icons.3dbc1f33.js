@@ -43,9 +43,16 @@
     consent: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 14l2 2 4-4",
     report: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 17v-3M12 17v-5M15 17v-2",
     mapdoc: "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14",
+    // CAP1: capture on a phone (a photo, a water sample, pest control), Records, and the ring's Edit order
+    camera: "M4 8.5A2 2 0 0 1 6 6.5h2l1.5-2h5l1.5 2h2a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z",
+    water: "M12 3.5s-6 6.4-6 10.8a6 6 0 0 0 12 0c0-4.4-6-10.8-6-10.8zM9.2 14.6a2.8 2.8 0 0 0 2.8 2.8",
+    pest: "M8.5 9a1.5 2 0 1 0 0-4 1.5 2 0 0 0 0 4zM15.5 9a1.5 2 0 1 0 0-4 1.5 2 0 0 0 0 4zM5 13a1.5 2 0 1 0 0-4 1.5 2 0 0 0 0 4zM19 13a1.5 2 0 1 0 0-4 1.5 2 0 0 0 0 4zM12 12c-3 0-5 3.5-5 5.5A2.5 2.5 0 0 0 9.5 20c1 0 1.5-.5 2.5-.5s1.5.5 2.5.5a2.5 2.5 0 0 0 2.5-2.5c0-2-2-5.5-5-5.5z",
+    records: "M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 16l4.5-4.5 3.5 3.5 2.5-2.5L20 18M15.5 9h.01",
+    up: "M6 15l6-6 6 6",
+    send: "M12 16V5M7 10l5-5 5 5M5 20h14",
   };
   // The icon each space view shows in the tab bar
-  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due" };
+  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records" };
   const NS = "http://www.w3.org/2000/svg";
   function icon(name, size = 22) {
     const d = PATHS[name] || PATHS.file, doc = root.document;

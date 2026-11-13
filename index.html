@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="vendor/maplibre-gl.ab1e70d5.css">
 <!-- V4: the map viewer's stylesheet sets page-wide rules, so it is on only while a map is shown (js/maps-view.js); before tokens.css, so the app's colours and type win -->
 <link rel="stylesheet" href="vendor/viewer.374d7780.css" media="not all" data-viewer-styles>
-<link rel="stylesheet" href="css/tokens.2379e305.css">
+<link rel="stylesheet" href="css/tokens.4c8a2406.css">
 <link rel="stylesheet" href="css/app.c00335d2.css">
 <link rel="stylesheet" href="css/demo.09842fda.css">
 <link rel="stylesheet" href="css/blocks.8ac4dcd2.css">
@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="css/plan-print.ac7ecabf.css">
 <link rel="stylesheet" href="css/plans-demo.04d0dd02.css">
 <link rel="stylesheet" href="css/place-home.6fdae8e2.css">
+<link rel="stylesheet" href="css/capture.0de5a5f1.css">
 <!-- UI1: the shared components (space header, tabs, account menu, Add, sheets, buttons, fields) last, so they set the look -->
 <link rel="stylesheet" href="css/ui.83076b34.css">
 </head>
@@ -244,14 +245,14 @@
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
 <script src="js/brand.80965af9.js"></script>
 <script src="js/consent-no.711a9161.js"></script>
-<script src="js/demo.74d7db36.js"></script>
+<script src="js/demo.2bb13637.js"></script>
 <script src="js/util.1d5eb095.js"></script>
-<script src="js/icons.d9c59684.js"></script>
+<script src="js/icons.3dbc1f33.js"></script>
 <script src="js/account-menu.0f64e677.js"></script>
 <script src="js/sheet.f9b10d89.js"></script>
 <script src="js/space-nav.9a24ed54.js"></script>
 <script src="js/map-palette.611ef9f6.js"></script>
-<script src="js/simple-view.b5df2254.js"></script>
+<script src="js/simple-view.a86d1456.js"></script>
 <script src="js/privacy.2bf69cda.js"></script>
 <script src="js/layer-kinds.f0f86f81.js"></script>
 <script src="js/route-timing.eb451185.js"></script>
@@ -260,8 +261,11 @@
 <script src="js/basemaps.53fc74c9.js"></script>
 <script src="js/auth.1e4f2997.js"></script>
 <script src="js/photo-model.7d519141.js"></script>
-<script src="js/capture-queue.3f5954df.js"></script>
-<script src="js/capture.e22e7bbe.js"></script>
+<script src="js/photo-read.41a6249a.js"></script>
+<script src="js/capture-queue.dd1bd2f1.js"></script>
+<script src="js/capture.cfd0bd2b.js"></script>
+<script src="js/capture-model.d30c836a.js"></script>
+<script src="js/capture-ring-model.479e9837.js"></script>
 <script src="js/popup.02390ce3.js"></script>
 <script src="js/blocks/registry.108f6d88.js"></script>
 <script src="js/blocks/answer.ce39f59d.js"></script>
@@ -295,7 +299,7 @@
 <script src="js/block-model.442f7f01.js"></script>
 <script src="js/add-block.8917b951.js"></script>
 <script src="js/farm-space.224322e9.js"></script>
-<script src="js/group-model.54ec22e8.js"></script>
+<script src="js/group-model.2f434820.js"></script>
 <script src="js/group-update.0bd365c9.js"></script>
 <script src="js/group-wq-answer.7133bd52.js"></script>
 <script src="js/group-manage-model.bffefdae.js"></script>
@@ -310,11 +314,14 @@
 <script src="js/membership-model.baa23e78.js"></script>
 <script src="js/membership.ebab1026.js"></script>
 <script src="js/people.cd797db1.js"></script>
-<script src="js/add.c5f65358.js"></script>
-<script src="js/place-home-model.94bb4749.js"></script>
+<script src="js/add.976985fc.js"></script>
+<script src="js/capture-ring.25d45464.js"></script>
+<script src="js/capture-photo.923ae135.js"></script>
+<script src="js/records.dfe0babf.js"></script>
+<script src="js/place-home-model.a55d75db.js"></script>
 <script src="js/place-home.84b4896e.js"></script>
 <script src="js/working-notes.6acfaded.js"></script>
-<script src="js/group-space.9780377c.js"></script>
+<script src="js/group-space.dfd731fe.js"></script>
 <script src="js/shape-edit-model.ae81c31a.js"></script>
 <script src="js/shape-editor.0ee097ec.js"></script>
 <script src="js/wq-sites-model.97e120be.js"></script>
@@ -332,7 +339,7 @@
 <script src="js/tokens-model.c6a721ec.js"></script>
 <script src="js/tokens.368b3ae6.js"></script>
 <script src="js/two-factor.a22a65e5.js"></script>
-<script src="js/main.c33aac95.js"></script>
+<script src="js/main.d0e2e0b6.js"></script>
 </body>
 </html>
 

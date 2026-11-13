@@ -101,7 +101,7 @@
   // The place's sections the person can open, other than Home, each with one quiet line where it is cheap to know.
   // facts: { maps: n | null, files: n | null, nextEvent: { starts_at, title } | null | undefined (not read) }
   const STATIC = {
-    maps: "Published maps", documents: "Plans, consents and reports", events: "The group's calendar", people: "Members and the people linked to them",
+    maps: "Published maps", documents: "Plans, consents and reports", events: "The group's calendar", people: "Members and the people linked to them", records: "Photos, water samples and pest control",
     map: "The map with its layers and cards (RCL staff)", ask: "Ask about this farm (RCL staff)", create: "Reports and updates (RCL staff)", manage: "Members, checks and settings",
   };
   function eventLine(ev) {

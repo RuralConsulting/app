@@ -66,6 +66,7 @@
       if (suffix === "/ops/looks") return "#/ops/looks";
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
+      if (suffix === "/records") return "#/group/" + GROUP + "/records" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // CAP1
       return /^(?:\/(?:home|documents|events|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
@@ -358,6 +359,66 @@
     manageDemo(data, queue);
     eventsDemo(data);
     peopleDemo(data);
+    capturesDemo(data);
+  }
+  // CAP1: captures taken on a phone (public.captures), invented: the demo person's own, another member's shared with the group and one
+  // not shared (which only the group's coordinators read: the demo person is the group's admin unless ?simple= says otherwise). The
+  // pictures are the one drawn stand-in. Saved in memory (capture_save, idempotent on the phone's client id); the photos sent are kept
+  // as they were sent, so the demo shows the photo taken. The capture_save and storage stand-ins answer as if there were no coverage
+  // while the browser says it is offline, so the outbox can be walked.
+  const OTHER_MEMBER = "de000000-0000-4000-8000-0000000005c1", THIRD_MEMBER = "de000000-0000-4000-8000-0000000005c2";
+  function capturesDemo(data) {
+    const id = (n) => "de000000-0000-4000-8000-0000000005" + String(n).padStart(2, "0"), cid = (n) => "de000000-0000-4000-8000-0000000006" + String(n).padStart(2, "0");
+    const path = (who, n, thumb) => "org/" + GROUP + "/captures/" + who + "/" + cid(n) + (thumb ? "-thumb" : "") + ".jpg";
+    const row = (n, who, name, extra) => ({ id: id(n), client_id: cid(n), org_id: GROUP, kind: "photo", created_by: who, created_by_name: name, taken_at_from: "photo", position_from: "photo", accuracy_m: null,
+      note: null, tags: [], data: {}, shared_with_group: false, photo_path: path(who, n), thumb_path: path(who, n, true), photo_width: 2000, photo_height: 1500, archived_at: null, archived_by: null,
+      created_at: extra.taken_at, updated_at: extra.taken_at, ...extra });
+    data.tables.captures = [
+      row(1, USER, "Demo advisor", { taken_at: "2026-10-27T22:10:00Z", latitude: -43.0102, longitude: 172.0411, note: "Willows down across the creek after the rain (synthetic)", tags: ["Fencing", "Wetland"] }),
+      row(2, OTHER_MEMBER, "Aroha Example (synthetic)", { taken_at: "2026-10-25T03:40:00Z", latitude: -43.0214, longitude: 172.0623, kind: "pest_control", tags: ["Pest control", "Deer"], data: { species: "deer", count: 3 },
+        note: "Three hinds on the terrace at dusk (synthetic)", shared_with_group: true }),
+      row(3, THIRD_MEMBER, "Ben Example (synthetic)", { taken_at: "2026-10-21T01:05:00Z", latitude: -42.9931, longitude: 172.0835, kind: "water_sample", tags: ["Water sample"],
+        data: { site_name: "Ford Road culvert (synthetic)", readings: [{ name: "Nitrate", value: 2.5, unit: "mg/L" }] }, note: null }),
+      row(4, OTHER_MEMBER, "Aroha Example (synthetic)", { taken_at: "2026-10-18T20:30:00Z", latitude: -43.0301, longitude: 172.0198, tags: ["Planting", "Wetland"], note: "Carex planted along the drain (synthetic)", shared_with_group: true }),
+    ];
+    data.tables.capture_tags = [{ id: id(90), org_id: GROUP, name: "Water sample", colour: "hue-2", sort_order: 0, archived_at: null }];
+    data.objects = new Map();   // the photos sent in this session, by path
+  }
+  // As row-level security reads public.captures for the demo person: their own, and others' only when shared, unless they are one of
+  // the group's coordinators (who read every capture in it).
+  function capturesFor(d) {
+    const role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role;
+    const all = d.tables.captures || [];
+    return ["facilitator", "advisor", "admin"].includes(role) ? all : role ? all.filter((c) => c.created_by === USER || c.shared_with_group) : [];
+  }
+  const offlineNow = () => typeof navigator === "object" && navigator.onLine === false;
+  const capturePath = (p) => /^org\/[0-9a-f-]{36}\/captures\//.test(String(p || ""));
+  const captureUrls = new Map();
+  function captureUrl(d, path) {
+    const blob = d.objects?.get(path);
+    if (blob && typeof URL.createObjectURL === "function") { if (!captureUrls.has(path)) captureUrls.set(path, URL.createObjectURL(blob)); return captureUrls.get(path); }
+    return new URL(PHOTO, typeof location === "undefined" ? "http://localhost/" : location.href).href;
+  }
+  const LOST = () => ({ data: null, error: { message: "TypeError: Failed to fetch", details: "", hint: "", code: "" }, status: 0 });
+  // public.capture_save in memory: the row for this person's client id if there is one, else a new row as the guard stamps it.
+  function captureSave(d, c) {
+    if (!c?.client_id || c.org_id !== GROUP) return [null, { code: "42501", message: "new row violates row-level security policy for table \"captures\"" }];
+    const T = d.tables.captures, had = T.find((x) => x.created_by === USER && x.client_id === c.client_id);
+    if (had) return [had.id];
+    if (c.photo_path && !d.objects.has(c.photo_path)) return [null, { code: "23514", message: "Send the photo before its record" }];
+    const now = new Date().toISOString(), id = "de000000-0000-4000-8000-" + String(700000000000 + T.length + 1);
+    T.push({ id, client_id: c.client_id, org_id: c.org_id, kind: c.kind || "photo", created_by: USER, created_by_name: "Demo advisor", taken_at: c.taken_at || now, taken_at_from: c.taken_at_from || "device",
+      latitude: c.latitude ?? null, longitude: c.longitude ?? null, position_from: c.position_from ?? null, accuracy_m: c.accuracy_m ?? null, note: c.note || null, tags: c.tags || [], data: c.data || {},
+      shared_with_group: !!c.shared_with_group, photo_path: c.photo_path || null, thumb_path: c.thumb_path || null, photo_width: c.photo_width || null, photo_height: c.photo_height || null,
+      archived_at: null, archived_by: null, created_at: now, updated_at: now });
+    return [id];
+  }
+  function captureTagSuggestions(d, o) {
+    if (o !== GROUP) return [];
+    const used = new Map();
+    for (const c of capturesFor(d).filter((x) => !x.archived_at)) for (const t of c.tags || []) { const k = t.toLowerCase(); const e = used.get(k) || { name: t, uses: 0 }; e.uses++; used.set(k, e); }
+    for (const t of d.tables.capture_tags || []) if (!t.archived_at) { const k = t.name.toLowerCase(); const e = used.get(k) || { name: t.name, uses: 0 }; used.set(k, { ...e, name: t.name, listed: true, colour: t.colour }); }
+    return [...used.values()].map((x) => ({ name: x.name, uses: x.uses, listed: !!x.listed, colour: x.colour || null })).sort((a, b) => b.uses - a.uses || (b.listed - a.listed) || a.name.localeCompare(b.name)).slice(0, 16);
   }
   // N4: the group's events (public.group_events) and attendance (public.group_event_attendees), invented: past and coming ones
   // around the fixture's date (29 Oct 2026), one all-day on the day daylight saving starts, one cancelled, one with a macron and
@@ -1787,7 +1848,8 @@
         then(resolve, reject) { return execute().then(resolve, reject); },
       };
       async function execute() {
-        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : table === "site_record_summary" ? demoRecordSummary(d) : table === "monitoring_sites" ? demoMonitoringSites(d) : d.tables[table];
+        if (table === "captures" && offlineNow()) return LOST();   // CAP1: no coverage
+        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : table === "site_record_summary" ? demoRecordSummary(d) : table === "monitoring_sites" ? demoMonitoringSites(d) : table === "captures" && d.tables.captures ? capturesFor(d) : d.tables[table];
         if (write && adding && KEPT.includes(table)) {
           const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
             ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));
@@ -1846,6 +1908,8 @@
         }
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
+        if (name === "capture_save") return offlineNow() ? LOST() : result(...captureSave(d, args?.c));   // CAP1
+        if (name === "capture_tag_suggestions") return offlineNow() ? LOST() : result(captureTagSuggestions(d, args?.o));   // CAP1
         if (/^group_event_(notes|attendee_notes|set_notes|attendee_set_note)$/.test(name)) return result(...eventNotesRpc(d, name, args || {}));   // NP1
         // NP1b, as public.farm_working_notes_allowed: RCL staff on the farm (the demo person when staff); a client: no
         if (name === "farm_working_notes_allowed") return result(!!d.tables.profiles?.[0]?.is_staff && (args.f === FARM || args.f === FARM2));
@@ -2008,9 +2072,17 @@
       } },
       // Every document opens the one stand-in page (DEC1b: a file the group holds, under demo/held/, the stand-in PDF a card frames);
       // the demo's photo points name the one stand-in picture.
-      storage: { from: () => ({ createSignedUrls: async (paths) => result(paths.map((path) => ({ path, error: null, signedUrl: new URL("demo/map-boundary.geojson", typeof location === "undefined" ? "http://localhost/" : location.href).href }))),   // V4: the one invented outline
-        createSignedUrl: async (path) => result({ signedUrl: new URL(path === PHOTO ? PHOTO : String(path).startsWith("demo/held/") && String(path).endsWith(".pdf") ? "demo/source.pdf" : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }),
-        upload: async (path) => result({ path }) }) },
+      // CAP1: a capture's photo (org/<group>/captures/...) is the one sent in this session (kept as sent), else the drawn stand-in; while the
+      // browser says it is offline, sending one gets no answer, and a second send of the same path is refused as Storage refuses it.
+      storage: { from: () => ({ createSignedUrls: async (paths) => { const d = await ready; return result(paths.map((path) => ({ path, error: null, signedUrl: capturePath(path) ? captureUrl(d, path) : new URL("demo/map-boundary.geojson", typeof location === "undefined" ? "http://localhost/" : location.href).href }))); },   // V4: the one invented outline
+        createSignedUrl: async (path) => { const d = await ready; return result({ signedUrl: capturePath(path) ? captureUrl(d, path) : new URL(path === PHOTO ? PHOTO : String(path).startsWith("demo/held/") && String(path).endsWith(".pdf") ? "demo/source.pdf" : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }); },
+        upload: async (path, blob) => {
+          if (!capturePath(path)) return result({ path });
+          if (offlineNow()) return LOST();
+          const d = await ready;
+          if (d.objects.has(path)) return { data: null, error: { name: "StorageApiError", message: "The resource already exists", status: 400, statusCode: "409" } };
+          d.objects.set(path, blob); return result({ path });
+        } }) },
     };
   }
   return { FARM, FARM2, USER, ORG, GROUP, MEMBERS, levelOf, groupRpc, proposalsRpc, GROUP_MEMBERS, queueOf, wqOf, wqLatest, askReply, isRoute, isSparse, isFarmer, isMulti, isGroup, routeHash, href, dataset, client };

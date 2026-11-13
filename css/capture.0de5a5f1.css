@@ -1,0 +1,159 @@
+/* CAP1: capture on a phone. The add menu (capture-ring.js), the capture screen (capture-photo.js) and Records (records.js).
+   Ink controls, one filled button per screen (Save), the device's font, light and dark from the tokens; light and fine, not chunky
+   (the owner, 13 Nov 2026: "more refined and less chunky"): hairline edges, small text, plain links for what is secondary. */
+
+/* ---- the add menu: an even column rising straight up from the + -------------------------------------------------------------------- */
+.ring { position: fixed; inset: 0; z-index: 35; }
+.ring-backdrop { position: absolute; inset: 0; background: var(--backdrop-strong); animation: fp-fade var(--dur-2) var(--ease); }
+/* each option: its words, then a small round button on the +'s centre line (left/top place the button's right edge and middle) */
+.ring-item { position: fixed; display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink);
+  cursor: pointer; transform: translate(-100%, -50%); -webkit-tap-highlight-color: var(--clear); animation: ring-in var(--dur-2) var(--ease) both; animation-delay: calc(var(--ring-i, 0) * 20ms); }
+.ring-dot { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--raised); color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); }
+.ring-word { max-width: 180px; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--raised); color: var(--ink); font: 500 var(--text-small)/1.25 var(--f-ui);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.ring .ring-item:focus-visible { outline: none; }
+.ring .ring-item:focus-visible .ring-dot { outline: 2px solid var(--raised); outline-offset: 3px; }
+.ring-item:active .ring-dot { transform: scale(.94); }
+.ring-item[data-ring="more"] .ring-dot { background: var(--fill); }
+.ring-close { position: fixed; display: grid; place-items: center; width: 52px; height: 52px; margin: 0; padding: 0; border: 0; border-radius: 50%; transform: translate(-50%, -50%);
+  background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+@keyframes ring-in { from { opacity: 0; transform: translate(-100%, calc(-50% + 12px)); } to { opacity: 1; transform: translate(-100%, -50%); } }
+@media (prefers-reduced-motion: reduce) { .ring-item, .ring-backdrop { animation: none; } }
+body.ring-open .space-tabs { pointer-events: none; }
+
+/* the Edit sheet */
+.ring-edit-list { list-style: none; margin: 0; padding: 0 var(--s-3); display: grid; gap: 2px; }
+.ring-edit-row { display: flex; align-items: center; gap: var(--s-2); min-height: 52px; }
+.ring-edit-label { flex: 1; display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); cursor: pointer; }
+.ring-edit-label input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.ring-edit-moves { display: flex; gap: 2px; }
+.ring-move { display: grid; place-items: center; width: var(--tap); height: var(--tap); border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.ring-move[disabled] { opacity: .35; cursor: default; }
+.ring-edit-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-5) 0; }
+.ring-edit-note { margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+.ring-edit-reset { min-height: var(--tap); }
+.ring-edit-help { padding: 0 var(--s-5) var(--s-2); }
+
+/* the count on the + */
+.add-button .add-badge { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--radius-pill); background: var(--panel); color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 700; font-size: var(--text-small); line-height: 20px; text-align: center; }
+.add-button { position: relative; }   /* (ui.css, loaded after this, makes the phone's round + fixed) */
+
+/* ---- the capture screen (and a record seen full screen) ----------------------------------------------------------------------------- */
+.cap-screen { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--wash); color: var(--ink); }
+body.cap-open { overflow: hidden; }
+body.cap-open .add-button { opacity: 0; pointer-events: none; }
+.cap-head { display: grid; grid-template-columns: var(--tap) 1fr var(--tap); align-items: center; gap: var(--s-2); padding: max(var(--s-2), env(safe-area-inset-top)) var(--s-2) var(--s-2);
+  background: var(--panel); border-bottom: 1px solid var(--rule-soft); }
+.cap-head h2 { margin: 0; text-align: center; font: 600 var(--text-body)/1.3 var(--f-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-close { display: grid; place-items: center; width: var(--tap); height: var(--tap); border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.cap-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; align-content: start; gap: var(--s-5); padding: var(--s-4) var(--s-4) var(--s-6);
+  width: 100%; max-width: 640px; margin: 0 auto; box-sizing: border-box; }
+.cap-foot { padding: var(--s-2) var(--s-4) max(var(--s-2), env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--rule-soft); }
+.cap-save { display: block; width: 100%; max-width: 640px; margin: 0 auto; height: 44px; border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink);
+  font: 600 var(--text-body)/1 var(--f-ui); cursor: pointer; }
+.cap-save[disabled] { opacity: .5; cursor: progress; }
+
+.cap-photo { position: relative; display: grid; gap: var(--s-2); justify-items: center; }
+.cap-img { display: block; width: 100%; max-height: 42vh; object-fit: contain; border-radius: var(--radius); background: var(--fill); }
+.cap-photo-empty { display: grid; justify-items: center; gap: var(--s-1); width: 100%; padding: var(--s-5) var(--s-4); border-radius: var(--radius); background: none;
+  border: 1px dashed var(--field-border); box-sizing: border-box; }
+.cap-photo[data-has-photo="true"] .cap-photo-empty { display: none; }
+.cap-take { display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--tap); padding: 0 var(--s-2); border: 0; background: none; color: var(--ink);
+  font: 500 var(--text-body)/1 var(--f-ui); text-decoration: underline; text-decoration-color: var(--field-border); text-underline-offset: 3px; cursor: pointer; }
+.cap-screen .link { min-height: var(--tap); padding: 0 var(--s-1); font-size: var(--text-small); }
+
+.cap-tags, .cap-kind { margin: 0; padding: 0; border: 0; display: grid; gap: var(--s-2); min-width: 0; }
+.cap-tags legend, .cap-kind legend, .cap-field > span, .cap-sub { padding: 0; margin: 0 0 var(--s-1); color: var(--ink-2); font: 600 var(--text-small)/1.3 var(--f-ui); }
+/* (rows 14 px apart and chips 6 px apart, so each chip's 44 px tap area below never overlaps a neighbour's) */
+.cap-chips { display: flex; flex-wrap: wrap; gap: 14px 6px; padding: 7px 0; }
+.chip { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--field-border); border-radius: var(--radius-pill); background: none; color: var(--ink);
+  font: 400 var(--text-small)/1.2 var(--f-ui); cursor: pointer; box-sizing: border-box; }
+/* a chip looks 30 px high, and is a 44 px target: its tap area reaches 7 px above and below and 3 px to each side (as ui.css's .crm-chip-on) */
+.chip { position: relative; }
+.chip::after { content: ""; position: absolute; inset: -7px -3px; }
+.chip-static::after { content: none; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip-static { cursor: default; min-height: 24px; }
+.chip-count { margin-left: var(--s-1); color: inherit; opacity: .7; }
+.cap-tag-row { display: flex; gap: var(--s-2); }
+.cap-tag-row input { flex: 1; min-width: 0; }
+.cap-tag-add { display: grid; place-items: center; width: var(--tap); height: var(--tap); flex: none; border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.cap-screen input[type="text"], .cap-screen select { min-height: var(--tap); padding: 0 10px; border: 1px solid var(--field-border); border-radius: var(--radius-s);
+  background: var(--panel); color: var(--ink); font: 400 var(--text-body)/1.2 var(--f-ui); box-sizing: border-box; width: 100%; }
+.cap-field { display: grid; gap: 2px; }
+.cap-field-short input { max-width: 8em; }
+.cap-readings { display: grid; gap: var(--s-2); }
+.cap-reading { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: var(--s-2); }
+.cap-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.cap-line .icon { flex: none; color: var(--ink-3); }
+.cap-pos-acts { display: inline-flex; gap: var(--s-3); margin-left: auto; }
+.cap-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--ink-3); flex: none; }
+.cap-pos[data-has="true"] .cap-dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cap-pin-map { height: 220px; border-radius: var(--radius); overflow: hidden; background: var(--fill); }
+.cap-share { display: flex; gap: var(--s-3); align-items: flex-start; min-height: var(--tap); box-sizing: border-box; padding: var(--s-3) 0 0; border-top: 1px solid var(--rule-soft); cursor: pointer; }
+.cap-share b { font-weight: 500; }
+.cap-share input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.cap-share span { display: grid; gap: 2px; }
+.cap-share small, .cap-quiet { color: var(--ink-3); font-size: var(--text-small); margin: 0; }
+.cap-msg { margin: 0; min-height: 1.2em; color: var(--ink); font-size: var(--text-small); }
+.cap-msg:empty { display: none; }
+
+/* after Save: one quiet line that opens it */
+.cap-saved { position: fixed; z-index: 41; left: 50%; bottom: calc(var(--tabbar-h) + 24px); transform: translateX(-50%); max-width: calc(100vw - 32px); }
+@media (max-width: 800px) { .cap-saved { left: 16px; right: 84px; transform: none; max-width: none; } }   /* (clear of the round +) */
+.cap-saved[hidden] { display: none; }
+.cap-saved-link { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: 0 var(--s-4); border-radius: var(--radius-pill); background: var(--ink); color: var(--panel);
+  font-size: var(--text-small); text-decoration: none; box-shadow: var(--shadow-2); }
+.cap-saved-open { text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+
+/* ---- Records ------------------------------------------------------------------------------------------------------------------------ */
+/* a list, not a map: the panel takes the width (as Events and People) */
+#screen-group[data-view="records"] .group-map { display: none; }
+#screen-group[data-view="records"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="records"] .group-panel { padding: 0; border: 0; background: var(--wash); }
+@media (min-width: 801px) {
+  #screen-group[data-view="records"] .group-head.space-head { padding-left: max(var(--s-3), calc((100% - var(--page-max)) / 2)); padding-right: max(var(--s-5), calc((100% - var(--page-max)) / 2 + var(--s-4))); }
+}
+.records { display: grid; align-content: start; gap: var(--s-3); width: 100%; max-width: var(--page-max); margin: 0 auto; padding: var(--s-4) var(--s-4) calc(var(--s-10) + var(--fab-gutter, 0px)); box-sizing: border-box; }
+.rec-head h2 { margin: 0; font: 600 var(--text-heading)/1.2 var(--f-display); }
+.rec-quiet { margin: 2px 0 0; color: var(--ink-3); font-size: var(--text-small); }
+.rec-status:empty, .rec-status[hidden] { display: none; }
+.rec-filters { display: flex; gap: var(--s-2); overflow-x: auto; padding: 8px 4px; }   /* (room for each chip's 44 px tap area inside the scrolling row) */
+.rec-filters[hidden] { display: none; }
+.rec-filters .chip { flex: none; }
+.rec-list { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); }
+.rec-list:empty { display: none; }
+.rec-list > li + li { border-top: 1px solid var(--rule-soft); }
+.rec-row { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: var(--s-3); width: 100%; min-height: 64px; padding: var(--s-2) 0; border: 0; background: none;
+  color: var(--ink); text-align: left; font: inherit; cursor: pointer; box-sizing: border-box; }
+li.rec-row { cursor: default; }
+@media (hover: hover) { button.rec-row:hover { background: var(--fill); } }
+.rec-thumb { display: grid; place-items: center; width: 48px; height: 48px; border-radius: var(--radius-s); overflow: hidden; background: var(--fill); color: var(--ink-3); }
+.rec-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rec-thumb-none { display: grid; place-items: center; width: 100%; height: 100%; color: var(--ink-3); }   /* a thumbnail that could not load: a calm placeholder */
+.cap-field-msg { margin: 2px 0 0; color: var(--ink); font-size: var(--text-small); }
+.cap-field-msg:empty { display: none; }
+[aria-invalid="true"] { border-color: var(--ink) !important; box-shadow: inset 0 0 0 1px var(--ink); }
+.rec-text { display: grid; gap: 2px; min-width: 0; }
+.rec-text b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-text small { color: var(--ink-3); font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-date { color: var(--ink-3); font-size: var(--text-small); white-space: nowrap; }
+.rec-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.records .rec-acts button.link { min-height: var(--tap); padding: 0 var(--s-1); }   /* (over .group-panel button.link's 32 px) */
+.rec-confirm { color: var(--ink-2); font-size: var(--text-small); }
+.rec-waiting { display: grid; gap: var(--s-2); }
+.rec-waiting[hidden] { display: none; }
+.rec-waiting-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.rec-waiting-head h3 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.rec-send { display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 0 var(--s-1); border: 0; background: none; color: var(--ink);
+  font: 500 var(--text-small)/1 var(--f-ui); text-decoration: underline; text-decoration-color: var(--field-border); text-underline-offset: 3px; cursor: pointer; }
+.rec-send[disabled] { color: var(--ink-3); text-decoration: none; cursor: default; }
+.rec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
+.rec-photo-box { display: grid; place-items: center; }
+.rec-photo { display: block; max-width: 100%; max-height: 62vh; border-radius: var(--radius); background: var(--fill); }
+.rec-note { margin: 0; font-size: var(--text-body); }
+.rec-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-4); margin: 0; font-size: var(--text-small); }
+.rec-facts dt { color: var(--ink-3); }
+.rec-facts dd { margin: 0; color: var(--ink); }
+.rec-tags { display: flex; flex-wrap: wrap; gap: var(--s-1); }

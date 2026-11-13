@@ -70,6 +70,16 @@
     }
     return op;
   }
+  // CAP1: a capture for a catchment group or sub-group (a photo with tags, a water sample, pest control), made on the phone.
+  // `record` is public.capture_save's argument (capture-model.js record()); its client_id names the row on every send, and the
+  // photo and thumbnail go to the maker's own folder under that id (capture-model.js paths()). entry_id is the client id, so a
+  // refused capture holds nothing else back. The blobs are kept here until sent.
+  function groupCaptureOp({ user, record, photo = null, thumb = null, at, uuid }) {
+    if (!record?.client_id || !record.org_id) throw Error("A capture needs its place.");
+    const file = (f) => (f && f.blob ? { blob: f.blob, path: f.path, mime: "image/jpeg", size: f.blob.size } : null);
+    return { id: uuid(), kind: "group_capture", org_id: record.org_id, user_id: user, entry_id: record.client_id, record, photo: file(photo), thumb: file(thumb),
+      queued_at: at, state: "pending", done: [], tries: 0, error: null };
+  }
   // An edit of an entry's text, made on the version last read (its updated_at).
   function editOp({ farm, user, entry, body, at, uuid }) {
     if (!entry?.id || !entry.updated_at) throw Error("This record can't be edited here.");
@@ -87,7 +97,7 @@
     const status = Number(res.status || e.status || 0), storage = String(e.statusCode || "");
     if (/^[0-9A-Z]{5}$/.test(code) && !/^PGRST/.test(code)) {   // a database answer: decided by its SQLSTATE
       if (code === "23505") return "duplicate";
-      return /^(08|40|53|57)/.test(code) ? "transient" : "permanent";
+      return /^(08|28|40|53|57)/.test(code) ? "transient" : "permanent";   // (28: not signed in yet: CAP1's capture_save waits for the sign-in)
     }
     if (storage === "409" || /already exists|duplicate/i.test(text)) return "duplicate";
     if (/^PGRST30/.test(code) || status === 401) return "transient";   // the session needs refreshing
@@ -147,6 +157,21 @@
             op.done.push("file");
           }
           op.state = "synced";
+        } else if (op.kind === "group_capture") {
+          // CAP1: the photo, its thumbnail, then the record (the database refuses a record whose photo isn't there yet). Each step
+          // is safe to send again: an object already there is "duplicate"; capture_save returns the row already made for this id.
+          for (const [step, f] of [["upload", op.photo], ["thumb", op.thumb]]) {
+            if (f && !op.done.includes(step)) {
+              await attempt(() => sb.storage.from("documents").upload(f.path, f.blob, { contentType: f.mime, upsert: false }));
+              op.done.push(step); await save(op);
+            }
+          }
+          if (!op.done.includes("record")) {
+            op.capture_id = await attempt(() => sb.rpc("capture_save", { c: op.record }), false);
+            op.done.push("record");
+          }
+          op.state = "synced";
+          if (op.photo) op.photo = { ...op.photo, blob: null };   // sent: the full photo leaves the phone's storage (the thumbnail stays a while)
         } else {
           const result = await attempt(() => sb.rpc("sync_entry_edit", { p_op: op.id, p_entry: op.entry_id, p_base: op.base_updated_at, p_body: op.body }), false);
           op.done.push("edit");
@@ -220,7 +245,11 @@
     async function list(farm) { const me = user(); return (await store.all()).filter((o) => o.user_id === me && (!farm || o.farm_id === farm)); }
     async function retry(seq) { const op = (await store.all()).find((o) => o.seq === seq); if (op && op.state === "failed") { op.state = "pending"; op.answered_failures = 0; await save(op); } return sync(); }
     async function dismiss(seq) { await store.remove(seq); onChange(); }
-    return { add, sync, list, retry, dismiss, store, get retrying() { return timer !== null; } };
+    // CAP1: the group captures of the signed-in person (all of them, or one place's), in capture order; and everything a person
+    // left on this phone, removed (signing out: no one's captures stay for the next person).
+    async function captures(org) { const me = user(); return (await store.all()).filter((o) => o.kind === "group_capture" && o.user_id === me && (!org || o.org_id === org)); }
+    async function forget(who) { for (const o of await store.all()) if (o.user_id === who) await store.remove(o.seq); onChange(); }
+    return { add, sync, list, captures, retry, dismiss, forget, store, get running() { return running !== null; }, get retrying() { return timer !== null; } };
   }
 
   // ---- the lines on the farm's record ---------------------------------------------------------------------------
@@ -245,5 +274,5 @@
   }
   const stateWords = (s) => STATE_WORDS[s] || "";
 
-  return { DB, STORE, RETRY_FIRST_MS, RETRY_MAX_MS, MAX_ANSWERED_FAILURES, idbStore, memoryStore, captureOp, editOp, outcome, createQueue, lines, stateWords };
+  return { DB, STORE, RETRY_FIRST_MS, RETRY_MAX_MS, MAX_ANSWERED_FAILURES, idbStore, memoryStore, captureOp, groupCaptureOp, editOp, outcome, createQueue, lines, stateWords };
 });

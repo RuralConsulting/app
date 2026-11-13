@@ -34,6 +34,12 @@
     }
     const user = await FP.auth.user();
     FP.privacy.links();
+    // CAP1: opened with no coverage, by the last person signed in on this phone (or with a session that can't be refreshed offline):
+    // their groups as last read, so + and Photo work; captures are kept on the phone and sent once they are signed in again
+    if (!FP.demo?.active && navigator.onLine === false) {
+      const last = FP.captures?.lastPlaces();
+      if (last && (!user || user.id === last.user.id) && last.groups.length) { startOffline(user, last); return; }
+    }
     // V8: the privacy and terms note is open to everyone, signed in or not
     if (!user) { if (FP.privacy.isRoute(location.hash)) { FP.privacy.open(); return; } show("screen-signin"); $("#email").focus(); return; }
     if (!FP.demo?.active) {
@@ -68,10 +74,29 @@
     FP.groupSpace.setGroups(groups, user);
     FP.placeHome?.setPlaces({ farms: allFarms, groups });   // J2: the places Home's search may lead to
     FP.groupSpace.hasPortfolio = () => farms.length + groups.length > 1;
+    FP.captures?.signedIn(user, groups);   // CAP1: remembers the person's groups for an offline start, and sends what waits
     const asked = await staffRead;
     readyToRoute = true;
     if (early !== location.hash || asked) route();   // the farm already open stays as it is; anything else is routed now
     else if (earlySimple !== FP.simpleView.on()) route();   // V6: opened as the simple view, and the person turned out to be staff
+  }
+  // CAP1: the offline start. Nothing is read: the groups are the ones last read on this phone (names and roles), the simple view
+  // applies (staff can't be confirmed), and each place's sections draw what they can. Back in range, everything starts properly.
+  function startOffline(user, last) {
+    const who = user || last.user;
+    for (const w of $$(".who")) w.textContent = "Offline" + (who.email ? " · " + who.email : "");
+    for (const i of $$(".account-initials")) i.textContent = FP.accountMenu.initials(who);
+    allFarms = []; farms = []; groups = last.groups;
+    FP.farmSpace.setPortfolio(farms, who);
+    FP.groupSpace.setGroups(groups, who);
+    FP.placeHome?.setPlaces({ farms: [], groups });
+    FP.groupSpace.hasPortfolio = () => groups.length > 1;
+    FP.captures.offline(who);
+    // (the staff flag can't be read offline, so J2c's landing would give Places: a bare address opens the person's first group instead)
+    if (!location.hash || location.hash === "#" || location.hash === "#/") history.replaceState(null, "", FP.groupModel.href(groups[0].id, "home"));
+    readyToRoute = true;
+    route();
+    window.addEventListener("online", () => start(), { once: true });
   }
   // The address names one of the person's farms (a view of it): followed before the groups and the staff flag are known.
   const routed = () => (FP.demo?.active ? FP.demo.routeHash(location.hash) : location.hash);
@@ -226,6 +251,8 @@
     if (e.target.closest(".b-password")) { msg("#pw-msg", ""); show("screen-password"); $("#pw0").focus(); return; }
     if (!e.target.closest(".b-signout")) return;
     if (FP.demo?.active) { location.href = location.pathname + location.search; return; }
+    // CAP1: says what has not been sent (it would be lost) and clears this person's captures from the phone; staying signed in is a choice
+    if (FP.captures && !(await FP.captures.beforeSignOut())) return;
     FP.groupManage?.forget();   // ON3b: no group's queue outlives the sign-in
     await FP.auth.signOut(); location.hash = ""; location.reload();
   });

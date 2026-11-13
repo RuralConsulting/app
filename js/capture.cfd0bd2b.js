@@ -6,7 +6,7 @@
 (function (root) {
   const FP = root.FP, Q = FP.captureQueue;
   const uuid = () => root.crypto.randomUUID();
-  let queue = null, who = null, client = null, kept = true;
+  let queue = null, who = null, client = null, kept = true, held = false;
   const views = new Set();
   const changed = () => views.forEach((v) => v.refresh());
 
@@ -23,14 +23,21 @@
       remove: async (seq) => (await pick()).remove(seq), all: async () => (await pick()).all() };
   }
   // One queue per signed-in person; called when a farm opens and when the Create view mounts. Uploads what waits.
-  function start({ sb, user }) {
+  // CAP1: `hold` keeps what is saved on the phone without sending it: the app opened offline for the last person signed in on this
+  // phone, before their sign-in could be confirmed (main.js); it is sent once they are signed in (start again without hold).
+  function start({ sb, user, hold = false }) {
+    held = !!hold;
     if (!queue || who !== user.id || client !== sb) {
       who = user.id; client = sb;
-      queue = Q.createQueue({ store: store(), sb, user: () => who, online: () => root.navigator.onLine !== false, uuid, onChange: changed });
+      queue = Q.createQueue({ store: store(), sb, user: () => who, online: () => !held && root.navigator.onLine !== false, uuid, onChange: changed });
     }
     queue.sync().then(() => views.forEach((v) => v.reload()), () => {});
     return queue;
   }
+  // CAP1: whether this browser keeps what waits after it closes (IndexedDB), as far as is known yet
+  const keeps = () => kept;
+  // CAP1: listen for changes of the queue (a capture saved, sent, refused); returns a function that stops listening
+  function watch(fn) { const v = { refresh: fn, reload: fn }; views.add(v); return () => views.delete(v); }
   root.addEventListener("online", () => { if (queue) queue.sync().then(() => views.forEach((v) => v.reload()), () => {}); changed(); });
   root.addEventListener("offline", changed);
   // The app back in front (a phone puts it to sleep in a pocket): try what waits now rather than at the next retry.
@@ -134,5 +141,5 @@
     refresh(); reload();
     return { destroy() { views.delete(view); urls.forEach((u) => URL.revokeObjectURL(u)); box.remove(); }, refresh, reload, queue: q };
   }
-  FP.capture = { start, mount, get queue() { return queue; } };
+  FP.capture = { start, mount, keeps, watch, get queue() { return queue; }, get held() { return held; } };
 })(window);
