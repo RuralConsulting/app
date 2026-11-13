@@ -18,6 +18,8 @@
 // own fold (status superseded, tier not archive); the Download button saves a file under its original name (downloadName); data.canSupersede
 // (RCL staff who can edit) offers "Superseded by ..." in the move menu, and the database enforces it (guard_document_supersession).
 // The block calls nothing itself: the host's store does (app/js/document-files.js holds the reads and writes both hosts use).
+// PH3: with option explorer (both Files screens) the same rows are drawn as a file explorer: folders from each file's kind, then a
+// folder's files with the way up and one sort; the actions above are unchanged and reached the same way (data-* attributes).
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./registry.js") : root.FP.blocks, node ? require("../farm-model.js") : root.FP.farmModel,
@@ -202,9 +204,142 @@
     const n = list(data?.documents).length;
     return n === 0 ? "empty" : n < 3 ? "sparse" : "full";
   }
+  // ---- PH3: Files as a file explorer (folders, then files) ------------------------------------------------------------------------
+  // The owner's direction (13 Nov 2026): on a phone Files looks like a phone's Files app or Dropbox. There is no folder column in the
+  // database, so the folders are the categories the files already carry: their kind (doc_type), read with docTier's kind order, and a
+  // few title words for reference documents. A file sits in exactly one folder. Empty folders are not shown; with only one folder
+  // its files are listed straight away. The archive stays out of the folders (search finds it), as before; a superseded file sits in
+  // its kind's folder, after the current ones, and says so. A group's own files and what member farms shared (data.shared) are read
+  // exactly as before; the shared ones are their own folder. Who can see a file is unchanged: only what the host read is listed.
+  const FOLDERS = [["plans", "Plans"], ["consents", "Consents"], ["reports", "Reports"], ["maps", "Maps"], ["resources", "Resources"],
+    ["notes", "Notes and letters"], ["agreements", "Agreements"], ["other", "Other files"], ["shared", "Shared by member farms"]];
+  const FLAT_MAX = 6;
+  const folderLabel = (key) => (FOLDERS.find(([k]) => k === key) || [, "Files"])[1];
+  // Where a file goes, in this order (PH3, review of #537): (1) its own kind, when the kind says what it is (a plan, consent, report,
+  // map, agreement, soil fact sheet, or a letter or email, which stays with the letters whatever it is about); (2) for a file whose kind
+  // says nothing (notes, other, none): a consent word or a consent number (CRC...) in the title goes to Consents; (3) other title words
+  // (reference material, a plan, a map, a report); (4) notes to Notes and letters, anything else to Other files.
+  const CONSENT_WORD = /\bconsents?\b|\bCRC\s?\d/i;
+  // Reference material: a file whose title calls it a guide, protocol, template, form, handbook and the like ("resource consent" is a consent)
+  const RESOURCE = /\b(protocols?|guides?|guidance|handbooks?|manuals?|templates?|forms?|fact ?sheets?|factsheets?|how[\s-]to|toolkits?|references?|resources?(?!\s+consents?)|checklists? for)\b/i;
+  const PLAN_WORD = /\bplans?\b/i, REPORT_WORD = /\breports?\b|\bbudgets?\b|\bmonitoring\b|\bresults?\b/i, MAP_WORD = /\bmaps?\b/i;
+  const LETTERS = ["correspondence", "letter", "letters", "email", "e_mail"];
+  function folderOf(doc) {
+    const t = String(doc?.doc_type || "").toLowerCase().trim().replace(/[\s-]+/g, "_"), title = String(doc?.title || "");
+    // (1) its own kind
+    if (t === "agreement") return "agreements";
+    if (t === "smap_factsheet" || ["guidance", "reference", "resource"].includes(t)) return "resources";
+    if (LETTERS.includes(t)) return "notes";
+    if (t === "fep_audit") return "plans";
+    if (t === "consent_correspondence" || CONSENT.test(t)) return "consents";
+    if (["gis_artifact", "map_extract", "land_unit_map", "farm_map"].includes(t)) return "maps";
+    if (["group_update", "measurements"].includes(t) || (t && REPORT.test(t))) return "reports";
+    const c = M.docTier({ ...doc, tier: null, status: null });
+    if (c.tier === "primary") return ["plans", "consents", "reports", "maps", "reports", "reports"][c.weight] || "other";
+    // (2) consent words, (3) other title words
+    if (CONSENT_WORD.test(title)) return "consents";
+    if (RESOURCE.test(title)) return "resources";
+    if (PLAN_WORD.test(title)) return "plans";
+    if (MAP_WORD.test(title)) return "maps";
+    if (REPORT_WORD.test(title)) return "reports";
+    // (4)
+    if (["memo", "note", "notes"].includes(t)) return "notes";
+    return "other";
+  }
+  const nameOrder = (a, b) => String(M.docTitle(a.doc)).localeCompare(String(M.docTitle(b.doc)), "en-NZ", { sensitivity: "base", numeric: true }) || String(a.doc.id).localeCompare(String(b.doc.id));
+  // Within a folder: current files first, then superseded; each by the sort chosen (newest, the default, or name).
+  function sortItems(items, sort) {
+    const cmp = sort === "name" ? nameOrder : (a, b) => newest(a.doc, b.doc);
+    return [...items].sort((a, b) => (a.tier.tier === "superseded") - (b.tier.tier === "superseded") || cmp(a, b));
+  }
+  // { folders: [{ key, label, items }] } in FOLDERS order, empty ones left out; archived files are not in any folder.
+  function folders(docs, o = {}) {
+    const a = arrange(docs), by = new Map(FOLDERS.map(([k]) => [k, []]));
+    for (const p of a.all) if (p.tier.tier !== "archive") by.get(folderOf(p.doc)).push(p);
+    for (const doc of list(o.shared)) if (doc && doc.id != null) by.get("shared").push({ doc, tier: { tier: "shared" }, shared: true });
+    return { folders: FOLDERS.map(([key, label]) => ({ key, label, items: sortItems(by.get(key), o.sort) })).filter((f) => f.items.length), archive: a.archive };
+  }
+  // A short date and the size (or the kind when the size is not recorded): "1 Aug 2024 · 2.1 MB", "Shared 20 Sept 2026 · Ridge Road"
+  const dateOf = (d) => day(d.date_prepared) || day(d.period_end) || day(d.created_at);
+  function fileLine(p, data) {
+    const d = p.doc;
+    if (p.shared) return [text(d.attribution) || null, day(d.created_at) ? "shared " + M.date(day(d.created_at)) : null].filter(Boolean).join(" · ");
+    const kind = M.docKind(d.doc_type), when = dateOf(d), bytes = Number(d.size_bytes);
+    // a supporting file says which main file it is with (review of #537), quietly, after its date
+    const main = p.tier.tier === "supporting" && d.relates_to != null ? list(data.documents).find((x) => x && x.id === d.relates_to) : null;
+    return [supersededMark(d, data.documents), when ? M.date(when) : null, Number.isFinite(bytes) && bytes > 0 ? size(bytes) : !kind || kind === "Other" ? null : kind,
+      main ? "with " + M.docTitle(main) : null].filter(Boolean).join(" · ") || "No date recorded";
+  }
+  const ICON_OF_FOLDER = { plans: "plan", consents: "consent", reports: "report", maps: "mapdoc" };
+  const svg = (name, n = 20) => '<svg viewBox="0 0 24 24" width="' + n + '" height="' + n + '" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="' +
+    esc((I && (I.PATHS[name] || I.PATHS.file)) || "") + '"/></svg>';
+  // One file: its kind's icon, the name (a tap opens it), one quiet line; one quiet control at the right: "•••" for an editor (Download
+  // and where it sits), the download arrow for anyone else. The name's button covers the row, so the whole row is the tap target.
+  function fxFileHtml(p, o, data, note) {
+    const d = p.doc, title = M.docTitle(d), mine = o.selected != null && String(o.selected) === String(d.id);
+    const icon = p.shared ? "file" : ICON_OF_FOLDER[folderOf(d)] || iconOf(p);
+    const name = d.storage_path ? '<button type="button" class="doc-open fx-name" data-open-document="' + esc(d.id) + '">' + esc(title) + "</button>" : '<span class="fx-name">' + esc(title) + "</span>";
+    const end = !p.shared && data.canEdit ? '<button type="button" class="doc-move fx-more" data-doc-move="' + esc(d.id) + '" aria-expanded="false" aria-label="More for ' + esc(title) + '">' + svg("more") + "</button>"
+      : !p.shared && canDownload(d) ? '<button type="button" class="doc-download fx-get" data-download-document="' + esc(d.id) + '" aria-label="Download ' + esc(title) + '">' + svg("download") + "</button>" : "";
+    return '<li class="fx-file' + (mine ? " selected-record" : "") + (p.tier.tier === "superseded" ? " fx-old" : "") + '" data-item-id="' + esc(d.id) + '" data-doc-tier="' + esc(p.tier.tier) + '" tabindex="-1">' +
+      '<div class="fx-row"><span class="fx-icon" aria-hidden="true">' + svg(icon) + '</span><span class="fx-text">' + name +
+      '<small class="fx-line">' + esc([note, fileLine(p, data)].filter(Boolean).join(" · ")) + "</small></span>" + end + "</div>" + (p.shared ? "" : requestedHtml(data, d)) + "</li>";
+  }
+  const fxFolderHtml = (f) => '<li><button type="button" class="fx-row fx-folder" data-fx-open="' + esc(f.key) + '"><span class="fx-icon" aria-hidden="true">' + svg("files") +
+    '</span><span class="fx-text"><span class="fx-name">' + esc(f.label) + '</span></span><span class="fx-count">' + f.items.length + '<span class="visually-hidden"> ' + (f.items.length === 1 ? "file" : "files") + "</span></span></button></li>";
+  const SORTS = { newest: "Newest first", name: "By name" };
+  const sortHtml = (sort) => '<button type="button" class="fx-sort" data-fx-sort="' + (sort === "name" ? "newest" : "name") + '" aria-label="Sort: ' + esc(SORTS[sort] || SORTS.newest) + '. Change">' +
+    svg("filter", 16) + "<span>" + esc(SORTS[sort] || SORTS.newest) + "</span></button>";
+  // What the explorer shows: the folders, or one folder's files with the way up, or (a single folder) its files at the top.
+  // st: { folder, sort } (the person's place, kept by the live part); the files of a route's ?item= open in their folder.
+  function explorerBody(data, o, st = {}) {
+    const d = data || {}, f = folders(d.documents, { shared: d.shared, sort: st.sort });
+    if (!f.folders.length) return '<p class="fx-none">' + (list(d.documents).length ? "Every file here is archived; search to find one." : "No files yet.") + "</p>";
+    // a short list needs no folders: up to FLAT_MAX files (or one folder's worth) are listed straight away, newest first
+    const all = f.folders.flatMap((x) => x.items);
+    if (f.folders.length === 1 || all.length <= FLAT_MAX) {
+      const items = sortItems(all, st.sort);
+      return '<nav class="fx-crumbs" aria-label="Files"><span class="fx-here fx-total">' + esc(plural(items.length, "file", "files")) + "</span>" + (items.length > 1 ? sortHtml(st.sort) : "") + "</nav>" +
+        '<ul class="fx-list fx-files" data-fx-folder="">' + items.map((p) => fxFileHtml(p, o, d)).join("") + "</ul>";
+    }
+    const holding = o.selected != null ? f.folders.find((x) => x.items.some((p) => String(p.doc.id) === String(o.selected))) : null;
+    const key = st.folder === undefined && holding ? holding.key : st.folder;
+    const open = f.folders.find((x) => x.key === key);
+    if (!open) return '<ul class="fx-list fx-folders" aria-label="Folders">' + f.folders.map(fxFolderHtml).join("") + "</ul>";
+    const up = f.folders.length > 1 ? '<button type="button" class="fx-up" data-fx-up data-from="' + esc(open.key) + '">' + svg("back", 18) + "<span>Files</span></button>" +
+      '<span class="fx-sep" aria-hidden="true">/</span><h4 class="fx-here" aria-current="location">' + esc(open.label) + "</h4>" : '<h4 class="fx-here">' + esc(open.label) + "</h4>";
+    return '<nav class="fx-crumbs" aria-label="Where you are">' + up + (open.items.length > 1 ? sortHtml(st.sort) : "") + "</nav>" +
+      '<ul class="fx-list fx-files" data-fx-folder="' + esc(open.key) + '">' + open.items.map((p) => fxFileHtml(p, o, d)).join("") + "</ul>";
+  }
+  // Search across every file (the archive and the shared ones too), each with the folder it is in.
+  function explorerResults(data, o, q) {
+    const d = data || {}, docs = list(d.documents), words =String(q || "").toLowerCase().split(/\s+/).map(squash).filter(Boolean), whole = squash(q);
+    const found = search(docs, q).map((p) => ({ ...p, note: p.tier.tier === "archive" ? "Archived" : folderLabel(folderOf(p.doc)) }));
+    for (const doc of list(d.shared)) {
+      const hay = squash([doc.title, M.docKind(doc.doc_type), doc.attribution, doc.original_name].filter(Boolean).join(" "));
+      if (words.length && (words.every((w) => hay.includes(w)) || hay.includes(whole))) found.push({ doc, tier: { tier: "shared" }, shared: true, note: folderLabel("shared") });
+    }
+    if (!found.length) return '<p class="fx-none">Nothing matches “' + esc(String(q).trim()) + "”.</p>";
+    return '<ul class="fx-list fx-files fx-found">' + found.slice(0, MAX_RESULTS).map((p) => fxFileHtml(p, o, d, p.note)).join("") + "</ul>" +
+      (found.length > MAX_RESULTS ? '<p class="fx-none">' + found.length + " match; the first " + MAX_RESULTS + " are shown.</p>" : "");
+  }
+  function explorerHtml(d, o, ctx, docs) {
+    const h = ctx.level, title = text(d.title) || "Files", total = docs.length + list(d.shared).length;
+    const heading = "<h" + h + ' class="block-title' + (ctx.nested ? " visually-hidden" : "") + '">' + esc(title) + "</h" + h + ">";
+    const notice = text(d.notice) ? '<p class="doc-notice" role="status">' + esc(d.notice) + "</p>" : "";
+    const offered = text(d.readInHref) ? offerHtml(d.offer, d.readInHref, d.requests, d.userId) : "";
+    // a route that names an archived file opens with it found, as before
+    const picked = o.selected != null ? arrange(docs).archive.find((p) => String(p.doc.id) === String(o.selected)) : null;
+    const q = picked ? M.docTitle(picked.doc) : "";
+    const searchBox = total ? '<div class="fx-bar"><label class="fx-search">' + svg("search", 18) + '<span class="visually-hidden">Search files</span><input type="search" data-doc-search data-fx-search autocomplete="off" spellcheck="false" placeholder="Search files" value="' + esc(q) + '"></label></div>' : "";
+    return '<section class="documents-block fx" data-documents="' + docs.length + '">' + heading + notice + offered + searchBox +
+      '<div class="fx-body" aria-live="polite">' + (q ? explorerResults(d, o, q) : explorerBody(d, o)) + "</div>" + (d.canAdd ? addHtml() : "") + "</section>";
+  }
+
   function render(data, o, ctx) {
     const d = data || {}, docs = list(d.documents), h = ctx.level;
     const title = text(d.title) || "Files";
+    if (o.explorer) return explorerHtml(d, o, ctx, docs);
     if (!docs.length && !d.canAdd) return "";
     const a = arrange(docs, o);
     const heading = "<h" + h + ' class="block-title' + (ctx.nested ? " visually-hidden" : "") + '">' + esc(title) + "</h" + h + ">";
@@ -306,6 +441,11 @@
       others.map((p) => opt('data-doc-set="supporting" data-doc-under="' + esc(p.doc.id) + '"', "With " + M.docTitle(p.doc), here === "supporting" && doc.relates_to === p.doc.id)).join("") +
       opt('data-doc-set="archive"', "Archive", here === "archive") + (data?.canSupersede ? supersedeOptions(doc, others, opt) : "") + "</ul>";
   }
+  // PH3: an editor's "•••" in the explorer: Download first (one control per row instead of two), then where the file sits, as before.
+  function explorerMenuHtml(doc, data) {
+    const get = canDownload(doc) ? '<li><button type="button" data-download-document="' + esc(doc.id) + '">Download</button></li>' : "";
+    return moveHtml(doc, data).replace(/^(<ul class="doc-menu)(" data-doc-menu="[^"]*">)/, "$1 fx-menu$2" + get);
+  }
   // V5: staff only (the database refuses anyone else). A superseded file can be brought back; a current one names the issue that replaces it.
   const supersedeOptions = (doc, others, opt) => isSuperseded(doc) ? opt('data-doc-supersede=""', "Not superseded")
     : others.map((p) => opt('data-doc-supersede="' + esc(p.doc.id) + '"', "Superseded by " + M.docTitle(p.doc))).join("");
@@ -346,7 +486,13 @@
     const store = ctx.store || null, d = data || {};
     const primaries = () => { const a = arrange(list(d.documents)); return [...a.primaries, ...a.more].map((p) => p.doc); };
     const input = rootEl.querySelector("[data-doc-search]"), results = rootEl.querySelector(".doc-results");
-    input?.addEventListener("input", () => { results.innerHTML = resultsHtml(d, o, input.value); });
+    // PH3: the explorer keeps the person's place (folder, sort) on the host, so drawing the block again (after an upload) keeps it
+    const fx = rootEl.classList?.contains("fx") ? rootEl.querySelector(".fx-body") : null;
+    const place = fx ? (host.__fx ||= {}) : null;
+    const drawBody = () => { if (fx) fx.innerHTML = text(input?.value) ? explorerResults(d, o, input.value) : explorerBody(d, o, place); };
+    if (fx && (place.folder !== undefined || place.sort) && !text(input?.value)) drawBody();
+    if (fx) input?.addEventListener("input", drawBody);
+    else input?.addEventListener("input", () => { results.innerHTML = resultsHtml(d, o, input.value); });
     let items = [];
     const box = rootEl.querySelector(".doc-confirm"), drop = rootEl.querySelector(".doc-drop");
     async function choose(files) {
@@ -389,6 +535,19 @@
     });
     rootEl.addEventListener("click", async (e) => {
       if (e.target.closest("[data-doc-cancel]")) { closeConfirm(); return; }
+      // PH3: into a folder, up to the folders, and the one sort control (newest first, or by name)
+      const into = e.target.closest("[data-fx-open]"), up = e.target.closest("[data-fx-up]"), sort = e.target.closest("[data-fx-sort]");
+      if (fx && (into || up || sort)) {
+        if (into) place.folder = into.dataset.fxOpen;
+        if (up) place.folder = null;
+        if (sort) place.sort = sort.dataset.fxSort;
+        drawBody();
+        // the focus stays with the person: on the sort control, the first file of the folder, or the folder just left
+        const left = up ? fx.querySelector('[data-fx-open="' + CSS.escape(up.dataset.from || "") + '"]') : null;
+        (sort ? fx.querySelector("[data-fx-sort]") : into ? fx.querySelector(".fx-up, .fx-name") : left || fx.querySelector("[data-fx-open]"))?.focus();
+        if (into || up) rootEl.scrollIntoView?.({ block: "nearest" });
+        return;
+      }
       // FU4: "Read this plan in" asks once (the button is gone when the line is drawn again with the request on it).
       const readIn = e.target.closest("[data-doc-read-in]");
       if (readIn) {
@@ -410,12 +569,19 @@
         const doc = list(d.documents).find((x) => String(x.id) === save.dataset.downloadDocument);
         if (!doc || !store?.download || save.disabled) return;
         save.disabled = true;
+        // PH3 (review of #537): in the explorer the control keeps its icon; what happened is one quiet line under the row, read out
+        const said = (words) => {
+          const row = save.closest(".fx-file");
+          if (!row) { save.textContent = words; return; }
+          row.querySelector(".fx-said")?.remove();
+          row.querySelector(".fx-row").insertAdjacentHTML("afterend", '<p class="doc-msg fx-said" role="status">' + esc(words) + "</p>");
+        };
         try {
           const { url, name } = await store.download(doc);
           const link = Object.assign(document.createElement("a"), { href: url, download: name, rel: "noopener" });
           document.body.append(link); link.click(); link.remove();
-          save.textContent = "Download";
-        } catch { save.textContent = "Couldn't download it"; }
+          said(fx ? "Downloaded " + name + "." : "Download");
+        } catch { said("Couldn't download it"); }
         save.disabled = false;
         return;
       }
@@ -426,7 +592,8 @@
         for (const b of rootEl.querySelectorAll("[data-doc-move]")) b.setAttribute("aria-expanded", "false");
         if (open) return;
         const doc = list(d.documents).find((x) => String(x.id) === toggle.dataset.docMove);
-        toggle.closest(".doc").querySelector(".doc-head").insertAdjacentHTML("afterend", moveHtml(doc, d));
+        if (fx) toggle.closest(".fx-file").querySelector(".fx-row").insertAdjacentHTML("afterend", explorerMenuHtml(doc, d));
+        else toggle.closest(".doc").querySelector(".doc-head").insertAdjacentHTML("afterend", moveHtml(doc, d));
         toggle.setAttribute("aria-expanded", "true");
         return;
       }
@@ -455,9 +622,10 @@
       kinds: { type: "list", default: [] },                // only these document types (doc_type names); none = every kind
       limit: { type: "integer", default: null, min: 1, max: 200 },   // main documents shown before "n more"
       selected: { type: "string", default: null },         // the document to open and mark (a route's ?item=)
+      explorer: { type: "boolean", default: false },       // PH3: folders, then files (the Files screens of a farm and a group)
     },
     state, render, mounted,
   });
   return { block, arrange, sourceLine, search, resultsHtml, guessBatch, readDrop, saveChoices, offerHtml, openRequest, askedLine, heldPlan, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES,
-    downloadName, downloadHref };
+    downloadName, downloadHref, FOLDERS, FLAT_MAX, folderOf, folders, explorerBody, explorerResults, explorerMenuHtml, fileLine };
 });

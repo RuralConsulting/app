@@ -1263,8 +1263,8 @@
     const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.simpleView?.on() ? null : FP.href(M.href(farm, "onboarding")),
       requests: context.planRequests || [], userId: user?.id || null });
     handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => { const sentenceData = M.documents(context, FP.documentsBlock.arrange(context.documents)); return FP.simpleView?.on() ? { ...sentenceData, title: "Files" } : sentenceData; }, level: 2, href: FP.href }));
-    if (context.documents.length || editor())
-      handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null } },
+    // PH3: folders, then files; drawn with no files too, so the screen says so in one sentence
+    handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null, explorer: true } },
         { read: () => { const d = data(); documentsNotice = null; documentsOffer = []; return d; }, level: 3, nested: true, href: FP.href, store: documentStore(farm, () => handles) }));
     // FU4: the open requests are read once the view is up, and drawn when they arrive (unless a notice or a fresh offer is waiting to be shown).
     // UI1 (review of #504): never while files are waiting at the confirm step (drawing the block again would drop them): the requests

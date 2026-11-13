@@ -113,7 +113,8 @@
       } catch (e) { draw(null, message(e)); }
     }
     function line(r) {
-      const id = ids.get(r.member_number), body = [el("b", {}, r.business_name), el("small", {}, M().rosterLine(r))];
+      // PH3: the same row as People's members: a rounded-square avatar with the initials, the name, one quiet line
+      const id = ids.get(r.member_number), body = [el("span", { class: "crm-avatar crm-avatar-org", "aria-hidden": "true" }, M().initials(r.business_name) || "·"), el("b", {}, r.business_name), el("small", {}, M().rosterLine(r))];
       const row = rowIds.get(id);
       return el("li", { class: "crm-row" + (r.left_on ? " ended" : ""), "data-member": r.member_number },
         id && adviser ? el("button", { type: "button", "data-business": id, onclick: () => openInParent(id) }, ...body) : el("div", { class: "sg-row" }, ...body),

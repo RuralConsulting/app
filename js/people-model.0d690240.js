@@ -132,6 +132,39 @@
     };
     return [...(rows || [])].sort((a, b) => cmp(a, b) || name(a).localeCompare(name(b), "en-NZ", { sensitivity: "base" }));
   }
+  // ---- PH3: People as a contact list -----------------------------------------------------------------------------------------------
+  // The letter a name is listed under: its first letter without its macron or accent, in capitals ("Ōtira" under O, "de Lacy" under
+  // D); a name that starts with no letter (a number, a bracket) under "#", which comes last. Words in brackets are not read.
+  const bare = (name) => String(name ?? "").replace(/\([^)]*\)|\[[^\]]*\]/g, " ").trim();
+  function letterOf(name) {
+    const c = fold(bare(name) || name).charAt(0).toUpperCase();
+    return /[A-Z]/.test(c) ? c : "#";
+  }
+  // Two letters for a round avatar: the first letters of the first two words ("Aroha Example (synthetic)" AE), or the first two of a
+  // single word; company words (Ltd, Limited, Trust, The) are left out; macrons kept as written. "" when the name has no letters.
+  const COMPANY = /^(ltd|limited|trust|the|and|&|inc|co|company|partnership)$/i;
+  function initials(name) {
+    const words = bare(name).normalize("NFC").replace(/[^\p{L}\p{M}\p{N}\s'-]/gu, " ").split(/\s+/).filter((w) => w && !COMPANY.test(w) && /[\p{L}\p{N}]/u.test(w));
+    const first = (w) => Array.from(w.replace(/^[^\p{L}\p{N}]+/u, "").normalize("NFC"))[0] || "";
+    const letters = (w) => Array.from(w.normalize("NFC")).filter((ch) => /[\p{L}\p{N}]/u.test(ch));   // punctuation never counts ("'Quoted' Co" QU)
+    const out = words.length > 1 ? first(words[0]) + first(words[1]) : letters(words[0] || "").slice(0, 2).join("");
+    return out.toLocaleUpperCase("en-NZ");
+  }
+  // Names in the order a phone's contacts lists them: by letter (A to Z, then "#"), then by name with case, macrons and accents
+  // ignored (Ā sorts with A), numbers read as numbers. nameOf(row) gives the name.
+  function byName(nameOf = (r) => r.display_name ?? r.business_name) {
+    return (a, b) => {
+      const x = String(nameOf(a) ?? ""), y = String(nameOf(b) ?? ""), lx = letterOf(x), ly = letterOf(y);
+      return (lx === "#") - (ly === "#") || lx.localeCompare(ly) || bare(x).localeCompare(bare(y), "en-NZ", { sensitivity: "base", numeric: true }) || x.localeCompare(y, "en-NZ");
+    };
+  }
+  // The rows with a letter heading before each new letter: [{ letter }, row, row, { letter }, row ...] (the rows already in name order).
+  function withLetters(rows, nameOf = (r) => r.display_name ?? r.business_name) {
+    const out = [];
+    let at = null;
+    for (const r of rows || []) { const l = letterOf(nameOf(r)); if (l !== at) { out.push({ letter: l }); at = l; } out.push(r); }
+    return out;
+  }
   // The last contact, short, for the right of a row: "today", "yesterday", "5 days ago", "3 weeks ago", else the date; "None yet".
   const lastShort = (t, today) => (t ? ago(t, today) : "None yet");
 
@@ -375,7 +408,7 @@
   // Whose contact details these are: a sub-group's People shows names and numbers only.
   const contactsNote = (parentName) => "Contact details are kept by " + (parentName || "the parent group") + ".";
 
-  return { DEFAULT_FILTERS, STATUS_TEXT, filterChips, removeFilter, clearFilters, toggleLabel, sortDirectory, lastShort, ROLES, canSee, canArchive, KINDS, KIND_TEXT, DIRECTIONS, DIRECTED, FOLLOW_UPS, FOLLOW_TEXT, fold, plural, splitList, dayKey, whenText, dateText, ago,
+  return { DEFAULT_FILTERS, STATUS_TEXT, filterChips, removeFilter, clearFilters, toggleLabel, sortDirectory, lastShort, letterOf, initials, byName, withLetters, ROLES, canSee, canArchive, KINDS, KIND_TEXT, DIRECTIONS, DIRECTED, FOLLOW_UPS, FOLLOW_TEXT, fold, plural, splitList, dayKey, whenText, dateText, ago,
     followUp, topicsOf, searchDirectory, labels, searchPeople, whoWith, linkText, feedArgs, groupByDay, heading, loggedBy, toForm, toSave, PERSON_FIELDS, personForm, toPerson,
     detailsForm, toDetails, cell, toCsv, DIRECTORY_COLUMNS, FEED_COLUMNS, directoryCsv, feedCsv, fileName,
     isSubgroup, parentOf, canSeeTab, canWriteSubgroups, SUBGROUP_CAP, subgroupMapSize, subgroupIndex, inSubgroups, subgroupChips, addChoices, subgroupLabel, roster, rosterLine, contactsNote };

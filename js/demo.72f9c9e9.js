@@ -26,12 +26,14 @@
     const wqPage = new URLSearchParams(root.location.search).get("wq");
     // LT1: "?titles=1" adds two invented questions from the LINZ titles check to the group's To review
     const titles = new URLSearchParams(root.location.search).get("titles") === "1";
+    // PH3: "?people=long" adds forty more invented people to the group's People, so its contact list has letter headings and the A to Z jump
+    const longPeople = new URLSearchParams(root.location.search).get("people") === "long";
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -161,7 +163,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -234,7 +236,7 @@
       data.ask = [];
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
-    if (group) groupDemo(data, queue);
+    if (group) groupDemo(data, queue, longPeople);
     if (group && (overview === "full" || overview === "empty")) overviewDemo(data, overview);   // MC1
     if (group && titles) titleQuestionsDemo(data);   // LT1
     demoMaps(data, sparse);
@@ -337,7 +339,7 @@
     "consent.no_conditions": "propose", "consent.not_recorded": "propose", "fep.confirm_report": "propose", "fep.not_read": "propose" };
   const LEVELS = ["aggregated", "anonymous", "named"];
   const levelOf = (setting, share) => (share ? LEVELS[Math.min(LEVELS.indexOf(setting), LEVELS.indexOf(share))] : "none");
-  function groupDemo(data, queue = null) {
+  function groupDemo(data, queue = null, longPeople = false) {
     // The group's rows sit beside the farm's (merged into reads), so the farm's and the gallery's counts are unchanged.
     const t = data.groupTables = { organisations: [], org_members: [], record_types: [], entries: [], documents: [], obligations: [], places: [] }, at = (d) => d + "T09:30:00+12:00";
     // WQ4: the group's area, as the loader makes it (the preset's applies_to.area is this code)
@@ -353,8 +355,15 @@
       { id: "demo-g-e3", org_id: GROUP, type_id: "rt-note", body: "Private: the facilitator's own reminder (synthetic).", captured_at: at("2026-09-20"), visibility: "private" },
       { id: "demo-g-e4", org_id: GROUP, type_id: "rt-meeting", body: "Committee meeting: agreed the spring planting order (synthetic).", captured_at: at("2026-10-07"), visibility: "farm" });
     t.documents.push(
-      { id: "demo-g-d1", org_id: GROUP, title: "Catchment plan 2025 (synthetic)", doc_type: "memo", author_org: "HDLG (example)", date_prepared: "2025-06-30", created_at: "2025-07-02T00:00:00Z", tier: "primary", tiered_at: "2025-07-02T00:00:00Z", visibility: "farm", storage_path: "org/demo/plan.pdf" },
-      { id: "demo-g-d2", org_id: GROUP, title: "Water sampling protocol (synthetic)", doc_type: "memo", author_org: "HDLG (example)", date_prepared: "2026-03-01", created_at: "2026-03-02T00:00:00Z", tier: "primary", tiered_at: "2026-03-02T00:00:00Z", visibility: "farm", storage_path: "org/demo/protocol.pdf" });
+      { id: "demo-g-d1", org_id: GROUP, title: "Catchment plan 2025 (synthetic)", doc_type: "memo", author_org: "HDLG (example)", date_prepared: "2025-06-30", created_at: "2025-07-02T00:00:00Z", tier: "primary", tiered_at: "2025-07-02T00:00:00Z", visibility: "farm", storage_path: "org/demo/plan.pdf", size_bytes: 2412000, mime_type: "application/pdf" },
+      { id: "demo-g-d2", org_id: GROUP, title: "Water sampling protocol (synthetic)", doc_type: "memo", author_org: "HDLG (example)", date_prepared: "2026-03-01", created_at: "2026-03-02T00:00:00Z", tier: "primary", tiered_at: "2026-03-02T00:00:00Z", visibility: "farm", storage_path: "org/demo/protocol.pdf", size_bytes: 386000, mime_type: "application/pdf" },
+      // PH3: a few more invented files, so the group's Files shows its folders (a consent, a report, a map, reference documents, notes)
+      { id: "demo-g-d3", org_id: GROUP, title: "Consent to sample the creek at four sites (synthetic)", doc_type: "consent_decision", author_org: "Example Regional Council", date_prepared: "2024-11-20", created_at: "2024-12-01T00:00:00Z", tier: "primary", tiered_at: "2024-12-01T00:00:00Z", visibility: "farm", storage_path: "org/demo/consent.pdf", size_bytes: 1180000, mime_type: "application/pdf" },
+      { id: "demo-g-d4", org_id: GROUP, title: "Annual monitoring report 2025 (synthetic)", doc_type: "other", author_org: "HDLG (example)", date_prepared: "2025-12-12", created_at: "2025-12-15T00:00:00Z", tier: "primary", tiered_at: "2025-12-15T00:00:00Z", visibility: "farm", storage_path: "org/demo/report.pdf", size_bytes: 3650000, mime_type: "application/pdf" },
+      { id: "demo-g-d5", org_id: GROUP, title: "Catchment map, March 2026 (synthetic)", doc_type: "gis_artifact", author_org: "HDLG (example)", date_prepared: "2026-03-10", created_at: "2026-03-11T00:00:00Z", tier: "primary", tiered_at: "2026-03-11T00:00:00Z", visibility: "farm", storage_path: "org/demo/map.pdf", size_bytes: 5200000, mime_type: "application/pdf" },
+      { id: "demo-g-d6", org_id: GROUP, title: "Riparian planting guide (synthetic)", doc_type: "other", author_org: "HDLG (example)", date_prepared: "2025-04-02", created_at: "2025-04-03T00:00:00Z", tier: "primary", tiered_at: "2025-04-03T00:00:00Z", visibility: "farm", storage_path: "org/demo/guide.pdf", size_bytes: 940000, mime_type: "application/pdf" },
+      { id: "demo-g-d7", org_id: GROUP, title: "Fencing grant application form (synthetic)", doc_type: "other", author_org: "HDLG (example)", date_prepared: "2026-02-14", created_at: "2026-02-15T00:00:00Z", tier: "primary", tiered_at: "2026-02-15T00:00:00Z", visibility: "farm", storage_path: "org/demo/form.pdf", size_bytes: 120000, mime_type: "application/pdf" },
+      { id: "demo-g-d8", org_id: GROUP, title: "Committee minutes, August 2026 (synthetic)", doc_type: "memo", author_org: "HDLG (example)", date_prepared: "2026-08-05", created_at: "2026-08-06T00:00:00Z", tier: "primary", tiered_at: "2026-08-06T00:00:00Z", visibility: "farm", storage_path: "org/demo/minutes.pdf", size_bytes: 210000, mime_type: "application/pdf" });
     t.obligations.push(
       { id: "demo-g-o1", org_id: GROUP, code: "G1", summary: "Annual catchment monitoring report to the regional council (synthetic)", kind: "date", due_date: "2026-12-15", recurrence: "annual" },
       { id: "demo-g-o2", org_id: GROUP, code: "G2", summary: "Keep the group's sampling records with the lab results (synthetic)", kind: "practice", due_date: null, recurrence: null });
@@ -369,7 +378,7 @@
       sharedDocs: [{ id: "demo-g-sd1", farm: MEMBERS[0].id, title: "Riparian planting plan (synthetic)", doc_type: "memo", created_at: "2026-09-20T03:00:00Z", tier: "primary", storage_path: "demo/riparian.pdf" }] };
     manageDemo(data, queue);
     eventsDemo(data);
-    peopleDemo(data);
+    peopleDemo(data, longPeople);
     capturesDemo(data);
   }
   // CAP1: captures taken on a phone (public.captures), invented: the demo person's own, another member's shared with the group and one
@@ -485,7 +494,7 @@
   // PE1: the group's people, the people at its businesses, more about some businesses and an interaction log with follow-ups
   // (public.people, group_member_people, group_member_details, interactions, interaction_links), all invented, around the
   // fixture's date (29 Oct 2026): one follow-up due, one coming, one done, one cancelled entry, one imported call. Saved in memory.
-  function peopleDemo(data) {
+  function peopleDemo(data, long = false) {
     const pid = (n) => "de000000-0000-4000-8000-0000000005" + String(n).padStart(2, "0"), iid = (n) => "de000000-0000-4000-8000-0000000006" + String(n).padStart(2, "0");
     const B = (n) => GROUP_MEMBERS[n - 1].id, made = "2026-08-01T00:00:00Z", OTHER = "de000000-0000-4000-8000-000000000499";
     const person = (n, given, family, extra = {}) => ({ id: pid(n), org_id: GROUP, given_name: given, family_name: family, display_name: given + " " + family, job_title: null, emails: [], phones: [],
@@ -499,6 +508,13 @@
       person(6, "Fern", "Notreal (synthetic)", { archived_at: "2026-06-30T00:00:00Z", archived_by: USER, notes: "Sold up and left the catchment." }),
       person(7, "Hemi", "Invented (synthetic)", { job_title: "Committee chair", phones: ["021 000 0107"] }),
     ];
+    // PH3: forty more invented names (mixed case, macrons, one starting with a number), none linked to a member
+    if (long) {
+      const GIVEN = ["Ānaru", "amy", "Bryn", "Ōtira", "Caleb", "Wiremu", "Daisy", "émile", "Grace", "Hana", "Ihaia", "Jack", "Kiri", "Liam", "Mere", "Noah", "Olive", "Pita", "Quinn", "Rāwiri"];
+      const FAMILY = ["Sample (synthetic)", "de Lacy (synthetic)", "Example (synthetic)", "Placeholder (synthetic)"];
+      for (let n = 0; n < 40; n++) data.tables.people.push(person(10 + n, GIVEN[n % GIVEN.length], FAMILY[(n + Math.floor(n / GIVEN.length)) % FAMILY.length], { job_title: n % 3 ? null : "Contractor" }));
+      data.tables.people.push(person(50, "7 Oaks", "Trust (synthetic)", { job_title: "Neighbour" }));
+    }
     const link = (n, b, p, relationship, extra = {}) => ({ id: pid(50 + n), org_id: GROUP, group_member_id: B(b), person_id: pid(p), relationship, is_primary: false, started_on: null, ended_on: null,
       source: "manual", external_id: null, created_by: USER, created_at: made, updated_by: USER, updated_at: made, ...extra });
     data.tables.group_member_people = [link(1, 1, 1, "owner", { is_primary: true }), link(2, 1, 2, "manager"), link(3, 2, 3, "accounts", { is_primary: true }), link(4, 3, 4, "owner", { is_primary: true }),

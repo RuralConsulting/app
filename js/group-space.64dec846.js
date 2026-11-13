@@ -883,7 +883,9 @@
   function documentsView(data) {
     const wrap = el("section", { class: "group-documents", "data-view": "documents" }, el("h2", {}, "Files"));
     const own = el("div", { class: "block-host documents-host" });
-    wrap.append(el("h3", {}, "The group's files"), own);
+    wrap.append(own);
+    // PH3: one file explorer: the group's own files in folders by kind, and what member farms shared as a folder of its own (read as before)
+    const shared = () => data.sharedDocuments.map((d) => ({ ...d, attribution: G().attribution(d, data.members) }));
     // V5: the group's editors add files (the database's rule is the same: any role but plain member); staff who can edit mark a new issue as superseding an old one.
     const editable = G().canWrite(data.group.role), Files = FP.documentFiles, owner = { org_id: data.group.id };
     let handle = null;
@@ -894,14 +896,8 @@
       download: (doc) => Files.downloadLink(FP.sb, doc),
       async changed(message) { data.documents = await groupDocuments(FP.sb, data.group.id); notice = message || null; handle?.refresh(); notice = null; },
     };
-    handle = FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: {} }, { read: () => ({ documents: data.documents, canEdit: editable, canAdd: editable, canSupersede: editable && !!FP.ops?.isStaff?.(), notice }), level: 3, nested: true, href: FP.href, store });
+    handle = FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: { explorer: true } }, { read: () => ({ documents: data.documents, shared: shared(), canEdit: editable, canAdd: editable, canSupersede: editable && !!FP.ops?.isStaff?.(), notice }), level: 3, nested: true, href: FP.href, store });
     notice = null;
-    wrap.append(el("h3", {}, "Shared by member farms"));
-    if (data.sharedDocuments.length) {
-      wrap.append(el("ul", { class: "group-lines" }, ...data.sharedDocuments.map((d) => el("li", {},
-        d.storage_path ? el("button", { type: "button", class: "doc-open", "data-open-document": d.id }, d.title || "Untitled") : el("span", {}, d.title || "Untitled"),
-        el("small", {}, G().attribution(d, data.members) + " · shared " + G().shortDate(d.created_at))))));
-    } else wrap.append(el("p", {}, "No member farm has shared a file with the group."));
     wrap.addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");
       const doc = button && [...data.documents, ...data.sharedDocuments].find((d) => d.id === button.dataset.openDocument);

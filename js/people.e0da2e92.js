@@ -259,9 +259,18 @@
       const waiting = (k) => st.loading === "all" || (st.loading === "people" && k === "people");
       const count = (k) => (waiting(k) ? "…" : k === "businesses" ? M().searchDirectory(st.directory, { status: "current" }).length : M().searchPeople(st.people).length);
       const view = (label, attrs, on) => el("button", { type: "button", ...attrs, ...(on ? { "aria-current": "true" } : {}) }, label);
-      // the two lists as one switch (Members | People); the interaction log, follow-ups and To review (with its count) as one quiet row,
-      // every one in view on a phone too
-      box.append(el("nav", { class: "crm-views", "aria-label": "People views" },
+      // the two lists as one switch (Members | People); the interaction log, follow-ups and To review (with its count) as one quiet row.
+      // PH3: on a phone all of these sit behind one quiet control (the list shown, with its count), opened in place as plain rows; the
+      // A to Z jump beside it for a long list. A computer shows them openly, as before.
+      const shownLabel = st.tab === "businesses" ? "Members (" + count("businesses") + ")" : st.tab === "people" ? "People (" + count("people") + ")"
+        : "Contacts" + (st.contacts.rows ? " (" + MM().searchContacts(st.contacts.rows).length + ")" : "");
+      const nav = el("nav", { class: "crm-views", "aria-label": "People views" });
+      const toggle = el("button", { type: "button", class: "crm-views-toggle", "aria-expanded": "false", "aria-controls": "crm-views-panel",
+        onclick: () => { const open = nav.classList.toggle("open"); toggle.setAttribute("aria-expanded", String(open)); } },
+        el("span", {}, shownLabel), FP.icon("down", 16));
+      const jump = el("button", { type: "button", class: "crm-jump", hidden: true, "aria-haspopup": "dialog", "aria-expanded": "false", "aria-label": "Jump to a letter" }, "A–Z");
+      box.append(nav);
+      nav.append(el("div", { class: "crm-views-bar" }, toggle, jump), el("div", { class: "crm-views-panel", id: "crm-views-panel" },
         el("div", { class: "crm-switch", role: "group", "aria-label": "Show" },
           view("Members (" + count("businesses") + ")", { "data-tab": "businesses", onclick: () => { st.tab = "businesses"; draw(); } }, st.tab === "businesses"),
           view("People (" + count("people") + ")", { "data-tab": "people", onclick: () => { st.tab = "people"; draw(); } }, st.tab === "people"),
@@ -271,6 +280,10 @@
           view("Interactions", { "data-action": "feed", onclick: () => openFeed({}) }),
           view("Follow-ups", { "data-action": "follow-ups", onclick: () => openFeed({ followUp: "open" }) }),
           view(reviewLabel(), { "data-action": "review", onclick: () => openReview() }))));
+      // the letters a long name-ordered list has, each one tap to its heading (set by fill)
+      let letters = [];
+      jump.addEventListener("click", () => FP.sheet.open({ opener: jump, title: "Jump to", className: "crm-jump-sheet", body: (done) => el("div", { class: "crm-letters" },
+        ...letters.map((l) => el("button", { type: "button", "data-letter": l, onclick: () => { done(); const h = wrap.querySelector("#crm-letter-" + (l === "#" ? "num" : l)); h?.scrollIntoView({ block: "start" }); h?.focus?.(); } }, l))) }));
       // SG2: a sub-group's businesses (from its parent's register), above the sub-group's own records
       if (M().isSubgroup(group) && FP.subgroups) box.append(st.roster ||= FP.subgroups.roster(group, { sb, parent: opts.parent || null, person: opts.person, today: today(), now: opts.now || null }));
       if (st.failed) { box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the group's people just now: " + st.failed)); return box; }
@@ -402,15 +415,24 @@
       if (st.tab === "businesses" && st.defs.failed && !st.loading) box.append(el("p", { class: "group-fine", role: "status", "data-defs-failed": "" }, "Couldn't read " + st.defs.failed + ". Reload to try again."));
       box.append(list);
       // The first screenful is drawn at once and the rest of a long list on the next frame (a newer fill drops an older one's rest).
-      function listOf(shown, row) {
-        const ul = el("ul", { class: "crm-list" }, ...shown.slice(0, FIRST).map(row)), run = ++fills;
-        if (shown.length > FIRST) later(() => { if (run === fills && ul.isConnected) ul.append(...shown.slice(FIRST).map(row)); });
+      // PH3: in name order, a letter heading before each new letter once the list is long enough to need them (a phone's contacts; a
+      // computer's table has its sortable header instead); the A to Z jump for a long one
+      const LETTERED = 12, LONG = 30;
+      function listOf(shown, row, by = null) {
+        const nameOf = by && shown.length >= LETTERED ? by : null;
+        const items = nameOf ? M().withLetters(shown, nameOf) : shown;
+        const node = (x) => (x && x.letter && Object.keys(x).length === 1 ? el("li", { class: "crm-letter", id: "crm-letter-" + (x.letter === "#" ? "num" : x.letter), tabindex: "-1" }, x.letter) : row(x));
+        const ul = el("ul", { class: "crm-list" + (nameOf ? " crm-lettered" : "") }, ...items.slice(0, FIRST).map(node)), run = ++fills;
+        if (items.length > FIRST) later(() => { if (run === fills && ul.isConnected) ul.append(...items.slice(FIRST).map(node)); });
+        letters = nameOf ? items.filter((x) => x && x.letter && Object.keys(x).length === 1).map((x) => x.letter) : [];
+        jump.hidden = !(nameOf && shown.length > LONG && letters.length > 1);
         return ul;
       }
+      const byName = () => (st.sort.by || "name") === "name";
       // a computer's table header: each column sorts (again: the other way); the header stays as the list scrolls
       function head(cols) {
         return el("div", { class: "crm-thead" }, ...cols.map(([by, label]) => {
-          const on = st.sort.by === by;
+          const on = (st.sort.by || "name") === by;   // PH3: opened in name order, the Name column says so
           return el("button", { type: "button", class: "crm-th", "data-sort": by, ...(on ? { "aria-sort": st.sort.dir > 0 ? "ascending" : "descending" } : {}),
             onclick: () => { st.sort = on ? { by, dir: -st.sort.dir } : { by, dir: by === "last" ? -1 : 1 }; fill(); } },
             el("span", {}, label), on ? el("span", { class: "crm-sort", "aria-hidden": "true" }, st.sort.dir > 0 ? "↑" : "↓") : null);
@@ -430,21 +452,21 @@
           // one column template for the header and every row (set here in full, whatever the number of list fields)
           const table = el("div", { class: "crm-table" + (FP.membershipModel ? " mf-table" : "") + (extra > 0 ? " mf-wide" : ""),
             ...(FP.membershipModel ? { style: "--cols: " + MM().colTemplate(extra) + "; --mf-extra: " + extra } : {}) },
-            head(cols), listOf(shown, businessRow));
+            head(cols), listOf(shown, businessRow, byName() ? (r) => r.business_name : null));
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "member", "members")),
             shown.length ? (extra > 0 ? el("div", { class: "mf-scroll" }, table) : table)
               : el("p", { class: "crm-empty" }, st.directory.length ? "No member matches." : "The group's member register is empty."));
         } else if (st.tab === "contacts") {
           if (st.contacts.failed) { list.replaceChildren(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the contacts just now: " + st.contacts.failed)); return; }
           if (!st.contacts.rows) { list.replaceChildren(el("p", { class: "crm-count", role: "status" }, "Reading the group's other contacts…")); readContacts(); return; }
-          const shown = M().sortDirectory(MM().searchContacts(st.contacts.rows, st.contacts.q, st.archived), st.sort.by === "member" ? null : st.sort.by, st.sort.dir);
+          const shown = ordered(MM().searchContacts(st.contacts.rows, st.contacts.q, st.archived), st.sort.by === "member" ? null : st.sort.by);
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "contact", "contacts")),
-            shown.length ? el("div", { class: "crm-table crm-table-people" }, head([["name", "Name"], ["contact", "Organisation"], ["last", "Last contact"]]), listOf(shown, contactRow))
+            shown.length ? el("div", { class: "crm-table crm-table-people" }, head([["name", "Name"], ["contact", "Organisation"], ["last", "Last contact"]]), listOf(shown, contactRow, byName() ? (r) => r.display_name : null))
               : el("p", { class: "crm-empty" }, st.contacts.rows.length ? "Nobody matches." : "No other contacts yet. Add council staff, funders and contractors the group works with from the … menu."));
         } else {
-          const shown = M().sortDirectory(M().searchPeople(st.people, { q: st.pq, archived: st.archived }), st.sort.by === "member" ? null : st.sort.by, st.sort.dir);
+          const shown = ordered(M().searchPeople(st.people, { q: st.pq, archived: st.archived }), st.sort.by === "member" ? null : st.sort.by);
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "person", "people")),
-            shown.length ? el("div", { class: "crm-table crm-table-people" }, head([["name", "Name"], ["contact", "Members"], ["last", "Last contact"]]), listOf(shown, personRow))
+            shown.length ? el("div", { class: "crm-table crm-table-people" }, head([["name", "Name"], ["contact", "Members"], ["last", "Last contact"]]), listOf(shown, personRow, byName() ? (r) => r.display_name : null))
               : el("p", { class: "crm-empty" }, st.people.length ? "Nobody matches." : "No people recorded yet. Add one, or import the Apptivo contacts."));
         }
       }
@@ -467,12 +489,14 @@
         el("span", {}, c.subgroup_name), el("small", {}, String(Number(c.current_businesses) || 0)))))),
         ...(s.truncated ? [el("p", { class: "group-fine" }, "Only the first " + M().SUBGROUP_CAP.toLocaleString("en-NZ") + " sub-group places are read.")] : [])];
     }
+    // PH3: a round avatar with the initials (a member business's is a rounded square, so members and people read apart); for sight only
+    const avatar = (name, org = false) => el("span", { class: "crm-avatar" + (org ? " crm-avatar-org" : ""), "aria-hidden": "true" }, M().initials(name) || "·");
     // A business: its name (a dot before it when a follow-up is due), member number and primary contact, the last contact at the right
     function businessRow(r) {
       const due = Number(r.due_follow_ups) || 0, last = M().lastShort(r.last_interaction_at, today());
       return el("li", { class: "crm-row" + (r.ended_at ? " ended" : "") },
         el("button", { type: "button", "data-business": r.group_member_id, onclick: () => openBusiness(r.group_member_id) },
-          el("span", { class: "crm-c-name" }, due ? el("span", { class: "crm-due-dot", title: M().plural(due, "follow-up", "follow-ups") + " due" }) : null,
+          el("span", { class: "crm-c-name" }, avatar(r.business_name, true), due ? el("span", { class: "crm-due-dot", title: M().plural(due, "follow-up", "follow-ups") + " due" }) : null,
             el("b", {}, r.business_name), due ? el("span", { class: "visually-hidden" }, " " + M().plural(due, "follow-up", "follow-ups") + " due") : null,
             r.ended_at ? el("span", { class: "crm-badge" }, "Ended") : null),
           // (a computer's table heads the column "No.": the word Member is for a phone's row and for screen readers)
@@ -489,16 +513,23 @@
           el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), last)));
     }
     // M1b: the directory as it is shown (search, PE1's and SG2's filters, then membership type and fields; sorted)
+    // PH3: by name unless a column was chosen, as a phone's contacts are (letters first, macrons and case ignored)
     function shownMembers() {
       let rows = M().searchDirectory(st.directory, { ...st.filters, subgroups: st.sg.chosen, subgroupIndex: st.sg.index });
       if (FP.membershipModel) rows = MM().filterRows(rows, st.filters);
+      if ((st.sort.by || "name") === "name") return ordered(rows, "name", (r) => r.business_name);
       return (FP.membershipModel && MM().sortBy(rows, st.sort.by, st.sort.dir, st.defs.fields)) || M().sortDirectory(rows, st.sort.by, st.sort.dir);
+    }
+    function ordered(rows, by, nameOf = (r) => r.display_name) {
+      if ((by || "name") !== "name") return M().sortDirectory(rows, by, st.sort.dir);
+      const cmp = M().byName(nameOf), dir = st.sort.by === "name" ? st.sort.dir : 1;
+      return [...rows].sort((a, b) => cmp(a, b) * dir);
     }
     // M1b: an other contact: name, organisation and kind, last contact
     function contactRow(c) {
       return el("li", { class: "crm-row" + (c.archived_at ? " ended" : "") },
         el("button", { type: "button", "data-person": c.person_id, onclick: () => openPerson(c.person_id) },
-          el("span", { class: "crm-c-name" }, el("b", {}, c.display_name), c.archived_at ? el("span", { class: "crm-badge" }, "Archived") : null),
+          el("span", { class: "crm-c-name" }, avatar(c.display_name), el("b", {}, c.display_name), c.archived_at ? el("span", { class: "crm-badge" }, "Archived") : null),
           el("span", { class: "crm-c-contact" }, MM().contactLine(c) || "No organisation recorded"),
           el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), M().lastShort(c.last_interaction_at, today()))));
     }
@@ -553,7 +584,7 @@
     function personRow(p) {
       return el("li", { class: "crm-row" + (p.archived_at ? " ended" : "") },
         el("button", { type: "button", "data-person": p.person_id, onclick: () => openPerson(p.person_id) },
-          el("span", { class: "crm-c-name" }, el("b", {}, p.display_name), p.archived_at ? el("span", { class: "crm-badge" }, "Archived") : null),
+          el("span", { class: "crm-c-name" }, avatar(p.display_name), el("b", {}, p.display_name), p.archived_at ? el("span", { class: "crm-badge" }, "Archived") : null),
           el("span", { class: "crm-c-contact" }, [p.job_title, (p.businesses || []).map((b) => b.business_name + (b.relationship ? " (" + b.relationship + ")" : "")).join(", ") || "No member"].filter(Boolean).join(" · ")),
           el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), M().lastShort(p.last_interaction_at, today()))));
     }
@@ -581,18 +612,36 @@
       if (d?.physical_address) out.push(el("dt", {}, "Physical"), el("dd", {}, d.physical_address));
       return out;
     }
+    // PH3: the head of a member's or a person's page, like a phone's contact card: a round avatar (a member's is a rounded square), the
+    // name, and one quiet line
+    // (review of #537: lighter) the avatar beside the name, its one line and Call · Text · Email as plain quiet words, in one band
+    function cardHead(name, line, org, badge, ways = null) {
+      return el("div", { class: "crm-card-head" }, el("span", { class: "crm-avatar crm-avatar-big" + (org ? " crm-avatar-org" : ""), "aria-hidden": "true" }, M().initials(name) || "·"),
+        el("div", { class: "crm-card-name" }, el("h3", {}, name, badge || null), line ? el("p", { class: "crm-sub" }, line) : null, ways));
+    }
+    // Call, text and email as plain actions, from the first phone and email recorded (what this page already read; nothing more)
+    function reach(d) {
+      const phone = (d?.phones || [])[0], email = (d?.emails || [])[0], dial = phone ? phone.replace(/[^\d+]/g, "") : "";
+      const links = [dial ? el("a", { href: "tel:" + dial, class: "crm-reach-link", "data-reach": "call" }, "Call") : null,
+        dial ? el("a", { href: "sms:" + dial, class: "crm-reach-link", "data-reach": "text" }, "Text") : null,
+        email ? el("a", { href: "mailto:" + email, class: "crm-reach-link", "data-reach": "email" }, "Email") : null].filter(Boolean);
+      return links.length ? el("div", { class: "crm-reach", role: "group", "aria-label": "Get in touch" }, ...links.flatMap((a, n) => (n ? [el("span", { class: "crm-reach-sep", "aria-hidden": "true" }, "·"), a] : [a]))) : null;
+    }
     function businessScreen() {
       const p = st.page || {};
       if (p.loading) return el("div", {}, backButton(), el("p", { class: "group-status", role: "status" }, "Reading the member…"));
       if (p.failed) return el("div", {}, backButton(), el("p", { role: "alert", class: "crm-failed" }, "Couldn't read this member: " + p.failed));
       const b = p.business, d = p.details || {}, people = p.people || [], mem = p.membership;
+      // PH3: a contact card's head: the avatar and name, one quiet line, call, text and email as plain actions, then the one filled
+      // button with the quieter actions under "…"
       const box = el("article", { class: "crm-page", "data-business": b.id }, backButton(),
-        el("h3", {}, b.business_name, b.ended_at ? el("span", { class: "crm-badge" }, "Ended") : null),
-        el("p", { class: "crm-sub" }, ["Member " + b.member_number, d.trading_name ? "trading as " + d.trading_name : null, d.status].filter(Boolean).join(" · ")),
+        cardHead(b.business_name, ["Member " + b.member_number, d.trading_name ? "trading as " + d.trading_name : null, d.status].filter(Boolean).join(" · "), true,
+          b.ended_at ? el("span", { class: "crm-badge" }, "Ended") : null, reach(d)),
         el("div", { class: "crm-actions" },
           el("button", { type: "button", class: "primary", "data-action": "log", onclick: () => openLog(null, [{ kind: "business", id: b.id, name: b.business_name, member_number: b.member_number }]) }, "Log an interaction"),
-          el("button", { type: "button", class: "secondary", "data-action": "edit-details", onclick: () => go("details-form", { form: M().detailsForm(p.details), target: b }) }, "Edit details"),
-          el("button", { type: "button", class: "secondary", "data-action": "add-person", onclick: () => openPersonForm(null, b) }, "Add a person here")));
+          FP.sheet.moreButton("More for " + b.business_name, [
+            { label: "Edit details", icon: "create", action: "edit-details", run: () => go("details-form", { form: M().detailsForm(p.details), target: b }) },
+            { label: "Add a person here", icon: "person", action: "add-person", run: () => openPersonForm(null, b) }])));
       // M1b: in the product page's order: contact details (and the people linked), membership, tags (sub-groups and labels), where
       // they are at (the group's own fields), notes, interactions, then its land, files and records
       const facts = contactLines(d);
@@ -646,7 +695,7 @@
     }
     function linkedPerson(x, b) {
       return el("li", { "data-link": x.link_id },
-        el("button", { type: "button", class: "crm-person", "data-person": x.person_id, onclick: () => openPerson(x.person_id) },
+        el("button", { type: "button", class: "crm-person", "data-person": x.person_id, onclick: () => openPerson(x.person_id) }, avatar(x.display_name),
           el("span", { class: "crm-row-main" }, el("b", {}, x.display_name), x.is_primary ? el("span", { class: "crm-badge" }, "Primary") : null, x.archived ? el("span", { class: "crm-badge" }, "Archived") : null),
           el("small", {}, [x.relationship, x.job_title, (x.phones || [])[0], (x.emails || [])[0], x.current ? null : "until " + M().dateText(x.ended_on)].filter(Boolean).join(" · "))),
         x.current ? el("span", { class: "crm-link-actions" },
@@ -691,15 +740,21 @@
       if (p.failed) return el("div", {}, backButton(), el("p", { role: "alert", class: "crm-failed" }, "Couldn't read this person: " + p.failed));
       const x = p.person, archived = !!x.archived_at, current = (p.businesses || []).filter((b) => b.current), past = (p.businesses || []).filter((b) => !b.current);
       const box = el("article", { class: "crm-page", "data-person": x.id }, backButton(),
-        el("h3", {}, x.display_name, archived ? el("span", { class: "crm-badge" }, "Archived") : null),
-        x.job_title || x.organisation_name || x.contact_kind ? el("p", { class: "crm-sub" }, [x.job_title, FP.membershipModel ? MM().contactLine({ organisation_name: x.organisation_name, contact_kind: x.contact_kind }) : null].filter(Boolean).join(" · ")) : null);
-      const actions = el("div", { class: "crm-actions" });
-      if (!archived) actions.append(
-        el("button", { type: "button", class: "primary", "data-action": "log", onclick: () => openLog(null, [{ kind: "person", id: x.id, name: x.display_name },
-          ...current.filter((b) => b.is_primary || current.length === 1).map((b) => ({ kind: "business", id: b.group_member_id, name: b.business_name, member_number: b.member_number }))]) }, "Log an interaction"),
-        el("button", { type: "button", class: "secondary", "data-action": "edit-person", onclick: () => openPersonForm(x, null) }, "Edit"));
-      if (M().canArchive(group.role, x, me)) actions.append(el("button", { type: "button", class: "secondary", "data-action": archived ? "restore" : "archive", onclick: () => setArchived(x, !archived) }, archived ? "Restore" : "Archive"));
-      box.append(actions);
+        cardHead(x.display_name, [x.job_title, FP.membershipModel ? MM().contactLine({ organisation_name: x.organisation_name, contact_kind: x.contact_kind }) : null].filter(Boolean).join(" · "), false,
+          archived ? el("span", { class: "crm-badge" }, "Archived") : null, archived ? null : reach(x)));
+      // PH3: the one filled button; Edit and Archive (or Restore) under "…"
+      const actions = el("div", { class: "crm-actions" }), more = [];
+      if (!archived) {
+        actions.append(el("button", { type: "button", class: "primary", "data-action": "log", onclick: () => openLog(null, [{ kind: "person", id: x.id, name: x.display_name },
+          ...current.filter((b) => b.is_primary || current.length === 1).map((b) => ({ kind: "business", id: b.group_member_id, name: b.business_name, member_number: b.member_number }))]) }, "Log an interaction"));
+        more.push({ label: "Edit", icon: "create", action: "edit-person", run: () => openPersonForm(x, null) });
+      }
+      if (M().canArchive(group.role, x, me)) {
+        if (archived) actions.append(el("button", { type: "button", class: "secondary", "data-action": "restore", onclick: () => setArchived(x, false) }, "Restore"));
+        else more.push({ label: "Archive", hint: "They stay on record and can be restored", icon: "close", action: "archive", run: () => setArchived(x, true) });
+      }
+      if (more.length) actions.append(FP.sheet.moreButton("More for " + x.display_name, more));
+      if (actions.childElementCount) box.append(actions);
       if (archived) box.append(el("p", { class: "group-fine" }, "Archived " + G().shortDate(x.archived_at) + ". An archived person stays on record with their interactions; restore them to change anything."));
       const facts = contactLines(x);
       box.append(el("section", { class: "crm-section" }, el("h4", {}, "Contact details"),
@@ -707,7 +762,7 @@
         x.notes ? el("p", { class: "crm-notes" }, x.notes) : null,
         x.user_id ? el("p", { class: "group-fine" }, "Has a sign-in to this platform.") : null,
         x.source && x.source !== "manual" ? el("p", { class: "group-fine" }, "First recorded from " + (x.source === "apptivo" ? "Apptivo" : x.source) + ".") : null));
-      const bizItem = (b) => el("li", {}, el("button", { type: "button", class: "crm-person", "data-business": b.group_member_id, onclick: () => openBusiness(b.group_member_id) },
+      const bizItem = (b) => el("li", {}, el("button", { type: "button", class: "crm-person", "data-business": b.group_member_id, onclick: () => openBusiness(b.group_member_id) }, avatar(b.business_name, true),
         el("span", { class: "crm-row-main" }, el("b", {}, b.business_name), b.is_primary ? el("span", { class: "crm-badge" }, "Primary") : null),
         el("small", {}, ["Member " + b.member_number, b.relationship, b.current ? null : "until " + M().dateText(b.ended_on)].filter(Boolean).join(" · "))));
       box.append(el("section", { class: "crm-section" }, el("h4", {}, "Members (" + current.length + ")"),

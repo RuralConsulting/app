@@ -174,6 +174,67 @@
 /* The Documents view: its sentence, then the block, as two panels with the standing answers' gap. */
 .documents-view { display: grid; gap: 10px; }
 
+/* PH3: Files as a file explorer (documents.js, option explorer): a search field, then folders (a folder icon, the name, the count), or
+   one folder's files (a type icon, the name, one quiet line, one quiet control) under a way back up. Plain rows with hairlines in one
+   outline, no box around each; ink for controls, no accent colour. Every control is a 44 px target. Selectors carry .fx so they are
+   stronger than the older Files rules in ui.css (which loads last). */
+.documents-block.fx { padding: 0; border: 0; background: none; }
+.documents-block.fx > .doc-notice, .documents-block.fx > .doc-offer { margin: 0 0 var(--s-3); }
+.fx-bar { margin: 0 0 var(--s-3); }
+.fx-search { position: relative; display: block; }
+.fx-search > svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.documents-block.fx .fx-search input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 12px 8px 38px; border: 1px solid var(--field-border, var(--rule)); border-radius: var(--radius-s, 8px);
+  background: var(--panel); color: var(--ink); font: inherit; }
+.documents-block.fx .fx-search input::placeholder { color: var(--ink-3); }
+.fx-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.fx-list > li + li { border-top: 1px solid var(--rule-soft, var(--rule)); }
+.fx-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 4px 6px 14px; box-sizing: border-box; }
+.documents-block.fx button.fx-folder { width: 100%; padding-right: 16px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.documents-block.fx button.fx-folder:hover, .fx-file:has(.fx-name:hover) .fx-row { background: var(--fill); }
+.fx-icon { flex: none; display: grid; place-items: center; width: 24px; color: var(--ink-2); }
+.fx-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.documents-block.fx .fx-name { all: unset; color: var(--ink); font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; cursor: default;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.documents-block.fx button.fx-name { cursor: pointer; }
+.documents-block.fx button.fx-name:hover { text-decoration: none; }
+/* the name's button covers the row, so the whole row opens the file; the control at the right sits above it */
+.documents-block.fx button.fx-name::after { content: ""; position: absolute; inset: 0; }
+.documents-block.fx button.fx-name:focus-visible { outline: none; }
+.documents-block.fx button.fx-name:focus-visible::after { outline: 2px solid var(--focus, var(--ink)); outline-offset: -2px; border-radius: var(--radius-s, 6px); }
+.fx-line { color: var(--ink-3); font-size: var(--text-small); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-old .fx-name { color: var(--ink-2); }
+.fx-count { flex: none; color: var(--ink-3); font-size: var(--text-small); }
+.documents-block.fx :is(.fx-more, .fx-get) { position: relative; z-index: 1; flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: 0; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--ink-2); font-size: inherit; cursor: pointer; }
+.documents-block.fx :is(.fx-more, .fx-get):hover, .documents-block.fx .fx-more[aria-expanded="true"] { background: var(--fill); color: var(--ink); }
+.fx-file .doc-requested { margin: -4px 0 8px 50px; }
+.fx-crumbs { display: flex; align-items: center; gap: 6px; min-height: 44px; margin: 0 0 var(--s-2); }
+.documents-block.fx .fx-up { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin-left: -6px; padding: 0 6px 0 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.documents-block.fx .fx-up:hover { color: var(--ink); }
+.fx-sep { color: var(--ink-3); }
+.documents-block.fx .fx-here.fx-total { font: 500 var(--text-small)/1.3 var(--f-ui); color: var(--ink-3); }
+.documents-block.fx .fx-here { flex: 1; min-width: 0; margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); color: var(--ink); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.documents-block.fx .fx-sort { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-left: auto; padding: 0 2px 0 8px; border: 0; background: none; color: var(--ink-2);
+  font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; white-space: nowrap; }
+.documents-block.fx .fx-sort:hover { color: var(--ink); }
+.fx-none { margin: var(--s-2) 0; color: var(--ink-2); }
+.fx-found { margin-top: var(--s-2); }
+.documents-block.fx .fx-menu { margin: 0 8px 8px 50px; }
+.documents-block.fx .fx-menu button { min-height: 44px; }
+.documents-block.fx .doc-msg { margin: 0 14px 8px 50px; }
+.documents-block.fx .doc-add { margin-top: var(--s-4); }
+@media (max-width: 760px) {
+  /* a phone: the round + adds a file (it hands the files to this input), so the drop-zone is kept for it but not drawn; the list ends
+     clear of the + */
+  .documents-block.fx .doc-drop { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+  .documents-block.fx { padding-bottom: 72px; }
+  /* a farm's Files on a phone: the explorer under the plain heading "Files" (the sentence, and the panel around it, are for a computer) */
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel { padding: 0; border: 0; background: none; box-shadow: none; }
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel > :not(h2) { display: none; }
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel > h2 { margin: 6px 0 0; font: 700 var(--text-heading)/1.2 var(--f-head); }
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel > h2 a { color: inherit; text-decoration: none; }
+}
+
 /* Chart block (B8): hand-drawn SVG. Series are told apart by line style and marker shape as well as colour; a censored result is
    an open triangle and the line into it is dotted, so it is never read as an exact value. Band ranges are shaded by the data given. */
 .chart-block { background: var(--panel); color: var(--ink); padding: 16px; border: 1px solid var(--rule); border-radius: var(--radius); }

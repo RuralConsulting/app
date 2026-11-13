@@ -226,3 +226,114 @@
 @media (min-width: 761px) {
   .ms-mark .ms-form-actions button { width: auto; }
 }
+
+/* ---- PH3: People as a contact list (people.js): a round avatar with the initials, the name and one quiet line; letter headings in
+   name order; the views behind one quiet control on a phone; a member's or a person's page opens like a contact card. One outline
+   around a set at most, hairlines between rows, ink for controls. Selectors start .group-people so they win over ui.css (loaded last). */
+.crm-avatar { flex: none; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--fill); color: var(--ink-2);
+  font: 600 var(--text-small)/1 var(--f-ui); letter-spacing: .02em; text-transform: uppercase; }
+.crm-avatar-org { border-radius: 10px; }
+.crm-avatar-big { width: 56px; height: 56px; font-size: var(--text-heading); }
+.crm-avatar-big.crm-avatar-org { border-radius: 14px; }
+.crm-views-bar, .crm-letter { display: none; }
+.group-people .crm-c-name .crm-avatar { align-self: center; width: 28px; height: 28px; font-size: var(--text-small); letter-spacing: 0; }
+.group-people .crm-c-name .crm-avatar-org { border-radius: 7px; }
+
+/* a member's or a person's page: the head of a contact card, then Call, Text and Email in one outline */
+.crm-card-head { display: flex; align-items: flex-start; gap: 14px; margin: 8px 0 4px; }
+.crm-card-name { min-width: 0; }
+.group-people .crm-card-name h3 { margin: 0; }
+.group-people .crm-card-name .crm-sub { margin: 2px 0 0; }
+.crm-reach { display: flex; flex-wrap: wrap; align-items: center; gap: 0 2px; margin: 0; }
+.crm-reach-link { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: var(--ink); font-weight: 500; text-decoration: none; }
+.crm-reach-link:first-child { padding-left: 0; }
+/* the hit area is at least 44 px wide around a short word ("Call"), without spacing the words apart */
+.crm-reach-link::after { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; min-width: 44px; width: 100%; transform: translateX(-50%); }
+.crm-reach-link:hover { text-decoration: underline; }
+.crm-reach-link:focus-visible { outline: 2px solid var(--focus, var(--ink)); outline-offset: 2px; border-radius: 4px; }
+.crm-reach-sep { color: var(--ink-3); }
+.group-people .crm-actions .more-button { flex: none; }
+
+/* the people at a member, the members a person is at: the same rows, in one outline */
+.group-people .crm-people { gap: 0; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.group-people .crm-people > li + li { border-top: 1px solid var(--rule-soft); }
+.group-people .crm-people .crm-person { grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; row-gap: 1px; align-items: center; min-height: 56px; padding: 8px 14px;
+  border: 0; border-radius: 0; background: none; }
+.group-people .crm-people .crm-person:hover, .group-people .crm-people .crm-person:focus-visible { background: var(--fill); border-color: var(--clear); }
+.group-people .crm-person > .crm-avatar { grid-row: 1 / span 2; }
+.group-people .crm-person > :not(.crm-avatar) { grid-column: 2; }
+.group-people .crm-person .crm-row-main b { font-weight: 600; }
+.group-people .crm-people .crm-badge { margin: 0; padding: 0; border: 0; color: var(--ink-3); font-size: var(--text-small); }
+.group-people .crm-people .crm-badge::before { content: "· "; }
+.group-people .crm-link-actions { padding: 0 14px 6px 66px; }
+
+@media (max-width: 760px) {
+  /* the title row: the round + is the way to log a call or add a person on a phone, so the title row carries only "…" */
+  .group-people .crm-titlebar button.primary { display: none; }
+  /* search first, then the list shown (one quiet control holding the views), then the list */
+  .group-people .crm-directory { display: flex; flex-direction: column; }
+  .group-people .crm-directory > .crm-searchbar { order: -2; }
+  .group-people .crm-directory > .crm-views { order: -1; display: block; margin: var(--s-2) 0 0; }
+  .crm-views-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
+  .group-people .crm-views-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 8px 0 0; border: 0; background: none; color: var(--ink);
+    font: 600 var(--text-body)/1.2 var(--f-ui); cursor: pointer; }
+  .group-people .crm-views-toggle svg { color: var(--ink-3); transition: transform .15s; }
+  .group-people .crm-views.open .crm-views-toggle svg { transform: rotate(180deg); }
+  .group-people .crm-jump { min-width: 44px; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--ink-2); font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; }
+  .group-people .crm-jump[hidden] { display: none; }
+  .crm-views-panel { display: none; }
+  .group-people .crm-views.open .crm-views-panel { display: block; margin: 2px 0 var(--s-2); border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+  .group-people .crm-views-panel :is(.crm-switch, .crm-also) { display: block; padding: 0; border-radius: 0; background: none; box-shadow: none; }
+  .group-people .crm-views-panel button { display: flex; align-items: center; width: 100%; min-height: 48px; padding: 0 14px; border: 0; border-radius: 0; background: none; color: var(--ink);
+    font: 400 var(--text-body)/1.2 var(--f-ui); text-align: left; text-decoration: none; cursor: pointer; }
+  .group-people .crm-views-panel .crm-also button, .group-people .crm-views-panel .crm-switch button + button { border-top: 1px solid var(--rule-soft); }
+  .group-people .crm-views-panel .crm-also { border-top: 1px solid var(--rule); }
+  .group-people .crm-views-panel button[aria-current] { background: none; color: var(--ink); font-weight: 600; }
+  .group-people .crm-views-panel button[aria-current]::after { content: "✓"; margin-left: auto; }
+  .group-people .crm-views-panel button:hover { background: var(--fill); }
+  .group-people .crm-directory .crm-count { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+  /* the rows: the avatar at the left across both lines, the name, one quiet line; hairlines in one outline */
+  .group-people .crm-table .crm-list { margin-top: var(--s-1); background: none; box-shadow: none; border: 1px solid var(--rule); }
+  .group-people .crm-table .crm-row > button { position: relative; min-height: 60px; padding-left: 66px; align-content: center; }
+  .group-people .crm-table .crm-c-name .crm-avatar { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; font-size: var(--text-small); }
+  .group-people .crm-table .crm-c-name .crm-avatar-org { border-radius: 10px; }
+  .group-people .crm-table .crm-c-last { font-size: var(--text-small); }
+  .group-people .crm-table.mf-table .crm-c-type { display: none; }
+  .group-people .crm-table .crm-row > button, .group-people .crm-table.mf-table .crm-row > button { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "name name last" "member contact contact"; }
+  /* people and other contacts as a phone's contacts: the name and one quiet line (the last contact is on their card and in a computer's column) */
+  .group-people .crm-table-people .crm-row > button { grid-template-columns: minmax(0, 1fr); grid-template-areas: "name" "contact"; }
+  .group-people .crm-table-people .crm-c-last { display: none; }
+  .group-people .crm-table .crm-c-contact { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* one line each: the name, then the quiet line (the full name is on the person's card) */
+  .group-people .crm-table .crm-row > button { column-gap: 0; }
+  .group-people .crm-table .crm-c-name { min-width: 0; }
+  .group-people .crm-table .crm-c-name b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .group-people .crm-table .crm-c-last { padding-left: 12px; }
+  .group-people .crm-letter { display: block; padding: 12px 14px 4px; color: var(--ink-3); font: 600 var(--text-small)/1.2 var(--f-ui); border-bottom: 1px solid var(--rule-soft); scroll-margin-top: 8px; }
+  .group-people .crm-letter:focus { outline: none; }
+  .group-people .crm-list > .crm-letter:not(:first-child) { border-top: 1px solid var(--rule); }
+}
+/* the A to Z sheet: the letters the list has, each a 44 px target */
+.crm-letters { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 4px; padding: 0 var(--s-4) var(--s-2); }
+.crm-letters button { min-width: 44px; min-height: 44px; border: 0; border-radius: var(--radius-s); background: none; color: var(--ink); font: 600 var(--text-body)/1 var(--f-ui); cursor: pointer; }
+.crm-letters button:hover { background: var(--fill); }
+@media (min-width: 761px) {
+  /* a computer: the views shown openly in one line, as before */
+  .crm-views-panel { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); }
+}
+/* PH3: every control on a member's or a person's page is a 44 px target (Back, a phone or email in the details, the links in a timeline) */
+.group-people button.link.crm-back { min-height: 44px; }
+.group-people .crm-facts { align-items: center; row-gap: 0; }
+.group-people .crm-facts dt, .group-people .crm-facts dd { min-height: 32px; display: flex; align-items: center; }
+.group-people .crm-facts a { display: inline-flex; align-items: center; min-height: 44px; }
+.group-people .crm-item button.link, .group-people .crm-item .crm-item-with button.link { min-height: 44px; }
+/* PH3: a sub-group's members (subgroups.js): the same rows, in one outline */
+.group-people .sg-list { gap: 0; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.group-people .sg-list > .crm-row + .crm-row { border-top: 1px solid var(--rule-soft); }
+.group-people .sg-list > .crm-row > :is(button, .sg-row) { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; row-gap: 1px; align-items: center; min-height: 56px;
+  padding: 8px 14px; border: 0; border-radius: 0; background: none; color: var(--ink); text-align: left; font: inherit; width: 100%; box-sizing: border-box; }
+.group-people .sg-list > .crm-row > button:hover { background: var(--fill); }
+.group-people .sg-list .crm-avatar { grid-row: 1 / span 2; }
+.group-people .sg-list .crm-row > * > :not(.crm-avatar) { grid-column: 2; }
+.group-people .sg-list .sg-remove { margin: 0 14px 6px 66px; min-height: 44px; }
