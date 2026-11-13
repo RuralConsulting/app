@@ -206,16 +206,8 @@
   }
 
   // ---- events --------------------------------------------------------------------------------------
-  $("#f-signin").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const btn = ev.target.querySelector("button");
-    btn.disabled = true; msg("#signin-msg", "");
-    const err = await FP.auth.signIn($("#email").value, $("#password").value);
-    btn.disabled = false;
-    if (err) { msg("#signin-msg", err); return; }
-    $("#password").value = "";
-    start();
-  });
+  // SI1 (sign-in first): the sign-in form's submit is signin.js's (it is on the page before the rest of the app); it starts the app through FP.main.
+  FP.main = { start };
 
   $("#f-welcome").addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -283,10 +275,9 @@
   });
   sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.routeTiming?.cancel(); FP.farmSpace.close(); show("screen-signin"); } });
 
-  // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts
-  if (!FP.demo?.active && "serviceWorker" in navigator && location.protocol === "https:") {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-  }
+  // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts (SI1: boot.js
+  // registers sw.js once the page is up and quiet, never ahead of the first screen)
+  FP.boot?.worker();
 
   if (FP.demo?.active) {
     document.body.classList.add("demo-mode");
