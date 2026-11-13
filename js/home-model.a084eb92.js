@@ -11,12 +11,15 @@
   // The places, in the plugin's picker order: groups A–Z, each followed by its own sub-groups A–Z (indented: depth 1), then farms
   // A–Z. A sub-group whose parent the person cannot see sits among the groups by its own name. parents: id -> name, for the
   // parents the person can read (their own groups, and any other the database lets them read).
-  // Each place: { id, kind: "farm" | "group" | "subgroup", name, parentId, parentName, depth }.
+  // Each place: { id, kind: "farm" | "group" | "subgroup", name, slug, parentId, parentName, depth, within }.
+  // PL2: within is the place it sits inside on the Places map, one level at a time: a sub-group's parent and a farm's own group
+  // (farms.org_id) when the person sees that group, else null (a top-level place).
   function places(farms, groups, parents = {}) {
     const list = (v) => (Array.isArray(v) ? v : []);
     const seen = new Map(list(groups).map((g) => [g.id, g]));
     const parentName = (g) => (g.parent_org_id ? seen.get(g.parent_org_id)?.name || parents[g.parent_org_id] || null : null);
-    const group = (g, depth) => ({ id: g.id, kind: g.parent_org_id ? "subgroup" : "group", name: g.name, parentId: g.parent_org_id || null, parentName: parentName(g), depth });
+    const group = (g, depth) => ({ id: g.id, kind: g.parent_org_id ? "subgroup" : "group", name: g.name, slug: g.slug || null, parentId: g.parent_org_id || null, parentName: parentName(g), depth,
+      within: g.parent_org_id && seen.has(g.parent_org_id) ? g.parent_org_id : null });
     const top = list(groups).filter((g) => !g.parent_org_id || !seen.has(g.parent_org_id)).sort(byName);
     const out = [], placed = new Set();
     const add = (g, depth) => {
@@ -26,8 +29,70 @@
     };
     for (const g of top) add(g, 0);
     for (const g of list(groups).filter((x) => !placed.has(x.id)).sort(byName)) add(g, 0);
-    for (const f of [...list(farms)].sort(byName)) out.push({ id: f.id, kind: "farm", name: f.name, parentId: null, parentName: null, depth: 0 });
+    for (const f of [...list(farms)].sort(byName)) out.push({ id: f.id, kind: "farm", name: f.name, slug: null, parentId: null, parentName: null, depth: 0, within: f.org_id && seen.has(f.org_id) ? f.org_id : null });
     return out;
+  }
+
+  // ---- PL2: one level at a time ---------------------------------------------------------------------------------------------
+  // Josh, 13 Nov 2026: "it should start with mccc, and then the 10 groups not both at the same time". The places drawn on the Places
+  // map at one level: at = null, the top level (every place inside nothing the person sees: top-level groups, a sub-group whose parent
+  // they cannot see, farms in no group of theirs); at = a group's id, the places inside it (its sub-groups and its farms).
+  const level = (list, at = null) => list.filter((p) => (p.within || null) === (at || null));
+  // How many places sit inside each place: id -> count (a group with none is absent).
+  function inside(list) {
+    const n = new Map();
+    for (const p of list) if (p.within) n.set(p.within, (n.get(p.within) || 0) + 1);
+    return n;
+  }
+  // The list ("All places"), grouped: each top-level row with the rows inside it as its `children` (a sub-group's own sub-groups
+  // follow it, flattened under the top row, as the database's tree is shallow). Farms that sit inside a group stay among the farms,
+  // as the list always had them. Returns [{ place, children: [place] }] in the list's own order.
+  function grouped(list) {
+    const rows = [], byTop = new Map(), topOf = (p) => { let q = p, guard = 0; while (q?.within && q.kind !== "farm" && guard++ < 16) q = list.find((x) => x.id === q.within) || null; return q; };
+    for (const p of list) {
+      const top = p.kind === "farm" ? null : topOf(p);
+      if (p.kind !== "farm" && top && top.id !== p.id && byTop.has(top.id)) { byTop.get(top.id).children.push(p); continue; }
+      const row = { place: p, children: [] };
+      rows.push(row);
+      if (p.kind !== "farm") byTop.set(p.id, row);
+    }
+    return rows;
+  }
+  // A row's one quiet line in the list: what it is, and for a group how many sub-groups it holds. A sub-group under its parent is
+  // just "Sub-group" (its parent is the row above it).
+  const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+  function rowLabel(p, subs = 0) {
+    if (p.kind === "farm") return "Farm";
+    if (p.kind === "subgroup" && p.within) return "Sub-group";
+    return kindLabel(p) + (subs ? " · " + plural(subs, "sub-group", "sub-groups") : "");
+  }
+
+  // Which marks on the map are drawn. items, in priority order (the chosen place first, then the larger places): each { box, bare }
+  // (screen boxes, {x, y, w, h}): box the whole mark with its name; bare a group's round marker alone (a farm has none: its dot is
+  // never drawn without its name). A mark that lies outside frame, or touches one of the `avoid` boxes (the panel, the card, the
+  // map's controls) or a mark already kept, keeps its round marker alone if that fits, and is otherwise dropped until the map is
+  // zoomed in. One answer per item: true (the mark and its name), "bare" (the marker alone) or false.
+  function marksToShow(items, { avoid = [], frame = null, gap = 4 } = {}) {
+    const hit = (a, b, g = gap) => a.x < b.x + b.w + g && b.x < a.x + a.w + g && a.y < b.y + b.h + g && b.y < a.y + a.h + g;
+    const outside = (a) => frame && (a.x < frame.x || a.y < frame.y || a.x + a.w > frame.x + frame.w || a.y + a.h > frame.y + frame.h);
+    const fits = (box) => !!box && box.w > 0 && !outside(box) && !avoid.some((b) => b && b.w > 0 && hit(box, b, 0)) && !kept.some((k) => hit(box, k));
+    const kept = [];
+    return items.map(({ box, bare }) => {
+      if (fits(box)) { kept.push(box); return true; }
+      if (fits(bare)) { kept.push(bare); return "bare"; }
+      return false;
+    });
+  }
+
+  // What a tap on the Places map picks (PL2). hits: what lies under the tap, each { id, on: "mark" | "line" | "fill", size } (a mark is
+  // a place's name or round marker; size the area of its outline's box). A mark always wins over an outline, the first mark found
+  // being the one on top; among outlines the smallest wins, so a place inside another is reachable. Returns an id or null.
+  function pickHit(hits) {
+    const list = (Array.isArray(hits) ? hits : []).filter((h) => h && h.id);
+    const mark = list.find((h) => h.on === "mark");
+    if (mark) return mark.id;
+    const shapes = list.filter((h) => h.on === "fill" || h.on === "line").sort((a, b) => (Number(a.size) || 0) - (Number(b.size) || 0));
+    return shapes[0]?.id ?? null;
   }
 
   // What a place is, in words: on its card, under its name in the list and in search.
@@ -185,5 +250,5 @@
     return groups.every((g) => own.has(g.id)) ? { to: "farm", id: farm.id } : { to: "places" };
   }
 
-  return { places, kindLabel, search, fold, openHref, polygons, bbox, simplifyRing, lighten, joinAreas, pointZoom, centre, union, landing, MAX_POINTS, SPECK };
+  return { places, level, inside, grouped, rowLabel, marksToShow, pickHit, kindLabel, search, fold, openHref, polygons, bbox, simplifyRing, lighten, joinAreas, pointZoom, centre, union, landing, MAX_POINTS, SPECK };
 });

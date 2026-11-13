@@ -20,7 +20,7 @@
 <!-- Keep demo.js before util.js and basemaps.js: it selects the client and disables demo tile requests. -->
 <script data-src="js/brand.80965af9.js"></script>
 <script data-src="js/consent-no.711a9161.js"></script>
-<script data-src="js/demo.f3fb47b2.js"></script>
+<script data-src="js/demo.05e49d80.js"></script>
 <script data-src="js/demo-wq-page.a8b05130.js"></script>
 <script data-src="js/util.1d5eb095.js"></script>
 <script data-src="js/icons.3f83f277.js"></script>
@@ -47,7 +47,7 @@
 <script data-src="js/popup.02390ce3.js"></script>
 <script data-src="js/blocks/registry.108f6d88.js"></script>
 <script data-src="js/blocks/answer.ce39f59d.js"></script>
-<script data-src="js/blocks/map-scene.983486d2.js"></script>
+<script data-src="js/blocks/map-scene.73e9ab25.js"></script>
 <script data-src="js/blocks/list.cce37062.js"></script>
 <script data-src="js/blocks/timeline.d3df4ebf.js"></script>
 <script data-src="js/blocks/checklist.956251f9.js"></script>
@@ -108,8 +108,8 @@
 <script data-src="js/wq-page.828f3863.js"></script>
 <script data-src="js/viewer.269d4a07.js"></script>
 <script data-src="js/maps-view.f82606f1.js"></script>
-<script data-src="js/home-model.12b73bd5.js"></script>
-<script data-src="js/home.1432d2bd.js"></script>
+<script data-src="js/home-model.a084eb92.js"></script>
+<script data-src="js/home.b03f90ab.js"></script>
 <script data-src="js/group-overview-model.bf3ea512.js"></script>
 <script data-src="js/group-overview.d8abed4a.js"></script>
 <script data-src="js/phone-area.a1930179.js"></script>
@@ -158,7 +158,7 @@
 <link rel="stylesheet" data-href="css/wq-page.78fd700f.css">
 </template>
 <!-- UI1: the shared components (space header, tabs, account menu, Add, sheets, buttons, fields) last, so they set the look -->
-<link rel="stylesheet" href="css/ui.83076b34.css">
+<link rel="stylesheet" href="css/ui.0dd53b4c.css">
 </head>
 <body>
 <p id="loading" class="loading">Loading…</p>
@@ -330,6 +330,8 @@
       <label for="home-search" class="visually-hidden">Find a farm or group</label>
       <input id="home-search" type="search" autocomplete="off" spellcheck="false" placeholder="Find a farm or group" aria-controls="home-results">
     </div>
+    <!-- PL2: the map shows one level; inside a group, this row is the way back out -->
+    <div id="home-level" class="home-level" hidden><button type="button" id="home-level-back" class="home-level-back">Back to all places</button><span id="home-level-name" class="home-level-name"></span></div>
     <ul id="home-results" class="home-results" aria-label="Matching places" hidden></ul>
     <p id="home-none" class="home-none" role="status"></p>
     <details id="home-fold" class="home-fold">
@@ -342,7 +344,7 @@
     <h2 id="home-card-name"></h2>
     <p id="home-card-kind" class="home-card-kind"></p>
     <p id="home-card-note" class="home-card-note" hidden>No outline recorded for it yet.</p>
-    <a id="home-card-open" class="home-card-open" href="#/">Open</a>
+    <div class="home-card-actions"><a id="home-card-open" class="home-card-open" href="#/">Open</a><button type="button" id="home-card-into" class="home-card-into" hidden></button></div>
   </section>
   <aside id="layers-drawer" class="layers-drawer" aria-label="Layers" hidden>
     <div class="drawer-heading"><h2>Layers</h2><button id="layers-close" type="button">Close</button></div>

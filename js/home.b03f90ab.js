@@ -48,7 +48,8 @@
   }
 
   // ---- in the browser ----------------------------------------------------------------------------------------------------
-  let list = [], shapes = new Map(), token = 0, chosen = null, bound = false;
+  // at: the group stepped into on the map (PL2: one level at a time), or null for the top level
+  let list = [], shapes = new Map(), token = 0, chosen = null, bound = false, at = null, onMap = false;
   const $ = (s) => root.FP.$(s), el = (...a) => root.FP.el(...a);
   const wide = () => root.innerWidth > 800;
   // The map's edges the panel (and the card, once one is open) cover, so a place is framed in what stays visible.
@@ -60,7 +61,6 @@
     if (wide()) return { top: 60, right: 70, bottom: 50, left: Math.min(Math.max(panel.right, card && !card.hidden ? card.getBoundingClientRect().right : 0) - map.left + 40, map.width / 2) };
     return { top: Math.min(panel.bottom - map.top + 24, map.height / 2), right: 40, bottom: Math.min(40 + cardH, map.height / 3), left: 40 };
   }
-  const label = (p) => [el("b", {}, p.name), el("small", {}, H.kindLabel(p))];
   // UI2: the list's swatch is the place's colour on the map (its group's hue; a sub-group lighter; a farm its ink marker)
   function swatch(p) {
     const P = root.FP.mapPalette, css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -69,13 +69,50 @@
     const hue = P.hues(css)[P.hueIndex(p.kind === "subgroup" && p.parentId ? p.parentId : p.id)];
     return { style: "--swatch: " + (p.kind === "subgroup" ? P.tone(hue, 0.3) : hue) };
   }
-  function item(p, where) {
-    return el("li", { class: "home-item" + (p.depth && where === "list" ? " sub" : ""), "data-kind": p.kind, "data-id": p.id },
-      el("button", { type: "button", "data-home-place": p.id, "data-from": where }, el("i", { class: "home-swatch", "aria-hidden": "true", ...swatch(p) }), el("span", {}, ...label(p))));
+  function item(p, where, detail = null) {
+    return el("li", { class: "home-item" + (p.within && where === "list" ? " sub" : ""), "data-kind": p.kind, "data-id": p.id },
+      el("button", { type: "button", "data-home-place": p.id, "data-from": where }, el("i", { class: "home-swatch", "aria-hidden": "true", ...swatch(p) }),
+        el("span", {}, el("b", {}, p.name), el("small", {}, detail ?? H.kindLabel(p)))));
   }
+  // PL2: the list grouped, a group's sub-groups folded under it (its row first; a tap on the chevron shows them), one quiet line each
+  // and no "Sub-group of …" repeated on every row. Search still finds every place by name.
   function drawList() {
-    $("#home-list").replaceChildren(...list.map((p) => item(p, "list")));
+    const subs = (p) => list.filter((x) => x.within === p.id && x.kind !== "farm").length;
+    $("#home-list").replaceChildren(...H.grouped(list).map(({ place: p, children }) => {
+      const li = item(p, "list", H.rowLabel(p, subs(p)));
+      if (!children.length) return li;
+      const id = "home-subs-" + p.id, open = children.some((c) => c.id === chosen);
+      li.classList.add("has-subs");
+      li.append(el("button", { type: "button", class: "home-expand", "aria-expanded": String(open), "aria-controls": id, "aria-label": "Show the " + children.length + " sub-groups of " + p.name }, el("i", { "aria-hidden": "true" })),
+        el("ul", { class: "home-subs", id, ...(open ? {} : { hidden: true }) }, ...children.map((c) => item(c, "list", H.rowLabel(c)))));
+      return li;
+    }));
     $("#home-count").textContent = "(" + list.length + ")";
+  }
+  // ---- PL2: the map shows one level: the top level, or the places inside the group stepped into ---------------------------------
+  const mapItem = (p) => ({ id: p.id, kind: p.kind, name: p.name, hueKey: p.kind === "subgroup" && p.parentId ? p.parentId : p.id,
+    logo: p.kind === "farm" ? null : root.FP.groupModel?.groupLogo?.({ slug: p.slug })?.src || null, ...shapes.get(p.id) });
+  const placeOf = (id) => list.find((x) => x.id === id) || null;
+  function drawLevel() {
+    const g = at && placeOf(at), back = $("#home-level");
+    if (back) {
+      back.hidden = !g;
+      if (g) {
+        const up = g.within && placeOf(g.within);
+        $("#home-level-back").textContent = up ? "Back to " + up.name : "Back to all places";
+        $("#home-level-name").textContent = g.name;
+      }
+    }
+    if (!onMap) return Promise.resolve();
+    const items = H.level(list, at).filter((p) => shapes.has(p.id)).map(mapItem);
+    const ctx = g && shapes.has(g.id) ? mapItem(g) : null;
+    return root.FP.farmMap.home(items, (id) => choose(id), padding(), { context: ctx, frame: ctx?.bbox || null });
+  }
+  // Into a group (its places shown, the group's own mark gone), or back out to where it sits
+  async function step(to) {
+    at = to || null;
+    unchoose({ keepMap: true });
+    await drawLevel();
   }
   function drawResults() {
     const q = $("#home-search").value, found = H.search(list, q);
@@ -85,24 +122,33 @@
     $("#home-fold").hidden = !!q.trim();   // while searching, the matches stand in for the list
   }
   // A place chosen (on the map, in the list or in search): marked and framed on the map, and its card shown.
-  function choose(id, { focus = false } = {}) {
-    const p = list.find((x) => x.id === id);
+  // A place chosen from the list or search that is not at the level drawn takes the map to its level first (never both levels).
+  async function choose(id, { focus = false } = {}) {
+    const p = placeOf(id);
     if (!p) return;
+    const mine = token;
+    if ((p.within || null) !== at) { at = p.within || null; await drawLevel(); if (mine !== token) return; }
     chosen = p.id;
     $("#home-card-name").textContent = p.name;
     $("#home-card-kind").textContent = H.kindLabel(p);
     $("#home-card-note").hidden = shapes.has(p.id);
     $("#home-card-open").href = root.FP.href(H.openHref(p));
     $("#home-card-open").setAttribute("aria-label", "Open " + p.name);
+    // a group with places inside it on the map: a quiet second action to step into it
+    const inner = H.level(list, p.id).filter((x) => shapes.has(x.id)), into = $("#home-card-into");
+    if (into) {
+      into.hidden = !inner.length;
+      into.textContent = inner.every((x) => x.kind === "subgroup") ? "Show its " + inner.length + " sub-group" + (inner.length === 1 ? "" : "s") : "Show the " + inner.length + " place" + (inner.length === 1 ? "" : "s") + " in it";
+    }
     $("#home-card").hidden = false;
     for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", String(b.dataset.homePlace === p.id));
     root.FP.farmMap.homeChoose?.(p.id, padding());
     if (focus) $("#home-card-open").focus();
   }
-  function unchoose() {
+  function unchoose({ keepMap = false } = {}) {
     chosen = null; $("#home-card").hidden = true;
     for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", "false");
-    root.FP.farmMap.homeChoose?.(null, padding());
+    if (!keepMap) root.FP.farmMap.homeChoose?.(null, padding());
   }
   function bind() {
     if (bound) return;
@@ -120,6 +166,13 @@
       if (e.key === "ArrowUp") { e.preventDefault(); (li?.previousElementSibling?.querySelector("button") || $("#home-search")).focus(); }
     });
     $("#portfolio").addEventListener("click", (e) => {
+      const fold = e.target.closest(".home-expand");
+      if (fold) {
+        const subs = document.getElementById(fold.getAttribute("aria-controls")), open = fold.getAttribute("aria-expanded") !== "true";
+        fold.setAttribute("aria-expanded", String(open)); if (subs) subs.hidden = !open;
+        return;
+      }
+      if (e.target.closest("#home-level-back")) { const g = at && placeOf(at); step(g?.within || null); return; }
       const b = e.target.closest("[data-home-place]");
       if (!b) return;
       const fromSearch = b.dataset.from === "search";
@@ -130,25 +183,32 @@
       choose(b.dataset.homePlace, { focus: e.detail === 0 });
     });
     $("#home-card-close").addEventListener("click", () => { const back = chosen && $('#portfolio [data-home-place="' + CSS.escape(chosen) + '"]'); unchoose(); back?.focus(); });
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented && !$("#home-card").hidden && document.body.classList.contains("portfolio-active")) unchoose(); });
+    $("#home-card-into")?.addEventListener("click", () => { if (chosen) step(chosen); });
+    // Escape: the card closes; with no card open, the map steps back out of the group it is in
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented || !document.body.classList.contains("portfolio-active")) return;
+      if (!$("#home-card").hidden) unchoose();
+      else if (at && !e.target.closest?.("input")) { const g = placeOf(at); step(g?.within || null); }
+    });
   }
   // The home page: the farm space has already put its own things away and shown the map screen (farmSpace.showPortfolio).
   async function show({ farms = [], groups = [] } = {}) {
     const mine = ++token, sb = root.FP.sb;
     bind();
     document.title = "Farms and groups | " + (root.FP.brand?.product || "");
-    chosen = null; $("#home-card").hidden = true; $("#home-search").value = ""; drawResults();
+    chosen = null; at = null; onMap = false; $("#home-card").hidden = true; $("#home-search").value = ""; drawResults();
     // wide screens open with the list showing; a phone keeps it folded under the search box
     $("#home-fold").open = wide();
     list = H.places(farms, groups); shapes = new Map();
-    drawList();
+    drawList(); drawLevel();
     const [found, parents] = await Promise.all([readShapes(sb, farms, groups).catch(() => new Map()), readParents(sb, groups).catch(() => ({}))]);
     if (mine !== token || !document.body.classList.contains("portfolio-active")) return;
     if (Object.keys(parents).length) { list = H.places(farms, groups, parents); drawList(); drawResults(); }
     shapes = found;
+    // PL2: the top level only (each top-level group one outline and one mark; its sub-groups appear once it is stepped into).
     // UI2: a sub-group is drawn in its parent's hue, lighter (map-palette.js)
-    const items = list.filter((p) => shapes.has(p.id)).map((p) => ({ id: p.id, kind: p.kind, name: p.name, hueKey: p.kind === "subgroup" && p.parentId ? p.parentId : p.id, ...shapes.get(p.id) }));
-    await root.FP.farmMap.home(items, (id) => choose(id), padding());
+    onMap = true;
+    await drawLevel();
   }
   return { readShapes, readParents, show, CAP };
 });

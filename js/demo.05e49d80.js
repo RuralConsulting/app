@@ -284,13 +284,16 @@
     return data;
   }
   // LP1: the two-farm demo's person also belongs to three invented catchment groups, so the home map has farms and groups on
-  // it: a parent group and one of its sub-groups, each with an area place (its geometry in NZTM metres, as the places table holds
+  // it: a parent group and three of its sub-groups (PL2), each with an area place (its geometry in NZTM metres, as the places table holds
   // it; the parent's outline has many points, as a real catchment's does), and a group with no area yet (found by search and
   // the list only). The groups' own spaces are not part of this demo.
   const MULTI_GROUPS = [
     { id: "de000000-0000-4000-8000-0000000003b1", name: "Example Collective (synthetic)", parent: null, area: { at: [172.33, -42.88], r: 0.42, points: 1500 } },
     { id: "de000000-0000-4000-8000-0000000003b2", name: "North Sub-group (synthetic)", parent: "de000000-0000-4000-8000-0000000003b1", area: { at: [172.63, -42.77], r: 0.06, points: 120 } },
     { id: "de000000-0000-4000-8000-0000000003b3", name: "Another Landcare Group (synthetic)", parent: null, area: null },
+    // PL2: two more sub-groups, one lying right under the parent's name (where a tap on the name once opened the sub-group)
+    { id: "de000000-0000-4000-8000-0000000003b4", name: "Central Sub-group (synthetic)", parent: "de000000-0000-4000-8000-0000000003b1", area: { at: [172.33, -42.88], r: 0.1, points: 160 } },
+    { id: "de000000-0000-4000-8000-0000000003b5", name: "West Sub-group (synthetic)", parent: "de000000-0000-4000-8000-0000000003b1", area: { at: [171.98, -42.95], r: 0.09, points: 140 } },
   ];
   function multiGroups(data) {
     // a wobbly ring round a centre (an illustration, not a catchment), in NZTM metres; made when first read (wq-model.js, which

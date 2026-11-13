@@ -964,16 +964,19 @@
     fit(union(boxes), wide ? { top: 90, left: 480, bottom: 90, right: 110 } : { top: 80, left: 85, bottom: Math.round(window.innerHeight * 0.5), right: 85 });
   }
 
-  // LP1: the home map. Every farm and group the person can see, each as its own (already lightened) outline, or as one point
-  // while the map is zoomed out so far that the outline would be a speck (item.pointZoom). UI2: Felt's calm look on the plain
-  // map: each group a solid thin outline of its own soft hue over a faint casing, with a gentle fill; its sub-groups lighter
-  // tints of it; a farm a small ink marker (its outline once zoomed in). Each place is named on the map where the name fits,
-  // the largest places first and never two names touching (farmModel.labelsToShow); its name also shows on hover. A click or tap
-  // calls onSelect(id), the smallest place under it winning (a farm inside a group's area is the farm). padding: the map's
-  // edges the home panels cover.
-  // items: [{ id, kind: "farm" | "group" | "subgroup", name, geometry, bbox, pointZoom, hueKey }] (hueKey: a sub-group's parent).
+  // LP1: the home map (Places). PL2 (Josh, 13 Nov 2026): one level at a time. home.js passes the places of one level only (the top
+  // level, or the places inside one group the person has stepped into); this draws them and nothing else. Each place is its own
+  // (already lightened) outline once it is big enough on screen (item.pointZoom), with ONE mark at its middle: a group's round
+  // marker (its logo, else its initials, ringed in its soft hue) with its name beside it; a farm a small ink dot with its name. UI2:
+  // Felt's calm look on the plain map, thin outlines of soft hues over a faint casing, gentle fills.
+  // Marks never touch each other, the panel, the card or the map's controls: one that would is dropped, the chosen place and then
+  // the larger places first, until the map is zoomed in (homeModel.marksToShow); no dot is ever drawn without its name. A tap opens
+  // what was tapped: a mark is its own target and wins; elsewhere the smallest outline under the tap (homeModel.pickHit).
+  // padding: the map's edges the home panels cover. context: the outline of the group stepped into, drawn quietly around its
+  // places (not a target, no mark). frame: the box to fit (the group stepped into), else every place drawn.
+  // items: [{ id, kind: "farm" | "group" | "subgroup", name, geometry, bbox, pointZoom, hueKey, logo }] (hueKey: a sub-group's parent).
   let homeOff = null, homeItems = [], homeChosen = null;
-  async function home(items, onSelect, padding) {
+  async function home(items, onSelect, padding, { context = null, frame = null } = {}) {
     const request = ++opening;
     if (!map) startBase = overviewBase();   // UI2b: a map made for Places opens on the plain ground
     init(); await loaded();
@@ -983,87 +986,90 @@
     map.resize();
     homeItems = items.filter((i) => i.geometry?.coordinates && i.bbox);
     homeChosen = null;
-    const P = FP.mapPalette;
+    const P = FP.mapPalette, H = FP.homeModel;
+    const look = (i, sub) => P.look(P.hues(cssVar)[P.hueIndex(i.hueKey || i.id)], { sub, onDark: onDark() });
     const props = (i) => {
-      const farm = i.kind === "farm", sub = i.kind === "subgroup", dark = onDark(), mark = P.farmMarker(dark);
-      const lk = P.look(P.hues(cssVar)[P.hueIndex(i.hueKey || i.id)], { sub, onDark: dark });
+      const farm = i.kind === "farm", sub = i.kind === "subgroup", mark = P.farmMarker(onDark()), lk = look(i, sub);
       return { id: i.id, kind: farm ? "farm" : "group", sub, name: i.name, size: area(i.bbox), fill: farm ? mark.fill : lk.fill, line: farm ? mark.fill : lk.line,
-        ring: farm ? mark.ring : lk.casing, casing: lk.casing, fo: farm ? 0.12 : lk.fillOpacity, lw: farm ? 1.5 : lk.lineWidth };
+        casing: lk.casing, fo: farm ? 0.12 : lk.fillOpacity, lw: farm ? 1.5 : lk.lineWidth };
     };
-    const data = () => ({ shapes: { type: "FeatureCollection", features: homeItems.map((i) => ({ type: "Feature", geometry: i.geometry, properties: props(i) })) },
-      points: { type: "FeatureCollection", features: homeItems.map((i) => ({ type: "Feature", geometry: { type: "Point", coordinates: FP.homeModel.centre(i.bbox) }, properties: props(i) })) } });
-    const d0 = data();
-    source("home-shapes", d0.shapes);
-    source("home-points", d0.points);
+    const data = () => ({ type: "FeatureCollection", features: homeItems.map((i) => ({ type: "Feature", geometry: i.geometry, properties: props(i) })) });
+    const contextData = () => ({ type: "FeatureCollection", features: context?.geometry ? [{ type: "Feature", geometry: context.geometry, properties: { line: look(context, false).line, casing: look(context, false).casing } }] : [] });
+    source("home-shapes", data());
+    source("home-context", contextData());
     const none = ["in", ["get", "id"], ["literal", []]];
+    // the group stepped into: its own outline only, thin, under its places
+    layer({ id: "home-context", type: "line", source: "home-context", layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": 1.2, "line-opacity": 0.7 } });
     layer({ id: "home-fill", type: "fill", source: "home-shapes", filter: none, paint: { "fill-color": ["get", "fill"], "fill-opacity": ["get", "fo"] } });
     layer({ id: "home-chosen-fill", type: "fill", source: "home-shapes", filter: none, paint: { "fill-color": ["get", "fill"], "fill-opacity": 0.18 } });
     layer({ id: "home-casing", type: "line", source: "home-shapes", filter: none, layout: { "line-join": "round" }, paint: { "line-color": ["get", "casing"], "line-width": ["+", ["get", "lw"], 2] } });
     layer({ id: "home-line", type: "line", source: "home-shapes", filter: none, layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": ["get", "lw"] } });
     layer({ id: "home-chosen", type: "line", source: "home-shapes", filter: none, layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": 3 } });
-    layer({ id: "home-point", type: "circle", source: "home-points", filter: none,
-      paint: { "circle-color": ["get", "fill"], "circle-radius": ["match", ["get", "kind"], "farm", 5.5, 7], "circle-stroke-color": ["get", "ring"], "circle-stroke-width": 2 } });
     // the theme or the background changed: the same places in the colours for it
-    paletteHooks.push(() => { if (!map?.getSource("home-shapes")) return; const d = data(); map.getSource("home-shapes").setData(d.shapes); map.getSource("home-points").setData(d.points); });
-    // the names, as quiet labels over the map: the largest places first; one that would touch another, or does not fit inside its
-    // own outline yet (and is not drawn as a point), waits until the map is zoomed in
-    const labels = [...homeItems].sort((a, b) => (a.kind === "farm") - (b.kind === "farm") || area(b.bbox) - area(a.bbox) || a.name.localeCompare(b.name)).map((i) => {
-      const node = FP.el("div", { class: "home-label", "data-kind": i.kind, "data-id": i.id, "aria-hidden": "true" }, FP.el("span", {}, i.name));
-      const marker = new maplibregl.Marker({ element: node, anchor: "center" }).setLngLat(FP.homeModel.centre(i.bbox)).addTo(map);
-      markers.push(marker);
-      return { i, node };
+    paletteHooks.push(() => {
+      if (!map?.getSource("home-shapes")) return;
+      map.getSource("home-shapes").setData(data()); map.getSource("home-context")?.setData(contextData());
+      for (const m of marks) m.node.style.setProperty("--ring", props(m.i).line);
     });
+    // One mark per place, at its middle: a tap target of its own (44 px tall), so a tap on a name or marker is never taken by an
+    // outline lying under it. The marks are for the pointer; the list and search beside the map are the keyboard's way in.
+    const marks = [...homeItems].sort((a, b) => (a.kind === "farm") - (b.kind === "farm") || area(b.bbox) - area(a.bbox) || a.name.localeCompare(b.name)).map((i) => {
+      const farm = i.kind === "farm";
+      const badge = farm ? FP.el("i", { class: "hm-dot" }) : FP.el("span", { class: "hm-badge" }, i.logo ? FP.el("img", { src: i.logo, alt: "" }) : FP.icons?.monogram?.(i.name) || "");
+      const face = FP.el("span", { class: "hm-face" }, badge, FP.el("span", { class: "hm-name" }, i.name));
+      const node = FP.el("div", { class: "home-label", "data-kind": i.kind, "data-id": i.id, "aria-hidden": "true", style: "--ring: " + props(i).line }, face);
+      node.addEventListener("click", (e) => { e.stopPropagation(); hover.remove(); onSelect(i.id); });
+      const marker = new maplibregl.Marker({ element: node, anchor: "left", offset: [farm ? -6 : -14, 0] }).setLngLat(H.centre(i.bbox)).addTo(map);
+      markers.push(marker);
+      return { i, node, face };
+    });
+    // what the marks must keep clear of: the Places panel, the card, the back row and the map's own controls
+    const avoid = () => [...document.querySelectorAll("#portfolio, #home-card, #home-level, #map .maplibregl-ctrl-top-right > *, #map .maplibregl-ctrl-bottom-left > *, #map .maplibregl-ctrl-bottom-right > *")]
+      .filter((n) => !n.hidden && n.offsetParent !== null).map((n) => { const r = n.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
     let queued = false;
     const place = () => {
       queued = false;
       if (!map) return;
-      const z = map.getZoom(), frame = map.getContainer().getBoundingClientRect();
+      const f = map.getContainer().getBoundingClientRect(), z = map.getZoom();
+      const order = [...marks].sort((a, b) => (b.i.id === homeChosen) - (a.i.id === homeChosen));
+      for (const m of order) { m.node.classList.remove("off", "bare"); m.node.classList.toggle("chosen", homeChosen === m.i.id); m.node.classList.toggle("at-point", z < m.i.pointZoom); }
       const box = (n) => { const r = n.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
-      const fits = labels.map(({ i, node }) => {
-        const point = z < i.pointZoom;
-        node.classList.toggle("at-point", point); node.classList.toggle("chosen", homeChosen === i.id);
-        node.classList.remove("off");
-        const span = node.firstChild, r = box(span);
-        if (r.x < frame.left || r.x + r.w > frame.right || r.y < frame.top || r.y + r.h > frame.bottom) return false;
-        if (point) return true;
-        const a = map.project(i.bbox[0]), b = map.project(i.bbox[1]);
-        return Math.abs(b.x - a.x) >= r.w * 0.8 || homeChosen === i.id;
-      });
-      const keep = FP.farmModel.labelsToShow(labels.map(({ node }, n) => ({ label: fits[n] ? box(node.firstChild) : { x: -1e6 - n * 1e4, y: -1e6, w: 0, h: 0 }, dot: null })));
-      labels.forEach(({ node }, n) => node.classList.toggle("off", !(fits[n] && keep[n])));
+      const keep = H.marksToShow(order.map((m) => ({ box: box(m.face), bare: m.i.kind === "farm" ? null : box(m.face.firstChild) })),
+        { avoid: avoid(), frame: { x: f.left, y: f.top, w: f.width, h: f.height } });
+      order.forEach((m, n) => { m.node.classList.toggle("off", !keep[n]); m.node.classList.toggle("bare", keep[n] === "bare"); });
     };
     declutter = () => { if (!queued) { queued = true; requestAnimationFrame(place); } };
     for (const ev of ["move", "resize"]) map.on(ev, declutter);
-    // outline or point, as the zoom says (set again only when the split changes)
-    let split = "";
+    document.fonts?.ready.then(() => declutter?.());
+    // outline once it is more than a speck (set again only when that changes); below that the place is its mark alone
+    let split = null;
     const show = () => {
       if (!map?.getLayer("home-fill")) return;
-      const z = map.getZoom(), shapes = homeItems.filter((i) => z >= i.pointZoom).map((i) => i.id), points = homeItems.filter((i) => z < i.pointZoom).map((i) => i.id);
-      const key = shapes.join();
+      const z = map.getZoom(), shapes = homeItems.filter((i) => z >= i.pointZoom).map((i) => i.id), key = shapes.join();
       if (key === split) return;
       split = key;
-      const ids = (list) => ["in", ["get", "id"], ["literal", list]];
-      for (const id of ["home-fill", "home-casing", "home-line"]) map.setFilter(id, ids(shapes));
-      map.setFilter("home-point", ids(points));
+      for (const id of ["home-fill", "home-casing", "home-line"]) map.setFilter(id, ["in", ["get", "id"], ["literal", shapes]]);
     };
-    const hits = (point) => {
-      const found = map.queryRenderedFeatures(point, { layers: ["home-point", "home-fill", "home-line"].filter((id) => map.getLayer(id)) });
-      return found.sort((a, b) => (a.layer.id === "home-point" ? 0 : 1) - (b.layer.id === "home-point" ? 0 : 1) || a.properties.size - b.properties.size);
-    };
+    const hits = (point) => map.queryRenderedFeatures(point, { layers: ["home-fill", "home-line"].filter((id) => map.getLayer(id)) })
+      .map((f) => ({ id: f.properties.id, name: f.properties.name, on: f.layer.id === "home-line" ? "line" : "fill", size: f.properties.size }));
     const hover = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: "home-hover", offset: 12 });
+    const onMark = (e) => !!e.originalEvent?.target?.closest?.(".home-label");
     const onMove = (e) => {
-      const f = hits(e.point)[0];
+      if (onMark(e)) { hover.remove(); return; }
+      const all = hits(e.point), id = H.pickHit(all), f = all.find((h) => h.id === id);
       map.getCanvas().style.cursor = f ? "pointer" : "";
       if (!f) { hover.remove(); return; }
-      hover.setLngLat(e.lngLat).setText(f.properties.name).addTo(map);
+      hover.setLngLat(e.lngLat).setText(f.name).addTo(map);
     };
     const onOut = () => hover.remove();
-    const onTap = (e) => { const f = hits(e.point)[0]; if (f) { hover.remove(); onSelect(f.properties.id); } };
+    // (a tap on a mark is the mark's own: MapLibre still reports it as a map click, which is ignored here)
+    const onTap = (e) => { if (onMark(e)) return; const id = H.pickHit(hits(e.point)); if (id) { hover.remove(); onSelect(id); } };
     map.on("zoom", show); map.on("moveend", show); map.on("mousemove", onMove); map.on("mouseout", onOut); map.on("click", onTap);
     homeOff = () => { map?.off("zoom", show); map?.off("moveend", show); map?.off("mousemove", onMove); map?.off("mouseout", onOut); map?.off("click", onTap); hover.remove(); homeItems = []; };
     const boxes = homeItems.map((i) => i.bbox);
     // all of them at once (never closer than a district, so one small farm still shows where it is), or New Zealand
-    map.fitBounds(boxes.length ? FP.homeModel.union(boxes) : [[166.3, -47.4], [178.6, -34.3]], { padding, duration: 0, maxZoom: 10, pitch: 0 });
+    const to = frame || (boxes.length ? H.union(boxes) : [[166.3, -47.4], [178.6, -34.3]]);
+    map.fitBounds(to, { padding, duration: 0, maxZoom: frame ? 13 : 10, pitch: 0 });
     show(); place();
   }
   // The chosen place: marked, and framed in the part of the map the home panels leave (nothing moves for a place with no shape).
