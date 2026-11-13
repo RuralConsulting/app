@@ -493,7 +493,7 @@
     if (fx && (place.folder !== undefined || place.sort) && !text(input?.value)) drawBody();
     if (fx) input?.addEventListener("input", drawBody);
     else input?.addEventListener("input", () => { results.innerHTML = resultsHtml(d, o, input.value); });
-    let items = [];
+    let items = [], unfit = null;
     const box = rootEl.querySelector(".doc-confirm"), drop = rootEl.querySelector(".doc-drop");
     async function choose(files) {
       const picked = [...files];
@@ -502,9 +502,24 @@
       if (ctx.stale()) return;
       items = made;
       box.innerHTML = confirmHtml(items, primaries()); box.hidden = false; drop.hidden = true;
+      // PH4: in the explorer (a place's Files, where the + adds a file) the step is the one pattern for add forms: it takes the screen on
+      // a phone, Cancel and Add in one thin top row with its title between them, the file's fields as plain rows (ui.css "doc-sheet")
+      const form = box.querySelector(".doc-confirm-form"), acts = form?.querySelector(".doc-actions");
+      if (fx && form && acts && globalThis.document) {
+        const n = items.filter((it) => !it.tooBig).length;
+        // (a farm's Files inside its map's sheet keeps the step in that sheet: the rows, without taking the screen)
+        form.classList.add("fs-sheet", "doc-sheet", ...(rootEl.closest("#space-content") ? [] : ["fs-page"]));
+        acts.classList.add("fs-top");
+        acts.append(Object.assign(globalThis.document.createElement("h2"), { className: "fs-title", textContent: n > 1 ? "Add " + n + " files" : "Add a file" }));
+        const body = globalThis.document.createElement("div");
+        body.className = "fs-body";
+        body.append(...[...form.children].filter((c) => c !== acts));
+        form.append(body);
+        unfit?.(); unfit = globalThis.FP?.formRows?.fit?.(box) || null;   // (the keyboard never covers the field being typed in or Add)
+      }
       box.querySelector("input[name^=title-]")?.focus();
     }
-    function closeConfirm() { if (!box) return; items = []; box.innerHTML = ""; box.hidden = true; drop.hidden = false; }
+    function closeConfirm() { if (!box) return; unfit?.(); unfit = null; items = []; box.innerHTML = ""; box.hidden = true; drop.hidden = false; }
     rootEl.querySelector("[data-doc-file]")?.addEventListener("change", (e) => { choose(e.target.files || []); e.target.value = ""; });
     if (drop) {
       for (const t of ["dragenter", "dragover"]) rootEl.addEventListener(t, (e) => { if (!e.dataTransfer?.types?.includes("Files")) return; e.preventDefault(); drop.classList.add("doc-drop-over"); });

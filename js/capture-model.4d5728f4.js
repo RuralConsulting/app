@@ -214,7 +214,85 @@
   // Who made it, as the list says it: "You", their name, or "A member".
   const who = (r, me) => (r.created_by && r.created_by === me ? "You" : r.created_by_name || "A member");
 
+  // ---- PH4: a saved record's page, and the form's short words --------------------------------------------------------------------------
+  // "21 Oct 2026 at 2:05 pm": a time as a sentence says it
+  function whenWords(iso) {
+    const t = Date.parse(iso || "");
+    if (!Number.isFinite(t)) return "";
+    const d = new Date(t);
+    const date = d.toLocaleDateString("en-NZ", { day: "numeric", month: "short", year: "numeric", timeZone: TZ });
+    const time = d.toLocaleTimeString("en-NZ", { hour: "numeric", minute: "2-digit", timeZone: TZ }).replace(/\s+/g, " ");
+    return date + " at " + time;
+  }
+  const speciesWord = (k) => SPECIES.find(([x]) => x === k)?.[1] || null;
+  const readingWords = (r) => [r?.name, r?.value, r?.unit].filter((v) => v !== undefined && v !== null && v !== "").join(" ");
+  // What it is and when, in one sentence: "Water sample, 21 Oct 2026 at 2:05 pm." / "Pest control: 3 deer, ..." / "Photo, 28 Oct
+  // 2026 at 11:10 am." (where it was is the Where row's)
+  function summary(c) {
+    const kind = KINDS[c?.kind] ? c.kind : "photo";
+    let what = KINDS[kind].label;
+    if (kind === "pest_control") { const n = detailLine(c); if (n) what += ": " + n; }
+    const when = whenWords(c?.taken_at);
+    return what + (when ? ", " + when : "") + ".";
+  }
+  // Who sees it, as one quiet line
+  const seenBy = (c, groupName) => (c?.shared_with_group ? "Seen by everyone in " + (groupName || "the group") : "Seen by whoever took it and the coordinators of " + (groupName || "the group"));
+  // Where, as a person reads it: the sample's own site, else the nearest known site with the distance, from sites: [{ site_id, name,
+  // lngLat }] (the group's monitoring sites the person may read). { words, near: { name, km } | null } or null with no position.
+  function placeWords(c, sites = [], { within = 25 } = {}) {
+    const p = c && okLatLon(c.latitude, c.longitude) ? { latitude: c.latitude, longitude: c.longitude } : null;
+    const own = tidy(c?.data?.site_name);
+    if (own) return { words: "At " + own, near: null, own: true };
+    if (!p) return null;
+    const n = nearest(sites, p, 1)[0];
+    if (!n || n.km > within) return { words: FROM_WORDS[c.position_from] || "On the map", near: null };
+    return { words: n.km < 0.05 ? "At " + n.name : kmWords(n.km) + " from " + n.name, near: { name: n.name, km: n.km } };
+  }
+  // The record page's rows: only those with a value, in order. [{ key, label, value }] (value a string or a list of strings).
+  function factRows(c, { me = null } = {}) {
+    const d = c?.data || {}, out = [];
+    if ((c?.tags || []).length) out.push({ key: "tags", label: "Tags", value: c.tags.slice() });
+    if (c?.kind === "water_sample") (d.readings || []).forEach((r, i) => { const w = readingWords(r); if (w) out.push({ key: "reading-" + i, label: i ? "Reading " + (i + 1) : "Reading", value: w }); });
+    if (c?.kind === "pest_control") {
+      const sp = speciesWord(d.species);
+      if (sp) out.push({ key: "species", label: "What", value: sp });
+      if (Number.isInteger(d.count)) out.push({ key: "count", label: "How many", value: String(d.count) });
+    }
+    if (c?.created_by || c?.created_by_name) out.push({ key: "by", label: "By", value: who(c, me) });
+    return out;
+  }
+  // The water sample's site choices: the nearest known sites (at most `cap`), each with its distance, then "Another place"
+  function siteOptions(sites, p, cap = 5) {
+    return [...nearest(sites, p, cap).map((s) => ({ value: String(s.site_id), label: s.name, hint: kmWords(s.km) + " away" })), { value: "", label: "Another place", hint: "Type its name" }];
+  }
+  // review of #539, 2: the site a water sample is put at by itself: the nearest known one only when the position is at it (within
+  // SITE_NEAR metres, or the position's own accuracy when that is larger, up to SITE_NEAR_MAX); otherwise none, and the person chooses
+  const SITE_NEAR = 100, SITE_NEAR_MAX = 250;
+  // review of #539, 1: a "Here" older than two minutes is never saved as here
+  const HERE_OLD = "Where you were is more than two minutes old, and this phone didn't give a newer position. Choose Where again: here, a pin, or no position.";
+  function closeSite(sites, p) {
+    const n = nearest(sites, p, 1)[0];
+    if (!n) return null;
+    const reach = Math.min(Math.max(SITE_NEAR, Number.isFinite(p?.accuracy_m) ? p.accuracy_m : 0), SITE_NEAR_MAX) / 1000;
+    return n.km <= reach ? n : null;
+  }
+  // A refused change on a record's page, in plain words: refused (the policy, the guard, or no row of theirs: PostgREST's PGRST116
+  // "JSON object requested") or not reached
+  function refusedWords(e) {
+    const t = String(e?.code || "") + " " + String(e?.message || e || "");
+    if (/PGRST116|42501|JSON object requested|row-level security|Only the person who made/i.test(t)) return "You can't change this record.";
+    if (/fetch|network|Failed/i.test(t)) return "That couldn't be saved: there's no connection just now. Try again when you're back in range.";
+    return "That couldn't be saved just now. Try again in a moment.";
+  }
+  // The form's "Where" row: what it says now
+  function whereShort(p) {
+    if (!p) return "";
+    const acc = p.accuracy_m != null ? " · within " + p.accuracy_m + " m" : "";
+    return (p.position_from === "device" ? "Here" : p.position_from === "pin" ? "Pin you dropped" : "From the photo") + acc;
+  }
+
   return { KINDS, SPECIES, SUGGESTED, MAX_TAGS, MAX_TAG, MAX_NOTE, MAX_READINGS, MAX_EDGE, THUMB_EDGE, PHOTO_BUDGET, THUMB_BUDGET, MAX_UPLOAD, FALLBACK_EDGE,
     tidyTags, chips, fieldProblems, nzLocalToIso, takenAt, position, latLonWords, positionLine, nearest, kmWords, sizes, paths, data, record,
-    SAVED, SAVED_OFFLINE, waitingLine, badgeCount, unsentCount, signOutWarning, SIGN_OUT_UNKNOWN, STATE_WORDS, when, day, detailLine, tagCounts, hasTag, who, plural };
+    SAVED, SAVED_OFFLINE, waitingLine, badgeCount, unsentCount, signOutWarning, SIGN_OUT_UNKNOWN, STATE_WORDS, when, day, detailLine, tagCounts, hasTag, who, plural,
+    whenWords, summary, seenBy, placeWords, factRows, siteOptions, whereShort, speciesWord, readingWords, FROM_WORDS, closeSite, SITE_NEAR, SITE_NEAR_MAX, HERE_OLD, refusedWords };
 });

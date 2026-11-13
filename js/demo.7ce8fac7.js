@@ -2069,6 +2069,17 @@
           }
           return result(singular ? added[0] : added);
         }
+        // PH4: a change to a capture, as public.captures' policy and guard allow it: its maker changes its note, tags, sharing or
+        // archives it; a group admin archives anyone's; nothing else (in memory)
+        if (write && changes && table === "captures") {
+          const role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role;
+          const hit = rows.filter((row) => filters.every(([key, val]) => matches(row, key, val)));
+          const keys = Object.keys(changes), mayAll = (r) => r.created_by === USER && !!role, archiveOnly = keys.every((k) => k === "archived_at");
+          if (hit.some((r) => !(mayAll(r) || (archiveOnly && role === "admin"))) || keys.some((k) => !["note", "tags", "shared_with_group", "archived_at"].includes(k)))
+            return result(null, { code: "42501", message: "Only the person who made a capture changes it; a group admin may archive it" });
+          for (const r of hit) Object.assign(r, copy(changes), { updated_at: new Date().toISOString(), ...(changes.archived_at ? { archived_by: USER } : {}) });
+          return singular ? (hit.length === 1 ? result(hit[0]) : error("Demo row not found")) : result(hit);
+        }
         // A change or removal of a Layers page note: applied in memory to the rows the filters pick.
         if (write && (changes || removing) && EDITED.includes(table) && filters.length) {
           const hit = rows.filter((row) => filters.every(([key, val]) => matches(row, key, val)));

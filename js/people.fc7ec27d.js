@@ -819,48 +819,55 @@
 
     // ---- log an interaction --------------------------------------------------------------------------------------------------------------
     function openLog(it, preset) { go("log", { form: M().toForm(it, now(), preset), editing: it || null }); }
+    // PH4: the one pattern for add forms (js/form-rows.js), and PRODUCT.md's "three taps and a line": who with, what it was, one line
+    // (and when, prefilled with now) first; the subject, how long, topics and a follow-up under More details. Plain rows, no boxes.
     function logScreen() {
-      const f = st.form, it = st.editing;
-      const seg = (name, choices, value, set) => el("div", { class: "crm-segments", role: "radiogroup", "aria-label": name, "data-field": name.toLowerCase() },
-        ...choices.map(([k, label]) => el("button", { type: "button", role: "radio", "aria-checked": String(value === k), "data-value": k, onclick: () => { set(k); draw(); } }, label)));
-      const input = (id, attrs = {}) => { const i = el("input", { id: "pe-" + id, name: id, ...attrs }); i.value = f[id] ?? ""; i.addEventListener("input", () => { f[id] = i.value; }); return i; };
-      const field = (id, label, node, hint) => el("div", { class: "crm-field", "data-field": id }, el("label", { for: "pe-" + id }, label), node, hint ? el("small", {}, hint) : null);
-      const quick = (id, choices) => el("div", { class: "crm-quick" }, ...choices.map(([v, label]) => el("button", { type: "button", class: "crm-chip", "aria-pressed": String(String(f[id]) === String(v)), onclick: () => { f[id] = String(v); draw(); } }, label)));
-      // Who with: picked chips, and a search over the group's businesses and people.
-      const picked = el("ul", { class: "crm-picked" }, ...f.links.map((l) => el("li", {}, M().linkText(l),
-        el("button", { type: "button", class: "link", "aria-label": "Remove " + l.name, onclick: () => { f.links = f.links.filter((x) => !(x.kind === l.kind && x.id === l.id)); draw(); } }, "×"))));
-      const results = el("ul", { class: "crm-who-results" });
-      const who = el("input", { id: "pe-who", type: "search", autocomplete: "off", placeholder: "Search members and people" });
+      const f = st.form, it = st.editing, R = FP.formRows;
+      const s = R.sheet({ form: true, page: true, title: it ? "Edit the interaction" : "Log an interaction", saveLabel: "Save", className: "crm-form crm-log", onCancel: () => back() });
+      const form = s.node, save = s.save;
+      s.cancel.classList.add("crm-back");
+      const input = (id, attrs = {}) => { const i = R.input({ id: "pe-" + id, name: id, ...attrs }); i.value = f[id] ?? ""; i.addEventListener("input", () => { f[id] = i.value; }); return i; };
+      const row = (id, label, node, hint) => R.row({ key: id, label, forId: "pe-" + id, control: node, hint });
+      // quick choices: small plain words after the field, no pill round them
+      const quick = (id, choices) => el("span", { class: "crm-quick fs-quick" }, ...choices.map(([v, label]) => el("button", { type: "button", class: "fs-quick-word", "aria-pressed": String(String(f[id]) === String(v)), onclick: () => { f[id] = String(v); draw(); } }, label)));
+      // Who with: the picked, each removable, and a search over the group's members and people
+      const picked = el("ul", { class: "crm-picked fs-picked" }, ...f.links.map((l) => el("li", {}, M().linkText(l),
+        el("button", { type: "button", class: "fs-unpick", "aria-label": "Remove " + l.name, onclick: () => { f.links = f.links.filter((x) => !(x.kind === l.kind && x.id === l.id)); draw(); } }, FP.icon("close", 14)))));
+      const results = el("div", { class: "crm-who-results fs-results" });
+      const who = R.input({ id: "pe-who", type: "search", placeholder: f.links.length ? "Add someone" : "Search members and people", enterkeyhint: "search" });
       const showResults = () => {
         const found = who.value.trim() ? M().whoWith(st.directory, st.people, who.value, f.links) : [];
-        results.replaceChildren(...found.map((r) => el("li", {}, el("button", { type: "button", "data-who": r.kind + ":" + r.id, onclick: () => {
+        results.hidden = !found.length;
+        results.replaceChildren(...found.map((r) => el("button", { type: "button", class: "fs-option", "data-who": r.kind + ":" + r.id, onclick: () => {
           f.links = [...f.links, { kind: r.kind, id: r.id, name: r.name, member_number: r.kind === "business" ? st.directory.find((x) => x.group_member_id === r.id)?.member_number : null }];
           draw(); document.getElementById("pe-who")?.focus();
-        } }, el("b", {}, r.name), el("small", {}, (r.kind === "business" ? "Member · " : "Person · ") + r.note)))));
+        } }, el("span", { class: "fs-lead", "aria-hidden": "true" }, FP.icon(r.kind === "business" ? "people" : "person", 18)),
+          el("span", { class: "fs-option-words" }, el("span", {}, r.name), el("small", {}, (r.kind === "business" ? "Member · " : "Person · ") + r.note)))));
       };
+      results.hidden = true;
       who.addEventListener("input", showResults);
-      const summary = el("textarea", { id: "pe-summary", rows: "5", maxlength: "20000" }); summary.value = f.summary; summary.addEventListener("input", () => { f.summary = summary.value; });
-      const errors = el("div", { class: "crm-errors", role: "alert" }, ...(st.errors || []).map((e) => el("p", {}, e)));
-      const save = el("button", { type: "submit", class: "primary" }, it ? "Save changes" : "Save");
+      const withRow = el("div", { class: "fs-row crm-with", "data-field": "who", "data-row": "who" }, el("label", { class: "fs-label", for: "pe-who" }, "With"),
+        el("div", { class: "fs-value fs-wrap" }, f.links.length ? picked : null, who));
+      const kind = R.pick({ id: "pe-kind", key: "kind", label: "What", title: "What it was", options: M().KINDS.map(([v, label]) => ({ value: v, label })), value: () => f.kind, onPick: (k) => { f.kind = k; draw(); } });
+      const direction = M().DIRECTED.has(f.kind) ? R.pick({ id: "pe-direction", key: "direction", label: "Direction", title: "Direction", options: M().DIRECTIONS.map(([v, label]) => ({ value: v, label })), value: () => f.direction, onPick: (k) => { f.direction = k; } }) : null;
+      const summary = R.long({ id: "pe-summary", key: "summary", label: "Summary", value: f.summary, placeholder: "One line is enough", max: 20000, onInput: (v) => { f.summary = v; } });
+      const whenRow = R.row({ key: "date", label: "When", forId: "pe-date", control: input("date", { type: "date", required: true }) });
+      const timeRow = R.row({ key: "time", label: "Time", forId: "pe-time", control: [input("time", { type: "time" }), el("button", { type: "button", class: "fs-quick-word", onclick: () => { f.date = M().dayKey(now()); f.time = FP.eventsModel.timeKey(now()); draw(); } }, "Now")] });
+      const errors = el("div", { class: "crm-errors fs-say", role: "alert" }, ...(st.errors || []).map((e) => el("p", {}, e)));
+      if (!(st.errors || []).length) errors.hidden = true;
       const in7 = M().dayKey(Date.parse(today() + "T12:00:00Z") + 7 * 86400000), in30 = M().dayKey(Date.parse(today() + "T12:00:00Z") + 30 * 86400000);
-      const form = el("form", { class: "crm-form crm-log", novalidate: true }, backButton(it ? "Back" : "Cancel"),
-        el("h3", {}, it ? "Edit the interaction" : "Log an interaction"), errors,
-        el("fieldset", {}, el("legend", {}, "What"), seg("Kind", M().KINDS, f.kind, (k) => { f.kind = k; })),
-        M().DIRECTED.has(f.kind) ? el("fieldset", {}, el("legend", {}, "Direction"), seg("Direction", M().DIRECTIONS, f.direction, (k) => { f.direction = k; })) : null,
-        el("div", { class: "crm-row-fields" }, field("date", "When", input("date", { type: "date", required: true })), field("time", "Time", input("time", { type: "time" }))),
-        el("button", { type: "button", class: "link", onclick: () => { f.date = M().dayKey(now()); f.time = FP.eventsModel.timeKey(now()); draw(); } }, "Now"),
-        field("duration", "How long (minutes, optional)", input("duration", { type: "number", min: "0", max: "10080", step: "1", inputmode: "numeric" })),
-        quick("duration", [[5, "5 min"], [15, "15 min"], [30, "30 min"], [60, "1 hour"]]),
-        el("div", { class: "crm-field", "data-field": "who" }, el("label", { for: "pe-who" }, "Who with"), picked, who, results),
-        field("subject", "Subject", input("subject", { type: "text", maxlength: "300", autocomplete: "off" })),
-        field("summary", "Summary", summary),
-        field("topics", "Topics (optional)", input("topics", { type: "text", autocomplete: "off", list: "pe-topic-list" }), "Separated by commas, for example: FEP, nutrient budget."),
+      const moreBox = R.more({ label: "More details", open: !!st.logMore || !!it, rows: [
+        row("subject", "Subject", input("subject", { type: "text", maxlength: "300" })),
+        row("duration", "How long", [input("duration", { type: "number", min: "0", max: "10080", step: "1", inputmode: "numeric", placeholder: "min" }), quick("duration", [[5, "5 min"], [15, "15"], [30, "30"], [60, "1 h"]])]),
+        row("topics", "Topics", input("topics", { type: "text", list: "pe-topic-list", placeholder: "FEP, nutrient budget" }), "Separated by commas."),
+        row("follow_up_on", "Follow up", [input("follow_up_on", { type: "date", "aria-label": "Follow up on" })]),
+        el("div", { class: "fs-row fs-quick-row" }, el("span", { class: "fs-label" }, ""), el("div", { class: "fs-value" }, quick("follow_up_on", [[in7, "In a week"], [in30, "In a month"], ["", "None"]]))),
+      ] });
+      moreBox.querySelector(".fs-more").addEventListener("click", () => { st.logMore = !moreBox._box.hidden; });
+      s.body.append(errors, R.set(withRow, results, kind, direction, summary, whenRow, timeRow), moreBox,
         el("datalist", { id: "pe-topic-list" }, ...M().topicsOf([...(st.page?.interactions || []), ...st.feed.items]).map((t) => el("option", { value: t }))),
-        field("follow_up_on", "Follow up on (optional)", input("follow_up_on", { type: "date" })),
-        quick("follow_up_on", [[in7, "In a week"], [in30, "In a month"], ["", "None"]]),
-        el("p", { class: "group-fine" }, "New Zealand time. Only the group's facilitators, advisors and admins see this."),
-        el("div", { class: "crm-save" }, save));
-      if (it && M().canArchive(group.role, it, me)) form.append(el("p", {}, el("button", { type: "button", class: "link", "data-action": "cancel-interaction", onclick: async () => {
+        R.quiet("New Zealand time. Only the group's facilitators, advisors and admins see this."));
+      if (it && M().canArchive(group.role, it, me)) s.body.append(el("p", {}, el("button", { type: "button", class: "link", "data-action": "cancel-interaction", onclick: async () => {
         if (await setCancelled(it, true)) back(true); else draw();
       } }, "Cancel this entry (it stays on record)")));
       form.addEventListener("submit", async (e) => {
@@ -901,34 +908,37 @@
           wrap.querySelector(".crm-title-actions .more-button")?.focus();   // back on the control that opened the sheet
         } });
     }
+    // PH4: the one pattern for add forms: the name, an email and a phone first; the rest under More details
     function personFormScreen() {
-      const f = st.form, { person: x, business: b, contact } = st.target;
+      const f = st.form, { person: x, business: b, contact } = st.target, R = FP.formRows;
       // a contact (someone linked to no member): who they work for and what kind of contact; never for a member's person
       const asContact = !b && !!FP.membershipModel && (contact || (!!x && !(st.page?.person?.id === x.id && (st.page.businesses || []).some((y) => y.current))));
-      const input = (id, attrs = {}) => { const i = el(attrs.rows ? "textarea" : "input", { id: "pf-" + id, name: id, ...attrs }); i.value = f[id] ?? ""; i.addEventListener("input", () => { f[id] = i.value; }); return i; };
-      const field = (id, label, node, hint) => el("div", { class: "crm-field", "data-field": id }, el("label", { for: "pf-" + id }, label), node, hint ? el("small", {}, hint) : null);
-      const errors = el("div", { class: "crm-errors", role: "alert" }, ...(st.errors || []).map((e) => el("p", {}, e)));
-      const primary = el("input", { id: "pf-is_primary", type: "checkbox", ...(f.is_primary ? { checked: true } : {}) });
-      primary.addEventListener("change", () => { f.is_primary = primary.checked; });
-      const save = el("button", { type: "submit", class: "primary" }, x ? "Save changes" : "Add the person");
-      const form = el("form", { class: "crm-form", novalidate: true }, backButton("Cancel"),
-        el("h3", {}, x ? "Edit " + x.display_name : b ? "Add a person at " + b.business_name : contact ? "Add a contact" : "Add a person"), errors,
-        contact ? el("p", { class: "group-fine" }, "Someone the group works with who is not a member, such as council staff, a funder or a contractor. Link them to a member later if that changes.") : null,
-        el("div", { class: "crm-row-fields" }, field("given_name", "First name", input("given_name", { type: "text", maxlength: "100", autocomplete: "off" })),
-          field("family_name", "Last name", input("family_name", { type: "text", maxlength: "100", autocomplete: "off" }))),
-        field("display_name", "Name shown (optional)", input("display_name", { type: "text", maxlength: "200", autocomplete: "off" }), "Leave empty to use the first and last name."),
-        field("job_title", "Job title or role", input("job_title", { type: "text", maxlength: "200", autocomplete: "off" })),
-        asContact ? el("div", { class: "crm-row-fields" }, field("organisation_name", "Organisation", input("organisation_name", { type: "text", maxlength: "200", autocomplete: "off", placeholder: "For example: Environment Canterbury" })),
-          field("contact_kind", "Kind of contact", input("contact_kind", { type: "text", maxlength: "40", autocomplete: "off", list: "pf-kinds" }))) : null,
-        asContact ? el("datalist", { id: "pf-kinds" }, ...MM().CONTACT_KINDS.map((k) => el("option", { value: k }))) : null,
-        b ? el("div", { class: "crm-row-fields" }, field("relationship", "Relationship to " + b.business_name, input("relationship", { type: "text", maxlength: "60", placeholder: "owner, manager, contact, accounts", autocomplete: "off" })),
-          el("div", { class: "crm-check" }, primary, el("label", { for: "pf-is_primary" }, "Primary contact"))) : null,
-        field("emails", "Emails", input("emails", { rows: "2", inputmode: "email" }), "One per line."),
-        field("phones", "Phones", input("phones", { rows: "2", inputmode: "tel" }), "One per line."),
-        field("postal_address", "Postal address", input("postal_address", { rows: "2" })),
-        field("physical_address", "Physical address", input("physical_address", { rows: "2" })),
-        field("notes", "Notes", input("notes", { rows: "3" })),
-        el("div", { class: "crm-save" }, save));
+      const s = R.sheet({ form: true, page: true, title: x ? "Edit " + x.display_name : b ? "Add a person at " + b.business_name : contact ? "Add a contact" : "Add a person", saveLabel: x ? "Save" : "Add",
+        className: "crm-form crm-person-form", onCancel: () => back() });
+      const form = s.node, save = s.save;
+      s.cancel.classList.add("crm-back");
+      const one = (id, label, attrs = {}, hint = null) => (attrs.rows
+        ? R.long({ id: "pf-" + id, key: id, label, value: f[id] ?? "", placeholder: attrs.placeholder || "", hint, attrs: { name: id, ...(attrs.inputmode ? { inputmode: attrs.inputmode } : {}) }, onInput: (v) => { f[id] = v; } })
+        : R.text({ id: "pf-" + id, key: id, label, value: f[id] ?? "", placeholder: attrs.placeholder || "", max: attrs.maxlength || null, hint, attrs: { name: id, ...(attrs.list ? { list: attrs.list } : {}) }, onInput: (v) => { f[id] = v; } }));
+      const errors = el("div", { class: "crm-errors fs-say", role: "alert" }, ...(st.errors || []).map((e) => el("p", {}, e)));
+      if (!(st.errors || []).length) errors.hidden = true;
+      const primary = b ? R.toggle({ id: "pf-is_primary", key: "is_primary", label: "Primary contact", checked: !!f.is_primary, onChange: (on) => { f.is_primary = on; } }) : null;
+      const moreBox = R.more({ label: "More details", open: !!x, rows: [
+        one("display_name", "Name shown", { maxlength: "200", placeholder: "Optional" }, "Leave empty to use the first and last name."),
+        one("job_title", "Job title", { maxlength: "200", placeholder: "Or role" }),
+        asContact ? one("organisation_name", "Organisation", { maxlength: "200", placeholder: "Environment Canterbury" }) : null,
+        asContact ? one("contact_kind", "Kind", { maxlength: "40", list: "pf-kinds", placeholder: "Kind of contact" }) : null,
+        b ? one("relationship", "Relationship", { maxlength: "60", placeholder: "owner, manager, contact" }) : null,
+        primary,
+        one("postal_address", "Postal", { rows: "2", placeholder: "Postal address" }),
+        one("physical_address", "Physical", { rows: "2", placeholder: "Physical address" }),
+        one("notes", "Notes", { rows: "3", placeholder: "Optional" }),
+      ] });
+      s.body.append(...[errors,
+        contact ? R.quiet("Someone the group works with who is not a member, such as council staff, a funder or a contractor. Link them to a member later if that changes.", { class: "fs-quiet fs-lead-note" }) : null,
+        R.set(one("given_name", "First name", { maxlength: "100" }), one("family_name", "Last name", { maxlength: "100" }),
+          one("emails", "Email", { rows: "1", inputmode: "email", placeholder: "One per line" }), one("phones", "Phone", { rows: "1", inputmode: "tel", placeholder: "One per line" })),
+        moreBox, asContact ? el("datalist", { id: "pf-kinds" }, ...MM().CONTACT_KINDS.map((k) => el("option", { value: k }))) : null].filter(Boolean));
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const { errors: problems, row, link } = M().toPerson(f);

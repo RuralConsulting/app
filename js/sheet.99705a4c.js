@@ -4,7 +4,7 @@
 // While one is open the round + is tucked away (body.sheet-open).
 //
 //   FP.sheet.open({ opener, title, where?, body(close) -> nodes, className? })   a sheet with anything in it
-//   FP.sheet.menu(opener, title, [{ label, hint?, icon?, action?, run() }])      a list of actions
+//   FP.sheet.menu(opener, title, [{ label, hint?, icon?, action?, run() }], where?, className?)   a list of actions
 //   FP.sheet.close()
 (function (root) {
   const FP = root.FP;
@@ -65,8 +65,8 @@
   }
 
   // A list of actions, each one tap
-  function menu(opener, title, items, where = "") {
-    return open({ opener, title, where, className: "fp-menu", body: (done) => el("ul", { class: "add-list", role: "list" }, ...items.map((it) => el("li", {},
+  function menu(opener, title, items, where = "", className = "") {
+    return open({ opener, title, where, className: "fp-menu" + (className ? " " + className : ""), body: (done) => el("ul", { class: "add-list", role: "list" }, ...items.map((it) => el("li", {},
       el(it.href ? "a" : "button", { ...(it.href ? { href: it.href } : { type: "button" }), class: "add-item fp-menu-item", ...(it.action ? { "data-action": it.action } : {}), ...(it.current ? { "aria-current": "page" } : {}),
         onclick: () => { done(); it.run?.(); } },
         it.icon ? el("span", { class: "add-item-icon" }, FP.icon(it.icon, 20)) : null,

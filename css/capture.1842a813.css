@@ -251,3 +251,40 @@ li.rec-row { cursor: default; }
 .qp input.qp-note { border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: none; padding: 0 2px; }
 .qp-note:focus { outline: none; border-bottom-color: var(--ink); }
 .qp-foot[hidden] { display: none; }
+
+/* ---- PH4: the capture screens in the form pattern (ui.css "PH4"; js/form-rows.js) ---------------------------------------------------- */
+/* the photo fills the top; "Take it again" sits on it, small */
+.fs .qp-photo { position: relative; display: block; }
+.fs .qp-img, .fs .cap-img { display: block; width: 100%; height: auto; max-height: 52vh; object-fit: cover; border-radius: var(--radius-l); background: var(--fill); }
+.fs .cap-photo[hidden] { display: none; }
+.qp-again { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; margin: 0; padding: 0 12px; border: 0; border-radius: var(--radius-pill);
+  background: var(--material); color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui); box-shadow: var(--shadow-1); cursor: pointer; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.qp-again::after { content: ""; position: absolute; inset: -5px -2px; }   /* a 44 px target */
+.qp-again:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.fs .qp-where { margin: -8px var(--s-1) 0; }
+.fs.qp .qp-body { gap: var(--s-5); padding: var(--s-4) var(--s-4) var(--s-8); }
+/* a photo added to a sample or pest control: small, at the end of its row */
+.fs .cap-row-thumb { flex: none; width: 36px; height: 36px; border-radius: var(--radius-s); object-fit: cover; background: var(--fill); }
+.fs .cap-row-thumb[hidden] { display: none; }
+.fs .cap-pin-map { height: 240px; border-radius: var(--radius-l); }
+.fs .cap-pin-map[hidden] { display: none; }
+.fs .cap-msg { min-height: 0; }
+
+/* ---- PH4: a saved record's page ------------------------------------------------------------------------------------------------------ */
+.rec-viewer .rec-photo-box { display: block; }
+.rec-viewer .rec-photo { display: block; width: 100%; height: auto; max-height: 56vh; object-fit: cover; border-radius: var(--radius-l); }
+.rec-viewer .rec-summary { margin: 0; font: 500 var(--text-body)/1.4 var(--f-ui); color: var(--ink); }
+.rec-viewer .rec-note { margin: -8px 0 0; font: 400 var(--text-body)/1.45 var(--f-ui); color: var(--ink); white-space: pre-wrap; }
+.rec-viewer .rec-value { min-width: 0; color: var(--ink); overflow-wrap: anywhere; padding: 12px 0; }
+.rec-viewer .fs-row { min-height: 44px; }
+.rec-viewer .rec-where .fs-chosen { white-space: normal; padding: 12px 0; }
+.rec-viewer .rec-where { display: grid; grid-template-columns: minmax(5.5rem, 34%) minmax(0, 1fr) auto; }
+.rec-viewer .rec-coords { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s-3); padding: 0 var(--s-4) 10px 0; color: var(--ink-2); font-size: var(--text-small); }
+.rec-viewer .rec-coords[hidden] { display: none; }
+.rec-viewer .rec-coords code { font: 400 var(--text-small)/1.4 var(--f-mono); color: var(--ink); user-select: all; -webkit-user-select: all; }
+.rec-viewer .rec-copy { position: relative; min-height: 32px; padding: 0 var(--s-2); border: 0; border-radius: var(--radius-s); background: none; color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); cursor: pointer; }
+.rec-viewer .rec-copy::after { content: ""; position: absolute; inset: -6px 0; }
+.rec-viewer .rec-seen { margin: -8px var(--s-1) 0; color: var(--ink-3); font-size: var(--text-small); }
+.rec-viewer .rec-say { margin: 0; color: var(--ink); font-size: var(--text-small); }
+.rec-viewer .rec-say:empty { display: none; }

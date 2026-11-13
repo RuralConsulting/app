@@ -252,52 +252,41 @@
       if (!ev) f.start_time = "";
       go("form", { current: ev, form: f, errors: [] });
     }
+    // PH4: the form in the one pattern for add forms (js/form-rows.js): Cancel, the title and Save in one thin top row; the few rows an
+    // event needs first (title, date, start, all day, place), everything else under More details; plain rows, no box round a field.
+    // On a phone it takes the screen; on a computer it sits in the page.
     function formScreen() {
-      const ev = st.current, f = st.form;
-      const field = (id, label, input, hint) => el("div", { class: "events-field", "data-field": id }, el("label", { for: "ev-" + id }, label), input, hint ? el("small", {}, hint) : null);
-      const input = (id, attrs = {}) => { const i = el("input", { id: "ev-" + id, name: id, ...attrs }); i.value = f[id] ?? ""; i.addEventListener("input", () => { f[id] = i.value; }); return i; };
-      const allDay = el("input", { id: "ev-all_day", type: "checkbox", ...(f.all_day ? { checked: true } : {}) });
-      const times = [field("start_time", "Starts at", input("start_time", { type: "time" })), field("end_time", "Ends at", input("end_time", { type: "time" }))];
-      allDay.addEventListener("change", () => { f.all_day = allDay.checked; for (const t of times) t.hidden = allDay.checked; });
-      for (const t of times) t.hidden = !!f.all_day;
-      const lat = input("latitude", { inputmode: "decimal", placeholder: "-43.5" }), lon = input("longitude", { inputmode: "decimal", placeholder: "172.6" });
-      const topicBox = el("div", { class: "events-topics-edit" });
-      const drawTopics = () => {
-        const used = new Set(f.topics.map((t) => t.toLowerCase()));
-        const suggest = M().topicSuggestions(st.events).filter((t) => !used.has(t.toLowerCase())).slice(0, 10);
-        const add = el("input", { id: "ev-topic", type: "text", maxlength: "40", list: "ev-topic-list", placeholder: "Type a topic, then Add", autocomplete: "off" });
-        const addIt = () => { const t = add.value.trim(); if (!t) return; f.topics = M().cleanTopics([...f.topics, t]); drawTopics(); topicBox.querySelector("#ev-topic")?.focus(); };
-        add.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addIt(); } });
-        topicBox.replaceChildren(
-          // (UI1: no chips draws nothing; replaceChildren would print a null as the word "null")
-          ...(f.topics.length ? [el("ul", { class: "events-topic-chips" }, ...f.topics.map((t) => el("li", {}, t, el("button", { type: "button", class: "link", "aria-label": "Remove topic " + t, onclick: () => { f.topics = f.topics.filter((x) => x !== t); drawTopics(); } }, "×"))))] : []),
-          el("div", { class: "events-topic-add" }, add, el("button", { type: "button", class: "secondary", onclick: addIt }, "Add")),
-          el("datalist", { id: "ev-topic-list" }, ...M().topicSuggestions(st.events).map((t) => el("option", { value: t }))),
-          ...(suggest.length ? [el("p", { class: "events-suggest" }, el("small", {}, "Used before: "), ...suggest.map((t) => el("button", { type: "button", class: "events-suggestion", onclick: () => { f.topics = M().cleanTopics([...f.topics, t]); drawTopics(); } }, t)))] : []));
-      };
-      drawTopics();
-      // NP1: the notes field only for the group's facilitators, advisors and admins, and said plainly to be theirs
-      const notes = notesToo ? el("textarea", { id: "ev-notes", rows: "4", maxlength: "10000" }) : null;
-      if (notes) { notes.value = f.notes || ""; notes.addEventListener("input", () => { f.notes = notes.value; }); }
+      const ev = st.current, f = st.form, R = FP.formRows;
+      const s = R.sheet({ form: true, page: true, title: ev ? "Edit the event" : "Add an event", saveLabel: ev ? "Save" : "Add", className: "events-form",
+        onCancel: () => (ev ? go("event") : go("calendar")) });
+      const form = s.node, save = s.save;
+      s.cancel.classList.add("events-back");
+      s.cancel.setAttribute("aria-label", ev ? "Cancel: back to the event" : "Cancel: back to the calendar");
+      const text = (id, label, attrs = {}, hint = null) => R.text({ id: "ev-" + id, key: id, label, value: f[id] ?? "", type: attrs.type || "text", placeholder: attrs.placeholder || "", max: attrs.maxlength || null,
+        inputmode: attrs.inputmode || null, hint, attrs: { name: id, ...Object.fromEntries(Object.entries(attrs).filter(([k]) => !["type", "placeholder", "maxlength", "inputmode"].includes(k))) }, onInput: (v) => { f[id] = v; } });
+      const title = text("title", "Title", { maxlength: "200", required: true, placeholder: "Field day or meeting" });
+      const date = text("start_date", "Date", { type: "date", required: true });
+      const start = text("start_time", "Starts at", { type: "time" });
+      const end = text("end_time", "Ends at", { type: "time" });
+      const allDay = R.toggle({ id: "ev-all_day", key: "all_day", label: "All day", checked: !!f.all_day, onChange: (on) => { f.all_day = on; start.hidden = on; end.hidden = on; } });
+      start.hidden = end.hidden = !!f.all_day;
+      const place = text("place_name", "Place", { maxlength: "200", placeholder: "the ford on Ford Road" });
+      const endDate = text("end_date", "Ends on", { type: "date" }, "If not the same day.");
+      const lat = text("latitude", "Latitude", { inputmode: "decimal", placeholder: "-43.5" }), lon = text("longitude", "Longitude", { inputmode: "decimal", placeholder: "172.6" });
       const mapSlot = el("div", { class: "events-pick-map", hidden: true });
       const pick = typeof root.maplibregl === "object" || typeof root.maplibregl === "function"
-        ? el("button", { type: "button", class: "link", "aria-expanded": "false", onclick: () => togglePick(mapSlot, pick, lat, lon, f) }, "Pick the point on a map") : null;
-      const errors = el("div", { class: "events-errors", role: "alert" }, ...(st.errors || []).map((e) => el("p", {}, e)));
-      const save = el("button", { type: "submit", class: "primary" }, ev ? "Save changes" : "Add the event");
-      const form = el("form", { class: "events-form", novalidate: true },
-        el("button", { type: "button", class: "link events-back", onclick: () => (ev ? go("event") : go("calendar")) }, ev ? "Back to the event" : "Back to the calendar"),
-        el("h3", {}, ev ? "Edit the event" : "Add an event"), errors,
-        field("title", "Title", input("title", { type: "text", maxlength: "200", required: true, autocomplete: "off" })),
-        el("div", { class: "events-field events-check" }, allDay, el("label", { for: "ev-all_day" }, "All day")),
-        el("div", { class: "events-row" }, field("start_date", "Date", input("start_date", { type: "date", required: true })), times[0]),
-        el("div", { class: "events-row" }, field("end_date", "Ends on (if not the same day)", input("end_date", { type: "date" })), times[1]),
-        el("p", { class: "group-fine" }, "New Zealand time."),
-        field("place_name", "Place", input("place_name", { type: "text", maxlength: "200", placeholder: "For example: the ford on Ford Road", autocomplete: "off" })),
-        el("fieldset", { class: "events-point" }, el("legend", {}, "Map point (optional)"), el("div", { class: "events-row" }, field("latitude", "Latitude", lat), field("longitude", "Longitude", lon)), pick, mapSlot),
-        el("div", { class: "events-field", "data-field": "topics" }, el("label", { for: "ev-topic" }, "Topics"), topicBox),
-        notes ? field("notes", "Notes", notes, "Not shown to members.") : null,
-        field("head_count", "Head count (optional)", input("head_count", { type: "number", min: "0", step: "1", inputmode: "numeric" }), "For when names aren't recorded."),
-        el("div", { class: "events-actions" }, save, el("button", { type: "button", class: "secondary", onclick: () => (ev ? go("event") : go("calendar")) }, "Cancel")));
+        ? R.action({ id: "ev-pick-point", key: "pick-point", icon: "map", label: "Pick the point on a map", attrs: { "aria-expanded": "false" }, onClick: () => togglePick(mapSlot, pick, lat._input, lon._input, f) }) : null;
+      // topics: a choice of several (those used before offered), with a new one typed
+      const topics = R.pick({ id: "ev-topics", key: "topics", label: "Topics", title: "Topics", multi: true, empty: "None",
+        options: () => M().cleanTopics([...f.topics, ...M().topicSuggestions(st.events)]).map((t) => ({ value: t, label: t })), value: () => f.topics,
+        onPick: (v) => { f.topics = M().cleanTopics(v); }, allowNew: { label: "New topic", placeholder: "Type a topic", max: 40, tidy: (t) => M().cleanTopics([t])[0] || "" } });
+      // NP1: the notes field only for the group's facilitators, advisors and admins, and said plainly to be theirs
+      const notes = notesToo ? R.long({ id: "ev-notes", key: "notes", label: "Notes", value: f.notes || "", placeholder: "Optional", max: 10000, hint: "Not shown to members.", onInput: (v) => { f.notes = v; } }) : null;
+      const head = text("head_count", "Head count", { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "Optional" }, "For when names aren't recorded.");
+      const errors = el("div", { class: "events-errors fs-say", role: "alert" }, ...(st.errors || []).map((e) => el("p", {}, e)));
+      const moreBox = R.more({ label: "More details", rows: [endDate, end, lat, lon, pick, topics, notes, head], open: !!ev && !!(f.end_date || f.latitude || f.topics.length || f.notes || f.head_count) });
+      s.body.append(errors, R.set(title, date, start, allDay), R.set(place), moreBox, mapSlot, R.quiet("New Zealand time."));
+      if (!(st.errors || []).length) errors.hidden = true;
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const { errors: problems, row: full } = M().toRow(f);

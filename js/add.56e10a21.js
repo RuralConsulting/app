@@ -191,7 +191,7 @@
   // panels that take the bottom of the screen while they are open: the button tucks away until they close (N2b's water quality
   // sites panel reaches 72% of a phone)
   // (PH2: and a map's own sheet opened tall on a phone, its layers and legend: the + never sits on its list)
-  const TUCK = ".events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden]), .rv-panel-open > .rv-panel, .maps-viewer.ph-more-open, .maps-viewer.rv-measuring, .maps-viewer.rv-comparing";
+  const TUCK = ".fs-page, .fs-overlay, .events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden]), .rv-panel-open > .rv-panel, .maps-viewer.ph-more-open, .maps-viewer.rv-measuring, .maps-viewer.rv-comparing";
   let watching = null, clicks = false;
   function settle() {
     const d = root.document, b = [...buttons.values()].find((x) => !x.hidden && x.getClientRects().length);

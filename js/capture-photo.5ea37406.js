@@ -1,6 +1,8 @@
 // CAP1: capture on a phone. "Take a photo" is the fastest path in the app: tap + then Photo, the camera opens, then one short screen
-// (the photo, tag chips, an optional note, the place, where and when it was taken) and one filled button, Save. A water sample and pest
-// control are the same screen with a tag preset and a few fields of their own. Save never waits for the network: the capture (the
+// and Save. PH4 (the owner: the forms are "clunky"): every screen here is the one pattern for add forms (form-rows.js): Cancel, the
+// title and Save in one thin top row, then plain rows. After the shot, the photo and at most three rows (Tag, Note, Place where there is
+// a choice); a water sample and pest control open on the fewest rows that make a record (the site, nearest first, and the reading; what
+// and how many; where and when prefilled), the photo an optional row, the rest under More details. Save never waits for the network: the capture (the
 // resized photo and its thumbnail, and its record) goes into the capture queue on this phone first (capture-queue.js, IndexedDB) and
 // is sent when there is coverage, in order, once. The person is back where they were with a quiet "Saved" line that opens it.
 //
@@ -134,16 +136,6 @@
     } finally { pic.done(); }
   }
 
-  // ---- the phone's own position, when the person allows it --------------------------------------------------------------------------------
-  function here() {
-    return new Promise((resolve) => {
-      const g = root.navigator.geolocation;
-      if (!g) { resolve(null); return; }
-      try { g.getCurrentPosition((p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy }), () => resolve(null), { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }); }
-      catch { resolve(null); }
-    });
-  }
-
   // ---- tags to offer ----------------------------------------------------------------------------------------------------------------------
   async function tagChoices(org, preset) {
     const key = TAGS_KEY + me + ":" + org, kept = readJson(key) || { suggestions: [], recent: [] };
@@ -183,138 +175,131 @@
     const camera = el("input", { type: "file", accept: "image/*", capture: "environment", hidden: true, id: "cap-camera" });
     const library = el("input", { type: "file", accept: "image/*", hidden: true, id: "cap-library" });
     open(ctx, K, camera, library);
-    try { camera.click(); } catch { /* the screen's own buttons */ }
+    // PH4: a water sample or pest control opens on its rows (the photo is an optional row); a photo opens the camera at once
+    if (K === "photo") try { camera.click(); } catch { /* the screen's own row */ }
   }
 
+  // PH4: the full screen (a water sample, pest control, and a photo on a computer) as FP.formRows lays every add form out: the top row
+  // (Cancel, the title, Save), then the fewest rows that make a valid record, prefilled (where: the phone's position when it already
+  // has a fresh one, never a prompt by itself; when: now, or the photo's own time), the reading or the count as one large number row,
+  // the photo as a row with a camera icon; everything else under More details (tags, note, place, sharing, more readings).
   function open(ctx, kind, camera, library) {
     close();
-    const places = placesFor(ctx);
-    const st = { kind, org: places[0]?.id || ctx.id, file: null, prepared: null, meta: null, device: null, pin: null, tags: new Set(C().KINDS[kind].preset ? [C().KINDS[kind].preset] : []),
-      chips: [], busy: false, asked: false, reading: 0, species: kind === "pest_control" ? "deer" : null };
+    const R = FP.formRows, places = placesFor(ctx);
+    const held = FP.locate?.last?.(), fresh = held && FP.phoneModel?.fresh?.(held) && FP.locate.permissionNow?.() !== "denied" ? held : null;
+    const st = { kind, org: places[0]?.id || ctx.id, file: null, prepared: null, meta: null, device: fresh ? { lat: fresh.lat, lon: fresh.lon, accuracy: fresh.accuracy, at: fresh.at } : null, pin: null,
+      tags: C().KINDS[kind].preset ? [C().KINDS[kind].preset] : [], chips: [], busy: false, reading: 0, species: kind === "pest_control" ? "deer" : null, shared: false, finding: false };
     const title = C().KINDS[kind].title;
-    const msg = el("p", { class: "cap-msg", role: "status", id: "cap-msg" });
+    const msg = el("p", { class: "cap-msg fs-say", role: "status", id: "cap-msg" });
+    const s = R.sheet({ id: "cap-screen", title, titleId: "cap-title", saveId: "cap-save", cancelId: "cap-close", className: "cap-screen", onSave: () => doSave(), onCancel: () => close(true) });
+    const node = s.node, save = s.save;
+    node.dataset.kind = kind;
+    s.cancel.setAttribute("aria-label", "Cancel: close without saving");
 
-    // the photo
+    // the photo: a row with a camera icon; once taken, the photo above the rows (a photo) or small in its row (a sample, pest control)
     const img = el("img", { class: "cap-img", id: "cap-img", alt: "", hidden: true });
-    const take = el("button", { type: "button", class: "cap-take", id: "cap-take" }, FP.icon("camera", 22), el("span", {}, "Take a photo"));
-    const choose = el("button", { type: "button", class: "link cap-choose", id: "cap-choose" }, "Choose from your photos");
-    const again = el("button", { type: "button", class: "link cap-again", id: "cap-again", hidden: true }, "Take another");
-    const photoBox = el("div", { class: "cap-photo", "data-has-photo": "false" }, img, el("div", { class: "cap-photo-empty" }, take, choose), again, camera, library);
-    take.addEventListener("click", () => camera.click());
-    again.addEventListener("click", () => camera.click());
-    choose.addEventListener("click", () => library.click());
+    const thumb = el("img", { class: "cap-row-thumb", alt: "", hidden: true });
+    const photoRow = R.action({ id: "cap-take", key: "photo", icon: "camera", label: "Add a photo", onClick: () => photoChoices() });
+    photoRow.append(thumb);
+    const photoBox = el("div", { class: "cap-photo", "data-has-photo": "false", hidden: true }, img);
     for (const input of [camera, library]) input.addEventListener("change", () => { const f = input.files?.[0]; input.value = ""; if (f) usePhoto(f); });
-
-    // tags
-    const chipsBox = el("div", { class: "cap-chips", role: "group", "aria-label": "Tags" });
-    const newTag = el("input", { type: "text", id: "cap-tag-new", class: "cap-tag-new", maxlength: String(C().MAX_TAG), placeholder: "Add a tag", enterkeyhint: "done", autocomplete: "off", "aria-label": "Add a tag" });
-    const addTag = el("button", { type: "button", class: "cap-tag-add", id: "cap-tag-add", "aria-label": "Add this tag" }, FP.icon("plus", 18));
-    function drawChips() {
-      const names = C().tidyTags([...st.chips, ...st.tags]);
-      chipsBox.replaceChildren(...names.map((t) => {
-        const on = [...st.tags].some((x) => x.toLowerCase() === t.toLowerCase());
-        const b = el("button", { type: "button", class: "chip cap-chip", "aria-pressed": String(on), "data-tag": t }, t);
-        b.addEventListener("click", () => { for (const x of [...st.tags]) if (x.toLowerCase() === t.toLowerCase()) st.tags.delete(x); if (!on) st.tags.add(t); drawChips(); chipsBox.querySelector('[data-tag="' + CSS.escape(t) + '"]')?.focus(); });
-        return b;
-      }));
+    s.sheet.append(camera, library);
+    function photoChoices() {
+      R.list({ opener: photoRow, title: "Photo", value: null, onPick: (v) => {
+        if (v === "camera") { try { camera.click(); } catch { /* the row again */ } }
+        else if (v === "library") { try { library.click(); } catch { /* the row again */ } }
+        else if (v === "remove") { st.file = null; st.prepared = null; st.meta = null; drawPhoto(); drawWhere(); }
+      }, options: [{ value: "camera", label: "Take a photo" }, { value: "library", label: "Choose from your photos" }, ...(st.prepared ? [{ value: "remove", label: "Remove the photo" }] : [])] });
     }
-    function typedTag() {
-      const t = C().tidyTags([newTag.value])[0];
-      if (!t) return;
-      if (C().tidyTags([...st.tags, t]).length > C().MAX_TAGS) { msg.textContent = "At most " + C().MAX_TAGS + " tags."; return; }
-      st.tags.add(t); if (!st.chips.some((x) => x.toLowerCase() === t.toLowerCase())) st.chips.push(t);
-      newTag.value = ""; drawChips();
+    function drawPhoto() {
+      const has = !!st.prepared;
+      if (img.src && !has) { URL.revokeObjectURL(img.src); img.removeAttribute("src"); }
+      img.hidden = !has || kind !== "photo"; photoBox.hidden = img.hidden; photoBox.dataset.hasPhoto = String(has);
+      thumb.hidden = !has || kind === "photo";
+      if (has) { const u = URL.createObjectURL(st.prepared.photo); if (kind === "photo") { img.src = u; img.alt = "The photo you took"; } else { thumb.src = u; thumb.alt = "The photo you took"; } }
+      photoRow.querySelector(".fs-action-words").textContent = has ? "Photo added" : "Add a photo";
+      photoRow.setAttribute("aria-label", has ? "Photo added: change or remove it" : "Add a photo");
     }
-    addTag.addEventListener("click", typedTag);
-    newTag.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); typedTag(); } });
-    const tagsBox = el("fieldset", { class: "cap-tags" }, el("legend", {}, "Tags"), chipsBox, el("div", { class: "cap-tag-row" }, newTag, addTag));
-    tagChoices(st.org, C().KINDS[kind].preset).then((list) => { st.chips = list; if (screen?.node === node) drawChips(); });
-    drawChips();
 
-    // the kind's own fields
-    const fields = kindFields(kind, st);
+    // tags (a choice of several, with a new one typed), note, place
+    const tagRow = R.pick({ id: "cap-tags", key: "tags", label: "Tags", title: "Tags", multi: true, max: C().MAX_TAGS, tooMany: "At most " + C().MAX_TAGS + " tags.",
+      options: () => C().tidyTags([...st.chips, ...st.tags]).map((t) => ({ value: t, label: t })), value: () => st.tags, onPick: (v) => { st.tags = C().tidyTags(v); },
+      allowNew: { label: "New tag", placeholder: "Type a tag", max: C().MAX_TAG, tidy: (t) => C().tidyTags([t])[0] || "" } });
+    tagChoices(st.org, C().KINDS[kind].preset).then((list) => { st.chips = list; if (screen?.node === node) tagRow._draw(); });
+    const noteRow = R.long({ id: "cap-note", key: "note", label: "Note", placeholder: "Optional", max: C().MAX_NOTE });
+    const note = noteRow._input;
+    const placeRow = places.length > 1 ? R.pick({ id: "cap-place", key: "place", label: "Place", title: "Save it to", options: places.map((g) => ({ value: g.id, label: g.name })), value: () => st.org,
+      onPick: (v) => { st.org = v; tagChoices(st.org, C().KINDS[kind].preset).then((l) => { st.chips = l; tagRow._draw(); }); fields.placeChanged?.(); } }) : null;
 
-    // note
-    const note = el("input", { type: "text", id: "cap-note", maxlength: String(C().MAX_NOTE), placeholder: "Optional", autocomplete: "off", enterkeyhint: "done" });
-    const noteBox = el("label", { class: "cap-field", for: "cap-note" }, el("span", {}, "Note"), note);
-
-    // the place
-    let placeBox;
-    if (places.length > 1) {
-      const sel = el("select", { id: "cap-place" }, ...places.map((g) => el("option", { value: g.id, selected: g.id === st.org }, g.name)));
-      sel.addEventListener("change", () => { st.org = sel.value; tagChoices(st.org, C().KINDS[kind].preset).then((l) => { st.chips = l; drawChips(); }); fields.placeChanged?.(); });
-      placeBox = el("label", { class: "cap-field", for: "cap-place" }, el("span", {}, "Place"), sel);
-    } else placeBox = el("p", { class: "cap-line cap-place", id: "cap-place-line" }, FP.icon("places", 18), el("span", {}, "To ", el("b", {}, places[0]?.name || ctx.name)));
-
-    // where and when
-    const posText = el("span", { id: "cap-pos-text" });
-    const useHere = el("button", { type: "button", class: "link", id: "cap-use-here" }, "Use my location");
-    const dropPin = el("button", { type: "button", class: "link", id: "cap-drop-pin", "aria-expanded": "false" }, "Drop a pin");
-    const pinMap = el("div", { class: "cap-pin-map", id: "cap-pin-map", hidden: true });
-    const posBox = el("div", { class: "cap-line cap-pos" }, el("span", { class: "cap-dot", "aria-hidden": "true" }), posText, el("span", { class: "cap-pos-acts" }, useHere, dropPin));
-    const timeText = el("span", { id: "cap-time-text" });
-    const timeBox = el("p", { class: "cap-line cap-time" }, FP.icon("events", 18), timeText);
+    // where and when: prefilled; where opens a short list (here, a pin, none)
     const pos = () => C().position({ meta: st.meta, device: st.device, pin: st.pin });
     const taken = () => C().takenAt(st.meta, new Date().toISOString());
+    const pinMap = el("div", { class: "cap-pin-map", id: "cap-pin-map", hidden: true });
+    const whereRow = R.pick({ id: "cap-where", key: "where", label: "Where", title: "Where it was", empty: "Add where", value: () => (st.pin ? "pin" : st.device ? "here" : st.meta && pos() ? "photo" : ""),
+      words: () => (st.finding ? "Finding where you are…" : C().whereShort(pos())),
+      options: () => [...(st.meta && C().position({ meta: st.meta }) ? [{ value: "photo", label: "Where the photo was taken", hint: "From the photo" }] : []),
+        { value: "here", label: "Where I am now", hint: "This phone's position" }, { value: "pin", label: "Drop a pin on the map" }, { value: "none", label: "No position" }],
+      onPick: (v) => {
+        if (v === "here") useHere();
+        else if (v === "pin") { st.pin = null; togglePin(true); }
+        else if (v === "photo") { st.device = null; st.pin = null; togglePin(false); }
+        else if (v === "none") { st.device = null; st.pin = null; st.meta = st.meta ? { ...st.meta, lat: null, lon: null } : null; togglePin(false); }
+        drawWhere();
+      } });
+    const whenRow = R.row({ key: "when", label: "When", control: el("span", { class: "fs-chosen", id: "cap-time-text" }) });
+    const sharedWhere = el("p", { class: "fs-quiet cap-shared-where", id: "cap-shared-where", hidden: true }, "Shared with the group, so is where it was taken.");
     function drawWhere() {
-      const p = pos();
-      posText.textContent = C().positionLine(p);
-      posBox.dataset.has = p ? "true" : "false";
+      whereRow._draw();
       const t = taken();
-      timeText.textContent = "Taken " + C().when(t.at) + (t.from === "photo" ? " (from the photo)" : "");
-      fields.positionChanged?.(p);
-      drawShared?.();
+      whenRow.querySelector("#cap-time-text").textContent = C().whenWords(t.at) + (t.from === "photo" ? " (from the photo)" : "");
+      fields.positionChanged?.(pos());
+      sharedWhere.hidden = !(st.shared && pos());
     }
-    useHere.addEventListener("click", async () => { posText.textContent = "Finding where you are…"; st.device = await here(); st.pin = null; if (!st.device) msg.textContent = "This phone didn't give a position. Drop a pin instead, or save without one."; drawWhere(); });
-    dropPin.addEventListener("click", () => togglePin());
+    async function useHere() {
+      st.finding = true; st.pin = null; togglePin(false); whereRow._draw();
+      const got = await FP.locate.get({ maxAge: 60000 });
+      st.finding = false;
+      if (screen?.node !== node) return;
+      st.device = got?.ok && got.fix ? { lat: got.fix.lat, lon: got.fix.lon, accuracy: got.fix.accuracy, at: got.fix.at } : null;
+      R.say(whereRow, st.device ? "" : "This phone didn't give a position. Drop a pin instead, or save without one.");
+      drawWhere();
+    }
     let map = null, marker = null;
-    function togglePin() {
-      const opening = pinMap.hidden;
-      pinMap.hidden = !opening; dropPin.setAttribute("aria-expanded", String(opening));
+    function togglePin(opening) {
+      pinMap.hidden = !opening;
       if (!opening) { map?.remove(); map = null; marker = null; return; }
       const gl = root.maplibregl, p = pos();
-      if (!gl || root.navigator.onLine === false) { pinMap.replaceChildren(el("p", { class: "cap-quiet" }, "The map needs a connection. Save without a position, or with the one shown.")); return; }
+      if (!gl || root.navigator.onLine === false) { pinMap.replaceChildren(el("p", { class: "fs-quiet" }, "The map needs a connection. Save without a position, or with the one shown.")); return; }
       try {
         gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js");
         map = new gl.Map({ container: pinMap, style: FP.basemaps.style("aerial"), ...(p ? { center: [p.longitude, p.latitude], zoom: 15 } : { bounds: [[166.3, -47.4], [178.6, -34.3]] }), attributionControl: { compact: true } });
         if (p) marker = new gl.Marker().setLngLat([p.longitude, p.latitude]).addTo(map);
         map.on("click", (e) => { st.pin = { lat: e.lngLat.lat, lon: e.lngLat.lng }; if (marker) marker.setLngLat(e.lngLat); else marker = new gl.Marker().setLngLat(e.lngLat).addTo(map); drawWhere(); });
-      } catch { pinMap.replaceChildren(el("p", { class: "cap-quiet" }, "The map couldn't open here.")); }
+      } catch { pinMap.replaceChildren(el("p", { class: "fs-quiet" }, "The map couldn't open here.")); }
     }
 
-    // share
-    const share = el("input", { type: "checkbox", id: "cap-share" });
-    const shareBox = el("label", { class: "cap-share", for: "cap-share" }, share, el("span", {}, el("b", {}, "Share with everyone in the group"), el("small", {}, "Otherwise only you and the group's coordinators see it.")));
+    // share: off unless the person turns it on (a member's capture is seen by them and the group's coordinators)
+    const shareRow = R.toggle({ id: "cap-share", key: "share", label: "Share with everyone in the group", hint: "Otherwise only you and the group's coordinators see it.",
+      onChange: (on) => { st.shared = on; drawWhere(); } });
+    const share = shareRow._input;
 
-    // Save: the one filled button
-    const save = el("button", { type: "button", class: "cap-save", id: "cap-save" }, "Save");
-    save.addEventListener("click", () => doSave());
-    const shut = el("button", { type: "button", class: "cap-close", id: "cap-close", "aria-label": "Close without saving" }, FP.icon("close", 22));
-    shut.addEventListener("click", () => close(true));
+    // the kind's own rows
+    const fields = kindFields(kind, st, { R });
+    const main = kind === "photo" ? [photoRow, tagRow, noteRow] : [...fields.main, whereRow, whenRow, photoRow];
+    const extra = kind === "photo" ? [whereRow, whenRow, placeRow, shareRow] : [...(fields.more || []), tagRow, noteRow, placeRow, shareRow];
+    const moreBox = R.more({ label: "More details", rows: extra });
+    s.body.append(photoBox, R.set(...main), pinMap, moreBox, sharedWhere, ...(fields.after || []), msg);
+    // (review of #529, 2: shared with the group, its position goes with it: said quietly, sharedWhere, under More details)
 
-    // review of #529, 2: shared with the group, its position goes with it: said quietly under the position line
-    const sharedWhere = el("p", { class: "cap-quiet cap-shared-where", id: "cap-shared-where", hidden: true }, "Shared with the group, so is where it was taken.");
-    const drawShared = () => { sharedWhere.hidden = !(share.checked && pos()); };
-    share.addEventListener("change", drawShared);
-    const body = el("div", { class: "cap-body" }, photoBox, tagsBox, fields.node, noteBox, placeBox, posBox, sharedWhere, pinMap, timeBox, shareBox, msg);
-    const node = el("div", { class: "cap-screen", id: "cap-screen", role: "dialog", "aria-modal": "true", "aria-labelledby": "cap-title", "data-kind": kind },
-      el("header", { class: "cap-head" }, shut, el("h2", { id: "cap-title" }, title), el("span", { class: "cap-head-gap" })),
-      body, el("footer", { class: "cap-foot" }, save));
-    node.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") { e.preventDefault(); close(true); return; }
-      if (e.key !== "Tab") return;
-      const f = [...node.querySelectorAll("button:not([disabled]), input:not([hidden]):not([type=file]), select, textarea, a[href]")].filter((x) => x.getClientRects().length);
-      if (!f.length) return;
-      if (e.shiftKey && root.document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
-      else if (!e.shiftKey && root.document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
-    });
     // (back to what opened it: a Home tile, or the + when the ring that opened it has gone)
     const from = root.document.activeElement;
     screen = { node, ctx, opener: from && from !== root.document.body && from.isConnected ? from : (FP.add?.buttons?.() || []).find((b) => !b.hidden && b.getClientRects().length) || null };
     root.document.body.append(node);
+    s.mounted();
     root.document.body.classList.add("cap-open");
     drawWhere();
-    take.focus();
+    // the focus on the first row that is not a text field (no keyboard until the person taps a field), else Cancel
+    ([...s.body.querySelectorAll("button.fs-row")].find((b) => b.getClientRects().length) || s.cancel).focus();
 
     async function usePhoto(file) {
       st.file = file; const mine = ++st.reading;
@@ -326,23 +311,37 @@
       if (!got) { msg.textContent = "This photo can't be read here. Take it again with the camera, or choose another."; return; }
       if (got.tooBig) { msg.textContent = "This photo is too large to send, even made smaller. Take it again, or choose another."; return; }
       st.prepared = got; st.meta = got.meta;
-      if (img.src) URL.revokeObjectURL(img.src);
-      img.src = URL.createObjectURL(got.photo); img.hidden = false; img.alt = "The photo you took";
-      photoBox.dataset.hasPhoto = "true"; again.hidden = false;
       msg.textContent = "";
-      // (review of #529, 2: the phone is asked for its position only when the person taps "Use my location", never by itself)
+      drawPhoto();
+      // (review of #529, 2: the phone is asked for its position only when the person asks for it, never by itself)
       drawWhere();
     }
 
+    // review of #539, 1: "Here" stands only for two minutes, as a photo's position does (phone-model PHOTO_FIX_AGE). At Save an older one
+    // is asked for again, only where the phone already allows it (never a new prompt); none fresh, and nothing is saved as "here": the
+    // person is told under Where and chooses again (here, a pin, or no position)
+    async function hereStill() {
+      if (!st.device || st.pin) return true;
+      const P = FP.phoneModel;
+      if (P.fresh(st.device, Date.now())) return true;
+      let got = null;
+      if (FP.locate.permissionNow() === "granted") got = await FP.locate.get({ maxAge: P.PHOTO_FIX_AGE });
+      if (screen?.node !== node) return false;
+      if (got?.ok && P.fresh(got.fix, Date.now())) { st.device = { lat: got.fix.lat, lon: got.fix.lon, accuracy: got.fix.accuracy, at: got.fix.at }; drawWhere(); return true; }
+      st.device = null; drawWhere();
+      R.say(whereRow, C().HERE_OLD);
+      return false;
+    }
     async function doSave() {
       if (st.busy) return;
       st.busy = true; save.disabled = true; msg.textContent = "";
       try {
+        if (!(await hereStill())) throw Object.assign(Error("Check the row marked above."), { plain: true });
         const typed = fields.values(), probs = C().fieldProblems(kind, typed);
         fields.showProblems?.(probs);
-        if (probs.length) throw Object.assign(Error(probs.length === 1 ? "Check the field marked above." : "Check the fields marked above."), { plain: true });
-        const { clientId, sending } = await keep({ org: st.org, kind, taken: taken(), position: pos(), note: note.value, tags: [...st.tags], shared: share.checked,
-          fields: fields.values(), prepared: st.prepared });
+        if (probs.length) throw Object.assign(Error(probs.length === 1 ? "Check the row marked above." : "Check the rows marked above."), { plain: true });
+        const { clientId, sending } = await keep({ org: st.org, kind, taken: taken(), position: pos(), note: note.value, tags: st.tags, shared: share.checked,
+          fields: typed, prepared: st.prepared });
         const to = st.org;
         close(true);
         saved(to, clientId, sending);
@@ -385,20 +384,25 @@
   // it works offline. So: + then Take a photo, the shutter, then Save.
   function quick(ctx) {
     close();
-    const P = FP.phoneModel, places = placesFor(ctx), placeName = places[0]?.name || ctx.name;
+    const P = FP.phoneModel, places = placesFor(ctx);
+    let placeName = places[0]?.name || ctx.name;
     const st = { org: places[0]?.id || ctx.id, fix: null, prepared: null, shotAt: null, tags: new Set(), chips: [], busy: false, reading: 0, note: null };
     const camera = el("input", { type: "file", accept: "image/*", capture: "environment", hidden: true, id: "qp-camera" });
     const body = el("div", { class: "cap-body qp-body" });
-    const save = el("button", { type: "button", class: "cap-save", id: "qp-save" }, "Save");
-    const foot = el("footer", { class: "cap-foot qp-foot", hidden: true }, save);
-    const shut = el("button", { type: "button", class: "cap-close", id: "qp-close", "aria-label": "Close without saving" }, FP.icon("close", 22));
-    const node = el("div", { class: "cap-screen qp", id: "qp-screen", role: "dialog", "aria-modal": "true", "aria-labelledby": "qp-title", "data-state": "locating" },
-      el("header", { class: "cap-head" }, shut, el("h2", { id: "qp-title" }, "Photo"), el("span", { class: "cap-head-gap" })), body, foot, camera);
-    shut.addEventListener("click", () => close(true));
-    node.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); close(true); } });
+    // PH4: the form pattern's sheet: Cancel, the title, Save (shown once there is a photo); the camera input kept inside it
+    const R = FP.formRows;
+    const s0 = R.sheet({ id: "qp-screen", title: "Photo", titleId: "qp-title", saveId: "qp-save", cancelId: "qp-close", className: "cap-screen qp", onSave: () => doSave(), onCancel: () => close(true) });
+    const node = s0.node, save = s0.save;
+    s0.cancel.setAttribute("aria-label", "Cancel: close without saving");
+    s0.body.replaceWith(body);
+    body.classList.add("fs-body");
+    s0.sheet.append(camera);
+    node.dataset.state = "locating";
+    save.hidden = true;
     const from = root.document.activeElement;
     screen = { node, ctx, opener: from && from !== root.document.body && from.isConnected ? from : (FP.add?.buttons?.() || []).find((b) => !b.hidden && b.getClientRects().length) || null };
     root.document.body.append(node);
+    s0.mounted();
     root.document.body.classList.add("cap-open");
     const live = () => screen?.node === node;
     // plain rows in one outline (the owner's guide): a small leading icon, then the words; the primary row's icon in a filled circle
@@ -406,13 +410,13 @@
       el("span", { class: "qp-dot", "aria-hidden": "true" }, FP.icon(icon, primary ? 18 : 20)), el("span", {}, words));
     const set = (...rows) => el("div", { class: "qp-set", role: "group" }, ...rows);
     const msg = el("p", { class: "cap-msg", role: "status", id: "qp-msg" });
-    const whereWords = () => ["To " + placeName, st.shotAt ? C().when(st.shotAt) : null, st.fix ? P.accuracyWords(st.fix.accuracy) : null].filter(Boolean).join(" · ");
+    const whereWords = () => [places.length > 1 && st.prepared ? null : "To " + placeName, st.shotAt ? C().when(st.shotAt) : null, st.fix ? "here, " + P.accuracyWords(st.fix.accuracy).replace(/ /g, "\u00a0") : null].filter(Boolean).join(" · ");
     let where = null;
     const drawWhere = () => { if (where) where.textContent = whereWords(); };
 
     function show(state, problem = null) {
       node.dataset.state = state;
-      foot.hidden = state !== "photo";
+      save.hidden = state !== "photo";
       if (state === "locating") body.replaceChildren(el("p", { class: "qp-quiet", role: "status", id: "qp-locating" }, "Finding your position…"));
       else if (state === "refused") {
         // PH2: what is wrong, then where this phone turns location on, step by step (an iPhone's Settings and Safari's page menu; an
@@ -463,7 +467,7 @@
     async function usePhoto(file) {
       const mine = ++st.reading, shot = new Date().toISOString();
       body.replaceChildren(el("p", { class: "qp-quiet", role: "status" }, "Reading the photo…"));
-      foot.hidden = true;
+      save.hidden = true;
       // the position at the shot: one from the two minutes before it, or asked for now; none means no photo
       let f = FP.locate.permissionNow() === "denied" ? null : P.fixForShot(FP.locate.last(), shot);
       if (!f) {
@@ -486,28 +490,26 @@
       st.prepared = got;
       drawPhoto();
     }
+    // PH4: after the shot, the photo fills the top; under it at most three rows: Tag (a short list with ticks; none chosen for the
+    // person, as before), Note (one row that grows), and Place only where there is a real choice; Save in the top row
     function drawPhoto() {
       const img = el("img", { class: "cap-img qp-img", id: "qp-img", alt: "The photo you took", src: URL.createObjectURL(st.prepared.photo) });
-      const chips = el("div", { class: "qp-tags", role: "group", "aria-label": "Tag (optional)", id: "qp-tags" });
-      const drawChips = () => chips.replaceChildren(...st.chips.map((t) => {
-        const on = [...st.tags].some((x) => x.toLowerCase() === t.toLowerCase());
-        const b = el("button", { type: "button", class: "chip qp-chip", "aria-pressed": String(on), "data-tag": t }, t);
-        b.addEventListener("click", () => { for (const x of [...st.tags]) if (x.toLowerCase() === t.toLowerCase()) st.tags.delete(x); if (!on) st.tags.add(t); drawChips(); chips.querySelector('[data-tag="' + CSS.escape(t) + '"]')?.focus(); });
-        return b;
-      }));
-      tagChoices(st.org, null).then((list) => { st.chips = P.quickTags(list); if (live()) drawChips(); });
-      const note = el("input", { type: "text", id: "qp-note", class: "qp-note", maxlength: String(C().MAX_NOTE), placeholder: "Add a note (optional)", autocomplete: "off", enterkeyhint: "done", "aria-label": "Note (optional)" });
-      note.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); note.blur(); } });
-      where = el("p", { class: "qp-quiet qp-where", id: "qp-where" });
+      const tagRow = R.pick({ id: "qp-tags", key: "tags", label: "Tag", title: "Tags", multi: true, empty: "Optional", max: C().MAX_TAGS, tooMany: "At most " + C().MAX_TAGS + " tags.",
+        options: () => C().tidyTags([...st.chips, ...st.tags]).map((t) => ({ value: t, label: t })), value: () => [...st.tags], onPick: (v) => { st.tags = new Set(C().tidyTags(v)); },
+        allowNew: { label: "New tag", placeholder: "Type a tag", max: C().MAX_TAG, tidy: (t) => C().tidyTags([t])[0] || "" } });
+      tagChoices(st.org, null).then((list) => { st.chips = C().tidyTags(list); if (live()) tagRow._draw(); });
+      const noteRow = R.long({ id: "qp-note", key: "note", label: "Note", placeholder: "Optional", max: C().MAX_NOTE });
+      const placeRow = places.length > 1 ? R.pick({ id: "qp-place", key: "place", label: "Save to", title: "Save it to", options: places.map((g) => ({ value: g.id, label: g.name })), value: () => st.org,
+        onPick: (v) => { st.org = v; placeName = places.find((g) => g.id === v)?.name || placeName; drawWhere(); tagChoices(st.org, null).then((l) => { st.chips = C().tidyTags(l); tagRow._draw(); }); } }) : null;
+      where = el("p", { class: "fs-quiet qp-where", id: "qp-where" });
       drawWhere();
-      const again = el("button", { type: "button", class: "link qp-again", id: "qp-again", onclick: () => openCamera() }, "Take it again");
-      body.replaceChildren(el("div", { class: "qp-photo" }, img, again), chips, note, where, msg);
-      st.note = note;
+      const again = el("button", { type: "button", class: "qp-again", id: "qp-again", onclick: () => openCamera() }, FP.icon("camera", 16), el("span", {}, "Take it again"));
+      body.replaceChildren(el("div", { class: "qp-photo" }, img, again), R.set(tagRow, noteRow, placeRow), where, msg);
+      st.note = noteRow._input;
       show("photo");
-      drawChips();
-      save.focus();
+      s0.top.querySelector(".fs-title")?.focus();   // (the sheet's title, not Save: no ring drawn round the action; Tab goes on to the rows)
     }
-    save.addEventListener("click", async () => {
+    async function doSave() {
       if (st.busy || !st.prepared) return;
       // the position is the condition for a photo: the shot's own (from the two minutes before it), and location still on at Save;
       // otherwise nothing is saved (review of #535, 1)
@@ -526,79 +528,78 @@
         saved(to, clientId, sending);
         badge();
       } catch (e) { msg.textContent = e.plain ? e.message : e.message || String(e); st.busy = false; save.disabled = false; }
-    });
+    }
 
     // the gate: a fresh position opens the camera on this same tap; otherwise the phone is asked first
     openCamera();
   }
 
-  // The water sample's site and readings; pest control's species and count. Each kind: { node, values(), positionChanged?(p) }.
-  function kindFields(kind, st) {
+  // The water sample's site and readings; pest control's species and count, as rows (PH4). Each kind: { main: rows first (the fewest
+  // that make a valid record), more: rows under More details, after: lines after the sets, first: the row to focus, values(),
+  // showProblems(probs), positionChanged?(p), placeChanged?() }.
+  function kindFields(kind, st, { R }) {
     if (kind === "water_sample") {
-      const siteSel = el("select", { id: "cap-site", hidden: true });
-      const siteName = el("input", { type: "text", id: "cap-site-name", maxlength: "120", placeholder: "Site name (optional)", autocomplete: "off" });
-      const rows = el("div", { class: "cap-readings" });
-      const more = el("button", { type: "button", class: "link", id: "cap-reading-add" }, "Add a reading");
-      const addRow = () => {
-        const i = rows.childElementCount;
-        if (i >= C().MAX_READINGS) return;
-        rows.append(el("div", { class: "cap-reading-wrap", "data-reading-wrap": String(i) }, el("div", { class: "cap-reading", "data-reading": String(i) },
-          el("input", { type: "text", class: "cap-r-name", maxlength: "40", placeholder: "Nitrate", "aria-label": "Reading " + (i + 1) + ": what" }),
-          el("input", { type: "text", class: "cap-r-value", inputmode: "decimal", placeholder: "0.0", "aria-label": "Reading " + (i + 1) + ": value" }),
-          el("input", { type: "text", class: "cap-r-unit", maxlength: "20", placeholder: "mg/L", "aria-label": "Reading " + (i + 1) + ": unit" })),
-          el("p", { class: "cap-field-msg", id: "cap-reading-msg-" + i, role: "status" })));
-        more.hidden = rows.childElementCount >= C().MAX_READINGS;
+      let sites = [], near = [];
+      const nameRow = R.text({ id: "cap-site-name", key: "site-name", label: "Site", placeholder: "Name of the place (optional)", max: 120 });
+      const siteRow = R.pick({ id: "cap-site", key: "site", label: "Site", title: "Which site", empty: "Choose", value: () => st.site ?? null,
+        options: () => C().siteOptions(sites, C().position({ meta: st.meta, device: st.device, pin: st.pin }), 5),
+        onPick: (v) => { st.site = v; st.siteAuto = false; drawSites(); if (v === "") nameRow._input.focus(); } });
+      // the nearest known site first (the group's sites the person may read, read once a session, at most five offered)
+      const drawSites = (p = C().position({ meta: st.meta, device: st.device, pin: st.pin })) => {
+        near = C().nearest(sites, p, 5);
+        // review of #539, 2: put at a site by itself only when the position is at it; the person's own choice stays while it is listed
+        if (st.siteAuto || st.site == null) { const close = C().closeSite(sites, p); st.site = close ? String(close.site_id) : null; st.siteAuto = true; }
+        if (st.site && !near.some((x) => String(x.site_id) === st.site)) st.site = null;
+        siteRow.hidden = !near.length;
+        nameRow.hidden = near.length > 0 && st.site !== "";   // (a typed name only once "Another place" is chosen, or with no site near)
+        nameRow.querySelector(".fs-label").textContent = near.length ? "Site name" : "Site";
+        siteRow._draw();
       };
-      more.addEventListener("click", () => { addRow(); rows.lastElementChild?.querySelector("input")?.focus(); });
-      addRow();
-      let sites = [];
-      const drawSites = (p) => {
-        const near = C().nearest(sites, p, 5);
-        siteSel.hidden = !near.length; siteName.hidden = near.length > 0 && siteSel.value !== "";
-        if (!near.length) return;
-        const was = siteSel.value;
-        siteSel.replaceChildren(el("option", { value: "" }, "Another place (type it)"), ...near.map((s) => el("option", { value: String(s.site_id), selected: String(s.site_id) === was }, s.name + " · " + C().kmWords(s.km))));
-        siteName.hidden = siteSel.value !== "";
-      };
-      siteSel.addEventListener("change", () => { siteName.hidden = siteSel.value !== ""; });
-      const load = () => sitesFor(st.org).then((s) => { sites = s; drawSites(C().position({ meta: st.meta, device: st.device, pin: st.pin })); });
+      const load = () => sitesFor(st.org).then((x) => { sites = x; drawSites(); });
       load();
-      const node = el("fieldset", { class: "cap-kind cap-water" }, el("legend", {}, "Sample"),
-        el("label", { class: "cap-field", for: "cap-site" }, el("span", {}, "Site"), siteSel, siteName), el("p", { class: "cap-sub" }, "Field readings (optional)"), rows, more,
-        el("p", { class: "cap-quiet" }, "Lab results are added to this record later. They stay the group's record: nothing here goes into the regional council's water quality data."));
-      const showProblems = (probs) => {
-        [...rows.children].forEach((w, i) => {
-          const p = probs.find((x) => x.key === "reading-" + i), v = w.querySelector(".cap-r-value");
-          v.setAttribute("aria-invalid", p ? "true" : "false"); v.setAttribute("aria-describedby", "cap-reading-msg-" + i);
-          w.querySelector(".cap-field-msg").textContent = p ? p.text : "";
-        });
-        rows.querySelector("[aria-invalid=true]")?.focus();
+      // a reading: what (in the label's place, quiet), the number (large) and its unit, in one row
+      const readings = [];
+      const readingRow = (i) => {
+        const name = R.input({ type: "text", class: "fs-input fs-label-input cap-r-name", maxlength: "40", placeholder: i ? "What" : "Nitrate", "aria-label": "Reading " + (i + 1) + ": what" });
+        const unit = R.input({ type: "text", class: "fs-input fs-unit-input cap-r-unit", maxlength: "20", placeholder: "mg/L", "aria-label": "Reading " + (i + 1) + ": unit" });
+        const r = R.big({ id: "cap-r-value-" + i, key: "reading-" + i, labelNode: el("span", { class: "fs-label" }, name), placeholder: "0.0",
+          attrs: { class: "fs-input fs-big-input cap-r-value", "aria-label": "Reading " + (i + 1) + ": value" }, unit });
+        r.classList.add("cap-reading");
+        r.dataset.reading = String(i);
+        readings.push(r);
+        return r;
       };
-      return { node, positionChanged: drawSites, placeChanged: load, showProblems,
+      const first = readingRow(0);
+      const addOne = R.action({ id: "cap-reading-add", key: "reading-add", icon: "plus", label: "Add another reading", onClick: () => {
+        if (readings.length >= C().MAX_READINGS) return;
+        const r = readingRow(readings.length);
+        addOne.before(r);
+        addOne.hidden = readings.length >= C().MAX_READINGS;
+        r.querySelector(".cap-r-name")?.focus();
+      } });
+      const showProblems = (probs) => {
+        readings.forEach((w, i) => { const p = probs.find((x) => x.key === "reading-" + i); R.say(w, p ? p.text : ""); });
+        readings.find((w) => w.querySelector("[aria-invalid=true]"))?.querySelector(".cap-r-value")?.focus();
+      };
+      return { main: [siteRow, nameRow, first], more: [addOne], first: first.querySelector(".cap-r-value"),
+        after: [R.quiet("Lab results are added to this record later. They stay the group's record: nothing here goes into the regional council's water quality data.", { class: "fs-quiet cap-lab" })],
+        positionChanged: (p) => drawSites(p), placeChanged: load, showProblems,
         values: () => {
-          const pick = !siteSel.hidden && siteSel.value ? sites.find((s) => String(s.site_id) === siteSel.value) : null;
-          return { site_id: pick ? pick.site_id : null, site_name: pick ? pick.name : siteName.value,
-            readings: [...rows.children].map((w) => w.querySelector(".cap-reading")).map((r) => ({ name: r.querySelector(".cap-r-name").value, value: r.querySelector(".cap-r-value").value, unit: r.querySelector(".cap-r-unit").value })) };
+          const pick = !siteRow.hidden && st.site ? sites.find((x) => String(x.site_id) === st.site) : null;
+          return { site_id: pick ? pick.site_id : null, site_name: pick ? pick.name : nameRow._input.value,
+            readings: readings.map((r) => ({ name: r.querySelector(".cap-r-name").value, value: r.querySelector(".cap-r-value").value, unit: r.querySelector(".cap-r-unit").value })) };
         } };
     }
     if (kind === "pest_control") {
-      const group = el("div", { class: "cap-chips", role: "group", "aria-label": "Species" });
-      const draw = () => group.replaceChildren(...C().SPECIES.map(([k, label]) => {
-        const b = el("button", { type: "button", class: "chip cap-chip", "aria-pressed": String(st.species === k), "data-species": k }, label);
-        b.addEventListener("click", () => { st.species = st.species === k ? null : k; draw(); group.querySelector('[data-species="' + k + '"]')?.focus(); });
-        return b;
-      }));
-      draw();
-      const count = el("input", { type: "text", id: "cap-count", inputmode: "numeric", value: "1", "aria-label": "How many", class: "cap-count", "aria-describedby": "cap-count-msg" });
-      const countMsg = el("p", { class: "cap-field-msg", id: "cap-count-msg", role: "status" });
-      const showProblems = (probs) => { const p = probs.find((x) => x.key === "count"); count.setAttribute("aria-invalid", p ? "true" : "false"); countMsg.textContent = p ? p.text : ""; if (p) count.focus(); };
-      const node = el("fieldset", { class: "cap-kind cap-pest" }, el("legend", {}, "What"), group,
-        el("label", { class: "cap-field cap-field-short", for: "cap-count" }, el("span", {}, "How many"), count), countMsg);
-      return { node, showProblems, values: () => ({ species: st.species, count: count.value }) };
+      const what = R.pick({ id: "cap-species", key: "species", label: "What", title: "What", empty: "Choose", value: () => st.species ?? "",
+        options: [...C().SPECIES.map(([k, label]) => ({ value: k, label })), { value: "", label: "Not sure" }], onPick: (v) => { st.species = v || null; } });
+      const count = R.big({ id: "cap-count", key: "count", label: "How many", value: "1", inputmode: "numeric", placeholder: "0" });
+      count._input.setAttribute("aria-describedby", "cap-count-msg");
+      const showProblems = (probs) => { const p = probs.find((x) => x.key === "count"); R.say(count, p ? p.text : ""); if (p) count._input.focus(); };
+      return { main: [what, count], first: count._input, showProblems, values: () => ({ species: st.species, count: count._input.value }) };
     }
-    return { node: null, values: () => ({}) };
+    return { main: [], values: () => ({}) };
   }
-
   function close(refocus = false) {
     if (!screen) return;
     const { node, opener } = screen;
@@ -622,5 +623,5 @@
 
   root.addEventListener("hashchange", () => close(false));
   FP.captures = { start, close, signedIn, offline, beforeSignOut, rememberPlaces, lastPlaces, badge, waiting, sendNow: () => queue()?.sync(),
-    userId: () => me, confirmed: () => confirmed, isOpen: () => !!screen, prepare, quick };
+    userId: () => me, confirmed: () => confirmed, isOpen: () => !!screen, prepare, quick, sitesFor };
 })(window);
