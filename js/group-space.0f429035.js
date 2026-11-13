@@ -126,6 +126,7 @@
   function close() {
     token++; dropParts(); timing = null; T()?.cancel("group");
     FP.mapsView?.close();
+    FP.phoneArea?.close();   // PH1
     wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null;
     mapHandle?.destroy(); mapHandle = null; surface = null; entries = [];
     ctx = null; draft = null;
@@ -192,7 +193,7 @@
     header(group, route);
     $("#screen-group").dataset.view = route.view;
     if (route.view !== "map") hideNeeds();   // UI2: What needs doing is the Working map's (UI2's Overview)
-    if (route.view !== "home") { FP.placeHome?.close(); FP.groupOverview?.close(); }
+    if (route.view !== "home") { FP.placeHome?.close(); FP.groupOverview?.close(); FP.phoneArea?.close(); }
     if (route.view !== "records") FP.records?.close();   // CAP1
     if (route.view !== "water") FP.wqPage?.close();   // WQV1: its map and charts go with the page
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
@@ -266,7 +267,14 @@
       const home = { space: "group", place: group, sections: shownTabs, people: !!FP.peopleModel?.canSeeTab(group, groups), addCtx, sb: FP.sb, today,
         search: (view, q) => { pendingSearch = { view, q }; } };
       // MC1: on a computer a group's Home is its overview (group-overview.js: the numbers, the trends and the map, with Home's search);
-      // a phone keeps Home as it is
+      // a phone has its area map (PH1, above)
+      // PH1: on a phone, Home is the group's area on a plain map: Locate me, what is near, and the + (phone-area.js)
+      if (FP.phoneArea?.phone()) {
+        FP.placeHome?.close(); FP.groupOverview?.close();
+        $("#screen-group").dataset.home = "area";
+        panel.replaceChildren(FP.phoneArea.view({ group, sb: FP.sb, home })); panel.scrollTop = 0; return;
+      }
+      FP.phoneArea?.close();
       const overview = !!FP.groupOverview && computer();
       $("#screen-group").dataset.home = overview ? "overview" : "launcher";
       if (overview) panel.replaceChildren(FP.groupOverview.view({ group, groups, person, sb: FP.sb, today, home }));

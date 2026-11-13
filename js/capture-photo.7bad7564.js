@@ -17,6 +17,7 @@
   const uuid = () => root.crypto.randomUUID();
   const PLACES_KEY = "fp-places-v1", TAGS_KEY = "fp-cap-tags-v1:";
   let me = null, confirmed = false, unwatch = null;
+  const phoneNow = () => !!root.matchMedia?.(FP.phoneModel?.PHONE || "(max-width: 800px)").matches;
 
   // ---- this device's small memory (wrapped: private browsing refuses it, and nothing here is needed) -----------------------------------
   const ls = () => { try { return root.localStorage; } catch { return null; } };
@@ -176,6 +177,8 @@
   function start(ctx, kind = "photo") {
     if (!me) { FP.add?.toast?.("Sign in again to take photos here."); return; }
     const K = C().KINDS[kind] ? kind : "photo";
+    // PH1: on a phone, a photo is the quick path: the phone's position first, the camera at once, then a tag, a note and Save
+    if (K === "photo" && phoneNow() && FP.phoneModel && FP.locate) { quick(ctx); return; }
     // the camera first: the tap that chose the action is what lets the page open it
     const camera = el("input", { type: "file", accept: "image/*", capture: "environment", hidden: true, id: "cap-camera" });
     const library = el("input", { type: "file", accept: "image/*", hidden: true, id: "cap-library" });
@@ -338,23 +341,8 @@
         const typed = fields.values(), probs = C().fieldProblems(kind, typed);
         fields.showProblems?.(probs);
         if (probs.length) throw Object.assign(Error(probs.length === 1 ? "Check the field marked above." : "Check the fields marked above."), { plain: true });
-        const clientId = uuid(), files = st.prepared ? C().paths(st.org, me, clientId) : null;
-        const record = C().record({ clientId, org: st.org, user: me, kind, taken: taken(), position: pos(), note: note.value, tags: [...st.tags], shared: share.checked,
-          fields: fields.values(), photo: st.prepared ? { width: st.prepared.width, height: st.prepared.height, bytes: st.prepared.photo.size, thumb: !!st.prepared.thumb } : null });
-        const op = Q().groupCaptureOp({ user: me, record, photo: files ? { blob: st.prepared.photo, path: files.photo } : null, thumb: files && st.prepared.thumb ? { blob: st.prepared.thumb, path: files.thumb } : null,
-          at: new Date().toISOString(), uuid });
-        const q = queue();
-        if (!q) throw Object.assign(Error("Sign in again to save photos here."), { plain: true });
-        try { await q.add(op); }
-        catch (e) {
-          // the phone refused to keep it (storage full, or storage blocked): say so, and keep the photo on this screen
-          throw Object.assign(Error(/quota|space|storage/i.test(String(e?.name) + " " + String(e?.message)) ?
-            "This phone has no room left to keep the photo. Free some space, or keep this screen open and try Save again when you're back in range." :
-            "This phone wouldn't keep the photo (" + (e?.message || e) + "). Keep this screen open and try Save again."), { plain: true });
-        }
-        root.navigator.storage?.persist?.().catch(() => {});   // ask the browser not to clear what waits
-        rememberTags(st.org, [...st.tags]);
-        const sending = confirmed && root.navigator.onLine !== false;
+        const { clientId, sending } = await keep({ org: st.org, kind, taken: taken(), position: pos(), note: note.value, tags: [...st.tags], shared: share.checked,
+          fields: fields.values(), prepared: st.prepared });
         const to = st.org;
         close(true);
         saved(to, clientId, sending);
@@ -364,6 +352,178 @@
         st.busy = false; save.disabled = false;
       }
     }
+  }
+
+  // A capture into the queue on this phone (sent when there is coverage): its record (capture-model.js record, public.capture_save's
+  // argument) and its photo and thumbnail. Throws a plain sentence when the phone will not keep it. Returns { clientId, sending }.
+  async function keep({ org, kind, taken, position, note, tags, shared, fields, prepared }) {
+    const clientId = uuid(), files = prepared ? C().paths(org, me, clientId) : null;
+    const record = C().record({ clientId, org, user: me, kind, taken, position, note, tags, shared, fields,
+      photo: prepared ? { width: prepared.width, height: prepared.height, bytes: prepared.photo.size, thumb: !!prepared.thumb } : null });
+    const op = Q().groupCaptureOp({ user: me, record, photo: files ? { blob: prepared.photo, path: files.photo } : null, thumb: files && prepared.thumb ? { blob: prepared.thumb, path: files.thumb } : null,
+      at: new Date().toISOString(), uuid });
+    const q = queue();
+    if (!q) throw Object.assign(Error("Sign in again to save photos here."), { plain: true });
+    try { await q.add(op); }
+    catch (e) {
+      // the phone refused to keep it (storage full, or storage blocked): say so, and keep the photo on this screen
+      throw Object.assign(Error(/quota|space|storage/i.test(String(e?.name) + " " + String(e?.message)) ?
+        "This phone has no room left to keep the photo. Free some space, or keep this screen open and try Save again when you're back in range." :
+        "This phone wouldn't keep the photo (" + (e?.message || e) + "). Keep this screen open and try Save again."), { plain: true });
+    }
+    root.navigator.storage?.persist?.().catch(() => {});   // ask the browser not to clear what waits
+    rememberTags(org, tags);
+    return { clientId, sending: confirmed && root.navigator.onLine !== false };
+  }
+
+  // ---- PH1: the quick photo on a phone ------------------------------------------------------------------------------------------------
+  // + then Take a photo: the phone's position is needed first (the owner: GPS on is the prerequisite for photos). With a fresh one the
+  // camera opens at once; otherwise the phone is asked, and the camera opens as soon as it answers (or from the "Open the camera" row
+  // where the browser wants another tap). Refused or unavailable: one sentence and a "Try again" row, and no photo. After the shot:
+  // the photo, an optional tag from one line of quiet chips (CAP1's tags), an optional one-line note, Save. The capture carries the
+  // phone's own position, its accuracy and the time (from the device, never read from the photo), and is kept by the same queue, so
+  // it works offline. So: + then Take a photo, the shutter, then Save.
+  function quick(ctx) {
+    close();
+    const P = FP.phoneModel, places = placesFor(ctx), placeName = places[0]?.name || ctx.name;
+    const st = { org: places[0]?.id || ctx.id, fix: null, prepared: null, shotAt: null, tags: new Set(), chips: [], busy: false, reading: 0, note: null };
+    const camera = el("input", { type: "file", accept: "image/*", capture: "environment", hidden: true, id: "qp-camera" });
+    const body = el("div", { class: "cap-body qp-body" });
+    const save = el("button", { type: "button", class: "cap-save", id: "qp-save" }, "Save");
+    const foot = el("footer", { class: "cap-foot qp-foot", hidden: true }, save);
+    const shut = el("button", { type: "button", class: "cap-close", id: "qp-close", "aria-label": "Close without saving" }, FP.icon("close", 22));
+    const node = el("div", { class: "cap-screen qp", id: "qp-screen", role: "dialog", "aria-modal": "true", "aria-labelledby": "qp-title", "data-state": "locating" },
+      el("header", { class: "cap-head" }, shut, el("h2", { id: "qp-title" }, "Photo"), el("span", { class: "cap-head-gap" })), body, foot, camera);
+    shut.addEventListener("click", () => close(true));
+    node.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); close(true); } });
+    const from = root.document.activeElement;
+    screen = { node, ctx, opener: from && from !== root.document.body && from.isConnected ? from : (FP.add?.buttons?.() || []).find((b) => !b.hidden && b.getClientRects().length) || null };
+    root.document.body.append(node);
+    root.document.body.classList.add("cap-open");
+    const live = () => screen?.node === node;
+    // plain rows in one outline (the owner's guide): a small leading icon, then the words; the primary row's icon in a filled circle
+    const row = (id, icon, words, onclick, primary = false) => el("button", { type: "button", class: "qp-row" + (primary ? " qp-primary" : ""), id, onclick },
+      el("span", { class: "qp-dot", "aria-hidden": "true" }, FP.icon(icon, primary ? 18 : 20)), el("span", {}, words));
+    const set = (...rows) => el("div", { class: "qp-set", role: "group" }, ...rows);
+    const msg = el("p", { class: "cap-msg", role: "status", id: "qp-msg" });
+    const whereWords = () => ["To " + placeName, st.shotAt ? C().when(st.shotAt) : null, st.fix ? P.accuracyWords(st.fix.accuracy) : null].filter(Boolean).join(" · ");
+    let where = null;
+    const drawWhere = () => { if (where) where.textContent = whereWords(); };
+
+    function show(state, problem = null) {
+      node.dataset.state = state;
+      foot.hidden = state !== "photo";
+      if (state === "locating") body.replaceChildren(el("p", { class: "qp-quiet", role: "status", id: "qp-locating" }, "Finding where you are…"));
+      else if (state === "refused") {
+        const why = P.photoProblem(problem);
+        body.replaceChildren(el("p", { class: "qp-say", id: "qp-needs", role: "alert", "data-why": why.key }, why.text), set(row("qp-retry", "locate", "Try again", () => openCamera())));
+        body.querySelector("#qp-retry")?.focus();
+      } else if (state === "ready") {
+        where = el("p", { class: "qp-quiet qp-where", id: "qp-where" }, whereWords());
+        body.replaceChildren(set(row("qp-open", "camera", "Open the camera", () => openCamera(), true)), where, msg);
+      }
+    }
+    // No position (refused, off, slow or unavailable): the held one is dropped, the photo with it, and nothing is saved (review of #535, 1)
+    function refuse(problem) {
+      st.fix = null; st.prepared = null; st.shotAt = null; st.reading++;
+      show("refused", problem);
+    }
+    // The camera opens only with a fresh position: one held from the last two minutes, with location not refused since, opens it on
+    // this same tap; otherwise the phone is asked first ("Open the camera", "Take it again" and "Try again" all come here)
+    function openCamera() {
+      const supported = !!root.navigator.geolocation;
+      const gate = P.photoGate({ permission: FP.locate.permissionNow(), last: FP.locate.last(), supported });
+      if (gate === "refused") { refuse({ key: supported ? "refused" : "off" }); return; }
+      if (gate === "go") {
+        st.fix = FP.locate.last();
+        if (node.dataset.state !== "photo") show("ready");
+        try { camera.click(); } catch { /* the "Open the camera" row */ }
+        return;
+      }
+      ask();
+    }
+    // the person's position, then the camera (it opens if the browser still counts the tap; otherwise the "Open the camera" row)
+    async function ask() {
+      show("locating");
+      if ((await FP.locate.permission()) === "denied") { if (live()) refuse({ key: "refused" }); return; }
+      const got = await FP.locate.get({ maxAge: P.PHOTO_FIX_AGE });
+      if (!live()) return;
+      if (!got.ok) { refuse(got.problem); return; }
+      st.fix = got.fix; show("ready");
+      try { camera.click(); } catch { /* the "Open the camera" row */ }
+    }
+    camera.addEventListener("change", () => { const f = camera.files?.[0]; camera.value = ""; if (f) usePhoto(f); });
+
+    async function usePhoto(file) {
+      const mine = ++st.reading, shot = new Date().toISOString();
+      body.replaceChildren(el("p", { class: "qp-quiet", role: "status" }, "Reading the photo…"));
+      foot.hidden = true;
+      // the position at the shot: one from the two minutes before it, or asked for now; none means no photo
+      let f = FP.locate.permissionNow() === "denied" ? null : P.fixForShot(FP.locate.last(), shot);
+      if (!f) {
+        const got = await FP.locate.get({ maxAge: P.PHOTO_FIX_AGE });
+        if (!live() || mine !== st.reading) return;
+        f = got.ok ? P.fixForShot(got.fix, shot) : null;
+        if (!f) { refuse(got.ok ? { key: "unavailable" } : got.problem); return; }
+      }
+      st.fix = f; st.shotAt = shot;
+      // a newer position, if the phone gives one soon (it stands only if it is still the shot's); a refusal drops the held one
+      FP.locate.get({ maxAge: 10000 }).then((r) => {
+        if (!live() || st.reading !== mine) return;
+        if (r.ok && P.fixForShot(r.fix, shot)) { st.fix = r.fix; drawWhere(); }
+        else if (!r.ok && r.problem?.key === "refused") st.fix = null;
+      });
+      const got = await prepare(file);
+      if (!live() || mine !== st.reading) return;
+      if (!got || got.tooBig) { show("ready"); msg.textContent = got?.tooBig ? "This photo is too large to send, even made smaller. Take it again." : "This photo can't be read here. Take it again."; return; }
+      if (st.prepared) node.querySelectorAll("img").forEach((i) => { if (i.src.startsWith("blob:")) URL.revokeObjectURL(i.src); });
+      st.prepared = got;
+      drawPhoto();
+    }
+    function drawPhoto() {
+      const img = el("img", { class: "cap-img qp-img", id: "qp-img", alt: "The photo you took", src: URL.createObjectURL(st.prepared.photo) });
+      const chips = el("div", { class: "qp-tags", role: "group", "aria-label": "Tag (optional)", id: "qp-tags" });
+      const drawChips = () => chips.replaceChildren(...st.chips.map((t) => {
+        const on = [...st.tags].some((x) => x.toLowerCase() === t.toLowerCase());
+        const b = el("button", { type: "button", class: "chip qp-chip", "aria-pressed": String(on), "data-tag": t }, t);
+        b.addEventListener("click", () => { for (const x of [...st.tags]) if (x.toLowerCase() === t.toLowerCase()) st.tags.delete(x); if (!on) st.tags.add(t); drawChips(); chips.querySelector('[data-tag="' + CSS.escape(t) + '"]')?.focus(); });
+        return b;
+      }));
+      tagChoices(st.org, null).then((list) => { st.chips = P.quickTags(list); if (live()) drawChips(); });
+      const note = el("input", { type: "text", id: "qp-note", class: "qp-note", maxlength: String(C().MAX_NOTE), placeholder: "Add a note (optional)", autocomplete: "off", enterkeyhint: "done", "aria-label": "Note (optional)" });
+      note.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); note.blur(); } });
+      where = el("p", { class: "qp-quiet qp-where", id: "qp-where" });
+      drawWhere();
+      const again = el("button", { type: "button", class: "link qp-again", id: "qp-again", onclick: () => openCamera() }, "Take it again");
+      body.replaceChildren(el("div", { class: "qp-photo" }, img, again), chips, note, where, msg);
+      st.note = note;
+      show("photo");
+      drawChips();
+      save.focus();
+    }
+    save.addEventListener("click", async () => {
+      if (st.busy || !st.prepared) return;
+      // the position is the condition for a photo: the shot's own (from the two minutes before it), and location still on at Save;
+      // otherwise nothing is saved (review of #535, 1)
+      if (FP.locate.permissionNow() === "denied" || !P.fixForShot(st.fix, st.shotAt)) { refuse({ key: "refused" }); return; }
+      st.busy = true; save.disabled = true; msg.textContent = "";
+      if (!P.fixForShot(FP.locate.last(), Date.now())) {
+        const now = await FP.locate.get({ maxAge: P.PHOTO_FIX_AGE });
+        if (!live()) return;
+        if (!now.ok) { st.busy = false; save.disabled = false; refuse(now.problem); return; }
+      }
+      try {
+        const { clientId, sending } = await keep({ org: st.org, kind: "photo", taken: { at: st.shotAt, from: "device" }, position: C().position({ device: st.fix }),
+          note: st.note?.value || "", tags: [...st.tags], shared: false, fields: {}, prepared: st.prepared });
+        const to = st.org;
+        close(true);
+        saved(to, clientId, sending);
+        badge();
+      } catch (e) { msg.textContent = e.plain ? e.message : e.message || String(e); st.busy = false; save.disabled = false; }
+    });
+
+    // the gate: a fresh position opens the camera on this same tap; otherwise the phone is asked first
+    openCamera();
   }
 
   // The water sample's site and readings; pest control's species and count. Each kind: { node, values(), positionChanged?(p) }.
@@ -456,5 +616,5 @@
 
   root.addEventListener("hashchange", () => close(false));
   FP.captures = { start, close, signedIn, offline, beforeSignOut, rememberPlaces, lastPlaces, badge, waiting, sendNow: () => queue()?.sync(),
-    userId: () => me, confirmed: () => confirmed, isOpen: () => !!screen, prepare };
+    userId: () => me, confirmed: () => confirmed, isOpen: () => !!screen, prepare, quick };
 })(window);

@@ -187,7 +187,7 @@
   // away until they go. Checked a few times a second while a button shows on a phone, and never otherwise.
   // (UI2: the group Overview's short map strip on a phone is not a sheet along the bottom: the button stays where it is over the page,
   // rather than climbing onto the strip's own controls; opened tall, the strip's controls lift it as any map's do)
-  const SHEETS = ".rv-panel, #overview-rail:not([hidden]), #space-content:not([hidden]), .maplibregl-ctrl-bottom-right:not(#screen-group.has-needs:not(.map-open) #group-map .maplibregl-ctrl-bottom-right)";
+  const SHEETS = ".rv-panel, .pa-sheet, #overview-rail:not([hidden]), #space-content:not([hidden]), .maplibregl-ctrl-bottom-right:not(#screen-group.has-needs:not(.map-open) #group-map .maplibregl-ctrl-bottom-right)";
   // panels that take the bottom of the screen while they are open: the button tucks away until they close (N2b's water quality
   // sites panel reaches 72% of a phone)
   const TUCK = ".events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden])";

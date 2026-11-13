@@ -2,23 +2,27 @@
    Ink controls, one filled button per screen (Save), the device's font, light and dark from the tokens; light and fine, not chunky
    (the owner, 13 Nov 2026: "more refined and less chunky"): hairline edges, small text, plain links for what is secondary. */
 
-/* ---- the add menu: an even column rising straight up from the + -------------------------------------------------------------------- */
+/* ---- the add menu: a list rising from the + (PH1, after the owner's guide of 13 Nov 2026) -------------------------------------------
+   Plain rows of words with a small leading icon, no box around each option; one thin rounded outline around the set; a hairline between
+   groups; ink only. Each row is a 44 px target. Take a photo is first, its icon in a filled ink circle (the primary row). */
 .ring { position: fixed; inset: 0; z-index: 35; }
 .ring-backdrop { position: absolute; inset: 0; background: var(--backdrop-strong); animation: fp-fade var(--dur-2) var(--ease); }
-/* each option: its words, then a small round button on the +'s centre line (left/top place the button's right edge and middle) */
-.ring-item { position: fixed; display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink);
-  cursor: pointer; transform: translate(-100%, -50%); -webkit-tap-highlight-color: var(--clear); animation: ring-in var(--dur-2) var(--ease) both; animation-delay: calc(var(--ring-i, 0) * 20ms); }
-.ring-dot { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--raised); color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); }
-.ring-word { max-width: 180px; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--raised); color: var(--ink); font: 500 var(--text-small)/1.25 var(--f-ui);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
-.ring .ring-item:focus-visible { outline: none; }
-.ring .ring-item:focus-visible .ring-dot { outline: 2px solid var(--raised); outline-offset: 3px; }
-.ring-item:active .ring-dot { transform: scale(.94); }
-.ring-item[data-ring="more"] .ring-dot { background: var(--fill); }
+.ring-list { position: fixed; box-sizing: border-box; padding: 6px 0; border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); color: var(--ink);
+  box-shadow: var(--shadow-2); animation: ring-in var(--dur-2) var(--ease) both; }
+.ring-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; margin: 0; padding: 0 18px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; cursor: pointer; box-sizing: border-box; -webkit-tap-highlight-color: var(--clear); }
+.ring-dot { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; color: var(--ink); }
+.ring-word { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ring-primary .ring-word { font-weight: 500; }
+.ring-primary .ring-dot { background: var(--ink); color: var(--panel); }
+.ring-sep { height: 1px; margin: 4px 18px; background: var(--rule-soft); }
+.ring .ring-item:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; border-radius: var(--radius-s); }
+@media (hover: hover) { .ring-item:hover { background: var(--fill); } }
+.ring-item:active { background: var(--fill); }
 .ring-close { position: fixed; display: grid; place-items: center; width: 52px; height: 52px; margin: 0; padding: 0; border: 0; border-radius: 50%; transform: translate(-50%, -50%);
   background: var(--accent); color: var(--accent-ink); cursor: pointer; }
-@keyframes ring-in { from { opacity: 0; transform: translate(-100%, calc(-50% + 12px)); } to { opacity: 1; transform: translate(-100%, -50%); } }
-@media (prefers-reduced-motion: reduce) { .ring-item, .ring-backdrop { animation: none; } }
+@keyframes ring-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ring-list, .ring-backdrop { animation: none; } }
 body.ring-open .space-tabs { pointer-events: none; }
 
 /* the Edit sheet */
@@ -157,3 +161,71 @@ li.rec-row { cursor: default; }
 .rec-facts dt { color: var(--ink-3); }
 .rec-facts dd { margin: 0; color: var(--ink); }
 .rec-tags { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+
+/* ---- PH1: a group's Home on a phone: the area on a plain map, Locate me, Near you ---------------------------------------------------
+   After the owner's guide (13 Nov 2026): plain rows of text about 17 px with a small leading icon, no box around each; one thin rounded
+   outline around a set; a heading the same size as the rows in medium weight; generous side margins; ink controls, no accent. */
+@media (max-width: 800px) {
+  #screen-group[data-view="home"]:has(.pa) { position: fixed; inset: var(--demo-banner-height, 0px) 0 var(--tabbar-h) 0; padding: 0; min-height: 0; }
+  #screen-group[data-view="home"]:has(.pa) .group-body { display: flex; flex: 1; min-height: 0; }
+  #screen-group[data-view="home"]:has(.pa) .group-panel { position: relative; flex: 1; min-height: 0; padding: 0; overflow: hidden; }
+}
+.pa { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--wash); }
+.pa-stage { position: relative; flex: 1; min-height: 160px; }
+.pa-map { position: absolute; inset: 0; background: var(--map-background); }
+.pa-stage .wqs-ctrl { display: none; }   /* no layer switching on the phone: a site opens from the list */
+.pa-locate { position: absolute; z-index: 5; top: 12px; right: 12px; display: grid; place-items: center; width: 44px; height: 44px; margin: 0; padding: 0;
+  border: 1px solid var(--rule); border-radius: 50%; background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); cursor: pointer; }
+.pa-locate[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }   /* on, without a second filled control beside the + */
+.pa-locate.pa-busy .icon { animation: pa-pulse 1s ease-in-out infinite; }
+@keyframes pa-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pa-locate.pa-busy .icon { animation: none; opacity: .5; } }
+.pa-sheet { flex: none; max-height: 46%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 24px 16px; background: var(--panel); border-top: 1px solid var(--rule-soft);
+  border-radius: var(--radius-l) var(--radius-l) 0 0; margin-top: -12px; position: relative; z-index: 4; box-sizing: border-box; }
+.pa:has(.wqs-open) .pa-sheet { display: none; }
+/* Home's search at the top of the sheet: one quiet field, 44 px; while searching, its results take the sheet (Near you steps aside) */
+.pa-sheet .ph-compact:not([hidden]) { display: block; max-width: none; margin: 0 0 14px; padding: 0; gap: 0; }
+.pa-sheet .ph-compact .ph-search input { min-height: var(--tap); border-radius: var(--radius-l); background: none; box-shadow: inset 0 0 0 1px var(--rule); }
+.pa-sheet .ph-compact .ph-results { margin-top: 12px; }
+.pa-sheet:has(.ph-compact.searching) { max-height: 72%; }
+.pa-sheet:has(.ph-compact.searching) > :not(.ph-compact) { display: none; }   /* a site's panel takes the bottom while it is open */
+.pa-sheet h2 { margin: 0; font: 500 var(--text-body)/1.3 var(--f-ui); letter-spacing: 0; }
+.pa-line { margin: 2px 0 10px; color: var(--ink-3); font-size: var(--text-small); }
+.pa-line:empty { display: none; }
+.pa-say:empty { display: none; }
+.pa-say-text { margin: 0 0 10px; color: var(--ink); font-size: var(--text-body); line-height: 1.4; }
+.pa-set { list-style: none; margin: 0 0 10px; padding: 4px 0; border: 1px solid var(--rule); border-radius: var(--radius-l); }
+.pa-set[hidden] { display: none; }
+.pa-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; margin: 0; padding: 0 16px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; cursor: pointer; box-sizing: border-box; -webkit-tap-highlight-color: var(--clear); }
+@media (hover: hover) { .pa-row:hover { background: var(--fill); } }
+.pa-row:active { background: var(--fill); }
+.pa-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; border-radius: var(--radius-s); }
+.pa-dot { display: grid; place-items: center; width: 24px; height: 24px; flex: none; color: var(--ink-2); }
+.pa-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pa-far { flex: none; color: var(--ink-3); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.pa-quiet { margin: 16px; color: var(--ink-3); font-size: var(--text-small); }
+
+/* ---- PH1: the quick photo (+ then Take a photo) ------------------------------------------------------------------------------------- */
+.qp .qp-body { gap: var(--s-4); padding: var(--s-5) 24px var(--s-6); }
+.qp-quiet { margin: 0; color: var(--ink-3); font-size: var(--text-body); }
+.qp-say { margin: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.45; }
+.qp-set { margin: 0; padding: 4px 0; border: 1px solid var(--rule); border-radius: var(--radius-l); }
+.qp-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; margin: 0; padding: 0 16px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; cursor: pointer; box-sizing: border-box; }
+.qp-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; border-radius: var(--radius-s); }
+.qp-dot { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; color: var(--ink); }
+.qp-primary { font-weight: 500; }
+.qp-primary .qp-dot { background: var(--ink); color: var(--panel); }
+.qp-photo { display: grid; justify-items: center; gap: 2px; }
+.qp-img { max-height: 46vh; }
+/* the tags: small quiet chips in one line, scrolling sideways when there are more (each chip's 44 px tap area inside the row) */
+.qp-tags { display: flex; gap: 6px; overflow-x: auto; padding: 7px 3px; margin: 0 -3px; scrollbar-width: none; }
+.qp-tags::-webkit-scrollbar { display: none; }
+.qp-tags .chip { flex: none; }
+.qp-tags .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.qp-note { min-height: var(--tap); padding: 0 2px; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); width: 100%; box-sizing: border-box; }
+.qp input.qp-note { border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: none; padding: 0 2px; }
+.qp-note:focus { outline: none; border-bottom-color: var(--ink); }
+.qp-foot[hidden] { display: none; }
