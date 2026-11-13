@@ -189,8 +189,12 @@
   // The events file's columns. Dates and times are New Zealand's; topics are separated by semicolons; "id" is the event's own id
   // (leave it empty on a new row; keep it to update that event). "cancelled" is shown, never changed by an import.
   const EVENT_COLUMNS = ["id", "title", "start_date", "start_time", "end_date", "end_time", "all_day", "place_name", "latitude", "longitude", "topics", "notes", "head_count", "cancelled"];
-  const ATTENDANCE_COLUMNS = ["event_id", "event_title", "event_date", "name", "kind", "note"];
-  const cell = (v) => { const s = v == null ? "" : String(v); return /[",\r\n]/.test(s) || /^\s|\s$/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const ATTENDANCE_COLUMNS = ["event_id", "event_title", "event_date", "name", "kind", "note", "role"];   // NP3: role (shared) last
+  // NP3: the spreadsheet formula guard the People and Membership exports use (people-model.js): a cell that begins with = + - @
+  // (or a tab or carriage return) is written with an apostrophe in front, so a spreadsheet shows it as text and never runs it. Free
+  // text only (titles, places, topics, notes, names, roles); a negative latitude or longitude, which is a number, is left as it is.
+  const NUMERIC = /^-?\d+(\.\d+)?$/;
+  const cell = (v) => { let s = v == null ? "" : String(v); if (/^[=+\-@\t\r]/.test(s) && !NUMERIC.test(s)) s = "'" + s; return /[",\r\n]/.test(s) || /^\s|\s$/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   // A UTF-8 byte order mark first, so a spreadsheet opens macrons (ā, ē, ī, ō, ū) as written; lines end CRLF (RFC 4180).
   const toCsv = (columns, rows) => "\uFEFF" + [columns.map(cell).join(","), ...rows.map((r) => columns.map((c) => cell(r[c])).join(","))].join("\r\n") + "\r\n";
   function parseCsv(text) {
@@ -225,7 +229,7 @@
     const evs = inRange(events, from, to), byId = new Map(evs.map((e) => [e.id, e]));
     const rows = (attendees || []).filter((a) => byId.has(a.event_id))
       .sort((a, b) => byStart(byId.get(a.event_id), byId.get(b.event_id)) || String(a.name).localeCompare(String(b.name)))
-      .map((a) => ({ event_id: a.event_id, event_title: byId.get(a.event_id).title, event_date: span(byId.get(a.event_id)).first, name: a.name, kind: ATTENDEE_KIND(a), note: a.note || "" }));
+      .map((a) => ({ event_id: a.event_id, event_title: byId.get(a.event_id).title, event_date: span(byId.get(a.event_id)).first, name: a.name, kind: ATTENDEE_KIND(a), note: a.note || "", role: a.role || "" }));
     return toCsv(ATTENDANCE_COLUMNS, rows);
   }
   const TEMPLATE_EXAMPLE = { id: "", title: "Field day at the ford (example: replace or delete this row)", start_date: "2026-10-14", start_time: "10:00", end_date: "2026-10-14", end_time: "13:00",
@@ -273,7 +277,7 @@
     if (body.length > max) return { error: "The file has " + body.length + " rows. Import at most " + max + " at a time: split the file and import each part.", rows: [], counts: {} };
     const byId = new Map((existing || []).map((e) => [String(e.id).toLowerCase(), e])), seen = new Set();
     const out = body.map(({ line, cells }) => {
-      const v = Object.fromEntries(header.map((h, n) => [h, (cells[n] ?? "").trim()]));
+      const v = Object.fromEntries(header.map((h, n) => [h, (cells[n] ?? "").trim().replace(/^'(?=[=+\-@])/, "")]));   // (the export's formula guard undone)
       const reject = (reason) => ({ line, action: "reject", reason, title: v.title || "" });
       if (cells.length > header.length && cells.slice(header.length).some((c) => c.trim())) return reject("More cells than columns: check for a comma that needs quotes.");
       const sd = readDate(v.start_date), ed = readDate(v.end_date), st = readTime(v.start_time), et = readTime(v.end_time);

@@ -8,12 +8,15 @@
 // one selects those columns any more (a read naming them is refused); the group's facilitators, advisors and admins read them
 // through group_event_notes and group_event_attendee_notes and write them through group_event_set_notes and
 // group_event_attendee_set_note (or on a new row). Everyone else never sees a notes field, and the calendar file never carries them.
+// NP3 (20261113063000, the owner's answers of 13 Nov 2026): who attended is read only by the group's editors, facilitators, advisors
+// and admins (the people who record it). A plain member sees the event and its head count, never the attendee list, so the list is
+// not even asked for; and each attendee has a shared "Role or organisation" (role) beside the coordinators' private note.
 (function (root) {
   const FP = root.FP;
   const M = () => FP.eventsModel, G = () => FP.groupModel;
   const el = (...a) => FP.el(...a);
   const COLS = "id,org_id,title,starts_at,ends_at,all_day,place_name,latitude,longitude,topics,head_count,cancelled_at,cancelled_by,created_by,created_at,updated_at";
-  const ATT_COLS = "id,event_id,user_id,group_member_id,name,added_at";
+  const ATT_COLS = "id,event_id,user_id,group_member_id,name,role,added_at";
   // NP1: who reads and writes the notes (the database decides; this only says whether to ask)
   const NOTE_ROLES = ["facilitator", "advisor", "admin"];
   const canNotes = (role) => NOTE_ROLES.includes(role);
@@ -158,7 +161,8 @@
       if (!st.current) return go("calendar");
       go("event");
       try {
-        st.attendees = await readAttendees(sb, id);
+        // NP3: the list only for those who record it (anyone else reads no rows: not asked for)
+        st.attendees = canWrite ? await readAttendees(sb, id) : [];
         if (notesToo && st.attendees.length) st.attendees = await withAttendeeNotes(sb, group.id, st.attendees, [id]).catch(() => st.attendees);
         if (canWrite && !st.current.cancelled_at) await pickers();
       } catch (e) { st.notice = "Couldn't read the attendance just now: " + (e?.message || e); }
@@ -185,9 +189,12 @@
       if (canWrite && !ev.cancelled_at) buttons.append(el("button", { type: "button", class: "secondary", "data-action": "edit", onclick: () => openForm(ev) }, "Edit"));
       if (canWrite && canCancel(ev)) buttons.append(el("button", { type: "button", class: "secondary", "data-action": ev.cancelled_at ? "restore" : "cancel", onclick: () => setCancelled(ev, !ev.cancelled_at) }, ev.cancelled_at ? "Restore the event" : "Cancel the event"));
       if (buttons.childNodes.length) box.append(buttons);
+      // NP3: a plain member sees no attendance section at all (the head count, a number on the event, is in the facts above)
+      if (!canWrite) return box;
       box.append(el("h4", {}, "Attendance (" + st.attendees.length + (ev.head_count != null ? " named, head count " + ev.head_count : "") + ")"));
       box.append(st.attendees.length ? el("ul", { class: "events-attendees" }, ...st.attendees.map((a) => el("li", { "data-kind": M().ATTENDEE_KIND(a) },
-        el("span", {}, el("b", {}, a.name), el("small", {}, KIND[M().ATTENDEE_KIND(a)] + (notesToo && a.note ? " · " + a.note : ""))),
+        el("span", {}, el("b", {}, a.name), el("small", {}, KIND[M().ATTENDEE_KIND(a)] + (a.role ? " · " + a.role : "")),
+          notesToo && a.note ? el("small", { class: "events-private events-attendee-note" }, "Note: " + a.note + " (not shown to members)") : null),
         canWrite && !ev.cancelled_at ? el("button", { type: "button", class: "link", "aria-label": "Remove " + a.name, onclick: () => removeAttendee(a) }, "Remove") : null)))
         : el("p", { class: "events-empty-tab" }, "No names recorded." + (ev.head_count == null ? "" : " The head count is " + ev.head_count + ".")));
       if (canWrite && !ev.cancelled_at) box.append(attendeeForm(ev));
@@ -200,19 +207,22 @@
         (st.register || []).length ? el("optgroup", { label: "Members" }, ...st.register.filter((b) => !taken.has(b.id)).map((b) => el("option", { value: "b:" + b.id, "data-name": b.business_name }, b.business_name + (b.member_number ? " (" + b.member_number + ")" : "")))) : null);
       const name = el("input", { id: "attendee-name", type: "text", maxlength: "200", autocomplete: "off" });
       // NP1: a note on an attendee is the coordinators' (facilitators, advisors, admins); an editor adds names only
-      const note = notesToo ? el("input", { id: "attendee-note", type: "text", maxlength: "200", placeholder: "For example: committee, regional council", autocomplete: "off", "aria-describedby": "attendee-note-hint" }) : null;
+      // NP3: the role or organisation is shared with whoever reads the list; the note is the coordinators' own
+      const role = el("input", { id: "attendee-role", type: "text", maxlength: "200", placeholder: "For example: committee, regional council", autocomplete: "off" });
+      const note = notesToo ? el("input", { id: "attendee-note", type: "text", maxlength: "200", autocomplete: "off" }) : null;
       const msg = el("p", { class: "events-msg", role: "status" });
       who.addEventListener("change", () => { const o = who.selectedOptions[0]; if (o?.dataset.name) name.value = o.dataset.name; });
       const form = el("form", { class: "events-attendee-form" }, el("h4", {}, "Add someone"),
         el("label", { for: "attendee-who" }, "Who"), who, el("label", { for: "attendee-name" }, "Name"), name,
-        ...(note ? [el("label", { for: "attendee-note" }, "Note (optional)"), note, el("small", { id: "attendee-note-hint", class: "events-private" }, "Not shown to members")] : []),
+        el("label", { for: "attendee-role" }, "Role or organisation"), role,
+        ...(note ? [el("label", { for: "attendee-note" }, "Note (not shown to members)"), note] : []),
         el("button", { type: "submit", class: "primary" }, "Add"), msg,
         el("p", { class: "group-fine" }, "Names only: no phone numbers or emails are kept. People with a sign-in are listed once their sign-in has a name."));
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!name.value.trim()) { msg.textContent = "Type their name."; return; }
         const [kind, id] = (who.value || ":").split(":");
-        const row = { event_id: ev.id, name: name.value.trim(), ...(note && note.value.trim() ? { note: note.value.trim() } : {}), ...(kind === "u" ? { user_id: id } : kind === "b" ? { group_member_id: id } : {}) };
+        const row = { event_id: ev.id, name: name.value.trim(), ...(role.value.trim() ? { role: role.value.trim() } : {}), ...(note && note.value.trim() ? { note: note.value.trim() } : {}), ...(kind === "u" ? { user_id: id } : kind === "b" ? { group_member_id: id } : {}) };
         form.querySelector("button[type=submit]").disabled = true;
         const { data, error } = await sb.from("group_event_attendees").insert(row).select(ATT_COLS).single();
         if (error) { msg.textContent = "Couldn't add them: " + error.message; form.querySelector("button[type=submit]").disabled = false; return; }
@@ -348,7 +358,8 @@
         msg,
         el("div", { class: "events-actions events-export-buttons" },
           el("button", { type: "button", class: "primary", "data-export": "events", onclick: () => { const { a, b } = range(); download(name("events", "csv"), M().eventsCsv(st.events, a, b), "text/csv;charset=utf-8"); } }, "Events (CSV)"),
-          el("button", { type: "button", class: "secondary", "data-export": "attendance", onclick: async (e) => {
+          // NP3: the attendance file only for those who read the list
+          !canWrite ? null : el("button", { type: "button", class: "secondary", "data-export": "attendance", onclick: async (e) => {
             const { a, b } = range(), evs = M().inRange(st.events, a, b);
             e.target.disabled = true; msg.textContent = "Reading the attendance…";
             try {

@@ -379,11 +379,11 @@
       ev(7, "Catchment open day (synthetic)", "2026-11-20T11:00:00Z", "2026-11-22T11:00:00Z", { all_day: true, place_name: "Across the catchment", topics: ["Biodiversity", "Water quality"] }),
     ];
     data.tables.group_event_attendees = [
-      { id: id(51), event_id: id(3), org_id: GROUP, user_id: USER, group_member_id: null, name: "Demo advisor", note: "Facilitator", added_at: made },
+      { id: id(51), event_id: id(3), org_id: GROUP, user_id: USER, group_member_id: null, name: "Demo advisor", role: "Facilitator", note: null, added_at: made },
       { id: id(52), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: GROUP_MEMBERS[0].id, name: GROUP_MEMBERS[0].business_name, note: null, added_at: made },
       { id: id(53), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: GROUP_MEMBERS[2].id, name: GROUP_MEMBERS[2].business_name, note: null, added_at: made },
-      { id: id(54), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: null, name: "Aroha Tāne (synthetic)", note: "Regional council, land management", added_at: made },
-      { id: id(55), event_id: id(2), org_id: GROUP, user_id: null, group_member_id: null, name: "Pat Example (synthetic)", note: "Chair", added_at: made },
+      { id: id(54), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: null, name: "Aroha Tāne (synthetic)", role: "Regional council, land management", note: "Keen to see the culvert (synthetic).", added_at: made },
+      { id: id(55), event_id: id(2), org_id: GROUP, user_id: null, group_member_id: null, name: "Pat Example (synthetic)", role: "Chair", note: null, added_at: made },
     ];
     data.eventPeople = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: "de000000-0000-4000-8000-000000000499", name: "Mere Example (synthetic)", role: "member" }];
   }
