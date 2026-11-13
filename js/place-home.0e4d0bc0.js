@@ -39,7 +39,12 @@
     const hasPlaces = subgroups.length > 0;
     const people = group && !!opts.people && keys.includes("people");
     const facts = {}, counts = {};
-    const wrap = el("section", { class: "place-home", "data-view": "home", "data-space": space, "aria-label": "Home" });
+    // MC1: compact, on a group's overview on a computer: the search alone (the + in the header offers the add actions there)
+    if (opts.compact) {
+      const kinds = H().searchKinds({ space, sections, people, places: hasPlaces });
+      if (!kinds.length) return el("div", { class: "place-home ph-compact", "data-space": space, hidden: true });
+    }
+    const wrap = el(opts.compact ? "div" : "section", { class: "place-home" + (opts.compact ? " ph-compact" : ""), "data-view": opts.compact ? null : "home", "data-space": space, "aria-label": opts.compact ? null : "Home" });
 
     // ---- search -----------------------------------------------------------------------------------------------------------------
     const kinds = H().searchKinds({ space, sections, people, places: hasPlaces });
@@ -99,6 +104,12 @@
       });
       // (a person who comes to search: the lists are asked for as soon as the field is touched, not per keystroke)
       input.addEventListener("focus", () => { loadLists(); }, { once: true });
+    }
+
+    if (opts.compact) {
+      wrap.append(...[searchBox, results].filter(Boolean));
+      me.wrap = wrap;
+      return wrap;
     }
 
     // ---- the add actions (add.js's registry: what the + offers here) ----------------------------------------------------------------

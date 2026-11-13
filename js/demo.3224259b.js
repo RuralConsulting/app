@@ -15,6 +15,9 @@
     const simple = new URLSearchParams(root.location.search).get("simple");
     // N2b: "?groupsites=none" makes the demo group one the old model has no area for (an MCCC sub-group): group_wq_sites is empty
     const groupSites = new URLSearchParams(root.location.search).get("groupsites");
+    // MC1: "?overview=full" makes the demo group a collective with sub-groups, boundaries, monitoring sites and results for its
+    // overview on a computer; "?overview=empty" makes it one as MCCC started: sub-groups by name, no boundary, no water data
+    const overview = new URLSearchParams(root.location.search).get("overview");
     // UI2: "?groupmap=none" makes the demo group one with nothing in the older map model (an MCCC group): its Overview has no map
     // of its own, only its published map under Maps
     const groupMap = new URLSearchParams(root.location.search).get("groupmap");
@@ -25,7 +28,7 @@
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -155,7 +158,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -229,6 +232,7 @@
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
     if (group) groupDemo(data, queue);
+    if (group && (overview === "full" || overview === "empty")) overviewDemo(data, overview);   // MC1
     if (group && titles) titleQuestionsDemo(data);   // LT1
     demoMaps(data, sparse);
     if (farmer) {
@@ -592,6 +596,135 @@
   // SG2: the invented sub-groups of "HDLG (example)" (not among the demo person's own groups: their spaces are not part of the demo).
   const SUBGROUPS = [{ id: "de000000-0000-4000-8000-0000000003c1", name: "Ford Creek sub-group (synthetic)", slug: "demo-ford-creek", member: true },
     { id: "de000000-0000-4000-8000-0000000003c2", name: "Hill Country sub-group (synthetic)", slug: "demo-hill-country", member: false }];
+  // MC1: the overview demos. "full": the group as a collective (an invented "Plains Catchment Collective") with eight sub-groups the
+  // person is in, each with an invented boundary (a wobbly ring in NZTM metres, as places rows hold them), the group's own area around
+  // them all (as MCCC's is its sub-groups joined), invented monitoring sites inside (rivers sampled monthly, wells quarterly, some
+  // stopped long ago, some with a short record), and two sub-groups' own sampling (an owner source). "empty": the group as MCCC
+  // started: ten sub-groups by name, no boundary, no members, no water data. Every name and number is invented; the reads have the
+  // real functions' shapes (subgroup_counts, places, group_wq_sites, wq_site_result_counts, the analysis function's trend preview).
+  const OV_ID = (n) => "de000000-0000-4000-8000-0000000009" + String(n).padStart(2, "0");
+  const OV_FULL = [["Rakaia Terraces", 171.98, -43.66, 0.10], ["Upper Ashburton", 171.45, -43.62, 0.12], ["Ashburton Forks", 171.68, -43.78, 0.07],
+    ["Mayfield Downs", 171.38, -43.85, 0.07], ["Hinds Plains", 171.58, -44.0, 0.09], ["Lower Ashburton", 171.85, -43.95, 0.075],
+    ["Wakanui Coast", 172.05, -43.92, 0.07], ["Lake Heron Basin", 171.2, -43.48, 0.06]];
+  const OV_EMPTY = ["Upper Plains", "Lake Basin", "North Branch", "South Branch", "Foothills", "Coastal Strip", "Middle Reaches", "Gorge", "Lower Plains", "Spring-fed Streams"];
+  const OV_RIVERS = ["Rakaia River", "Ashburton River", "Hinds River", "Wakanui Creek", "Taylors Stream", "Lismore Creek", "Mayfield Drain", "Stoney Creek", "Home Stream", "Bowyers Stream", "Pudding Hill Stream", "Hekeao Drain"];
+  const OV_PLACES = ["the bridge", "SH1", "Mayfield Road", "the gorge", "Ealing", "the coast road", "Wheatstone", "the ford", "Tinwald", "Hakatere"];
+  const ovHash = (str) => { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
+  function overviewDemo(data, mode) {
+    const t = data.groupTables, W = () => (typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel);
+    const g = t.organisations.find((o) => o.id === GROUP);
+    Object.assign(g, { name: mode === "full" ? "Plains Catchment Collective (synthetic)" : "Foothills Collective (synthetic)", slug: null });
+    t.places = t.places.filter((p) => p.org_id !== GROUP);   // the demo group's older area (no shape) is not this group's
+    const subs = mode === "full" ? OV_FULL.map(([name, x, y, r], i) => ({ id: OV_ID(i + 1), name: name + " (synthetic)", x, y, r }))
+      : OV_EMPTY.map((name, i) => ({ id: OV_ID(20 + i), name: name + " sub-group (synthetic)" }));
+    for (const s of subs) {
+      t.organisations.push({ id: s.id, name: s.name, slug: null, kind: "catchment_group", parent_org_id: GROUP });
+      t.org_members.push({ org_id: s.id, user_id: USER, role: "member" });
+    }
+    const ov = data.overview = { subs, sites: [], bySub: new Map() };
+    if (mode === "empty") { t.group_members = []; data.tables.group_events = []; data.tables.group_event_attendees = []; return; }
+    const ring = (x, y, r, points, seed) => {
+      const out = [];
+      for (let i = 0; i < points; i++) {
+        const a = (2 * Math.PI * i) / points, k = r * (1 + 0.14 * Math.sin(3 * a + seed) + 0.05 * Math.sin(11 * a + seed));
+        out.push(W().lngLatToNztm(x + k * Math.cos(a) * 1.38, y + k * Math.sin(a)).map((v) => Math.round(v)));
+      }
+      return [...out, out[0]];
+    };
+    const place = (org, name, make) => {
+      const row = { id: "ov-area-" + org, org_id: org, farm_id: null, kind: "area", code: null, name, valid_to: null };
+      let geom = null;
+      Object.defineProperty(row, "geom", { enumerable: true, get: () => (geom ||= make()) });
+      t.places.push(row);
+    };
+    subs.forEach((s, i) => place(s.id, s.name + " area", () => ({ type: "Polygon", coordinates: [ring(s.x, s.y, s.r, 140, i)] })));
+    place(GROUP, g.name + " area", () => ({ type: "Polygon", coordinates: [ring(171.62, -43.76, 0.36, 220, 7)] }));
+    // the sites: four to nine a sub-group, a river sampled monthly (from 1990 to 2014 on) or a well quarterly; a few stopped years ago,
+    // a few with a short record; positions are worked out when first read (wq-model.js may load after the fixture)
+    const end = String(data.asAt).slice(0, 7);
+    let n = 0;
+    subs.forEach((s, si) => {
+      const k = 4 + (ovHash(s.name) % 6);
+      for (let j = 0; j < k; j++) {
+        const h = ovHash(s.id + ":" + j), well = h % 5 === 0, a = (ovHash("angle" + s.id + j) % 360) * Math.PI / 180, d = s.r * (0.12 + (ovHash("reach" + j + s.id) % 55) / 100);
+        const id = 9600 + ++n, start = 1990 + ((h >>> 4) % 25), stopped = h % 7 === 3 ? 2008 + ((h >>> 3) % 8) : null, short = h % 11 === 4;
+        const from = short ? "2023-0" + (1 + (h % 8)) : start + "-0" + (1 + (h % 8)), to = stopped ? stopped + "-06" : end, step = well ? 3 : 1;
+        const nitrate = h % 6 === 1 ? ["nitrate-n", "nitrate-nitrite-n"] : ["nitrate-nitrite-n"];
+        const fams = well ? { nitrate, conductivity: ["conductivity"] }
+          : { nitrate, "e-coli": ["e-coli"], drp: ["drp"], turbidity: ["turbidity"], "ammoniacal-n": ["ammoniacal-n"], temperature: ["temperature"] };
+        const own = (si === 2 || si === 5) && j === 0;   // two sub-groups' own sampling site (an owner source)
+        const name = own ? OV_RIVERS[h % OV_RIVERS.length] + " at the members' site (synthetic)" : well ? "Well SYN/" + (100 + n) + " (synthetic)"
+          : OV_RIVERS[h % OV_RIVERS.length] + " at " + OV_PLACES[(h >>> 5) % OV_PLACES.length] + " (synthetic)";
+        const last = Number(to.slice(0, 4)) * 12 + Number(to.slice(5, 7)), times = [];
+        for (let m = Number(from.slice(0, 4)) * 12 + Number(from.slice(5, 7)); m <= last; m += step) {
+          const yy = Math.floor((m - 1) / 12), mm = m - yy * 12;
+          times.push(yy + "-" + String(mm).padStart(2, "0") + "-1" + (h % 9) + "T22:00:00Z");
+        }
+        let geom = null;
+        const site = { site_id: id, external_id: (own ? "SYN-OWN-" : "SYN-OV-") + n, name, site_type: well ? "Groundwater" : "River",
+          source_key: own ? "demo-own-wq-sites" : "ecan-wq-sites", owner_org_id: own ? s.id : null, own, families: fams, times, last_sampled: times[times.length - 1] || null };
+        Object.defineProperty(site, "geom", { enumerable: true, get: () => (geom ||= { type: "Point", coordinates: W().lngLatToNztm(s.x + d * Math.cos(a) * 1.38, s.y + d * Math.sin(a)).map(Math.round) }) });
+        ov.sites.push(site);
+        ov.bySub.set(s.id, [...(ov.bySub.get(s.id) || []), site]);
+      }
+    });
+  }
+  // As public.subgroup_counts, group_wq_sites(org, 0) and wq_site_result_counts for the overview demos; null for anything else.
+  function overviewRpc(d, name, args) {
+    const ov = d.overview, sub = (id) => ov.subs.find((s) => s.id === id);
+    if (name === "subgroup_counts") return args.parent_org === GROUP ? [ov.subs.map((s) => ({ subgroup_id: s.id, subgroup_name: s.name, subgroup_slug: null, current_businesses: 0, is_member: true }))] : null;
+    if (name === "group_wq_sites" && Number(args.km) === 0 && (args.g === GROUP || sub(args.g))) {
+      const rows = args.g === GROUP ? ov.sites : ov.bySub.get(args.g) || [];
+      return [rows.map((x) => ({ site_id: x.site_id, external_id: x.external_id, name: x.name, site_type: x.site_type, distance_m: 0, geom: x.geom, last_sampled: x.last_sampled,
+        source_key: x.source_key, owner_farm_id: null, owner_org_id: x.owner_org_id }))];
+    }
+    if (name === "wq_site_result_counts") {
+      const ids = new Set((args.site_ids || []).map(Number)), since = args.since ? Date.parse(args.since) : null, out = [];
+      if (ids.size > 1000) return [null, { code: "22023", message: "wq_site_result_counts: at most 1000 sites a call" }];
+      for (const x of ov.sites.filter((s) => ids.has(s.site_id))) {
+        const times = x.times.filter((t) => since === null || Date.parse(t) >= since);
+        if (!times.length) continue;
+        // as the function: a row for every result at the site (parameter null), then one per key asked that the site has
+        const keys = Object.entries(x.families).flatMap(([family, ks]) => ks.map((k) => [k, family])), asked = new Set(args.parameter_keys || []);
+        const row = (parameter, family, t) => ({ site_id: x.site_id, parameter, family, results: t.length, own_results: x.own ? t.length : 0, sampling_times: t.length, first_sampled: t[0], last_sampled: t[t.length - 1] });
+        out.push({ ...row(null, null, times), results: times.length * keys.length, own_results: x.own ? times.length * keys.length : 0 });
+        for (const [k, family] of keys) {
+          if (!asked.has(k)) continue;
+          // (a few demo sites also have a short nitrate-N record beside their long nitrate-nitrite-N one)
+          const t = k === "nitrate-n" ? times.slice(-12) : times;
+          if (t.length) out.push(row(k, family, t));
+        }
+      }
+      return [out];
+    }
+    return null;
+  }
+  // The analysis function's trend preview for an overview site, in its reply shape: the library's record rules (tools.ts trendSeasons)
+  // on the invented months, then an invented class. undefined: not an overview site.
+  function overviewAnalysis(d, body) {
+    const p = body?.params, site = d.overview.sites.find((s) => s.site_id === p?.site_id);
+    if (!site) return undefined;
+    if (body.mode !== "preview" || p.tool !== "trend") return null;
+    const years = Number(p.years) || 10, end = 2026, from = end - years + "-07-01", to = end + "-06-30";
+    const t = site.times.filter((x) => x.slice(0, 10) >= from && x.slice(0, 10) <= to);
+    const months = new Set(t.map((x) => x.slice(0, 7))).size, quarters = new Set(t.map((x) => x.slice(0, 4) + "q" + Math.floor((Number(x.slice(5, 7)) - 1) / 3))).size;
+    const hydro = new Set(t.map((x) => Number(x.slice(0, 4)) + (Number(x.slice(5, 7)) >= 7 ? 1 : 0))).size, yearsOk = hydro >= Math.ceil(0.9 * years);
+    const seasons = years === 5 ? (months >= 54 ? "monthly" : null) : months >= Math.ceil(0.9 * years * 12) && yearsOk ? "monthly" : quarters >= Math.ceil(0.9 * years * 4) && yearsOk ? "quarterly" : null;
+    const r = ovHash(site.site_id + "|" + p.parameter + "|" + years) % 10, nitrate = /nitrate/.test(p.parameter);
+    const pick = nitrate ? (r < 2 ? ["likely", "decreasing"] : r < 5 ? ["indeterminate", null] : r < 8 ? ["likely", "increasing"] : ["very likely", "increasing"])
+      : (r < 3 ? ["likely", "decreasing"] : r < 4 ? ["very likely", "decreasing"] : r < 8 ? ["indeterminate", null] : ["likely", "increasing"]);
+    const higherBetter = p.parameter === "clarity" || p.parameter === "dissolved-oxygen";
+    const result = seasons ? { seasons, seasonal: false, seasonality_p: 0.4, values: seasons === "monthly" ? months : quarters, censored_values: 0, s: 0, var_s: 0, z: 0,
+      p_decreasing: pick[1] === "decreasing" ? 0.85 : 0.2, p_increasing: pick[1] === "decreasing" ? 0.15 : 0.8, category: pick[0], direction: pick[1],
+      assessment: pick[1] === null ? "indeterminate" : (pick[1] === "increasing") === higherBetter ? "improving" : "degrading", sen_slope: { per_year: 0.01, percent_per_year: null, unit: "/year" },
+      coverage: { months, quarters, years_with_data: hydro, expected_months: years * 12, expected_quarters: years * 4 } } : null;
+    return { preset: null, tool: "trend", tool_version: "x1-wq 1.0.0", method: { id: "x1-trend v1", name: "Mann-Kendall / seasonal Kendall test with Sen slope (indicative)" },
+      parameters: { ...p, end_year: end, years, from, to }, site: { monitoring_site_id: site.site_id, source_key: site.source_key, external_id: site.external_id, name: site.name },
+      measurement_sources: t.length ? ["ecan-wq"] : [], source_versions: {}, attribution: [], result,
+      unavailable: seasons ? null : { reason: t.length ? "insufficient_record" : "no_results", detail: "Not enough results in the window for a trend (invented demo record)." },
+      caveats: [], statement: "", ai_proposed_inputs: null, advisor_overrides: {}, note_allowed: false,
+      preview_sha256: (site.site_id.toString(16) + years.toString(16) + p.parameter.length.toString(16)).padStart(64, "0") };
+  }
   // SG2, as public.subgroup_counts, business_subgroups and subgroup_business_list: for the group's members (any role), as the
   // database answers them; anyone else gets no rows. [data, error], or null for a name it does not know.
   function subgroupRpc(d, name, args) {
@@ -1705,6 +1838,7 @@
     });
   }
   function demoAnalysis(d, body) {
+    if (d.overview) { const r = overviewAnalysis(d, body); if (r !== undefined) return r; }   // MC1
     // N2: the Maps panel asks for a site's band, trend or summary with no preset and no end year (the library's own window)
     if (!body?.preset_id && body?.params && body.params.end_year === undefined && body.params.location_id === undefined) return demoSiteAnalysis(d, body);
     const loc = body?.params?.location_id === DEMO_LOCATION.id ? DEMO_LOCATION : null;
@@ -1898,6 +2032,7 @@
       today: async () => (await ready).asAt,
       async rpc(name, args) {
         const d = await ready;
+        if (d.overview) { const r = overviewRpc(d, name, args || {}); if (r) return result(...r); }   // MC1
         // CAP1b: with d.farmParts the demo farm is a large farm as CAP1a gives it (farmParts); without, a database before CAP1a
         if (d.farmParts && args.f === FARM && ["farm_map", "farm_reference_counts", "farm_reference_context", "farm_layer_features"].includes(name)) return result(...farmParts(d, name, args));
         // N2b: the ECan site list's features in a box (reference_view_features), for a group the old model has no area for

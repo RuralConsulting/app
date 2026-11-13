@@ -382,6 +382,18 @@
         "Rests on " + rests + (windowWords(p) ? ", " + windowWords(p) : "") + ". Indicative: worked out by the platform in the LAWA style, not LWP-Trends output." };
   }
 
+  // MC1: the class of a trend reply, read from exactly the fields trendWords reads, so a group's overview counts what each site's
+  // panel says: "improving" or "degrading" (likely or very likely), "indeterminate" ("No clear trend"), "little" ("Too little
+  // data"), "unavailable" ("Not available"), "failed" ("Couldn't be worked out"), or null when nothing was asked ("No trend").
+  function trendClass(res) {
+    if (!res) return null;
+    if (res.kind !== "preview") return "failed";
+    const p = res.preview, r = p?.result;
+    if (p?.unavailable) return TOO_LITTLE.includes(p.unavailable.reason) ? "little" : "unavailable";
+    if (!r?.category) return "unavailable";
+    return r.assessment === "indeterminate" ? "indeterminate" : r.assessment === "improving" || r.assessment === "degrading" ? r.assessment : "unavailable";
+  }
+
   // The median of the window, from the library's summary: "1.7 mg/L (58 samples)", or why there is none.
   function medianWords(res) {
     if (!res) return "Not worked out for this measure";
@@ -428,5 +440,5 @@
 
   return { CURRENT, HELD_WORDS, refine, holdBack, markSparse, restore, compareHint, analysisYears, ANALYSIS_LONGEST, emptyPeriod, MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
     tidy, credit, siteList, listing, pinned, intro, boxes, BOX_MARGIN_KM, quarters, boxRows, MAX_READ, PARTIAL, summaryRows, SUMMARY_IDS, SUMMARY_PAGE, framePadding, buttonTop, choose, remove, full, parameters, pickParameter, pickYears, record, recordLine, recordOf, bandRanges, windowStart, chartData,
-    analysisRequest, requestKey, bandWords, trendWords, medianWords, lawaWords, lawaLine, latestWords, compareRows };
+    analysisRequest, requestKey, bandWords, trendWords, trendClass, TOO_LITTLE, medianWords, lawaWords, lawaLine, latestWords, compareRows };
 });

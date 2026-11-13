@@ -260,7 +260,8 @@
     // host: the element to fill. opts: { owner: { farm } or { org }, name, item (a map's id, or none), href(mapId or null) }.
     async function open(host, opts) {
       close();
-      const s = shown = { host, opts, map: null, timer: null, renewAt: Infinity, chosen: null, several: false, overlay: null, wq: {} };
+      // MC1: opts.waterQuality opens the map with its water quality sites panel on (the overview's "Open water quality")
+      const s = shown = { host, opts, map: null, timer: null, renewAt: Infinity, chosen: null, several: false, overlay: null, wq: opts.waterQuality ? { on: true } : {} };
       say(s, "Loading maps…");
       let maps;
       try { maps = await listMaps(opts.owner); }

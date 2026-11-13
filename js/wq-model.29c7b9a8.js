@@ -95,6 +95,17 @@
   const summary = (sites_, km = RADIUS_KM) => !sites_.length ? "No monitoring sites within " + km + " km" :
     sites_.length + (sites_.length === 1 ? " monitoring site" : " monitoring sites") + " within " + km + " km";
   // The sources a list of sites comes from, named once ("Environment Canterbury"; "This farm's own and Environment Canterbury").
+  // MC1: surface water or groundwater, from a monitoring site's own type as its source wrote it, or null when the type does not say
+  // (the platform's types are not one list yet: ECan's "Rivers, Drains, Creeks", "Lakes", "Groundwater-Wells", "Groundwater-Springs";
+  // a group's "surface water", "groundwater", "stream", "drain", "springhead"). A spring is groundwater coming up, as ECan files it.
+  // Deliberately small: WQV1 (the Water quality page) brings one tidy classification and may adopt or replace this.
+  function waterKind(siteType) {
+    const t = String(siteType ?? "").toLowerCase();
+    if (!t.trim()) return null;
+    if (/ground ?water|\bwells?\b|\bbores?\b|spring/.test(t)) return "groundwater";
+    if (/surface|river|stream|creek|drain|lake|lagoon|estuar|wetland|canal|tarn|pond/.test(t)) return "surface";
+    return null;
+  }
   const sourcesLine = (sites_) => {
     const names = [...new Set(sites_.map((s) => s.owner))];
     return names.length ? "Source: " + (names.length === 1 ? names[0] : names.slice(0, -1).join(", ") + " and " + names[names.length - 1]) : "";
@@ -333,5 +344,5 @@
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP, otherDatasets, alsoMeasured, locationWindows };
+  return { NOT_ASSESSED, RADIUS_KM, waterKind, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP, otherDatasets, alsoMeasured, locationWindows };
 });

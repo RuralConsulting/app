@@ -28,6 +28,14 @@
   let addCtx = null;   // UI2: what Add offers here (header), for the Add in What needs doing
   let shownTabs = [];   // J2: the sections drawn for this person here ([key, label]), for Home's shortcuts
   const T = () => FP.routeTiming || null;
+  // MC1: a computer (wider than a phone's 800 px, ui.css's breakpoint) gets the group's overview on Home; crossing the breakpoint
+  // with Home open draws the other one
+  const COMPUTER = "(min-width: 801px)";
+  const computer = () => !!root.matchMedia?.(COMPUTER).matches;
+  root.matchMedia?.(COMPUTER).addEventListener?.("change", () => {
+    const screen = root.document?.querySelector("#screen-group");
+    if (screen && !screen.hidden && screen.dataset.view === "home" && ctx?.group && lastView === "home") open(ctx.group, { view: "home" });
+  });
   const featureCount = (n) => Number(n).toLocaleString("en-NZ") + (Number(n) === 1 ? " feature" : " features");
 
   async function read(query) { const { data, error } = await query; if (error) throw error; return data; }
@@ -122,7 +130,7 @@
     mapHandle?.destroy(); mapHandle = null; surface = null; entries = [];
     ctx = null; draft = null;
     hideNeeds();
-    FP.placeHome?.close();
+    FP.placeHome?.close(); FP.groupOverview?.close();
     FP.records?.close();   // CAP1
     FP.groupManage?.forget(); lastView = null;   // ON3b: leaving the group space drops the manage space's reads
     document.body.classList.remove("group-space-active");
@@ -183,7 +191,7 @@
     header(group, route);
     $("#screen-group").dataset.view = route.view;
     if (route.view !== "map") hideNeeds();   // UI2: What needs doing is the Working map's (UI2's Overview)
-    if (route.view !== "home") FP.placeHome?.close();
+    if (route.view !== "home") { FP.placeHome?.close(); FP.groupOverview?.close(); }
     if (route.view !== "records") FP.records?.close();   // CAP1
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
     if (route.view === "manage" && (lastView !== "manage" || ctx?.group.id !== group.id)) FP.groupManage?.forget(group.id);
@@ -199,7 +207,8 @@
     // V4: Maps fills the space under the header (js/maps-view.js) and asks for none of the group's reads
     if (route.view === "maps") {
       document.title = group.name + " · " + G().viewLabel("maps") + " | " + (FP.brand?.product || "");
-      return FP.mapsView.open($("#group-maps"), { owner: { org: group.id }, name: group.name, item: route.item || null, href: (id) => FP.href(G().href(group.id, "maps", id)) });
+      return FP.mapsView.open($("#group-maps"), { owner: { org: group.id }, name: group.name, item: route.item || null, href: (id) => FP.href(G().href(group.id, "maps", id)),
+        waterQuality: !!FP.groupOverview?.takeWaterQuality?.() });   // MC1: "Open water quality" on the overview
     }
     FP.mapsView?.close();
     // N4: Events is a calendar, not a map: the panel takes the width and the view reads and writes the group's events itself
@@ -242,8 +251,14 @@
       document.title = group.name + " · " + G().viewLabel("home") + " | " + (FP.brand?.product || "");
       const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : G().isoDay(Date.now());
       if (current !== token) return;
-      panel.replaceChildren(FP.placeHome.view({ space: "group", place: group, sections: shownTabs, people: !!FP.peopleModel?.canSeeTab(group, groups), addCtx, sb: FP.sb, today,
-        search: (view, q) => { pendingSearch = { view, q }; } }));
+      const home = { space: "group", place: group, sections: shownTabs, people: !!FP.peopleModel?.canSeeTab(group, groups), addCtx, sb: FP.sb, today,
+        search: (view, q) => { pendingSearch = { view, q }; } };
+      // MC1: on a computer a group's Home is its overview (group-overview.js: the numbers, the trends and the map, with Home's search);
+      // a phone keeps Home as it is
+      const overview = !!FP.groupOverview && computer();
+      $("#screen-group").dataset.home = overview ? "overview" : "launcher";
+      if (overview) panel.replaceChildren(FP.groupOverview.view({ group, groups, person, sb: FP.sb, today, home }));
+      else { FP.groupOverview?.close(); panel.replaceChildren(FP.placeHome.view(home)); }
       panel.scrollTop = 0;
       return;
     }
