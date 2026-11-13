@@ -161,3 +161,22 @@
 }
 .wqp-depth { display: block; color: var(--ink-3); font-size: var(--text-small); }
 .wqp-download { color: var(--ink); }
+
+/* ---- PH2: the Water quality page on a phone, calm: one quiet control for the water type and the measure, the quick answer, then the
+   plain map with small dots; the sites and the layers and legend open on request from two quiet chips on the map ---------------------- */
+.wqp-mapchips { display: none; }
+@media (max-width: 800px) {
+  .wqp-choose { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 0 14px; border: 1px solid var(--rule); border-radius: var(--radius-pill);
+    background: none; color: var(--ink); font: 500 var(--text-body)/1.2 var(--f-ui); cursor: pointer; }
+  .wqp-choose .icon { color: var(--ink-2); }
+  .wqp-phonemap { height: 58vh; }
+  .wqp-phonebox .wqp-sentence { margin-bottom: var(--s-2); }
+  .wqp-phonebox .wqp-phonelead { margin: var(--s-2) 0 0; color: var(--ink-3); font-size: var(--text-small); }
+  .wqp-mapchips { position: absolute; z-index: 3; top: var(--s-3); left: var(--s-3); right: var(--s-3); display: flex; flex-wrap: wrap; gap: 8px; }
+  .wqp-mapchips .wqp-bgswitch { position: static; margin-left: auto; }
+  .wqp-mapchip { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-radius: var(--radius-pill);
+    background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); font: 600 var(--text-small)/1 var(--f-ui); cursor: pointer; }
+  .wqp-mapchip::after { content: ""; position: absolute; inset: -5px 0; }
+  .wqp-layersheet .wqp-layers { display: block; padding: 0 var(--s-4); }
+  .wqp-sitesheet .wqp-phonelist { padding: 0 var(--s-4); }
+}

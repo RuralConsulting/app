@@ -116,9 +116,12 @@
   // no rows to name: its own sites are never readable to them.
   const PLAIN_SOURCES = { "ecan-wq-sites": "Environment Canterbury", "ecan-wq": "Environment Canterbury", "niwa-nrwqn-sites": "NIWA", "niwa-nrwqn": "NIWA",
     "niwa-hydro-sites": "NIWA", "niwa-hydro": "NIWA" };
+  // PH2: a name's possessive as written: "Ashburton Lakes' own", "Ashburton Forks' own", "Greenstreet's own" (a name ending in s
+  // takes the apostrophe alone). Used wherever a name is given an 's.
+  const possessive = (name) => { const n = String(name ?? "").trim(); return !n ? n : /s$/i.test(n) ? n + "'" : n + "'s"; };
   function sourceLabel(site, { org = null, farm = null, names = null } = {}) {
     const o = site?.owner_org_id ?? null, f = site?.owner_farm_id ?? null;
-    if (o) return o === org ? "This group's own" : names?.get?.(o) ? names.get(o) + "'s own" : "Another group's own";
+    if (o) return o === org ? "This group's own" : names?.get?.(o) ? possessive(names.get(o)) + " own" : "Another group's own";
     if (f) return f === farm ? "This farm's own" : "A member farm's own";
     return PLAIN_SOURCES[site?.source_key] || sourceName(site?.source_key) || "Shared monitoring site";
   }
@@ -368,5 +371,5 @@
     };
   }
 
-  return { waterType, waterKind, belowDischarge, sourceLabel, PLAIN_SOURCES, NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP, otherDatasets, alsoMeasured, locationWindows };
+  return { possessive, waterType, waterKind, belowDischarge, sourceLabel, PLAIN_SOURCES, NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP, otherDatasets, alsoMeasured, locationWindows };
 });

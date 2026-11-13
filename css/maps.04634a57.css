@@ -116,3 +116,70 @@
 .wqs-switch { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
 .wqs-held { margin-top: 8px; }
 .wqs-held > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: var(--text-small); }
+
+/* ---- PH2: one layout rule for a phone map screen (the viewer's own breakpoint, 720 px) -----------------------------------------------
+   Top right: one small cluster, Locate then More (zoom is a pinch; the compass, 3D, measure and print are under More, shown while it
+   is open). Top left: "Whole area" (or "Whole property"), and the Water quality chip under it. Bottom left, above the sheet: the scale
+   and the credit's "i". Bottom right, above the sheet: the + alone (add.js). The map's own sheet: its title row and Layers; open, it
+   leaves the cluster clear and the +, the chip and the scale step aside. Every control a 44 px target. viewer.js is not edited. */
+.ph-more, .ph-locate { display: none; }
+.ph-locate-btn, .ph-more-btn { display: grid; place-items: center; color: var(--ink); }
+.ph-locate-btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--ink); }
+.ph-locate-btn.ph-busy .icon { animation: pa-pulse 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ph-locate-btn.ph-busy .icon { animation: none; opacity: .5; } }
+.ph-me-dot { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--map-me); box-shadow: 0 0 0 2.5px var(--map-label); }
+.ph-locate-sheet .ph-locate-say { margin: 0 var(--s-4) var(--s-3); color: var(--ink); }
+.ph-locate-sheet .ph-locate-help { margin: 0 var(--s-4) var(--s-3); }
+.ph-locate-sheet .qp-set { margin: 0 var(--s-4) var(--s-3); }
+@media (max-width: 720px) {
+  /* review of #538, 2: More opens two short columns to the left of the cluster (zoom and the compass; 3D, measure, print), all within
+     the top of the map, so on the shortest phone (320 x 568, Safari's bars showing) none runs under the sheet or the +, which steps
+     aside while the list is open; the Water quality chip steps aside too */
+  .maps-viewer .maplibregl-ctrl-top-right { display: grid; grid-template-columns: repeat(3, auto); justify-content: end; align-items: start; gap: 10px; padding: 10px 10px 0 0; }
+  .maps-viewer .maplibregl-ctrl-top-right > .maplibregl-ctrl { margin: 0; }
+  .maps-viewer .maplibregl-ctrl-top-right > :has(.maplibregl-ctrl-geolocate) { display: none; }   /* the app's own Locate instead (maps-view.js) */
+  .maps-viewer .ph-locate { display: block; grid-column: 3; grid-row: 1; }
+  .maps-viewer .ph-more { display: block; grid-column: 3; grid-row: 2; }
+  .maps-viewer .maplibregl-ctrl-top-right > :has(.maplibregl-ctrl-zoom-in) { grid-column: 1; grid-row: 1 / span 3; }
+  .maps-viewer .maplibregl-ctrl-top-right > .rv-3d { grid-column: 2; grid-row: 1; }
+  .maps-viewer .maplibregl-ctrl-top-right > .rv-tools { grid-column: 2; grid-row: 2 / span 3; }
+  .maps-viewer:not(.ph-more-open) .maplibregl-ctrl-top-right > :is(:has(.maplibregl-ctrl-zoom-in), .rv-3d, .rv-tools) { display: none; }
+  .maps-viewer.ph-more-open .wqs-ctrl { display: none; }
+  .maps-viewer .maplibregl-ctrl-top-right button { width: 44px; height: 44px; }
+  .maps-viewer .rv-3d button { line-height: 44px; }
+  .maps-viewer.ph-more-open .ph-more-btn { background: var(--fill); }
+  /* the scale and the credit: bottom left, above the map's sheet, side by side */
+  .maps-viewer .maplibregl-ctrl-bottom-right { right: auto; left: 0; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px)); display: flex; align-items: flex-end; gap: 8px; padding: 0 0 8px 10px; }
+  .maps-viewer .maplibregl-ctrl-bottom-right > .maplibregl-ctrl { margin: 0; }
+  .maps-viewer .maplibregl-ctrl-attrib.maplibregl-compact-show { max-width: calc(100vw - 110px); }
+  .maps-viewer:is(.rv-panel-open, .wqs-open) :is(.maplibregl-ctrl-bottom-right, .wqs-ctrl) { display: none; }
+  /* "Whole area" and the chip: 34 px to look at, 44 px to tap */
+  .maps-viewer .rv-fit { min-height: 34px; }
+  .maps-viewer .rv-fit::after, .maps-viewer .wqs-toggle::after, .maps-viewer .wqs-list-btn::after { content: ""; position: absolute; inset: -5px 0; }
+  .maps-viewer .wqs-toggle, .maps-viewer .wqs-list-btn { position: relative; }
+  /* the sheet: the title and Layers; the group's name and the Rural Consulting mark are the header's, not repeated here */
+  .maps-viewer .rv-kicker, .maps-viewer .rv-org .rv-brand { display: none; }
+  .maps-viewer .rv-org:not(:has(.rv-back)) { display: none; }
+  .maps-viewer .rv-title { font-size: var(--text-heading); }
+  .maps-viewer .rv-panel { max-height: calc(100% - 124px); }
+  /* measuring or comparing (a tool from More, which closes): the tool's bar sits low, above the sheet, in place of the scale and credit,
+     and the tools stay up top so the same button ends it; the + steps aside meanwhile (add.js) */
+  .maps-viewer .rv-toolbar { top: auto; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px) + 10px); left: 10px; right: 10px; transform: none; max-width: none; }
+  .maps-viewer:is(.rv-measuring, .rv-comparing) .maplibregl-ctrl-top-right > .rv-tools { display: block; }
+  .maps-viewer:is(.rv-measuring, .rv-comparing) :is(.maplibregl-ctrl-bottom-right, .wqs-ctrl) { display: none; }
+}
+/* the water quality dots: small far out, a little larger close in, the chosen one clear (wq-sites.js sets the zoom band) */
+.wqs-pin { padding: 6px; }
+.wqs-pin i { width: var(--wqs-dot, 12px); height: var(--wqs-dot, 12px); border-width: 1.5px; box-sizing: border-box; }
+.wqs-pin.wqs-older i { width: calc(var(--wqs-dot, 12px) - 2px); height: calc(var(--wqs-dot, 12px) - 2px); }
+[data-wqs-zoom="far"] { --wqs-dot: 10px; }
+[data-wqs-zoom="mid"] { --wqs-dot: 12px; }
+[data-wqs-zoom="near"] { --wqs-dot: 14px; }
+.wqs-pin.wqs-chosen i { width: 18px; height: 18px; }
+.wqs-pin.wqs-thinned { visibility: hidden; pointer-events: none; }
+@media (max-width: 720px) { .wqs-pin { padding: 16px; } }   /* a 44 px tap target round a 12 px dot */
+/* the list of sites, on request: a quiet chip beside Water quality once it is on (a phone) */
+.wqs-list-btn { display: none; height: 34px; margin-left: 6px; padding: 0 10px; border: 0; border-radius: 4px; box-shadow: var(--map-pin-shadow); font: 600 var(--text-small) var(--f-ui); color: var(--ink); background: var(--panel); cursor: pointer; }
+@media (max-width: 720px) { .wqs-on .wqs-list-btn { display: inline-flex; align-items: center; } .wqs-ctrl { display: flex; } }
+/* the panel's top row is its own: the back link and the close button, over a hairline, so the close never sits on the list */
+.wqs-bar { border-bottom: 1px solid var(--rule-soft); padding-bottom: 4px; margin-bottom: 4px; }

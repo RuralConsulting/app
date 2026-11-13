@@ -96,5 +96,20 @@ FP.basemaps = (() => {
     map.setLayoutProperty("bm-aerial", "visibility", which === "aerial" ? "visible" : "none");
     for (const [name, o] of merged) for (const id of o.layers) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", name === which ? "visible" : "none");
   }
-  return { style, pick, ground, setTerrain, terrainDefault, names, labels, missingKey: !key, exaggeration: EXAGGERATION };
+  // PH2: on a narrow map MapLibre opens its compact credit expanded, a dark box across the bottom of the map (the owner's phone, under
+  // the +). It starts folded to its small "i" instead, once, when it first has something to say; a tap on the "i" still opens it, as
+  // the licences ask the credit to be within reach. A person's own tap is never undone.
+  function quietCredit(map) {
+    let done = false;
+    const tick = () => {
+      if (done) return;
+      const a = map.getContainer?.().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+      if (!a) return;
+      done = true;
+      a.classList.remove("maplibregl-compact-show"); a.removeAttribute("open");
+      map.off("styledata", tick); map.off("sourcedata", tick);
+    };
+    map.on("styledata", tick); map.on("sourcedata", tick); setTimeout(tick, 0);
+  }
+  return { style, pick, ground, setTerrain, terrainDefault, names, labels, missingKey: !key, exaggeration: EXAGGERATION, quietCredit };
 })();

@@ -28,7 +28,64 @@
   function mount(holder, options) {
     let store = null;
     try { store = localStorage; } catch {}
-    return api.seedStartOn(store, options.referenceLayers, () => mountWith(holder, options));
+    const { phoneGroup = false, ...rest } = options;
+    return api.seedStartOn(store, rest.referenceLayers, () => mountWith(holder, rest), { phoneGroup });
+  }
+  const phone = () => !!root.matchMedia?.("(max-width: 720px)").matches;   // the viewer's own phone width
+  // PH2: what the app sets around the viewer's own controls on a phone (viewer.js is the portal's and is not edited): one "More"
+  // control after Locate holds zoom, the compass, 3D, measure and print (shown by maps.css while it is open); the credit starts
+  // folded to its "i"; a group's map fits "Whole area" (not "Whole property") and its line says when it was published, not surveyed.
+  function chrome(map, holder, { group = false, publishedAt = null, areaHa = null } = {}) {
+    const el = (...a) => FP.el(...a);
+    if (group) {
+      const fit = holder.querySelector(".rv-fit");
+      if (fit) fit.textContent = "Whole area";
+      const line = holder.querySelector(".rv-meta");
+      if (line) line.textContent = api.meta({ publishedAt, areaHa });
+    }
+    FP.basemaps?.quietCredit?.(map);
+    const button = el("button", { type: "button", class: "ph-more-btn", "aria-expanded": "false", "aria-label": "More map tools", title: "More map tools" }, FP.icon ? FP.icon("more", 20) : "…");
+    const box = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group ph-more" }, button);
+    const more = (on) => { holder.classList.toggle("ph-more-open", on); button.setAttribute("aria-expanded", String(on)); };
+    button.addEventListener("click", () => more(!holder.classList.contains("ph-more-open")));
+    // a tool that takes over the map (3D, measure, print, compare) closes the list; zoom keeps it open for another tap
+    holder.addEventListener("click", (e) => { if (e.target.closest?.(".rv-3d button, .rv-tools button")) more(false); });
+    try { map.addControl({ onAdd: () => box, onRemove: () => box.remove() }, "top-right"); } catch {}
+    try { map.addControl({ onAdd: () => locateControl(map), onRemove: () => {} }, "top-right"); } catch {}
+  }
+  // review of #538, 4: Locate me on a phone's map is the app's own, as on Home (the viewer's is MapLibre's, which a permission query
+  // saying "denied" turns off for good and which says nothing when refused): the phone is asked from the tap itself, the real answer
+  // decides, and a refusal says where this phone turns location on, with Try again (which asks again from its own tap). On a
+  // computer the viewer's own control stays (maps.css shows one or the other).
+  function locateControl(map) {
+    const el = (...a) => FP.el(...a), P = FP.phoneModel;
+    const btn = el("button", { type: "button", class: "ph-locate-btn", "aria-label": "Locate me", title: "Locate me" }, FP.icon ? FP.icon("locate", 20) : "◎");
+    const box = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group ph-locate" }, btn);
+    let marker = null;
+    const refused = (problem) => FP.sheet?.open({ opener: btn, title: "Location", className: "ph-locate-sheet", body: (done) => [
+      el("p", { class: "ph-locate-say", role: "alert" }, problem.text),
+      ...(problem.help?.length ? [el("ol", { class: "qp-help ph-locate-help" }, ...problem.help.map((h) => el("li", {}, h)))] : []),
+      el("div", { class: "qp-set", role: "group" }, el("button", { type: "button", class: "qp-row", id: "ph-locate-retry", onclick: () => { done(); ask(); } },
+        el("span", { class: "qp-dot", "aria-hidden": "true" }, FP.icon ? FP.icon("locate", 20) : null), el("span", {}, "Try again"))),
+    ] });
+    function ask() {
+      if (!FP.locate || !P) return;
+      const asked = FP.locate.get({ maxAge: 5000 });   // (from the tap itself: nothing awaited first)
+      btn.classList.add("ph-busy"); btn.setAttribute("aria-busy", "true");
+      asked.then((got) => {
+        btn.classList.remove("ph-busy"); btn.removeAttribute("aria-busy");
+        if (!got.ok) { btn.setAttribute("aria-pressed", "false"); refused(got.problem); return; }
+        const f = got.fix, gl = root.maplibregl;
+        btn.setAttribute("aria-pressed", "true");
+        try {
+          if (!marker && gl?.Marker) marker = new gl.Marker({ element: el("span", { class: "ph-me-dot", "aria-label": "You are here" }), anchor: "center" });
+          marker?.setLngLat([f.lon, f.lat]).addTo(map);
+          map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 14), duration: root.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 600 });
+        } catch { /* the map is going */ }
+      });
+    }
+    btn.addEventListener("click", ask);
+    return box;
   }
   function mountWith(holder, options) {
     if (linzKey()) return root.RCLViewer.mount(holder, options);
@@ -43,6 +100,15 @@
     // Switching it on returns once it applies: the map takes its size from the holder as it starts, and before the stylesheet
     // is in, the viewer's map element has no height (MapLibre then makes a 300 px canvas and keeps it). Chrome reads the sheet
     // again when its media changes, so it applies only once the page's style sheets list it (checked every 16 ms, 4 s at most).
+    phone, chrome,
+    // PH2: a group's map's sub-groups in the soft neutral set (map-palette.js), and the names of the person's sub-groups to know them by
+    calm: (manifest, owner) => {
+      const group = !!(owner?.org && !owner.farm), css = typeof getComputedStyle === "function" ? getComputedStyle(document.documentElement) : null;
+      let bm = null; try { bm = localStorage.getItem(BASEMAP_KEY); } catch {}
+      const names = (FP.groupSpace?.groups?.() || []).filter((g) => g.parent_org_id === owner?.org).map((g) => String(g.name || "").trim().toLowerCase());
+      return api.calmManifest(manifest, { group, palette: FP.mapPalette, names, onDark: (bm || (phone() && group ? "map" : "aerial")) === "aerial",
+        hues: FP.mapPalette && css ? FP.mapPalette.hues((k) => css.getPropertyValue(k)) : null });
+    },
     styles: (on) => {
       const link = document.querySelector("link[data-viewer-styles]");
       if (!link) return null;
@@ -232,15 +298,20 @@
       const holder = el("div", { class: "maps-viewer" });
       try {
         s.host.replaceChildren(holder);
+        const group = !!(s.opts.owner?.org && !s.opts.owner.farm);
+        const manifest = env.calm ? env.calm(read.manifest, s.opts.owner) : read.manifest;
         s.map = env.mount(holder, {
-          manifest: { ...read.manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
-          url: (rel) => read.urls[rel] || "",
+          manifest: { ...manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
+          // (a legend swatch drawn here is an SVG data: image, passed as it is; every other file is a signed link)
+          url: (rel) => (typeof rel === "string" && rel.startsWith("data:image/svg+xml,") ? rel : read.urls[rel] || ""),
+          ...(group && env.phone?.() ? { phoneGroup: true } : {}),
           ...(read.shared.length ? { shared: read.shared } : {}),
           referenceLayers: startOn(read.referenceLayers, s.opts.owner),
           onBack: s.several ? () => env.go(s.opts.href(null)) : null, backLabel: "All maps",
           ...env.backgrounds(),
         });
         if (at) s.map.jumpTo(at);
+        try { env.chrome?.(s.map, holder, { group, publishedAt: s.chosen.published_at, areaHa: read.manifest?.area_ha }); } catch {}
       } catch { say(s, UNAVAILABLE, tryAgain(s)); return; }
       try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq, read.manifest?.bounds || null) : null; } catch { s.overlay = null; }
       s.renewAt = env.now() + RENEW_MS;
@@ -282,8 +353,53 @@
       dropMap(s);
       s.host.replaceChildren();
     }
-    return { open, close, wake, listMaps };
+    return { open, close, wake, listMaps, debug: () => shown?.map || null };
   }
+  // ---- PH2: a calm group map --------------------------------------------------------------------------------------------------
+  // An area as a person reads it: whole hectares, and a large group's to the nearest 10 or 100 ("243,700 ha", not "243,674.3 ha").
+  function areaWords(ha) {
+    const n = Number(ha);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    const r = n >= 10000 ? Math.round(n / 100) * 100 : n >= 1000 ? Math.round(n / 10) * 10 : n >= 10 ? Math.round(n) : Math.round(n * 10) / 10;
+    return r.toLocaleString("en-NZ") + " ha";
+  }
+  // The line under a group's map title. The viewer says "Surveyed <date>, <area>" from the package's survey_date, which the plugin
+  // guesses from the commonest date among the features' date fields (drone photos, on a farm): a group's map is not surveyed. What
+  // is true is when this version was published (map_packages.published_at, the date the maps list already gives as "Updated").
+  const meta = ({ publishedAt = null, areaHa = null } = {}) => [publishedAt ? "Updated " + day(publishedAt) : "", areaWords(areaHa)].filter(Boolean).join(" · ");
+  // The layer on a group's map that is its sub-groups: a categorised area layer drawn by the web map whose title says so, or whose
+  // categories are mostly the group's own sub-groups' names (`names`, lower case).
+  function subgroupLayer(L, names = []) {
+    if (!L?.vector || L.geometry !== "polygon" || L.classes?.kind !== "categories") return false;
+    if (/\b(sub-?groups?|catchment groups?)\b/i.test(String(L.title || ""))) return true;
+    const labels = (L.legend || []).map((g) => String(g?.label || "").trim().toLowerCase()).filter(Boolean);
+    return labels.length >= 2 && labels.filter((x) => names.includes(x)).length * 2 >= labels.length;
+  }
+  // The owner (13 Nov 2026): sub-groups in a neutral, soft, easy-to-tell-apart set, thin outlines, gentle translucent fills, never
+  // brand colours. The same seven soft hues the Places map and a group's overview give groups (map-palette.js), one per sub-group in
+  // turn, each with map-palette's outline for the background it opens on; its legend swatches drawn to match (an SVG, which the app's
+  // content policy allows as a data: image). Every other layer, and every farm's map, is drawn as published.
+  function calmLayer(L, palette, { onDark = false, hues = null } = {}) {
+    const set = hues || palette.DEFAULT_HUES;
+    const keys = [...new Set(L.vector.layers.flatMap((v) => Object.keys(v.by || {})))];
+    const lookOf = (k) => palette.look(set[(k === "*" ? 0 : Number(k) || 0) % set.length], { onDark });
+    const by = (f) => Object.fromEntries(keys.map((k) => [k, f(lookOf(k), k)]));
+    const swatch = (lk) => "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect x="1.5" y="1.5" width="17" height="17" rx="2" fill="' +
+      lk.fill + '" fill-opacity="0.35" stroke="' + lk.line + '" stroke-width="1.5"/></svg>');
+    return { ...L, calm: true,
+      vector: { ...L.vector, layers: [{ type: "fill", by: by((lk) => ({ color: lk.fill, opacity: 0.16 })) }, { type: "line", by: by((lk) => ({ color: lk.line, opacity: 1, width: 1.2 })) }] },
+      legend: (L.legend || []).map((g, i) => ({ ...g, icon: swatch(lookOf(keys.includes(String(i)) ? String(i) : keys[0] || "0")) })) };
+  }
+  function calmManifest(manifest, { group = false, palette = null, names = [], onDark = false, hues = null } = {}) {
+    if (!group || !palette || !Array.isArray(manifest?.layers)) return manifest;
+    let changed = false;
+    const layers = manifest.layers.map((L) => (subgroupLayer(L, names) ? ((changed = true), calmLayer(L, palette, { onDark, hues })) : L));
+    return changed ? { ...manifest, layers } : manifest;
+  }
+  // The background and reference layers a group's map opens with on a phone: the plain map, roads and waterways off, unless the person
+  // has chosen otherwise on this device (the viewer remembers their own choices; these are set only for the start and taken away)
+  const PHONE_START = { "rv-basemap": "map", "rv-ref-ww": "0", "rv-ref-rd": "0" };
+
   // CTX2: where the viewer remembers a context layer's switch on this device (its contextDefs: "rv-ctx-" and the key as it cleans it)
   const ctxStore = (key) => { const k = String(key || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 80); return k ? "rv-ctx-" + k : null; };
   // CTX2: the viewer's reference layers for an owner: a group's map marks the layers that start on (startOn); a farm's map starts
@@ -294,15 +410,16 @@
   }
   // CTX2: run `start` (the viewer's mount) with each startOn layer's switch set on in `store` (localStorage) where the person has no
   // choice of their own remembered, then take away only what was set here. A store that cannot be used changes nothing.
-  function seedStartOn(store, layers, start) {
+  // PH2: on a phone a group's map is calm: `phoneGroup` seeds PHONE_START the same way and seeds no context layer on (the owner: "you
+  // might use a map on your phone to find a site, but not turn on half a dozen layers"); each stays one tap away in Layers.
+  function seedStartOn(store, layers, start, { phoneGroup = false } = {}) {
     const seeded = [];
-    for (const r of layers || []) {
-      if (!r || r.startOn !== true || !r.style) continue;
-      const k = ctxStore(r.key);
-      try { if (k && store && store.getItem(k) === null) { store.setItem(k, "1"); seeded.push(k); } } catch {}
-    }
+    const seed = (k, v) => { try { if (k && store && store.getItem(k) === null) { store.setItem(k, v); seeded.push([k, v]); } } catch {} };
+    if (phoneGroup) for (const [k, v] of Object.entries(PHONE_START)) seed(k, v);
+    else for (const r of layers || []) if (r && r.startOn === true && r.style) seed(ctxStore(r.key), "1");
     try { return start(); }
-    finally { for (const k of seeded) try { if (store.getItem(k) === "1") store.removeItem(k); } catch {} }
+    finally { for (const [k, v] of seeded) try { if (store.getItem(k) === v) store.removeItem(k); } catch {} }
   }
-  return { create, backgrounds, filesByPath, ctxStore, startOn, seedStartOn, BUCKET, MAX_MAPS, MAX_REFERENCE, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
+  return { create, backgrounds, filesByPath, ctxStore, startOn, seedStartOn, areaWords, meta, subgroupLayer, calmLayer, calmManifest, PHONE_START,
+    BUCKET, MAX_MAPS, MAX_REFERENCE, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
 });

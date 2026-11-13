@@ -19,7 +19,21 @@
   const MAX_SITES = 200;        // the sites drawn: the nearest first, as the read gives them (a group's list can be long)
   const MAX_CHOSEN = 6;         // sites in one comparison
   const RECENT_YEARS = 5;       // a site with no sample in this many years is drawn as an older site
-  const LABEL_ZOOM = 13;        // names show from this zoom (and always for a chosen site)
+  const LABEL_ZOOM = 13;
+  // PH2: dots closer than this (px, centre to centre) would sit on each other: only the first of them shows until zoomed in
+  const DOT_GAP = 14;
+  // Which dot shows where several would pile up, lowest first: the chosen ones, the group's own, then sites with recent results
+  const thinRank = (s, chosen = []) => (chosen.includes(s?.id) ? 0 : s?.owned ? 1 : s?.current && !s?.sparse ? 2 : 3);
+  // The dots to hide: in rank order (then as given), each is kept unless it is within `gap` of one already kept. A chosen one is
+  // always kept. points: [{ id, x, y, rank }]. A Set of the ids hidden.
+  function thin(points, gap = DOT_GAP) {
+    const order = (points || []).map((p, i) => ({ p, i })).sort((a, b) => (a.p.rank ?? 3) - (b.p.rank ?? 3) || a.i - b.i);
+    const kept = [], hidden = new Set();
+    for (const { p } of order) {
+      if (p.rank !== 0 && kept.some((k) => Math.hypot(k.x - p.x, k.y - p.y) < gap)) hidden.add(p.id); else kept.push(p);
+    }
+    return hidden;
+  }        // names show from this zoom (and always for a chosen site)
   // years 0 is the whole record (N2c): the chart then has no start; the median and trend use the library's longest window (20 years)
   const WINDOWS = [{ years: 5, label: "Last 5 years" }, { years: 10, label: "Last 10 years" }, { years: 20, label: "Last 20 years" }, { years: 0, label: "Whole record" }];
   const ANALYSIS_LONGEST = 20;
@@ -469,7 +483,7 @@
     });
   }
 
-  return { bandsFor, RIVERS_ONLY, DRINKING_WATER, drinkingWater, GROUNDWATER_WORDS, gradable, CURRENT, isCurrent, HELD_WORDS, refine, holdBack, markSparse, restore, compareHint, analysisYears, ANALYSIS_LONGEST, emptyPeriod, MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
+  return { DOT_GAP, thinRank, thin, bandsFor, RIVERS_ONLY, DRINKING_WATER, drinkingWater, GROUNDWATER_WORDS, gradable, CURRENT, isCurrent, HELD_WORDS, refine, holdBack, markSparse, restore, compareHint, analysisYears, ANALYSIS_LONGEST, emptyPeriod, MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
     tidy, credit, siteList, listing, pinned, intro, boxes, BOX_MARGIN_KM, quarters, boxRows, MAX_READ, PARTIAL, summaryRows, SUMMARY_IDS, SUMMARY_PAGE, framePadding, buttonTop, choose, remove, full, parameters, pickParameter, pickYears, record, recordLine, recordOf, bandRanges, windowStart, chartData,
     analysisRequest, requestKey, bandWords, trendWords, trendClass, TOO_LITTLE, medianWords, lawaWords, lawaLine, latestWords, compareRows };
 });

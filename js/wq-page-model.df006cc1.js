@@ -324,7 +324,7 @@
 
   // ---- words ----------------------------------------------------------------------------------------------------------------------
   const sourcesLine = (all) => { const names = [...new Set(list(all).map((s) => s.source))].sort((a, b) => rank(a) - rank(b)); return names.length ? "Sources: " + (names.length === 1 ? names[0] : names.slice(0, -1).join(", ") + " and " + names[names.length - 1]) + "." : ""; };
-  const rank = (s) => (s === "This group's own" ? 0 : /'s own$/.test(s) ? 1 : 2);
+  const rank = (s) => (s === "This group's own" ? 0 : /'s? own$/.test(s) ? 1 : 2);
   const fieldNote = (h, includeField) => (!h.field ? "" : includeField ? "Medians include " + plural(h.field, "field or test-strip reading", "field or test-strip readings") + "."
     : "Medians use laboratory results (and results whose method is not recorded); " + plural(h.field, "field or test-strip reading is", "field or test-strip readings are") + " left out.");
   // Said once, quietly, to someone in a group with sub-groups they are not on: nothing about what those sub-groups hold (no count, no names).

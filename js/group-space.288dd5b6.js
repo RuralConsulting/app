@@ -175,7 +175,9 @@
     const tabs = (FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people);   // UI1: the views drawn, for Add
     // UI2: five on a phone's tab bar and six in a computer's segmented control; the rest under More (space-nav.js)
     (FP.spaceNav?.render || plainTabs)($("#group-nav"), tabs.map(([key, label]) => ({ key, label, href: FP.href(G().href(group.id, key)), icon: FP.icons?.forView(key),
-      badge: key === "people" ? () => FP.groupPeople?.countBadge?.(group.id) : null })), route.view);   // RV1: open review items, once People has read them
+      badge: key === "people" ? () => FP.groupPeople?.countBadge?.(group.id) : null })), route.view,   // RV1: open review items, once People has read them
+      // PH2: on a phone Search is a button in the bar: Home's own search (place-home.js, compact) in a sheet that takes the screen
+      { search: FP.placeHome ? (opener) => searchSheet(opener, group, tabs) : null });
     const back = $("#group-back");
     back.hidden = !(FP.groupSpace.hasPortfolio?.());
     back.setAttribute("href", FP.href("#/places"));   // J2c: Places itself, never the bare address (which may land in a place)
@@ -272,7 +274,7 @@
       if (FP.phoneArea?.phone()) {
         FP.placeHome?.close(); FP.groupOverview?.close();
         $("#screen-group").dataset.home = "area";
-        panel.replaceChildren(FP.phoneArea.view({ group, sb: FP.sb, home })); panel.scrollTop = 0; return;
+        panel.replaceChildren(FP.phoneArea.view({ group, sb: FP.sb })); panel.scrollTop = 0; return;
       }
       FP.phoneArea?.close();
       const overview = !!FP.groupOverview && computer();
@@ -442,6 +444,17 @@
   // come from the group load the page already made.
   const DO_LABEL = { file: "Add a file", event: "Add an event", interaction: "Log a call or visit", person: "Add a person" };
   let pendingSearch = null;   // { view, q }: the words typed in the Overview's search, for the section it opens
+  // PH2: the bar's Search on a phone: Home's search (the same box, over the same lists, with the same reads) in a sheet that takes the
+  // screen; a result opens its section as on Home, and the sheet closes with the move
+  function searchSheet(opener, group, tabs) {
+    if (!FP.sheet || !FP.placeHome) return;
+    const home = { space: "group", place: group, sections: tabs, people: !!FP.peopleModel?.canSeeTab(group, groups), addCtx, sb: FP.sb, today: G().isoDay(Date.now()),
+      search: (view, q) => { pendingSearch = { view, q }; }, compact: true };
+    const moved = () => FP.sheet.close(false);
+    window.addEventListener("hashchange", moved, { once: true });
+    FP.sheet.open({ opener, title: "Search", className: "fp-search", onClose: () => { window.removeEventListener("hashchange", moved); FP.placeHome.close(); },
+      body: () => { const v = FP.placeHome.view(home); setTimeout(() => v.querySelector("input")?.focus(), 50); return v; } });
+  }
   // The words typed on the Overview, put into the section's own search once it is drawn (Files: the documents block's search)
   function takeSearch(view, input) {
     if (pendingSearch?.view !== view) return;

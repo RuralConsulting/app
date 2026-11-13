@@ -52,11 +52,16 @@
   // ---- in the browser ----------------------------------------------------------------------------------------------------------
   const drawn = new Map();   // nav element -> its last arguments (drawn again when the window crosses the phone width)
   const isPhone = () => !!root.matchMedia?.("(max-width: 800px)").matches;
-  // nav: the <nav> element; tabs: [{ key, label, href, icon, badge?: () => Node|null }]; view: the section shown now
-  function render(nav, tabs, view) {
+  // review of #538, 6: under 360 px wide, four sections (with More and Search beside them) so every button keeps a 44 px target
+  const NARROW_MAX = 4, isNarrow = () => !!root.matchMedia?.("(max-width: 359px)").matches;
+  // nav: the <nav> element; tabs: [{ key, label, href, icon, badge?: () => Node|null }]; view: the section shown now.
+  // PH2 (the owner, 13 Nov 2026: "all navigation down via buttons at bottom"): on a phone the bar floats, rounded, icons only (each
+  // with its name for a screen reader, the current one marked), and holds Search as its last button when the space has one
+  // (opts.search: run when it is tapped, given the button); More opens the remaining sections as a plain list.
+  function render(nav, tabs, view, opts = {}) {
     const FP = root.FP, el = (...a) => FP.el(...a);
-    drawn.set(nav, { tabs, view });
-    const arranged = isPhone() ? arrange(tabs, PHONE_MAX, { phone: true }) : arrange(tabs, DESKTOP_MAX), cur = currentOf(arranged, view);
+    drawn.set(nav, { tabs, view, opts });
+    const arranged = isPhone() ? arrange(tabs, isNarrow() ? NARROW_MAX : PHONE_MAX, { phone: true }) : arrange(tabs, DESKTOP_MAX), cur = currentOf(arranged, view);
     const byKey = new Map(tabs.map((t) => [t.key, t]));
     const link = (t) => el("a", { href: t.href, class: "group-tab", "data-tab": t.key, ...(t.key === view ? { "aria-current": "page" } : {}) },
       t.icon ? FP.icon(t.icon) : null, el("span", {}, t.label), t.badge?.() || null);
@@ -68,11 +73,17 @@
       more.addEventListener("click", () => FP.sheet.menu(more, "More", hidden.map((t) => ({ label: t.label, icon: t.icon, href: t.href, current: t.key === view, badge: t.badge?.() || null }))));
       nodes.push(more);
     }
+    if (opts.search && isPhone()) {
+      const find = el("button", { type: "button", class: "group-tab nav-more nav-search", "data-tab": "search", "aria-haspopup": "dialog", "aria-expanded": "false" },
+        FP.icon("search"), el("span", {}, "Search"));
+      find.addEventListener("click", () => opts.search(find));
+      nodes.push(find);
+    }
     nav.replaceChildren(...nodes);
     nav.dataset.count = String(nodes.length);
   }
-  const refresh = (nav) => { const a = nav && drawn.get(nav); if (a && nav.isConnected) render(nav, a.tabs, a.view); };
-  if (root.matchMedia && root.document) root.matchMedia("(max-width: 800px)").addEventListener?.("change", () => { for (const nav of drawn.keys()) refresh(nav); });
+  const refresh = (nav) => { const a = nav && drawn.get(nav); if (a && nav.isConnected) render(nav, a.tabs, a.view, a.opts); };
+  if (root.matchMedia && root.document) for (const q of ["(max-width: 800px)", "(max-width: 359px)"]) root.matchMedia(q).addEventListener?.("change", () => { for (const nav of drawn.keys()) refresh(nav); });
 
-  return { PHONE_MAX, DESKTOP_MAX, PHONE_ORDER, phoneOrder, arrange, currentOf, roleLine, headerLines, render, refresh };
+  return { PHONE_MAX, DESKTOP_MAX, NARROW_MAX, PHONE_ORDER, phoneOrder, arrange, currentOf, roleLine, headerLines, render, refresh };
 });

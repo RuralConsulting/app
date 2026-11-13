@@ -190,18 +190,23 @@
   const SHEETS = ".rv-panel, .pa-sheet, #overview-rail:not([hidden]), #space-content:not([hidden]), .maplibregl-ctrl-bottom-right:not(#screen-group.has-needs:not(.map-open) #group-map .maplibregl-ctrl-bottom-right)";
   // panels that take the bottom of the screen while they are open: the button tucks away until they close (N2b's water quality
   // sites panel reaches 72% of a phone)
-  const TUCK = ".events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden])";
+  // (PH2: and a map's own sheet opened tall on a phone, its layers and legend: the + never sits on its list)
+  const TUCK = ".events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden]), .rv-panel-open > .rv-panel, .maps-viewer.ph-more-open, .maps-viewer.rv-measuring, .maps-viewer.rv-comparing";
   let watching = null, clicks = false;
   function settle() {
     const d = root.document, b = [...buttons.values()].find((x) => !x.hidden && x.getClientRects().length);
     if (!b || !phone()) { d.documentElement.style.setProperty("--add-lift", "0px"); d.body.classList.remove("add-tucked"); return; }
     const tabs = [...d.querySelectorAll(".space-tabs")].map((t) => t.getBoundingClientRect()).find((r) => r.height), floor = tabs ? tabs.top : root.innerHeight;
     let lift = 0, tuck = false;
+    const br = b.getBoundingClientRect();
     for (const s of d.querySelectorAll(SHEETS)) {
       const r = s.getBoundingClientRect();
       if (!r.height || r.top >= floor) continue;
+      // PH2: the map's corner controls count only where they are under the button (a phone map keeps its scale and credit bottom left)
+      if (s.classList.contains("maplibregl-ctrl-bottom-right") && r.right <= br.left) continue;
       // a sheet along the bottom of what shows, or the map's own controls in its bottom right corner (its credit, its scale)
-      if (s.classList.contains("maplibregl-ctrl-bottom-right") ? r.bottom < floor - 260 || !s.childElementCount : r.bottom < floor - 2) continue;
+      // (PH2: the bar floats a few pixels clear of the screens above it, so a sheet ending within 20 px of its top is along the bottom)
+      if (s.classList.contains("maplibregl-ctrl-bottom-right") ? r.bottom < floor - 260 || !s.childElementCount : r.bottom < floor - 20) continue;
       const covered = floor - r.top + (s.classList.contains("maplibregl-ctrl-bottom-right") ? 4 : 0);
       if (covered > (floor * 0.5)) continue;   // a whole page (a client's Files): the button floats over it as over any page
       lift = Math.max(lift, covered);

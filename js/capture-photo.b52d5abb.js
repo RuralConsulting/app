@@ -413,10 +413,14 @@
     function show(state, problem = null) {
       node.dataset.state = state;
       foot.hidden = state !== "photo";
-      if (state === "locating") body.replaceChildren(el("p", { class: "qp-quiet", role: "status", id: "qp-locating" }, "Finding where you are…"));
+      if (state === "locating") body.replaceChildren(el("p", { class: "qp-quiet", role: "status", id: "qp-locating" }, "Finding your position…"));
       else if (state === "refused") {
-        const why = P.photoProblem(problem);
-        body.replaceChildren(el("p", { class: "qp-say", id: "qp-needs", role: "alert", "data-why": why.key }, why.text), set(row("qp-retry", "locate", "Try again", () => openCamera())));
+        // PH2: what is wrong, then where this phone turns location on, step by step (an iPhone's Settings and Safari's page menu; an
+        // Android phone's Settings and Chrome), then Try again, which asks the phone again from that tap
+        const why = P.photoProblem(problem, FP.locate.platform?.() || "other", root.navigator.userAgent || "");
+        body.replaceChildren(el("p", { class: "qp-say", id: "qp-needs", role: "alert", "data-why": why.key }, why.text),
+          ...(why.help?.length ? [el("ol", { class: "qp-help", id: "qp-help" }, ...why.help.map((h) => el("li", {}, h)))] : []),
+          set(row("qp-retry", "locate", "Try again", () => openCamera())));
         body.querySelector("#qp-retry")?.focus();
       } else if (state === "ready") {
         where = el("p", { class: "qp-quiet qp-where", id: "qp-where" }, whereWords());
@@ -433,7 +437,7 @@
     function openCamera() {
       const supported = !!root.navigator.geolocation;
       const gate = P.photoGate({ permission: FP.locate.permissionNow(), last: FP.locate.last(), supported });
-      if (gate === "refused") { refuse({ key: supported ? "refused" : "off" }); return; }
+      if (gate === "refused") { refuse({ key: "off" }); return; }
       if (gate === "go") {
         st.fix = FP.locate.last();
         if (node.dataset.state !== "photo") show("ready");
@@ -442,11 +446,13 @@
       }
       ask();
     }
-    // the person's position, then the camera (it opens if the browser still counts the tap; otherwise the "Open the camera" row)
+    // the person's position, then the camera (it opens if the browser still counts the tap; otherwise the "Open the camera" row).
+    // PH2: the phone is asked before anything is awaited, so the request is the tap's own (iPhone Safari), and always asked, even
+    // where the browser last said "denied": its answer decides, and a phone put right in Settings is then let through
     async function ask() {
+      const asked = FP.locate.get({ maxAge: P.PHOTO_FIX_AGE });
       show("locating");
-      if ((await FP.locate.permission()) === "denied") { if (live()) refuse({ key: "refused" }); return; }
-      const got = await FP.locate.get({ maxAge: P.PHOTO_FIX_AGE });
+      const got = await asked;
       if (!live()) return;
       if (!got.ok) { refuse(got.problem); return; }
       st.fix = got.fix; show("ready");

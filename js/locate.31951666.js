@@ -32,15 +32,30 @@
     return known;
   }
   permission();
-  function get({ maxAge = 15000, timeout = 15000 } = {}) {
-    if (!geo()) return Promise.resolve({ ok: false, problem: P().locateProblem("off") });
+  // PH2: which phone, so a refusal says where that phone turns location on (phone-model locationHelp)
+  const platform = () => P().platformOf(root.navigator?.userAgent, root.navigator?.maxTouchPoints);
+  const problemOf = (code) => P().locateProblem(code, platform(), root.navigator?.userAgent || "");
+  // PH2 (the owner's iPhone refused a photo with location on): the browser is asked at once, in the same task as the call, so a call
+  // from a tap is the tap's own request (Safari prompts for, and may only honour, a request that comes straight from a tap; nothing
+  // is awaited first, not even the permission's state). A first fix can take a while indoors: up to LOCATE_WAIT (20 s). An iPhone
+  // that answers "unavailable" (no fix yet) is asked once more without high accuracy, within the same wait.
+  function get({ maxAge = 15000, timeout = P().LOCATE_WAIT } = {}) {
+    if (!geo()) return Promise.resolve({ ok: false, problem: problemOf("off") });
     if (lastFix && P().fresh(lastFix, Date.now(), maxAge)) return Promise.resolve({ ok: true, fix: lastFix });
     if (asking) return asking;
+    const until = Date.now() + timeout;
     asking = new Promise((resolve) => {
-      try {
-        geo().getCurrentPosition((pos) => { const f = take(pos); resolve(f ? { ok: true, fix: f } : { ok: false, problem: P().locateProblem(2) }); },
-          (err) => { if (err?.code === 1) refused(); resolve({ ok: false, problem: P().locateProblem(err?.code) }); }, { enableHighAccuracy: true, timeout, maximumAge: maxAge });
-      } catch { resolve({ ok: false, problem: P().locateProblem(2) }); }
+      const ask = (high) => {
+        try {
+          geo().getCurrentPosition((pos) => { const f = take(pos); if (f) known = known === "denied" ? "granted" : known; resolve(f ? { ok: true, fix: f } : { ok: false, problem: problemOf(2) }); },
+            (err) => {
+              if (err?.code === 1) { refused(); known = "denied"; }
+              else if (err?.code === 2 && high && until - Date.now() > 1500) { ask(false); return; }
+              resolve({ ok: false, problem: problemOf(err?.code) });
+            }, { enableHighAccuracy: high, timeout: Math.max(1000, until - Date.now()), maximumAge: maxAge });
+        } catch { resolve({ ok: false, problem: problemOf(2) }); }
+      };
+      ask(true);
     }).finally(() => { asking = null; });
     return asking;
   }
@@ -55,5 +70,5 @@
       if (!listeners.size && watchId != null) { try { geo()?.clearWatch(watchId); } catch { /* gone */ } watchId = null; }
     };
   }
-  FP.locate = { last: () => lastFix, get, permission, permissionNow: () => (geo() ? known : "denied"), warm, watch, forget: () => { lastFix = null; } };
+  FP.locate = { last: () => lastFix, get, permission, permissionNow: () => (geo() ? known : "denied"), warm, watch, forget: () => { lastFix = null; }, platform };
 })(window);

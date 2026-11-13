@@ -14,6 +14,7 @@
 (function (root) {
   const FP = root.FP;
   const M = () => FP.peopleModel, G = () => FP.groupModel;
+  const whose = (n) => FP.wqModel?.possessive?.(n) || n + "'s";   // PH2: "Ashburton Lakes'", not "Ashburton Lakes's"
   const el = (...a) => FP.el(...a);
   const message = (e) => e?.message || String(e);
   async function rows(query) { const { data, error } = await query; if (error) throw error; return Array.isArray(data) ? data : []; }
@@ -123,8 +124,8 @@
     function addForm() {
       if (!writer) return null;
       if (!adding) return el("div", { class: "crm-actions" }, el("button", { type: "button", class: "secondary", "data-action": "sg-add", onclick: openAdd }, "Add a member"));
-      if (adding.failed) return el("p", { role: "alert", class: "crm-failed" }, "Couldn't read " + (parent.name || "the parent group") + "'s members just now: " + adding.failed);
-      if (!adding.register) return el("p", { class: "crm-count", role: "status" }, "Reading " + (parent.name || "the parent group") + "'s members…");
+      if (adding.failed) return el("p", { role: "alert", class: "crm-failed" }, "Couldn't read " + whose(parent.name || "the parent group") + " members just now: " + adding.failed);
+      if (!adding.register) return el("p", { class: "crm-count", role: "status" }, "Reading " + whose(parent.name || "the parent group") + " members…");
       const have = new Set(list.filter((r) => !r.left_on).map((r) => r.member_number));
       const choices = adding.register.filter((b) => !have.has(b.member_number));
       if (!choices.length) return el("p", { class: "crm-empty" }, "Every current member of " + (parent.name || "the parent group") + " is in this sub-group.");
@@ -138,7 +139,7 @@
       box.setAttribute("aria-busy", "false");
       const head = [el("h3", {}, "Members in " + group.name)];
       if (failed) { box.replaceChildren(...head, el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the sub-group's members just now: " + failed)); return; }
-      const note = el("p", { class: "crm-quiet sg-note" }, M().contactsNote(parent?.name), adviser ? " Open a member to see them, as " + (parent.name || "the parent group") + "'s " + parent.role + "." : "");
+      const note = el("p", { class: "crm-quiet sg-note" }, M().contactsNote(parent?.name), adviser ? " Open a member to see them, as " + whose(parent.name || "the parent group") + " " + parent.role + "." : "");
       box.replaceChildren(...[...head, ...(notice ? [el("p", { class: "crm-notice", role: "status" }, notice)] : []),
         el("p", { class: "crm-count", role: "status" }, M().plural(r.current.length, "member", "members")), note, addForm(),
         r.current.length ? el("ul", { class: "crm-list sg-list" }, ...r.current.map(line)) : el("p", { class: "crm-empty" }, "No members are listed in this sub-group yet."),

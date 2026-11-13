@@ -118,10 +118,22 @@
     // of them reaches lowest down the right-hand side, each time they change size or the map does.
     const toggle = el("button", { type: "button", class: "wqs-toggle", "aria-pressed": "false", title: "Show the water quality monitoring sites on this map",
       onclick: () => (st.on ? switchOff() : switchOn()) }, el("span", { class: "wqs-drop", "aria-hidden": "true" }), el("span", {}, "Water quality"));
-    const control = el("div", { class: "wqs-ctrl" }, toggle);
+    // PH2: on a phone the list of sites opens only on request: "Sites" beside the chip once the dots are on (a dot still opens its site)
+    // (review of #538, 7: the sites chosen stay chosen; the panel opens on them, with "All sites" back to the list)
+    const listBtn = el("button", { type: "button", class: "wqs-list-btn", "aria-label": "List the water quality sites", onclick: () => { openPanel(); render(true); } }, "Sites");
+    const control = el("div", { class: "wqs-ctrl" }, toggle, listBtn);
     holder.append(control);
+    const phone = () => !!root.matchMedia?.("(max-width: 720px)").matches;
     function place() {
       if (gone) return;
+      // PH2: on a phone the chip sits top left, under "Whole area" (the right-hand side is the map's one cluster of controls)
+      if (phone()) {
+        const h = holder.getBoundingClientRect(), fit = holder.querySelector(".rv-fit")?.getBoundingClientRect();
+        control.style.right = "auto"; control.style.left = "12px";
+        control.style.top = (fit && fit.height ? Math.round(fit.bottom - h.top + 10) : 12) + "px";
+        return;
+      }
+      control.style.left = "";
       const h = holder.getBoundingClientRect(), stack = holder.querySelector(".maplibregl-ctrl-top-right");
       const covers = [...(stack ? [stack] : []), ...holder.querySelectorAll(".rv-fit")].map((n) => n.getBoundingClientRect())
         .filter((r) => r.width > 0 && r.height > 0 && r.right > h.left + h.width / 2);   // only what is on the right-hand side
@@ -154,14 +166,32 @@
 
     function openPanel() { panel.hidden = false; holder.classList.add("wqs-open"); place(); }
     function closePanel(focusToggle) {
-      panel.hidden = true; holder.classList.remove("wqs-open"); token++; place();
+      panel.hidden = true; holder.classList.remove("wqs-open"); token++;
+      // (PH2: a chart brought into view can scroll the map's own box, which never scrolls by design: put it back, so nothing on the map
+      // is left under the header)
+      if (holder.scrollTop) holder.scrollTop = 0;
+      place();
       chart?.destroy(); chart = null;
       if (focusToggle) toggle.focus({ preventScroll: true });
     }
     const say = (t) => { status.textContent = t || ""; };
 
     // ---- the pins -----------------------------------------------------------------------------------------------------------
-    const near = () => holder.classList.toggle("wqs-near", map.getZoom() >= M().LABEL_ZOOM);
+    // PH2: the dots' size follows the zoom (small far out), and where they would pile up only the first of them shows until zoomed in:
+    // the chosen ones, then the group's own, then sites with recent results (wq-sites-model thin)
+    const near = () => {
+      const z = map.getZoom();
+      holder.classList.toggle("wqs-near", z >= M().LABEL_ZOOM);
+      holder.dataset.wqsZoom = z < 10 ? "far" : z < 13 ? "mid" : "near";
+      thin();
+    };
+    function thin() {
+      if (!markers.size) return;
+      const byId = new Map((sites || []).map((s) => [s.id, s]));
+      const pts = [...markers.keys()].map((id) => { const s = byId.get(id), p = map.project(s.lngLat); return { id, x: p.x, y: p.y, rank: M().thinRank(s, st.chosen) }; });
+      const hide = M().thin(pts, M().DOT_GAP);
+      for (const [id, m] of markers) m.pin.classList.toggle("wqs-thinned", hide.has(id));
+    }
     function drawPins() {
       clearPins();
       if (!gl?.Marker || !sites) return;
@@ -184,6 +214,7 @@
         else { delete m.pin.dataset.slot; m.pin.querySelector("i").textContent = ""; }
         m.pin.setAttribute("aria-pressed", String(slot > 0));
       }
+      thin();
     }
     // The first time the sites go on, the map widens (never zooms in) so every pin is clear of what sits over the map: the viewer's
     // panel (left on a computer), the map's buttons and this panel (right), the sheet (bottom, on a phone).
@@ -204,7 +235,9 @@
     // ---- on and off ---------------------------------------------------------------------------------------------------------
     async function switchOn() {
       st.on = true; toggle.setAttribute("aria-pressed", "true"); holder.classList.add("wqs-on");
-      openPanel(); fill(body); say("Loading the water quality sites…");
+      // PH2: on a phone the dots come on alone; the list waits for "Sites" (a site already chosen opens as before)
+      if (!phone() || st.chosen?.length) openPanel(); else place();
+      fill(body); say("Loading the water quality sites…");
       const t = ++token;
       // WQV1: a sub-group's own site is named for its sub-group (the person's groups), as on the Water quality page
       const names = new Map((FP.groupSpace?.groups?.() || []).map((g) => [g.id, g.name]));
@@ -428,6 +461,7 @@
 
     // ---- start, and leave ------------------------------------------------------------------------------------------------------
     map.on("zoom", near);
+    near();
     if (st.on) switchOn();
     return {
       remove() {

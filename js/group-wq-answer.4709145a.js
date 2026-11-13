@@ -21,6 +21,8 @@
   const api = factory(node ? require("./wq-analysis.js") : root.FP.wqAnalysis);
   if (node) module.exports = api; else root.FP.groupWqAnswer = api;
 })(typeof window === "undefined" ? globalThis : window, function (W) {
+  // PH2: a name's possessive, as wq-model.js possessive: "Ashburton Lakes'", "MCCC's"
+  const whose = (n) => (/s$/i.test(String(n)) ? n + "'" : n + "'s");
   const QUESTION = "What does our water-quality data tell us, compared with ECan's sites?";
   const MAX_OWN = 4, MAX_REFERENCE = 4, CONCURRENCY = 4;
   // A shared site list and the results dataset measured at its sites (the D2 rule: an owned site's list is its own dataset).
@@ -96,7 +98,7 @@
   function bandSkipped(preset, site, groupName) {
     const ds = preset.definition.parameters?.dataset;
     if (!ds || ds === site.dataset) return null;
-    return (groupName || "The group") + "'s method (" + preset.family + " v" + preset.version + ") bands the " + ds + " record only; this site's results are " +
+    return whose(groupName || "The group") + " method (" + preset.family + " v" + preset.version + ") bands the " + ds + " record only; this site's results are " +
       (site.role === "own" ? "the group's own sampling (" + site.dataset + ")" : "another dataset (" + site.dataset + ")") + ", so they are summarised here but not banded.";
   }
 
@@ -145,7 +147,7 @@
     if (b && !b.unavailable && b.result?.band) {
       out.band = { band: String(b.result.band), monthly_values: b.result.monthly_values ?? null, table: b.method?.table || null, method: b.method?.id || null,
         // a band preview asked for by preset_id is the preset's (a site it does not apply to comes back unavailable)
-        preset: preset ? (groupName || "the group") + "'s method " + preset.family + " v" + preset.version : null };
+        preset: preset ? whose(groupName || "the group") + " method " + preset.family + " v" + preset.version : null };
     } else out.not_assessed = skipped || (b?.unavailable ? b.unavailable.detail : band?.message ? "the analysis couldn't be run: " + band.message : "no result from the group's method.");
     // LAWA (D3): ECan's site matched to a LAWA site
     if (site.role === "reference") {
@@ -214,7 +216,7 @@
     const items = Array.from({ length: Math.max(own.length, ref.length) }, (_, i) => [own[i], ref[i]]).flat().filter(Boolean).map(item);
     const text = attr.name + (w ? ", " + day(w.from) + " to " + day(w.to) : "") + ": " + plural(own.length, "site", "sites") + " of the group's own beside " + plural(ref.length, "ECan site", "ECan sites");
     const because = (banded.length ? "NPS-FM band at " + plural(banded.length, "site", "sites") + " (" + banded.map((l) => l.site.name + " " + l.band.band).join(", ") + ")" : "no site has an NPS-FM band") +
-      " by " + (r.groupName || "the group") + "'s method " + r.preset.family + " v" + r.preset.version + "; " + plural(lines.length - banded.length, "site", "sites") + " not assessed, each with the reason" +
+      " by " + whose(r.groupName || "the group") + " method " + r.preset.family + " v" + r.preset.version + "; " + plural(lines.length - banded.length, "site", "sites") + " not assessed, each with the reason" +
       (lawa.length ? "; LAWA's state and trend at " + plural(lawa.length, "ECan site", "ECan sites") : "");
     return { ...base, answer: { text, because }, items, total: items.length,
       currency: "Written by code from the platform's tested water-quality library (" + dedupe(lines.flatMap((l) => l.sources.map((x) => x.method))).join(", ") + ") as you can read it now; nothing is stored and no AI is used. " +

@@ -714,3 +714,41 @@ body.simple-files .group-documents { margin: 0 auto; }
 /* UI2 review, round 2: one add per screen (Events' own Add gives way to the space's +); the table's "No." column holds the number */
 body:has(.add-button:not([hidden])) .events-actions button[data-action="add"] { display: none; }
 @media (min-width: 761px) { .crm-member-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
+
+/* ---- PH2: a calm phone (the owner, 13 Nov 2026: "for the phone we need minimalist approach. With all navigation down via buttons
+   at bottom. The 'add' plus in circle can be above this slightly.") ------------------------------------------------------------------
+   One floating, rounded bar of icons at the bottom holds all of a space's navigation (its sections, More, and Search in a group);
+   each icon has its name for a screen reader, the current one is marked in ink. The header above is one thin strip: back, the
+   place's mark and name on one line, the account. Every screen of a space ends above the bar (--tabbar-h is the room it takes). */
+@media (max-width: 800px) {
+  /* (review of #538, 3: the room the bar takes, 52 px and the gap under it, is no more than the old tab bar's 56 px plus the home bar,
+     so no screen, a farm's map above all, is shorter than it was) */
+  body.farm-space-active, body.group-space-active {
+    --bar-h: 52px; --bar-below: max(4px, env(safe-area-inset-bottom, 0px));
+    --tabbar-h: calc(var(--bar-h) + var(--bar-below));
+  }
+  .space-tabs, #farm-actions.space-tabs, .group-nav.space-tabs {
+    left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); bottom: var(--bar-below);
+    height: var(--bar-h); padding: 0 4px; border: 1px solid var(--rule-soft); border-radius: var(--radius-pill); box-shadow: var(--shadow-2); }
+  .space-tabs a, #farm-actions a, .group-nav .group-tab, .space-tabs .nav-more { height: var(--bar-h); min-height: 44px; padding: 0; gap: 0; }
+  /* icons only: the name stays for a screen reader */
+  .space-tabs a > span:not(.review-count):not(.nav-dot), #farm-actions a > span:not(.review-count):not(.nav-dot), .group-nav .group-tab > span:not(.review-count):not(.nav-dot),
+  .space-tabs .nav-more > span:not(.nav-dot) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .space-tabs a .icon, .space-tabs .nav-more .icon, #farm-actions a .icon { box-sizing: content-box; padding: 7px 12px; border-radius: var(--radius-pill); }
+  .space-tabs a, #farm-actions a, .group-nav .group-tab, .space-tabs .nav-more { min-width: 44px; }
+  .space-tabs a[aria-current] .icon, .space-tabs .nav-more[aria-current] .icon, #farm-actions a[aria-current] .icon { background: var(--accent); color: var(--accent-ink); }
+  .space-tabs a .review-count, .group-nav .group-tab .review-count { top: 6px; left: calc(50% + 10px); }
+  /* the + just above the bar, at the right, a fixed gap from it */
+  .add-button { bottom: calc(var(--tabbar-h) + 10px + var(--add-lift)); }
+  /* the header: one thin strip */
+  .space-bar { min-height: 48px; padding: 2px var(--s-3) 2px var(--s-1); gap: var(--s-2); }
+  .space-head .space-kind, .space-head .group-kind { display: none; }
+  .space-head .group-logo { height: 30px; }
+  .space-head .space-mark { width: 30px; height: 30px; }
+  .space-title h1, #farm-space-header .space-title h1 { font-size: var(--text-body); -webkit-line-clamp: 1; }
+  /* Search's sheet takes the screen: Home's search box at the top, its results under it */
+  .fp-search .add-panel { top: max(12px, env(safe-area-inset-top, 0px)) !important; max-height: none; display: flex; flex-direction: column; }
+  .fp-search .ph-compact:not([hidden]) { display: block; max-width: none; margin: 0 0 12px; padding: 0 var(--s-4); }
+  .fp-search .ph-compact .ph-search input { min-height: var(--tap); border-radius: var(--radius-l); background: none; box-shadow: inset 0 0 0 1px var(--rule); }
+  .fp-search .add-cancel { margin-top: auto; }
+}

@@ -379,36 +379,53 @@
     }
 
     // ---- a phone: a quick answer --------------------------------------------------------------------------------------------------
+    // PH2 (the owner, 13 Nov 2026: "The wq map on phone is way too cluttered and overwhelming"): the quick answer, then the plain map
+    // with small dots only. The water type and the measure are one quiet control (a list to choose from); the sites are a list in a
+    // sheet that opens on request ("Sites", or a dot, which opens its site with its chart); the layers and the legend are one button
+    // on the map. Nothing is left out: every choice, site and chart is one tap away; the Table is the computer's.
+    function chooseShown(opener) {
+      const { first, more } = M().measuresFor(st.type);
+      const setType = (v) => { if (st.type === v) return; st.type = v; st.chosen = null; st.ticked = null; if (!M().measuresFor(v).first.concat(M().measuresFor(v).more).some((x) => x.key === st.measure)) st.measure = "nitrate"; typeSeg.mark(); draw(); };
+      FP.sheet?.menu(opener, "Show", [
+        ...M().TYPES.map(([v, t]) => ({ label: t, current: st.type === v, icon: "water", run: () => setType(v) })),
+        ...first.concat(more).map((x) => ({ label: x.name, current: st.measure === x.key, run: () => { st.measure = x.key; st.chosen = null; st.ticked = null; draw(); } })),
+      ]);
+    }
+    function sitesSheet(opener, rows, open = null) {
+      FP.sheet?.open({ opener, title: "Sites", where: (M().TYPES.find(([v]) => v === st.type)?.[1] || "") + " · " + fmt(rows.length) + (rows.length === 1 ? " site" : " sites"), className: "wqp-sitesheet",
+        body: () => { const ul = siteList(rows); if (open != null) setTimeout(() => { const d = ul.querySelector('details[data-site="' + open + '"]'); if (d) { d.open = true; d.scrollIntoView?.({ block: "start" }); } }, 0); return ul; } });
+    }
+    function siteList(rows) {
+      return el("ul", { class: "wqp-phonelist" }, ...rows.map((r) => {
+        const body = el("div", { class: "wqp-phonesite" });
+        const d = el("details", { "data-site": r.id }, el("summary", {}, el("b", {}, r.name), el("small", {}, [r.source, M().tagsOf(r), r.latestText != null ? "latest " + M().latestText(r) : "", r.last ? W().date(r.last) : ""].filter(Boolean).join(" · "))), body);
+        d.addEventListener("toggle", () => {
+          if (!d.open || body.childElementCount) return;
+          const host = el("div", { class: "block-host" });
+          fill(body, siteFacts(r), host);
+          siteSeries(r).then((s) => renderChart(host, siteData(r, s), "No results of this measure in the period."),
+            () => fill(host, el("p", {}, "Couldn't read this site's results just now.")));
+        });
+        return el("li", {}, d);
+      }));
+    }
     function drawPhone() {
       const h = data.h, m = M().measure(st.measure), rows = [...data.shown].sort((a, b) => (b.own - a.own) || String(b.last || "").localeCompare(String(a.last || "")));
-      const mapBtn = el("button", { type: "button", class: "wqp-quiet wqp-mapbtn", "aria-expanded": String(!!st.phoneMap), onclick: () => { st.phoneMap = !st.phoneMap; drawPhone(); } }, FP.icon ? FP.icon("maps", 18) : null, el("span", {}, st.phoneMap ? "Back to the list" : "Map"));
-      const mapHost = el("div", { class: "wqp-phonemap", hidden: !st.phoneMap });
-      fill(phoneBox, el("h1", { class: "wqp-phonetitle" }, "Water quality"), typeSeg.node,
-        el("p", { class: "wqp-phonelead" }, el("b", {}, m?.name || st.measure), " · " + fmt(h.sites) + (h.sites === 1 ? " site" : " sites") + (h.latest ? " · latest " + W().date(h.latest) : "")),
-        M().bar(h).length ? miniBar(M().bar(h)) : null, el("p", { class: "wqp-sentence" }, M().sentence(h, st.measure, st.type)), mapBtn, mapHost,
-        st.phoneMap ? null : el("ul", { class: "wqp-phonelist" }, ...rows.map((r) => {
-          const body = el("div", { class: "wqp-phonesite" });
-          const d = el("details", { "data-site": r.id }, el("summary", {}, el("b", {}, r.name), el("small", {}, [r.source, M().tagsOf(r), r.latestText != null ? "latest " + M().latestText(r) : "", r.last ? W().date(r.last) : ""].filter(Boolean).join(" · "))), body);
-          d.addEventListener("toggle", () => {
-            if (!d.open || body.childElementCount) return;
-            const host = el("div", { class: "block-host" });
-            fill(body, siteFacts(r), host);
-            siteSeries(r).then((s) => renderChart(host, siteData(r, s), "No results of this measure in the period."),
-              () => fill(host, el("p", {}, "Couldn't read this site's results just now.")));
-          });
-          return el("li", {}, d);
-        })),
+      const typeWords = M().TYPES.find(([v]) => v === st.type)?.[1] || st.type;
+      const choose = el("button", { type: "button", class: "wqp-choose", id: "wqp-choose", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => chooseShown(choose) },
+        el("span", {}, typeWords + " · " + (m?.name || st.measure)), FP.icon ? FP.icon("chevron", 16) : null);
+      const mapHost = el("div", { class: "wqp-phonemap" });
+      const sitesBtn = el("button", { type: "button", class: "wqp-mapchip wqp-sitesbtn", id: "wqp-sites", "aria-haspopup": "dialog", onclick: () => sitesSheet(sitesBtn, rows) }, FP.icon ? FP.icon("files", 16) : null, el("span", {}, "Sites"));
+      // review of #538, 10: above the map only the one quiet control, the sentence and the bar (the page's name is for a screen
+      // reader; the bar's More already marks where you are); the count and the latest date go quietly under the map
+      fill(phoneBox, el("h1", { class: "wqp-phonetitle visually-hidden" }, "Water quality"), choose,
+        el("p", { class: "wqp-sentence" }, M().sentence(h, st.measure, st.type)), M().bar(h).length ? miniBar(M().bar(h)) : null, mapHost,
+        el("p", { class: "wqp-phonelead" }, fmt(h.sites) + (h.sites === 1 ? " site" : " sites") + (h.latest ? " · latest " + W().date(h.latest) : "")),
         el("p", { class: "wqp-credit" }, creditLine(data.shown)));
       mapUi?.destroy(); mapUi = null;
-      if (st.phoneMap) {
-        // a site tapped on the map opens in the list, with its chart
-        mapUi = makeMap(mapHost, { L, group, st, onSite: (id) => { st.phoneMap = false; st.openSite = id; drawPhone(); }, phoneMode: true });
-        mapUi.update(data, st);
-      } else if (st.openSite != null) {
-        const d = phoneBox.querySelector('details[data-site="' + st.openSite + '"]');
-        st.openSite = null;
-        if (d) { d.open = true; d.scrollIntoView?.({ block: "start" }); d.querySelector("summary")?.focus({ preventScroll: true }); }
-      }
+      // a dot tapped opens its site in the sites' sheet, with its chart
+      mapUi = makeMap(mapHost, { L, group, st, onSite: (id) => sitesSheet(sitesBtn, rows, id), phoneMode: true, extra: [sitesBtn] });
+      mapUi.update(data, st);
     }
 
     // ---- start, and a phone turning into a computer -----------------------------------------------------------------------------
@@ -449,20 +466,30 @@
     ],
   };
   let protocol = false;
-  function makeMap(host, { L, group, st, onSite, phoneMode }) {
+  function makeMap(host, { L, group, st, onSite, phoneMode, extra = [] }) {
     const gl = root.maplibregl;
     const side = el("aside", { class: "wqp-site", hidden: true, "aria-label": "The site chosen" });
     const panel = el("aside", { class: "wqp-layers", "aria-label": "Layers and legend" });
     const canvas = el("div", { class: "wqp-map", role: "region", "aria-label": "Map of the water quality sites" });
     const bg = el("div", { class: "wqp-bgswitch maplibregl-ctrl", role: "group", "aria-label": "Background" });
-    fill(host, phoneMode ? null : panel, el("div", { class: "wqp-mapbox" }, canvas, bg), phoneMode ? null : side);
+    // PH2: on a phone the layers and the legend are one button on the map, opening them in a sheet; beside it whatever the page adds
+    // (its Sites)
+    const layersBtn = phoneMode ? el("button", { type: "button", class: "wqp-mapchip wqp-layersbtn", id: "wqp-layers", "aria-haspopup": "dialog",
+      onclick: () => FP.sheet?.open({ opener: layersBtn, title: "Layers and legend", className: "wqp-layersheet", body: () => panel }) }, FP.icon ? FP.icon("layers", 16) : null, el("span", {}, "Layers")) : null;
+    const chips = phoneMode ? el("div", { class: "wqp-mapchips" }, ...extra, layersBtn) : null;
+    // (review of #538, 5: on a phone Map | Aerial is the last chip in the same row, which wraps on a narrow phone, so none sits on another)
+    if (chips) chips.append(bg);
+    fill(host, phoneMode ? null : panel, el("div", { class: "wqp-mapbox" }, canvas, ...(chips ? [chips] : [bg])), phoneMode ? null : side);
     if (!gl?.Map) { fill(canvas, el("p", { class: "wqp-empty" }, "The map can't be shown in this browser.")); return { side, update() {}, choose() {}, destroy() {} }; }
     if (!protocol && root.pmtiles?.Protocol) { try { gl.addProtocol("pmtiles", new root.pmtiles.Protocol().tile); } catch { /* already there */ } protocol = true; }
     try { gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js"); } catch { /* set already */ }
+    // (PH2: on a phone the credit's "i" sits bottom left by the scale, clear of the + that floats bottom right)
     const map = new gl.Map({ container: canvas, style: FP.basemaps.style("aerial"), bounds: [[171.4, -43.6], [172.7, -42.7]], maxZoom: 18,
-      attributionControl: { compact: true, customAttribution: FP.brand?.org_legal || "" } });
-    map.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");
+      attributionControl: phoneMode ? false : { compact: true, customAttribution: FP.brand?.org_legal || "" } });
+    if (phoneMode) map.addControl(new gl.AttributionControl({ compact: true, customAttribution: FP.brand?.org_legal || "" }), "bottom-left");
+    if (!phoneMode) map.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");   // (a phone pinches)
     map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
+    if (phoneMode) FP.basemaps.quietCredit?.(map);
     const ready = new Promise((res) => { map.once("load", res); const poll = () => (map.style?._loaded ? res() : setTimeout(poll, 50)); poll(); });
     // the plain map first, the aerial one tap away (the person's choice is not kept: an overview opens on the plain map)
     const choices = (FP.basemaps.names || []).length >= 2 ? ["topolite", "aerial"] : FP.demo?.active ? ["topolite", "aerial"] : [];
@@ -547,7 +574,8 @@
       if (typeNow === type) return;
       typeNow = type;
       for (const l of layers) hide(l);
-      layers = SUPPORT[type].map((def) => ({ def, on: st.layersOn[def.id] ?? def.on, ids: [], say: "" }));
+      // (PH2: on a phone none is on until asked for: the plain map and the dots)
+      layers = SUPPORT[type].map((def) => ({ def, on: st.layersOn[def.id] ?? (phoneMode ? false : def.on), ids: [], say: "" }));
       await ready;
       if (typeNow !== type) return;
       coreRows = coreRows || loadCore();
