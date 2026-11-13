@@ -52,7 +52,7 @@
     send: "M12 16V5M7 10l5-5 5 5M5 20h14",
   };
   // The icon each space view shows in the tab bar
-  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records" };
+  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records", water: "water" };
   const NS = "http://www.w3.org/2000/svg";
   function icon(name, size = 22) {
     const d = PATHS[name] || PATHS.file, doc = root.document;

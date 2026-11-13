@@ -29,6 +29,9 @@
 .wqs-pin { display: block; border: 0; background: none; padding: 6px; cursor: pointer; color: var(--map-label); font: 600 var(--text-small) var(--f-ui); text-shadow: var(--map-label-shadow); }
 .wqs-pin i { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--map-wq); border: 2px solid var(--map-label); box-shadow: var(--map-pin-shadow); font-style: normal; text-shadow: none; color: var(--map-label); }
 .wqs-pin.wqs-older i { width: 12px; height: 12px; background: var(--map-wq-older); }
+/* WQV1: the Water quality page's symbols: a square for a groundwater site, a ring for the group's own (its sub-groups' too) */
+.wqs-pin.wqs-gw i { border-radius: 3px; }
+.wqs-pin.wqs-own i { box-shadow: 0 0 0 2px var(--map-wq), 0 0 0 4px var(--map-label); }
 .wqs-pin .wqs-label { display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 160px; margin-top: -4px; text-align: center; line-height: 1.15; pointer-events: none; }
 .wqs-near .wqs-pin .wqs-label, .wqs-pin.wqs-chosen .wqs-label, .wqs-pin:focus-visible .wqs-label, .wqs-pin:hover .wqs-label { display: block; }
 /* comparing: the pins carry their numbers, so names show only close in (or on hover and focus), never piled on each other */

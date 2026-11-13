@@ -64,20 +64,27 @@
   // rest ("older or sparse") only when the person switches them on. Where the count is not read up front (a farm's or group's own
   // site list: the summary is read when a site is opened, refine()), recency alone decides until then.
   const CURRENT = Object.freeze({ years: 5, minResults: 12 });
-  function siteList(rows, owner, now, where = owner?.farm ? "farm" : "group") {
+  // The rule itself, in one place (WQV1's Water quality page uses it too, per chosen measure): a farm's or group's own site always; any
+  // other when its latest result (lastAt, ms) is within CURRENT.years of now and it has at least CURRENT.minResults results (counted:
+  // of one measure family; null when not counted yet, and then recency alone decides).
+  const isCurrent = ({ owned = false, lastAt = null, counted = null } = {}, now) => !!owned ||
+    (Number.isFinite(lastAt) && lastAt >= now - CURRENT.years * 365.25 * 86400000 && (counted === null || counted === undefined || counted >= CURRENT.minResults));
+  // names: optional, a Map of the person's organisations (id -> name), so a sub-group's own site reads "<Sub-group>'s own" (WQV1)
+  function siteList(rows, owner, now, where = owner?.farm ? "farm" : "group", names = null) {
     const farm = owner?.farm || null, org = owner?.org || null, since = now - CURRENT.years * 365.25 * 86400000;
     const usable = list(rows).filter((r) => r && r.site_id != null).slice(0, MAX_READ);
     const out = W.sites(usable, farm, MAX_READ).map((s, i) => {
       const row = usable[i];
-      const own = org && row.owner_org_id === org ? "This group's own" : s.owner;
+      // WQV1: the same plain words as the Water quality page (never "A group's"); a farm's own sites keep the farm's wording
+      const own = row.owner_farm_id ? s.owner : W.sourceLabel(row, { org, farm, names });
       const at = s.lastSampled ? Date.parse(s.lastSampled) : NaN, has = Number.isFinite(at);
       // a farm says how far a site is ("on the farm" at 0 m); a group or a map says nothing for a site inside it
       const away = where === "farm" ? s.away : Number(s.distance_m) > 0 ? s.distance + " away" : "";
       const counted = Number.isFinite(Number(row.n_max)) && row.n_max !== null ? Number(row.n_max) : null, recent = has && at >= since;
       // a farm's or group's OWN sampling site is never held back (its owners put it there), only said to have no recent results
       const owned = !!(row.owner_farm_id || row.owner_org_id);
-      return { ...s, owner: own, away, recent, hasResults: has, lastAt: has ? at : null, shared: !owned, owned,
-        counted, current: owned || (recent && (counted === null || counted >= CURRENT.minResults)),
+      return { ...s, owner: own, away, recent, hasResults: has, lastAt: has ? at : null, shared: !owned, owned, waterType: W.waterType(row.site_type),
+        counted, current: isCurrent({ owned, lastAt: has ? at : null, counted }, now),
         line: [away, s.last, own, owned && has && !recent ? "no recent results" : ""].filter(Boolean).join(" · ") };
     });
     const tier = (s) => (s.current ? 0 : s.recent ? 1 : s.hasResults ? 2 : 3);
@@ -306,6 +313,28 @@
   // record. latestAt: the site's latest result of the measure.
   const emptyPeriod = (years, latestAt) => "No results in the " + (WINDOWS.find((w) => w.years === pickYears(years))?.label || "period").toLowerCase() + "." +
     (latestAt ? " The latest is from " + W.date(latestAt) + "." : "");
+  // WQV1: groundwater. The NPS-FM's attribute bands grade rivers and lakes, never a well; the only line drawn on a groundwater chart is New
+  // Zealand's drinking-water maximum acceptable value (Water Services (Drinking Water Standards for New Zealand) Regulations 2022: nitrate
+  // 50 mg/L as nitrate, which is 11.3 mg/L as nitrate-N; E. coli fewer than 1 per 100 mL), labelled as a reference, never as a grade.
+  const DRINKING_WATER_SOURCE = "Drinking Water Standards for New Zealand 2022";
+  const DRINKING_WATER = Object.freeze({
+    "nitrate-n": { value: 11.3, label: "Drinking-water limit, nitrate-N 11.3 mg/L (" + DRINKING_WATER_SOURCE + "): a reference, not a grade" },
+    "nitrate-nitrite-n": { value: 11.3, label: "Drinking-water limit for nitrate-N, 11.3 mg/L (" + DRINKING_WATER_SOURCE + "): a reference for nitrate only (this is nitrate+nitrite-N, and nitrite has its own, lower limit), not a grade" },
+    "e-coli": { value: 1, label: "Drinking-water limit, fewer than 1 E. coli per 100 mL (" + DRINKING_WATER_SOURCE + "): a reference, not a grade" },
+  });
+  const drinkingWater = (parameter) => (DRINKING_WATER[parameter] ? [{ ...DRINKING_WATER[parameter], style: "dashed" }] : []);
+  const GROUNDWATER_WORDS = "A groundwater site: the NPS-FM's river and lake bands do not apply, so nothing is graded. Any line drawn is the drinking-water limit, a reference only.";
+  // The band shading a chart of these sites may carry (as run.ts decides a band): none where any is groundwater; none of a river-only
+  // table (nitrate toxicity, DRP, suspended fine sediment) where any is a lake. sites: { waterType, siteType or type (site_type) }.
+  const RIVERS_ONLY = ["nitrate-toxicity", "drp", "suspended-fine-sediment"];
+  function bandsFor(parameter, sites) {
+    const s = list(sites);
+    if (s.some((x) => x?.waterType === "groundwater" || x?.type === "groundwater")) return null;
+    if (RIVERS_ONLY.includes(ATTRIBUTE_OF[parameter]) && s.some((x) => /lake/i.test(String(x?.siteType ?? x?.type ?? "")))) return null;
+    return bandRanges(parameter);
+  }
+  // The band request for a site: none for groundwater (the analysis function is never asked to grade a well as a river).
+  const gradable = (site) => site?.waterType !== "groundwater";
   // The Chart block's data for one site, or for several (one line each, the site colours). seriesBySite: {id: rows of
   // measurement_series}. A site with no results in the window is still in the key ("no results").
   function chartData({ sites, parameter, name, unit, seriesBySite, latestBySite, years, limits = NO_LIMITS }) {
@@ -316,14 +345,15 @@
       const points = d.series[0].points.map((p) => ({ ...p, text: p.text ? tidy(p.text) : p.text }));
       return { site: s, latest: L, row, series: { ...d.series[0], points, id: "site-" + s.id, label: s.name, owner: s.owner || "" } };
     });
-    const bands = bandRanges(parameter);
+    // WQV1: a groundwater site is never shaded with the NPS-FM's river bands; the drinking-water limit is drawn as a reference line instead
+    const gw = all.some((s) => s.waterType === "groundwater"), bands = bandsFor(parameter, all);
     return {
       title: (name || parameter) + (one ? " at " + all[0].name : " at " + plural(all.length, "site", "sites")) + ", " + (WINDOWS.find((w) => w.years === years)?.label || "").toLowerCase(),
       parameter: { key: parameter, name: name || parameter, unit: unit || "" },
       attribution: "", provisional: lines.some((l) => l.row?.provisional),
-      ...(bands ? { bands } : { assess: "The NPS-FM has no bands for this measure here." }),
+      ...(bands ? { bands } : { assess: gw ? GROUNDWATER_WORDS : "The NPS-FM has no bands for this measure here." }),
       ...(one ? {} : { palette: "sites" }),
-      limits: list(limits),
+      limits: [...list(limits), ...(gw ? drinkingWater(parameter) : [])],
       series: lines.map((l) => l.series),
     };
   }
@@ -345,6 +375,7 @@
 
   // The band in words: { short, long, band }. res: what wqAnalysis.request returned, or null when nothing was asked.
   function bandWords(res, parameter, offered) {
+    if (res?.groundwater) return { short: "Not graded", long: "Not graded: the NPS-FM's bands are for rivers and lakes, not groundwater.", band: null };   // WQV1
     if (!res) return { short: "No NPS-FM band", long: "The NPS-FM has no attribute band the platform works out for this measure.", band: null };
     if (res.kind !== "preview") return { short: "Couldn't be worked out", long: "The NPS-FM band couldn't be worked out just now: " + text(res.message).replace(/\.$/, "") + ".", band: null };
     const p = res.preview, r = p.result;
@@ -438,7 +469,7 @@
     });
   }
 
-  return { CURRENT, HELD_WORDS, refine, holdBack, markSparse, restore, compareHint, analysisYears, ANALYSIS_LONGEST, emptyPeriod, MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
+  return { bandsFor, RIVERS_ONLY, DRINKING_WATER, drinkingWater, GROUNDWATER_WORDS, gradable, CURRENT, isCurrent, HELD_WORDS, refine, holdBack, markSparse, restore, compareHint, analysisYears, ANALYSIS_LONGEST, emptyPeriod, MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
     tidy, credit, siteList, listing, pinned, intro, boxes, BOX_MARGIN_KM, quarters, boxRows, MAX_READ, PARTIAL, summaryRows, SUMMARY_IDS, SUMMARY_PAGE, framePadding, buttonTop, choose, remove, full, parameters, pickParameter, pickYears, record, recordLine, recordOf, bandRanges, windowStart, chartData,
     analysisRequest, requestKey, bandWords, trendWords, trendClass, TOO_LITTLE, medianWords, lawaWords, lawaLine, latestWords, compareRows };
 });

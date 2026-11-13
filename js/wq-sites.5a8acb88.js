@@ -102,6 +102,8 @@
       catch { return { rows: await rpc("measurement_series", { ...args, resolution: "raw" }), raw: true }; }
     });
     const analysis = (tool, id, parameter, years) => {
+      // WQV1: a groundwater site is never sent for an NPS-FM band (the river and lake bands do not apply to a well)
+      if (tool === "band" && !M().gradable(byId(id))) return Promise.resolve({ groundwater: true });
       const body = M().analysisRequest(owner, tool, id, parameter, years);
       return body ? once("analysis|" + M().requestKey(body), () => A().request(sb, body), (r) => r?.kind === "error") : Promise.resolve(null);
     };
@@ -164,7 +166,8 @@
       clearPins();
       if (!gl?.Marker || !sites) return;
       for (const s of M().pinned(sites, st.chosen, st.showAll).filter((x) => x.lngLat)) {
-        const pin = el("button", { type: "button", class: "wqs-pin" + (s.current && !s.sparse ? "" : " wqs-older"), "data-wqs-site": s.id,
+        // WQV1: the page's symbols: a square for groundwater, a ring for the group's own
+        const pin = el("button", { type: "button", class: "wqs-pin" + (s.current && !s.sparse ? "" : " wqs-older") + (s.waterType === "groundwater" ? " wqs-gw" : "") + (s.owned ? " wqs-own" : ""), "data-wqs-site": s.id,
           title: s.name + (s.line ? " · " + s.line : ""), "aria-label": "Water quality site: " + s.name + (s.line ? ", " + s.line : ""),
           onclick: (e) => { e.stopPropagation(); pinClicked(s.id); } }, el("i", { "aria-hidden": "true" }), el("span", { class: "wqs-label" }, s.name));
         markers.set(s.id, { pin, marker: new gl.Marker({ element: pin, anchor: "center" }).setLngLat(s.lngLat).addTo(map) });
@@ -203,7 +206,9 @@
       st.on = true; toggle.setAttribute("aria-pressed", "true"); holder.classList.add("wqs-on");
       openPanel(); fill(body); say("Loading the water quality sites…");
       const t = ++token;
-      try { const read = await readSites(); where = read.where; partial = !!read.partial; sites = M().restore(M().siteList(read.rows, owner, now(), where), st); }
+      // WQV1: a sub-group's own site is named for its sub-group (the person's groups), as on the Water quality page
+      const names = new Map((FP.groupSpace?.groups?.() || []).map((g) => [g.id, g.name]));
+      try { const read = await readSites(); where = read.where; partial = !!read.partial; sites = M().restore(M().siteList(read.rows, owner, now(), where, names), st); }
       catch { if (t === token && !gone) { say(""); fill(body, el("p", {}, "Couldn't load the water quality sites just now."), el("button", { type: "button", class: "wqs-button", onclick: switchOn }, "Try again")); } return; }
       if (gone || !st.on) return;
       drawPins(); frame();
@@ -265,7 +270,9 @@
         drawPins(); draw();
       });
       const held = sites.filter((s) => !s.current).length;
-      fill(body, heading("Water quality sites"), intro,
+      // WQV1: a group's map leads to its Water quality page (every site, Surface water and Groundwater, Map, Chart and Table)
+      const page = owner.org && FP.groupModel ? el("p", { class: "wqs-hint wqs-pagelink" }, el("a", { href: FP.href(FP.groupModel.href(owner.org, "water")) }, "Open the Water quality page")) : null;
+      fill(body, heading("Water quality sites"), page, intro,
         held ? el("label", { class: "wqs-switch" }, toggleAll, el("span", {}, "Show older and sparse sites")) : null,
         held ? el("p", { class: "wqs-hint" }, M().HELD_WORDS) : null,
         partial ? el("p", { class: "wqs-hint wqs-partial" }, M().PARTIAL) : null,

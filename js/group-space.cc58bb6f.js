@@ -132,6 +132,7 @@
     hideNeeds();
     FP.placeHome?.close(); FP.groupOverview?.close();
     FP.records?.close();   // CAP1
+    FP.wqPage?.close();   // WQV1
     FP.groupManage?.forget(); lastView = null;   // ON3b: leaving the group space drops the manage space's reads
     document.body.classList.remove("group-space-active");
     FP.add?.update(null);
@@ -193,13 +194,14 @@
     if (route.view !== "map") hideNeeds();   // UI2: What needs doing is the Working map's (UI2's Overview)
     if (route.view !== "home") { FP.placeHome?.close(); FP.groupOverview?.close(); }
     if (route.view !== "records") FP.records?.close();   // CAP1
+    if (route.view !== "water") FP.wqPage?.close();   // WQV1: its map and charts go with the page
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
     if (route.view === "manage" && (lastView !== "manage" || ctx?.group.id !== group.id)) FP.groupManage?.forget(group.id);
     // DEC1b: leaving Manage removes its decision cards' small maps (each a WebGL context and the engine's listeners)
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records" || route.view === "water") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
@@ -234,6 +236,16 @@
       const q = pendingSearch?.view === "people" ? pendingSearch.q : ""; pendingSearch = null;
       panel.replaceChildren(FP.groupPeople.view(group, { sb: FP.sb, person, today, now: today && FP.demo?.active ? today + "T09:00:00+13:00" : null, tab: route.tab || null, q,
         parent: group.parent_org_id ? groups.find((x) => x.id === group.parent_org_id) || null : null }));   // SG2: a sub-group's parent, when the person is in it
+      panel.scrollTop = 0;
+      return;
+    }
+    // WQV1: Water quality is a page of its own (wq-page.js): its filter bar, figures and Map | Chart | Table take the width, with its own
+    // bounded reads and none of the group's
+    if (route.view === "water") {
+      document.title = group.name + " · " + G().viewLabel("water") + " | " + (FP.brand?.product || "");
+      const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
+      if (current !== token) return;
+      panel.replaceChildren(FP.wqPage.view(group, { sb: FP.sb, today: FP.demo?.active ? today : null, groups }));
       panel.scrollTop = 0;
       return;
     }

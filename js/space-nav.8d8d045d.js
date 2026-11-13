@@ -22,9 +22,15 @@
 
   // tabs: [[key, label]] or [{ key, label }], in order. Returns { shown, more } (each [{ key, label }]); more is empty when every
   // section fits. At most `max` sections are shown, and More holds the rest.
+  // WQV1: on a phone, Water quality is always under More (a view to work things out on a computer; never in the phone's bar)
+  const PHONE_MORE = ["water"];
   function arrange(tabs, max = PHONE_MAX, { phone = false } = {}) {
     let all = (Array.isArray(tabs) ? tabs : []).map(norm).filter((t) => t.key);
-    if (phone) all = phoneOrder(all);
+    if (phone) {
+      all = phoneOrder(all);
+      const later = all.filter((t) => PHONE_MORE.includes(t.key));
+      if (later.length) { const shown = all.filter((t) => !PHONE_MORE.includes(t.key)).slice(0, max); return { shown, more: all.filter((t) => !shown.includes(t)) }; }
+    }
     if (all.length <= max) return { shown: all, more: [] };
     return { shown: all.slice(0, max), more: all.slice(max) };
   }

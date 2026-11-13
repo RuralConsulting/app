@@ -91,12 +91,20 @@
       if (!c.loaded) return [quiet("Reading the monitoring sites…")];
       const w = c.O.wqCard({ scope: c.scope, classes: c.classes, filter: c.filter, plan: c.plan });
       const link = c.O.waterQualityLink(c.group.id, (id, view) => FP.href(FP.groupModel.href(id, view)));
-      if (!w) return c.areas.size ? [quiet(c.sitesRead ? "No water quality monitoring sites lie inside the boundaries held." : "The monitoring sites will show here."), cardLink(link.href, "Open water quality", c.waterQuality)]
+      if (!w) return c.areas.size ? [quiet(c.sitesRead ? "No water quality monitoring sites lie inside the boundaries held." : "The monitoring sites will show here."), cardLink(link.href, "Open water quality", link.opensPanel ? c.waterQuality : null)]
         : [quiet("Once a boundary is held, the monitoring sites inside it show here.")];
+      // WQV1: the Water quality page's own sentence and bar (LAWA's 10-year trends, the one class it shows), always read from this group,
+      // with the sub-group chosen picked out as the page does; how many sites the classes rest on beside the bar; the sites and samples
+      // line stays the card's own, so it follows the period
+      const s = c.wqSummary(c.filter.sub || null);
+      if (s !== null) return [s ? el("p", { class: "ov-sentence", id: "ov-wq-sentence" }, s.sentence) : el("p", { class: "ov-quiet ov-working", id: "ov-wq-sentence", role: "status" }, "Reading LAWA's trends…"),
+        s && s.bar.length ? FP.wqPage.miniBar(s.bar) : null, s?.basis ? quiet(s.basis) : null, s?.noArea ? null : quiet(w.line),
+        cardLink(s?.href || link.href, "Open water quality")].filter(Boolean);
+      // (without the page's code, MC1's own indicative trends)
       return [w.pending ? el("p", { class: "ov-quiet ov-working", id: "ov-wq-sentence", role: "status" }, w.sentence) : el("p", { class: "ov-sentence", id: "ov-wq-sentence" }, w.sentence),
         !w.pending && w.band && w.band.assessed ? c.bar(w.band) : null, quiet(w.line),
         ...(!w.pending && w.band ? [quiet("Indicative trends over the last " + w.years + " years, worked out as on each site's page."), ...w.notes.map(quiet)] : []),
-        cardLink(link.href, "Open water quality", c.waterQuality)].filter(Boolean);
+        cardLink(link.href, "Open water quality", link.opensPanel ? c.waterQuality : null)].filter(Boolean);
     } });
   cards.register({ id: "subgroups", title: "Sub-groups", group: "About the group", order: 20,
     line: "Each sub-group with its area, sites and samples, sorted as you like", can: (v) => !v.sub,
@@ -212,7 +220,23 @@
     const cardData = new Map();   // card id -> what its load gave (read once per page)
     const ctx = () => ({ group, subs, areas: A, sites: all, scope: scope(), classes, plan, filter, loaded, sitesRead, el, O: O(), bar, badge, hrefOf, highlight,
       href: (view, tab) => FP.href(FP.groupModel.href(group.id, view, tab || null)), sort: (k) => { filter.sort = k; store.set(key, O().filterText(filter)); drawCards(); },
-      waterQuality: () => { wqIntent = true; } });
+      waterQuality: () => { wqIntent = true; }, wqSummary });
+    // WQV1: the Water quality page's summary for this group, or for one of its sub-groups picked out of this group's sites (never a read
+    // of the sub-group itself, which a coordinator not on it cannot make), once per choice. undefined while read; null without the
+    // page's code; a failed read, or a sub-group whose boundary the person cannot read, is said in a sentence (never an error, never
+    // "no sites")
+    const wqSums = new Map();
+    function wqSummary(sub) {
+      if (!FP.wqPage?.summary) return null;
+      const k = sub || "";
+      if (!wqSums.has(k)) {
+        wqSums.set(k, undefined);
+        FP.wqPage.summary(sb, group.id, { sub, today: String(opts.today || "").slice(0, 10) || null }).then((x) => x, () => false).then((x) => { wqSums.set(k, x); if (live()) drawCards(); });
+      }
+      const x = wqSums.get(k);
+      if (x === false) return { sentence: "The trends couldn't be read just now.", bar: [], basis: null, href: null };
+      return x?.noArea ? { ...x, sentence: "This sub-group's boundary is not one you can see, so its sites are not picked out here. Choose all sub-groups for the group's trends." } : x;
+    }
     let layout = O().layoutFrom(store.get(O().cardsKey(person?.id, group.id)), cards.available(viewer));
     const saveLayout = () => store.set(O().cardsKey(person?.id, group.id), O().layoutText(layout));
     function drawCards() {
@@ -543,7 +567,7 @@
     function startTrends() {
       // the Water quality card's one measure, at the surface-water sites in scope only (N2's method, a site at a time), at most
       // TREND_CAP sites; nothing is asked while the card is hidden
-      if (!isShown("water")) { plan = null; classes = new Map(); return; }
+      if (!isShown("water") || FP.wqPage?.summary) { plan = null; classes = new Map(); return; }   // (WQV1: the card shows the page's own trends)
       const sc = scope(), m = O().headlineMeasure(sc);
       const t = token, p = O().trendPlan(sc.filter((s) => s.kind === "surface"), { org: group.id }, filter.period, now, m ? [m] : []);
       plan = p; classes = new Map(p.known);

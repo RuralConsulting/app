@@ -21,6 +21,9 @@
     // UI2: "?groupmap=none" makes the demo group one with nothing in the older map model (an MCCC group): its Overview has no map
     // of its own, only its published map under Maps
     const groupMap = new URLSearchParams(root.location.search).get("groupmap");
+    // WQV1: "?wq=sub" or "?wq=parent" makes the group demo's water quality MCCC-like (demo-wq-page.js): more sites and sources, two
+    // sub-groups' own datasets, the viewer on the first sub-group ("sub") or on neither ("parent")
+    const wqPage = new URLSearchParams(root.location.search).get("wq");
     // LT1: "?titles=1" adds two invented questions from the LINZ titles check to the group's To review
     const titles = new URLSearchParams(root.location.search).get("titles") === "1";
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
@@ -28,7 +31,7 @@
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -70,7 +73,7 @@
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
       if (suffix === "/records") return "#/group/" + GROUP + "/records" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // CAP1
-      return /^(?:\/(?:home|documents|events|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:home|documents|events|water|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -158,7 +161,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -243,6 +246,7 @@
     }
     data.groupSitesNone = groupSites === "none";
     data.groupMapNone = groupMap === "none";
+    data.wqPage = group && (wqPage === "sub" || wqPage === "parent") ? wqPage : null;   // WQV1
     if (simple === "client" || simple === "unreadable") {
       data.tables.profiles = [{ user_id: USER, is_staff: false }];
       for (const m of data.groupTables?.org_members || []) m.role = "member";
@@ -671,12 +675,31 @@
   }
   // As public.subgroup_counts, group_wq_sites(org, 0) and wq_site_result_counts for the overview demos; null for anything else.
   function overviewRpc(d, name, args) {
-    const ov = d.overview, sub = (id) => ov.subs.find((s) => s.id === id);
+    const ov = d.overview, sub = (id) => ov.subs.find((s) => s.id === id), W = () => (typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel);
     if (name === "subgroup_counts") return args.parent_org === GROUP ? [ov.subs.map((s) => ({ subgroup_id: s.id, subgroup_name: s.name, subgroup_slug: null, current_businesses: 0, is_member: true }))] : null;
     if (name === "group_wq_sites" && Number(args.km) === 0 && (args.g === GROUP || sub(args.g))) {
       const rows = args.g === GROUP ? ov.sites : ov.bySub.get(args.g) || [];
       return [rows.map((x) => ({ site_id: x.site_id, external_id: x.external_id, name: x.name, site_type: x.site_type, distance_m: 0, geom: x.geom, last_sampled: x.last_sampled,
         source_key: x.source_key, owner_farm_id: null, owner_org_id: x.owner_org_id }))];
+    }
+    // WQV1: the Water quality page's reads of the same sites, for the overview card's one call (FP.wqPage.summary): the sites with their
+    // water type, no figures (the card shows none), and an invented LAWA 10-year nitrate trend at most river sites
+    if (name === "wq_area_sites" && (args.g === GROUP || sub(args.g))) {
+      const rows = args.g === GROUP ? ov.sites : ov.bySub.get(args.g) || [];
+      return [rows.map((x) => ({ site_id: x.site_id, external_id: x.external_id, name: x.name, site_type: x.site_type, distance_m: 0, geom: x.geom, last_sampled: x.last_sampled,
+        source_key: x.source_key, owner_farm_id: null, owner_org_id: x.owner_org_id, water_type: W().waterType(x.site_type), depth_m: null }))];
+    }
+    if (name === "wq_site_figures") return [[]];
+    if (name === "wq_state_trend_for_sites") {
+      const out = [];
+      for (const id of (args.p_sites || []).map(Number)) {
+        const x = ov.sites.find((s) => s.site_id === id), r = ovHash("lawa" + id) % 6;
+        if (!x || x.own || x.site_type !== "River" || r === 0) continue;
+        const [description, score] = [null, ["Likely improving", 1], ["Likely degrading", -1], ["Very likely degrading", -2], ["Indeterminate", 0], ["Very likely improving", 2]][r];
+        out.push({ monitoring_site_id: id, lawa_site_id: "demo-lawa-" + id, kind: "trend", indicator: "Nitrate nitrogen", attribute: null, unit: null, state: description, period: "10 years",
+          trend_score: score, trend_description: description, release: "27oct2026", attribution: "Data sourced from LAWA (Land, Air, Water Aotearoa) and Environment Canterbury (invented demo values)." });
+      }
+      return [out];
     }
     if (name === "wq_site_result_counts") {
       const ids = new Set((args.site_ids || []).map(Number)), since = args.since ? Date.parse(args.since) : null, out = [];
@@ -1784,7 +1807,35 @@
   }
   function wqOf(d) {
     if (!d.wq) { const w = wqDemo(d.map.extent); d.wq = d.wqEmpty ? { ...w, sites: [], series: {} } : w; }
+    if (d.wqPage && !d.wq.page) PAGE().extend(d.wq, GROUP);   // WQV1: the MCCC-like demo
     return d.wq;
+  }
+  // WQV1: the Water quality page's reads (demo-wq-page.js): its two functions always; with the MCCC-like demo, what row-level security
+  // gives its viewer of group_wq_sites, the sub-group list, places, NIWA's sites, the summary and the results. [data, error] or null.
+  const PAGE = () => (typeof module === "object" && module.exports ? require("./demo-wq-page.js") : globalThis.FP.demoWqPage);
+  function wqPageRpc(d, name, args) {
+    if (d.wqPage && PAGE() && (name === "waterways_in_view" || name === "reference_view_features")) return PAGE().support(name, args);
+    if (!["wq_site_figures", "wq_state_trend_for_sites", "group_wq_sites", "subgroup_counts", "wq_area_sites"].includes(name) || !PAGE()) return null;
+    const wq = wqOf(d), v = d.wqPage;
+    // as public.wq_area_sites: every served water-quality site source (NIWA's too) and the own sites the viewer reads, with the water type
+    // and a well's depth where held
+    if (name === "wq_area_sites") return [args.g !== GROUP || d.groupSitesNone ? [] : wq.sites.filter((s) => !s.owner_farm_id && (!v || PAGE().readable(wq, v, s.site_id)))
+      .map(({ niwa, depth_m, ...s }) => ({ ...s, water_type: PAGE().waterType(s.site_type), depth_m: depth_m ?? null }))];
+    if (name === "wq_site_figures") return PAGE().figures(wq, v, args);
+    if (name === "wq_state_trend_for_sites") return PAGE().lawa(wq, args, demoLawa);
+    if (!v) return null;
+    if (name === "group_wq_sites") return [args.g === GROUP ? wq.sites.filter((s) => !s.owner_farm_id && !s.niwa && PAGE().readable(wq, v, s.site_id)).map(({ niwa, depth_m, ...s }) => s) : []];
+    return [args.parent_org === GROUP ? PAGE().subgroups(v) : []];
+  }
+  function wqPageRows(d, table) {
+    // (the overview demo's sites: each family's record, as public.site_record_summary)
+    if (table === "site_record_summary" && d.overview) return d.overview.sites.flatMap((x) => Object.keys(x.families).map((family) => ({ site_id: x.site_id, family, n: x.times.length,
+      first_sampled: x.times[0] || null, last_sampled: x.times[x.times.length - 1] || null })));
+    if (table === "measurements") return PAGE()?.measurements(wqOf(d), d.wqPage) || [];
+    if (table === "places" && d.wqPage) return PAGE().places(wqOf(d), d.wqPage, GROUP);
+    if (table === "monitoring_sites") return [...demoMonitoringSites(d), ...(d.wqPage ? PAGE().niwaSites(wqOf(d)) : [])];
+    if (table === "site_record_summary") return demoRecordSummary(d).filter((r) => !d.wqPage || PAGE().readable(wqOf(d), d.wqPage, r.site_id));
+    return undefined;
   }
   // wq_site_latest: the newest result of each parameter at a site, with who it is from and whether it is provisional.
   function wqLatest(wq, site) {
@@ -1983,7 +2034,8 @@
       };
       async function execute() {
         if (table === "captures" && offlineNow()) return LOST();   // CAP1: no coverage
-        const d = await ready, rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : table === "site_record_summary" ? demoRecordSummary(d) : table === "monitoring_sites" ? demoMonitoringSites(d) : table === "captures" && d.tables.captures ? capturesFor(d) : d.tables[table];
+        const d = await ready, page = wqPageRows(d, table);   // WQV1
+        const rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : page !== undefined ? page : table === "captures" && d.tables.captures ? capturesFor(d) : d.tables[table];
         if (write && adding && KEPT.includes(table)) {
           const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
             ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));
@@ -2007,13 +2059,13 @@
         }
         if (write) return error("The demo does not save changes");
         if (!rows) return error("This demo does not provide " + table);
-        let selected = [...rows, ...(d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => matches(row, key, val)));
+        let selected = [...rows, ...((table === "places" && d.wqPage) ? [] : d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => matches(row, key, val)));
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
         const total = selected.length;   // (the count is of every row the filters pick, before a range)
         if (span) selected = selected.slice(span[0], span[1] + 1);
         // N2b: as the real API, at most 1000 rows a request (the stand-in for site_record_summary keeps the cap, so a reader that trusts a
         // full page is caught by a test)
-        if (table === "site_record_summary") selected = selected.slice(0, 1000);
+        if (table === "site_record_summary" || table === "measurements") selected = selected.slice(0, 1000);
         if (counting) return { ...result(counting.head ? null : selected), count: total };
         if (singular && selected.length !== 1) return maybe && !selected.length ? result(null) : error("Demo row not found");
         return result(singular ? selected[0] : selected);
@@ -2033,6 +2085,7 @@
       async rpc(name, args) {
         const d = await ready;
         if (d.overview) { const r = overviewRpc(d, name, args || {}); if (r) return result(...r); }   // MC1
+        { const r = wqPageRpc(d, name, args || {}); if (r) return result(...r); }   // WQV1
         // CAP1b: with d.farmParts the demo farm is a large farm as CAP1a gives it (farmParts); without, a database before CAP1a
         if (d.farmParts && args.f === FARM && ["farm_map", "farm_reference_counts", "farm_reference_context", "farm_layer_features"].includes(name)) return result(...farmParts(d, name, args));
         // N2b: the ECan site list's features in a box (reference_view_features), for a group the old model has no area for

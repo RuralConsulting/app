@@ -1,0 +1,163 @@
+/* WQV1: a group's Water quality page (js/wq-page.js). The page takes the space's width (no group map behind it). On a computer: the filter
+   bar, the headline figures, Map | Chart | Table, with the map getting the room and one panel for layers and legend (after Felt); on a
+   phone a quick answer: the two water types, one sentence and bar, the list. Ink controls, colour only for data; tokens only. */
+#screen-group[data-view="water"] .group-map { display: none; }
+#screen-group[data-view="water"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="water"] .group-panel { border-left: 0; border-top: 0; padding: var(--s-4) var(--space) var(--s-6); background: var(--wash); }
+
+.wqp { max-width: 1600px; margin: 0 auto; color: var(--ink); }
+.wqp-phonebox { display: none; }
+.wqp.wqp-is-phone .wqp-desk { display: none; }
+.wqp.wqp-is-phone .wqp-phonebox { display: block; }
+.wqp-status:empty { display: none; }
+.wqp-status { color: var(--ink-2); margin: 0 0 var(--s-2); }
+.wqp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
+.wqp-head h1, .wqp-phonetitle { font: 700 var(--text-title)/1.15 var(--f-display); letter-spacing: -.02em; margin: 0; }
+.wqp-sources { margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+
+/* the page's buttons take the page's face; each control sets its own size (at no specificity, so every class below wins) */
+:where(.wqp) button { font-family: inherit; color: var(--ink); }
+/* The owner's style guide (13 Nov 2026): options are plain text with a small leading circle, never a box or pill per option; the chosen
+   one's circle is filled. Regular weight, body size; at most one thin rounded outline round a whole set (the phone's water types). */
+.wqp-seg { display: inline-flex; flex-wrap: wrap; gap: var(--s-1) var(--s-4); }
+.wqp-seg button, .wqp-chip { display: inline-flex; align-items: center; gap: var(--s-2); min-height: 32px; padding: 0; border: 0; border-radius: 0; background: none;
+  font-size: var(--text-body); font-weight: 400; color: var(--ink); cursor: pointer; }
+.wqp-seg button::before, .wqp-chip::before { content: ""; flex: none; box-sizing: border-box; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--ink-3); }
+.wqp-seg button[aria-pressed="true"], .wqp-chip[aria-pressed="true"] { font-weight: 500; }
+.wqp-seg button[aria-pressed="true"]::before, .wqp-chip[aria-pressed="true"]::before { border: 5px solid var(--ink); }
+.wqp-seg button:hover::before, .wqp-chip:hover::before { border-color: var(--ink-2); }
+.wqp-seg button[aria-pressed="true"]:hover::before, .wqp-chip[aria-pressed="true"]:hover::before { border-color: var(--ink); }
+.wqp-quiet { display: inline-flex; align-items: center; gap: var(--s-2); min-height: 32px; padding: 0 var(--s-2); border: 0; border-radius: var(--radius-s);
+  background: none; font-weight: 500; font-size: var(--text-small); color: var(--ink-2); cursor: pointer; }
+.wqp-quiet:hover { background: var(--fill); color: var(--ink); }
+.wqp-quiet[aria-pressed="true"] { color: var(--ink); font-weight: 600; }
+.wqp-quiet:disabled { color: var(--ink-3); cursor: default; }
+.wqp-link { font-size: inherit; border: 0; background: none; padding: 0; color: var(--accent-text); text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; cursor: pointer; font-weight: 500; text-align: left; }
+.wqp-link:hover { text-decoration-color: var(--ink); }
+
+/* ---- the filter bar ---- */
+.wqp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-5); padding: 0 0 var(--s-3); margin: 0 0 var(--s-4); border-bottom: 1px solid var(--rule-soft); }
+.wqp-measures { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-4); padding-left: var(--s-4); border-left: 1px solid var(--rule-soft); }
+/* quiet text controls: no box (nothing is typed here) */
+.wqp :is(.wqp-morebox, .wqp-field) select { min-height: 28px; padding: 0 var(--s-1); border: 0; border-radius: 6px; background: none; color: var(--ink); font-size: var(--text-small); font-weight: 500; cursor: pointer; }
+.wqp :is(.wqp-morebox, .wqp-field) select:hover { background: var(--fill); }
+.wqp-morebox.wqp-on select { font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.wqp-field { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--text-small); color: var(--ink-2); }
+/* two straight rows: what is shown (water type, measure), then where and when (sub-group, period, the switch) */
+.wqp-break { flex-basis: 100%; height: 0; }
+.wqp-switch { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--text-small); cursor: pointer; }
+/* a select is only as wide as what it says, so the whole bar, the switch too, sits on one line on a computer */
+.wqp :is(.wqp-morebox, .wqp-field) select { max-width: 13rem; }
+.wqp-switch small { color: var(--ink-3); font-size: var(--text-small); }
+.wqp-show-all { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+
+/* ---- the headline figures (after Plausible: a few numbers, one bar, one sentence) ---- */
+/* plain numbers with their labels, on one straight line; no tiles */
+.wqp-figures { display: grid; grid-template-columns: repeat(3, minmax(110px, auto)) minmax(280px, 1fr); gap: var(--s-6); align-items: start; margin: 0 0 var(--s-3); }
+.wqp-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wqp-fig b { font: 700 var(--text-heading)/1.2 var(--f-display); letter-spacing: -.01em; }
+.wqp-fig span { color: var(--ink-2); font-size: var(--text-small); }
+.wqp-fig-trend { gap: var(--s-2); }
+.wqp-bar { display: flex; height: 12px; border-radius: var(--radius-pill); overflow: hidden; background: var(--fill); }
+.wqp-bar-part { display: block; min-width: 4px; }
+.wqp-bar-empty { opacity: .6; }
+.wqp-bar-key { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); font-size: var(--text-small); color: var(--ink-2); }
+.wqp-bar-key i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: var(--s-1); vertical-align: -1px; }
+.wqp-sentence { margin: 0; font-weight: 500; line-height: 1.35; }
+.wqp-notes p { margin: 0 0 var(--s-2); color: var(--ink-2); font-size: var(--text-small); }
+.wqp-notes:empty { display: none; }
+.wqp-error { margin: 0; }
+
+/* ---- Map | Chart | Table ---- */
+.wqp-viewbar { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-4) 0 var(--s-2); }
+.wqp-download { margin-left: auto; }
+.wqp-pane[hidden] { display: none !important; }
+/* hairlines, no card: the map runs edge to edge between two rules */
+.wqp-mappane { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 0; height: clamp(440px, calc(100vh - 340px), 780px); border: 0;
+  border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); overflow: hidden; background: var(--panel); }
+.wqp-mappane.wqp-with-site { grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 400px); }
+.wqp-layers { overflow-y: auto; padding: var(--s-3) var(--s-4) var(--s-3) 0; border-right: 1px solid var(--rule-soft); background: var(--wash); }
+/* Layers, Legend, Sites: small headings (above .group-panel h2's) */
+.wqp h2.wqp-h { font: 600 var(--text-body)/1.3 var(--f-ui); letter-spacing: 0; margin: var(--s-2) 0; }
+/* the Chart block without its card: a hairline above */
+.wqp .chart-block { border: 0; border-top: 1px solid var(--rule-soft); border-radius: 0; padding: var(--s-3) 0 0; background: none; }
+.wqp-layerlist, .wqp-legend, .wqp-ticklist, .wqp-phonelist { list-style: none; margin: 0 0 var(--s-3); padding: 0; }
+.wqp-layerlist label { display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-1) 0; cursor: pointer; }
+.wqp-layerlist input { margin-top: 3px; accent-color: var(--accent); }
+.wqp-layerlist span { display: flex; flex-direction: column; }
+.wqp-layernote, .wqp-hint { color: var(--ink-3); font-size: var(--text-small); }
+.wqp-legend li { display: flex; align-items: center; gap: var(--s-2); padding: 2px 0; font-size: var(--text-small); }
+.wqp-swatch { flex: none; }
+.wqp-mapbox { position: relative; min-height: 0; min-width: 0; }
+.wqp-map { position: absolute; inset: 0; background: var(--map-background); }
+.wqp-bgswitch { position: absolute; left: var(--s-3); top: var(--s-3); z-index: 2; display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--radius-s);
+  background: var(--panel); box-shadow: var(--shadow-1); }
+.wqp-bgswitch button { min-height: 28px; padding: 0 var(--s-3); border: 0; border-radius: 6px; background: none; font-size: var(--text-small); font-weight: 500; color: var(--ink-2); cursor: pointer; }
+.wqp-bgswitch button[aria-pressed="true"] { background: var(--fill); color: var(--ink); font-weight: 600; }
+.wqp-site { overflow-y: auto; padding: var(--s-3) var(--s-4); border-left: 1px solid var(--rule-soft); background: var(--panel); }
+.wqp-site[hidden] { display: none; }
+.wqp-sitehead { display: flex; align-items: flex-start; gap: var(--s-2); }
+.wqp-sitehead h2 { font: 600 var(--text-body)/1.3 var(--f-ui); margin: var(--s-1) 0 0; flex: 1; }
+.wqp-close { min-width: 32px; min-height: 32px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font-size: var(--text-heading); line-height: 1; cursor: pointer; }
+.wqp-close:hover { background: var(--fill); color: var(--ink); }
+.wqp-meta { color: var(--ink-2); font-size: var(--text-small); margin: var(--s-1) 0 var(--s-2); }
+.wqp-facts p { margin: 0 0 var(--s-1); font-size: var(--text-small); }
+.wqp-held { color: var(--ink-3); }
+.wqp-siteactions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin: var(--s-3) 0; }
+.wqp-empty { color: var(--ink-2); }
+
+.wqp-chartpane { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--s-4); }
+.wqp-chartmain, .wqp-ticks, .wqp-tablewrap { min-width: 0; }
+.wqp-chartbar { margin: 0 0 var(--s-3); }
+.wqp-ticks { max-height: 640px; overflow-y: auto; }
+.wqp-ticklist label { display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-2) 0; border-bottom: 1px solid var(--rule-soft); cursor: pointer; }
+.wqp-ticklist input { margin-top: 3px; accent-color: var(--accent); }
+.wqp-ticklist span { display: flex; flex-direction: column; min-width: 0; }
+.wqp-ticklist small { color: var(--ink-3); font-size: var(--text-small); }
+
+.wqp-tablewrap { overflow-x: auto; }
+.wqp-table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+.wqp-table caption { text-align: left; font-weight: 600; padding: 0 0 var(--s-2); font-size: var(--text-body); }
+.wqp-table th, .wqp-table td { text-align: left; padding: var(--s-2) var(--s-2); border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+.wqp-table thead th { position: sticky; top: 0; background: var(--panel); }
+.wqp-sort { font-size: inherit; border: 0; background: none; padding: 0; font-weight: 600; cursor: pointer; color: var(--ink); text-align: left; }
+.wqp-table td small, .wqp-table th small { display: block; color: var(--ink-3); white-space: nowrap; }
+.wqp-num { font-variant-numeric: tabular-nums; }
+.wqp-heldrow { color: var(--ink-2); }
+.wqp-credit { margin: var(--s-3) 0 0; color: var(--ink-3); font-size: var(--text-small); }
+
+@media (max-width: 1100px) {
+  .wqp-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wqp-fig-trend { grid-column: 1 / -1; }
+  .wqp-mappane.wqp-with-site { grid-template-columns: 220px minmax(0, 1fr) minmax(280px, 340px); }
+  .wqp-mappane { grid-template-columns: 220px minmax(0, 1fr); }
+  .wqp-chartpane { grid-template-columns: minmax(0, 1fr) 240px; }
+}
+
+/* ---- a phone: a quick answer ---- */
+@media (max-width: 800px) {
+  #screen-group[data-view="water"] .group-panel { padding: var(--s-3) var(--space) calc(var(--s-6) + var(--fab-gutter)); }
+  .wqp-phonebox > * { margin: 0 0 var(--s-3); }
+  /* the water types as two rows inside one thin rounded outline; each row a 44 px target */
+  .wqp-phonebox .wqp-seg { display: flex; flex-direction: column; gap: 0; padding: var(--s-1) var(--s-4); border: 1px solid var(--rule); border-radius: var(--radius); }
+  .wqp-phonebox .wqp-seg button { min-height: var(--tap); }
+  .wqp-phonebox .wqp-seg button + button { border-top: 1px solid var(--rule-soft); }
+  /* every control keeps a 44 px tap area on a phone without looking bigger: an invisible hit area round it */
+  .wqp :is(.wqp-seg button, .wqp-quiet, .wqp-close, .wqp-link, .wqp-bgswitch button) { position: relative; }
+  .wqp :is(.wqp-seg button, .wqp-quiet, .wqp-close, .wqp-bgswitch button)::after { content: ""; position: absolute; inset: -6px -2px; }
+  .wqp .wqp-link::after { content: ""; position: absolute; inset: -12px -4px; }
+  .wqp-phonelead { color: var(--ink-2); }
+  .wqp-phonelead b { color: var(--ink); }
+  .wqp-mapbtn { padding-left: 0; }
+  .wqp-phonemap { position: relative; height: 62vh; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule-soft); }
+  .wqp-phonemap[hidden] { display: none; }
+  .wqp-phonemap .wqp-mapbox { position: absolute; inset: 0; }
+  .wqp-phonelist { border-top: 1px solid var(--rule-soft); }
+  .wqp-phonelist li { border-bottom: 1px solid var(--rule-soft); }
+  .wqp-phonelist summary { display: flex; flex-direction: column; gap: 2px; padding: var(--s-3) 0; min-height: var(--tap); cursor: pointer; list-style: none; }
+  .wqp-phonelist summary::-webkit-details-marker { display: none; }
+  .wqp-phonelist summary small { color: var(--ink-2); font-size: var(--text-small); }
+  .wqp-phonesite { padding: 0 0 var(--s-3); }
+}
+.wqp-depth { display: block; color: var(--ink-3); font-size: var(--text-small); }
+.wqp-download { color: var(--ink); }

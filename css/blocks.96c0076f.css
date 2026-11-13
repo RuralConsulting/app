@@ -225,6 +225,12 @@
 .chart-palette-sites .chart-mark { fill: var(--series); }
 .chart-palette-sites .chart-mark.chart-censored { fill: var(--panel); stroke: var(--series); }
 .chart-palette-sites .chart-band { fill: var(--ink-3); }
+/* WQV1: a field meter or test-strip reading is hollow, in its series' colour; a laboratory result stays solid */
+.chart-mark.chart-field { fill: var(--panel); stroke-width: 1.75; }
+.chart-mark.chart-field.chart-s0, .chart-mark.chart-field.chart-s2 { stroke: var(--accent); }
+.chart-mark.chart-field.chart-s1, .chart-mark.chart-field.chart-s4 { stroke: var(--ink); }
+.chart-mark.chart-field.chart-s3, .chart-mark.chart-field.chart-s5 { stroke: var(--ink-2); }
+.chart-palette-sites .chart-mark.chart-field { fill: var(--panel); stroke: var(--series); }
 /* N2: limit lines the caller gives (none yet; N3's adjustable lines), labelled at the right */
 .chart-limit { stroke: var(--ink); stroke-width: 1.5; }
 .chart-limit-dashed { stroke-dasharray: 8 4; }

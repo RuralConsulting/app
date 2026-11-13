@@ -79,7 +79,7 @@
   // Whose a site is: the farm's own, a group's, or the shared source's (named).
   function ownerLabel(site, farmId) {
     if (site?.owner_farm_id) return site.owner_farm_id === farmId ? "This farm's own" : "Another farm's";
-    if (site?.owner_org_id) return "A group's";
+    if (site?.owner_org_id) return "Another group's own";   // WQV1: plain words (sourceLabel names it where the name is known)
     return sourceName(site?.source_key) || "Shared monitoring site";
   }
   // The nearest first, as the read function returns them, with the screen's own fields.
@@ -90,22 +90,46 @@
       last: r.last_sampled ? "last sample " + date(r.last_sampled) : "no results yet", lngLat: siteLngLat(r.geom), source_key: r.source_key || null, owner: ownerLabel(r, farmId),
     }));
   }
+  // ---- WQV1: one water type and one source wording for every site, whatever its source ---------------------------------------------
+  // The water type from a site's site_type, as public.wq_water_type (migration 20261113071000) has it: "surface", "groundwater", "other"
+  // (effluent, marine, estuary, stormwater, air: left off the Water quality page) or "unknown" (shown with surface water and counted as
+  // needing a type). Spaces are tidied first (ECan's values often end in spaces). tests/db/wq_page.test.sql and tests/app/wq-page.test.cjs
+  // hold the same cases, so the two never disagree.
+  const GROUNDWATER = /(ground ?water|\bwells?\b|\bbores?\b|bore ?hole|aquifer|piezomet)/;
+  const OTHER_WATER = /(effluent|sewage|waste ?water|marine|estuar|coastal|ocean|\bsea\b|harbou?r|storm ?water|\bair\b|trade waste|leachate|landfill|outfall)/;
+  const SURFACE = /(river|stream|creek|drain|lake|lagoon|\bponds?\b|tarn|wetland|spring|canal|\braces?\b|tributar|brook|\bburn\b|surface|reservoir|channel|waterway|swamp)/;
+  // A type that begins with a river, stream, creek, drain or lake is surface water whatever follows ("Rivers - stormwater drain");
+  // "Other"/"Others" is other.
+  const SURFACE_FIRST = /^(rivers?|streams?|creeks?|drains?|lakes?)\b/, OTHERS = /^others?$/;
+  function waterType(siteType) {
+    const t = String(siteType ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!t) return "unknown";
+    if (GROUNDWATER.test(t)) return "groundwater";
+    if (SURFACE_FIRST.test(t)) return "surface";
+    if (OTHERS.test(t) || OTHER_WATER.test(t)) return "other";
+    return SURFACE.test(t) ? "surface" : "unknown";
+  }
+  // A site the source says is below a discharge (ECan's "Rivers - below discharges"): not an ambient site, so it is tagged.
+  const belowDischarge = (siteType) => /below dischar/i.test(String(siteType ?? ""));
+  // Whose a site is, in plain words, the same on the Water quality page and in Maps: "This group's own", "<Sub-group>'s own" (names:
+  // a Map of the organisations the person is in, id -> name), "Environment Canterbury", "NIWA". A sub-group the person is not in has
+  // no rows to name: its own sites are never readable to them.
+  const PLAIN_SOURCES = { "ecan-wq-sites": "Environment Canterbury", "ecan-wq": "Environment Canterbury", "niwa-nrwqn-sites": "NIWA", "niwa-nrwqn": "NIWA",
+    "niwa-hydro-sites": "NIWA", "niwa-hydro": "NIWA" };
+  function sourceLabel(site, { org = null, farm = null, names = null } = {}) {
+    const o = site?.owner_org_id ?? null, f = site?.owner_farm_id ?? null;
+    if (o) return o === org ? "This group's own" : names?.get?.(o) ? names.get(o) + "'s own" : "Another group's own";
+    if (f) return f === farm ? "This farm's own" : "A member farm's own";
+    return PLAIN_SOURCES[site?.source_key] || sourceName(site?.source_key) || "Shared monitoring site";
+  }
   const featureCollection = (sites_, selected = null) => ({ type: "FeatureCollection", features: sites_.filter((s) => s.lngLat).map((s) => ({
     type: "Feature", id: s.id, geometry: { type: "Point", coordinates: s.lngLat }, properties: { site_id: s.id, n: s.n, name: s.name, distance: s.distance, selected: s.id === selected } })) });
   const summary = (sites_, km = RADIUS_KM) => !sites_.length ? "No monitoring sites within " + km + " km" :
     sites_.length + (sites_.length === 1 ? " monitoring site" : " monitoring sites") + " within " + km + " km";
   // The sources a list of sites comes from, named once ("Environment Canterbury"; "This farm's own and Environment Canterbury").
-  // MC1: surface water or groundwater, from a monitoring site's own type as its source wrote it, or null when the type does not say
-  // (the platform's types are not one list yet: ECan's "Rivers, Drains, Creeks", "Lakes", "Groundwater-Wells", "Groundwater-Springs";
-  // a group's "surface water", "groundwater", "stream", "drain", "springhead"). A spring is groundwater coming up, as ECan files it.
-  // Deliberately small: WQV1 (the Water quality page) brings one tidy classification and may adopt or replace this.
-  function waterKind(siteType) {
-    const t = String(siteType ?? "").toLowerCase();
-    if (!t.trim()) return null;
-    if (/ground ?water|\bwells?\b|\bbores?\b|spring/.test(t)) return "groundwater";
-    if (/surface|river|stream|creek|drain|lake|lagoon|estuar|wetland|canal|tarn|pond/.test(t)) return "surface";
-    return null;
-  }
+  // MC1's overview card asks for surface water or groundwater (null otherwise). WQV1: one rule, waterType above (and public.wq_water_type);
+  // this is that rule seen as the card needs it, never a second classification.
+  const waterKind = (siteType) => { const w = waterType(siteType); return w === "surface" || w === "groundwater" ? w : null; };
   const sourcesLine = (sites_) => {
     const names = [...new Set(sites_.map((s) => s.owner))];
     return names.length ? "Source: " + (names.length === 1 ? names[0] : names.slice(0, -1).join(", ") + " and " + names[names.length - 1]) : "";
@@ -344,5 +368,5 @@
     };
   }
 
-  return { NOT_ASSESSED, RADIUS_KM, waterKind, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP, otherDatasets, alsoMeasured, locationWindows };
+  return { waterType, waterKind, belowDischarge, sourceLabel, PLAIN_SOURCES, NOT_ASSESSED, RADIUS_KM, compareLabel, SOURCE_NAMES, sourceName, nztmToLngLat, lngLatToNztm, siteLngLat, date, distanceText, valueText, isCensored, ownerLabel, sites, featureCollection, summary, sourcesLine, latest, credits, reportedText, chartData, location, locationLabel, FAMILIES, familyOf, sameFamily, locationPlan, locationLine, locationWindowStart, latestInstant, windowLine, LOCATION_WINDOW_YEARS, READ_CAP, otherDatasets, alsoMeasured, locationWindows };
 });

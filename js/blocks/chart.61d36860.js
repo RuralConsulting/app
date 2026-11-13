@@ -183,8 +183,9 @@
   let seq = 0;   // ids for the picture's title and description, so two charts on a page never share them
   const MARK = ["circle", "square", "diamond", "circle", "square", "diamond"];
   const tagOf = (kind) => kind === "square" ? "rect" : kind === "diamond" ? "path" : "circle";
+  // WQV1: a point with `field: true` (a field meter or test-strip reading) is drawn hollow; a laboratory result stays solid
   function marker(kind, c, p) {
-    const cx = p.cx.toFixed(1), cy = p.cy.toFixed(1), cls = "chart-mark chart-s" + c;
+    const cx = p.cx.toFixed(1), cy = p.cy.toFixed(1), cls = "chart-mark chart-s" + c + (p.field === true && !p.censored ? " chart-field" : "");
     if (p.censored) {   // an open triangle at the limit: pointing down for "less than", up for "more than"
       const d = BELOW.includes(p.qualifier) ? 1 : -1, a = 5.5;
       return '<path class="' + cls + ' chart-censored" d="M' + cx + " " + (p.cy + d * a).toFixed(1) + " l" + (-a) + " " + (-d * a * 1.7).toFixed(1) + " h" + 2 * a + ' z" data-qualifier="' + esc(p.qualifier) + '"/>';
@@ -245,6 +246,8 @@
       (MARK[c] === "square" ? '<rect class="chart-mark chart-s' + c + '" x="10.5" y="2.5" width="7" height="7"/>' : MARK[c] === "diamond" ? '<path class="chart-mark chart-s' + c + '" d="M14 1.5 l4.5 4.5 l-4.5 4.5 l-4.5 -4.5 z"/>' : '<circle class="chart-mark chart-s' + c + '" cx="14" cy="6" r="3.8"/>') + "</svg>" +
       "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c && (s.note || data?.palette !== "sites") ? " (" + (s.note || "comparison") + ")" : "") + (s.points.length || data?.palette !== "sites" ? "" : " · no results in this window") + "</span></li>");
     if (any) items.push('<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><path class="chart-mark chart-s0 chart-censored" d="M14 9.5 l-5.5 -9.4 h11 z"/></svg><span>Open triangle: below (&lt;) or above (&gt;) a detection limit, so not an exact value</span></li>');
+    // WQV1: only when a field reading is drawn
+    if (series.some((s) => s.points.some((p) => p.field === true && !censored(p)))) items.push('<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><circle class="chart-mark chart-s0" cx="7" cy="6" r="3.8"/><circle class="chart-mark chart-s0 chart-field" cx="21" cy="6" r="3.8"/></svg><span>Solid: a laboratory result. Hollow: a field meter or test-strip reading</span></li>');
     return '<ul class="chart-legend" aria-label="Key">' + items.join("") + "</ul>";
   }
 

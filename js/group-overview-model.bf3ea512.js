@@ -356,9 +356,8 @@
     return CARD_GROUPS.map((g) => ({ name: g, cards: defs.filter((d) => d.group === g).sort((a, b) => pos(a.id) - pos(b.id))
       .map((d) => ({ id: d.id, title: d.title, line: d.line || "", shown: !list(l?.hidden).includes(d.id) })) })).filter((g) => g.cards.length);
   }
-  // Where "Open water quality" goes, in one place. Until the Water quality page (WQV1) lands: the group's Maps with the water quality
-  // sites panel opened (wq-sites.js, through maps-view's `waterQuality`). WQV1 points this at its page.
-  const waterQualityLink = (groupId, href) => ({ href: href(groupId, "maps"), opensPanel: true });
+  // Where "Open water quality" goes, in one place: the group's Water quality page (WQV1, `#/group/<id>/water`).
+  const waterQualityLink = (groupId, href) => ({ href: href(groupId, "water"), opensPanel: false });
 
   // The calm line under the tiles and on the map when something is missing; null when nothing is.
   function emptyLine({ areas: A = new Map(), sites: all = [], filter = {}, sitesRead = true } = {}) {
