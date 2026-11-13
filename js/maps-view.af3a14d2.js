@@ -40,7 +40,18 @@
   FP.mapsView = api.create({
     sb: () => FP.sb, el: (...a) => FP.el(...a), mount, backgrounds: () => api.backgrounds(linzKey()),
     // The viewer's stylesheet sets page-wide rules and is on only while a map is shown (index.html loads it as media="not all").
-    styles: (on) => { const link = document.querySelector("link[data-viewer-styles]"); if (link) link.media = on ? "all" : "not all"; },
+    // Switching it on returns once it applies: the map takes its size from the holder as it starts, and before the stylesheet
+    // is in, the viewer's map element has no height (MapLibre then makes a 300 px canvas and keeps it). Chrome reads the sheet
+    // again when its media changes, so it applies only once the page's style sheets list it (checked every 16 ms, 4 s at most).
+    styles: (on) => {
+      const link = document.querySelector("link[data-viewer-styles]");
+      if (!link) return null;
+      link.media = on ? "all" : "not all";
+      const applies = () => !!link.sheet && [...document.styleSheets].includes(link.sheet);
+      if (!on || applies()) return null;
+      const until = Date.now() + 4000;
+      return new Promise((done) => { (function tick() { if (applies() || Date.now() > until) done(); else setTimeout(tick, 16); })(); });
+    },
     overlay: (map, holder, owner, state, bounds) => FP.wqSites?.attach({ map, holder, sb: FP.sb, owner, state, bounds }) || null,
     go: (hash) => { location.hash = hash; }, now: () => Date.now(), visible: () => document.visibilityState === "visible",
     setTimer: (f, ms) => setTimeout(f, ms), clearTimer: (t) => clearTimeout(t),
@@ -215,9 +226,11 @@
       if (!read) { say(s, renewing ? RAN_OUT : UNAVAILABLE, tryAgain(s)); return; }
       const m = s.map, at = m && { center: m.getCenter(), zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch() };
       dropMap(s);
+      // the viewer's stylesheet on, and read, before the map is made (env.styles), so the map starts at its holder's full size
+      try { await env.styles(true); } catch {}
+      if (s !== shown) return;
       const holder = el("div", { class: "maps-viewer" });
       try {
-        env.styles(true);
         s.host.replaceChildren(holder);
         s.map = env.mount(holder, {
           manifest: { ...read.manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
