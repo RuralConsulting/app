@@ -30,6 +30,9 @@
     const longPeople = new URLSearchParams(root.location.search).get("people") === "long";
     // SR1: "?round=1" gives the demo group's own sampling dataset twelve registered sites with a field-sensor nitrate record, for entering a round
     const round = new URLSearchParams(root.location.search).get("round") === "1";
+    // PJ1: "?projects=1" gives the demo group an example project (and a proposed one), with who takes part, what is due, a funder and
+    // tagged files, layers and events; with "?simple=client" the demo person is a plain member who takes part through a sub-group
+    const projects = new URLSearchParams(root.location.search).get("projects") === "1";
     // HV1: "?memberfarm=1" (or "long", a long farm name) with "#/demo/multi": the second farm is a member farm the person reads as
     // a coordinator of its group, not one of theirs (no farm_members row), so ".../farm-2" opens it read only
     const memberFarm = new URLSearchParams(root.location.search).get("memberfarm");
@@ -38,7 +41,7 @@
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, round, memberFarm })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, round, projects, memberFarm })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -80,6 +83,7 @@
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
       if (suffix === "/records") return "#/group/" + GROUP + "/records" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // CAP1
+      if (suffix === "/projects") return "#/group/" + GROUP + "/projects" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // PJ1
       if (suffix === "/home" && /[?&]item=[0-9a-f-]{36}/.test(hash)) return "#/group/" + GROUP + "/home" + /[?&]item=[0-9a-f-]{36}/.exec(hash)[0].replace("&", "?");   // CO1b
       if (suffix === "/water/round") return "#/group/" + GROUP + "/water/round" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // SR1
       return /^(?:\/(?:home|documents|events|water|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
@@ -170,7 +174,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, round = false, memberFarm = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, round = false, projects = false, memberFarm = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -246,6 +250,7 @@
     if (group) groupDemo(data, queue, longPeople);
     if (group && (overview === "full" || overview === "empty" || overview === "sub")) overviewDemo(data, overview);   // MC1, CO1
     if (group && titles) titleQuestionsDemo(data);   // LT1
+    if (group && projects) projectsDemo(data);   // PJ1
     demoMaps(data, sparse);
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
@@ -455,6 +460,130 @@
     for (const c of capturesFor(d).filter((x) => !x.archived_at)) for (const t of c.tags || []) { const k = t.toLowerCase(); const e = used.get(k) || { name: t, uses: 0 }; e.uses++; used.set(k, e); }
     for (const t of d.tables.capture_tags || []) if (!t.archived_at) { const k = t.name.toLowerCase(); const e = used.get(k) || { name: t.name, uses: 0 }; used.set(k, { ...e, name: t.name, listed: true, colour: t.colour }); }
     return [...used.values()].map((x) => ({ name: x.name, uses: x.uses, listed: !!x.listed, colour: x.colour || null })).sort((a, b) => b.uses - a.uses || (b.listed - a.listed) || a.name.localeCompare(b.name)).slice(0, 16);
+  }
+  // PJ1: "?projects=1": an example project of the group (public.projects and its three tables), as a coordinator would set it up, and
+  // a proposed one only the coordinators see. Invented throughout. The demo person is the group's admin (a coordinator: everything),
+  // or with "?simple=client" a plain member who also belongs to the Ford Road sub-group taking part (not drawn as a place of its own):
+  // they read the project once shared, its shared rows and the shared items their own rules let them read, never what is due or the
+  // funder. The reads below stand in for the database's rule (app.project_reader_ids and the restrictive policies); writes are kept in
+  // memory, the coordinators' only.
+  const PJ = (n) => "de000000-0000-4000-8000-000000000e" + String(n).padStart(2, "0");
+  const PJ_SUBS = [{ subgroup_id: "de000000-0000-4000-8000-000000000e81", subgroup_name: "Ford Road sub-group (synthetic)" },
+    { subgroup_id: "de000000-0000-4000-8000-000000000e82", subgroup_name: "Gorge pest group (synthetic)" }];
+  const PJ_TABLES = ["projects", "project_participants", "project_dates_due", "project_funders"];
+  function projectsDemo(data) {
+    const made = "2026-05-01T00:00:00Z", stamp = { created_by: USER, created_at: made, updated_at: made, updated_by: USER };
+    const T = data.tables, t = data.groupTables;
+    T.projects = [
+      { id: PJ(1), org_id: GROUP, name: "Feral deer pilot (synthetic)", purpose: "Plan and trial coordinated feral deer control in two pilot areas, and report what works to the funder (synthetic).",
+        status: "active", starts_on: "2026-04-15", ends_on: "2027-08-31", shared_with_members: true, ...stamp },
+      { id: PJ(2), org_id: GROUP, name: "Firefighting ponds (synthetic)", purpose: "Clean out stock water dams so a helicopter can fill from them (synthetic).",
+        status: "proposed", starts_on: "2026-12-01", ends_on: "2028-06-30", shared_with_members: false, ...stamp }];
+    const part = (n, project, kind, extra) => ({ id: PJ(n), project_id: project, org_id: GROUP, kind, participant_org_id: null, group_member_id: null, role: "taking_part",
+      joined_on: null, left_on: null, shared_with_members: false, ...stamp, ...extra });
+    T.project_participants = [
+      part(11, PJ(1), "subgroup", { participant_org_id: PJ_SUBS[0].subgroup_id, name: PJ_SUBS[0].subgroup_name, joined_on: "2026-05-01", shared_with_members: true }),
+      part(12, PJ(1), "subgroup", { participant_org_id: PJ_SUBS[1].subgroup_id, name: PJ_SUBS[1].subgroup_name, joined_on: "2026-05-01", shared_with_members: true }),
+      part(13, PJ(1), "member", { group_member_id: GROUP_MEMBERS[3].id, name: GROUP_MEMBERS[3].business_name, joined_on: "2026-06-10" }),
+      part(14, PJ(1), "partner", { name: "Example ministry (synthetic)", role: "funder", shared_with_members: true }),
+      part(15, PJ(1), "partner", { name: "Conservation agency (synthetic)", role: "partner" }),
+      part(21, PJ(2), "subgroup", { participant_org_id: PJ_SUBS[0].subgroup_id, name: PJ_SUBS[0].subgroup_name })];
+    const due = (n, title, due_on, extra = {}) => ({ id: PJ(n), project_id: PJ(1), org_id: GROUP, title, due_on, done_on: null, document_id: null, releases_payment: false, note: null, archived_at: null, ...stamp, ...extra });
+    T.project_dates_due = [
+      due(31, "Milestone 2: pilot plan and budget (synthetic)", "2026-06-01", { done_on: "2026-05-28", releases_payment: true, document_id: "demo-pj-d1" }),
+      due(32, "Monthly report, September (synthetic)", "2026-10-05"),
+      due(33, "Milestone 3: six-monthly report (synthetic)", "2026-12-01", { releases_payment: true }),
+      due(34, "Milestone 4: six-monthly report (synthetic)", "2027-06-01"),
+      due(35, "Final report (synthetic)", "2027-08-31")];
+    T.project_funders = [{ id: PJ(41), project_id: PJ(1), org_id: GROUP, funder_name: "Example ministry (synthetic)", agreement_ref: "EX-26-001 (synthetic)", amount: 250000,
+      note: "Most of it is paid at milestone 2 (synthetic).", archived_at: null, ...stamp }];
+    // the files, layers and events in it: some shared with members taking part, some for the coordinators only
+    const doc = (id, title, doc_type, date, shared) => ({ id, org_id: GROUP, title, doc_type, author_org: "HDLG (example)", date_prepared: date, created_at: date + "T00:00:00Z", tier: "primary",
+      tiered_at: date + "T00:00:00Z", visibility: "farm", storage_path: "org/demo/" + id + ".pdf", size_bytes: 480000, mime_type: "application/pdf", project_id: PJ(1), project_shared: shared });
+    t.documents.push(
+      doc("demo-pj-d1", "Deer pilot works plan (synthetic)", "memo", "2026-05-20", true),
+      doc("demo-pj-d2", "Deer sightings map, Ford Road meeting (synthetic)", "gis_artifact", "2026-07-28", true),
+      doc("demo-pj-d3", "Funding agreement (synthetic)", "other", "2026-04-15", false),
+      doc("demo-pj-d4", "Contractor safety plan, draft (synthetic)", "memo", "2026-09-02", false));
+    (t.map_layers ||= []).push(
+      { id: "demo-pj-l1", org_id: GROUP, name: "Deer pilot areas (synthetic)", theme: "boundaries", geometry_type: "polygon", source_file: null, project_id: PJ(1), project_shared: true },
+      { id: "demo-pj-l2", org_id: GROUP, name: "Deer control interest by farm (synthetic)", theme: "survey", geometry_type: "polygon", source_file: null, project_id: PJ(1), project_shared: false });
+    const ev = (n, title, starts_at, ends_at, place_name, shared) => ({ id: PJ(n), org_id: GROUP, title, starts_at, ends_at, all_day: false, place_name, latitude: null, longitude: null,
+      topics: ["Pest control"], notes: null, head_count: null, cancelled_at: null, cancelled_by: null, created_by: USER, created_at: made, updated_at: made, project_id: PJ(1), project_shared: shared });
+    (T.group_events ||= []).push(
+      ev(51, "Ford Road deer meeting (synthetic)", "2026-07-24T07:00:00Z", "2026-07-24T09:00:00Z", "Ford Road woolshed", true),
+      ev(52, "Deer pilot governance meeting (synthetic)", "2026-11-12T06:00:00Z", "2026-11-12T07:30:00Z", "Community hall", false));
+    data.projectsDemo = { via: [PJ_SUBS[0].subgroup_id] };
+  }
+  const pjRole = (d) => (d.groupTables?.org_members || []).find((m) => m.org_id === GROUP && m.user_id === USER)?.role || null;
+  const pjCoordinator = (d) => ["facilitator", "advisor", "admin"].includes(pjRole(d));
+  // As app.project_reader_ids: the shared projects the demo person takes part in now (through the sub-group they are in)
+  function pjReads(d) {
+    const today = String(d.asAt).slice(0, 10), via = d.projectsDemo?.via || [];
+    return new Set((d.tables.projects || []).filter((p) => p.shared_with_members && (d.tables.project_participants || []).some((x) => x.project_id === p.id
+      && via.includes(x.participant_org_id) && (!x.joined_on || x.joined_on <= today) && (!x.left_on || x.left_on > today))).map((p) => p.id));
+  }
+  // As the four tables' policies: the coordinators read everything; anyone else a shared project they take part in and its shared rows;
+  // the dates due and the funders only the coordinators
+  function projectRows(d, table) {
+    const all = (d.tables[table] ||= []), co = pjCoordinator(d), reads = pjReads(d);
+    if (co) return all;
+    if (table === "projects") return all.filter((p) => reads.has(p.id));
+    if (table === "project_participants") return all.filter((x) => x.shared_with_members && reads.has(x.project_id));
+    return [];
+  }
+  // As the restrictive policies on documents, map_layers and group_events: a tagged item only for the coordinators, or shared with a
+  // shared project the person takes part in (and still within the item's own rule, which the demo's rows already are)
+  const pjItemSeen = (r, co, reads) => !r.project_id || co || (r.project_shared && reads.has(r.project_id));
+  // A write to the four tables, as their policies and guards allow it: the coordinators only; who and when stamped; the owning group from
+  // the project; a sub-group or member named from the list; the same group or business once at a time
+  function projectWrite(d, table, { adding, changes, filters, singular }) {
+    const refuse = (m) => ({ data: null, error: { code: "42501", message: m || "new row violates row-level security policy for table \"" + table + "\"" } });
+    if (!pjCoordinator(d)) return refuse();
+    const T = (d.tables[table] ||= []), now = new Date().toISOString();
+    if (adding) {
+      const added = [];
+      for (const r of Array.isArray(adding) ? adding : [adding]) {
+        const p = table === "projects" ? null : (d.tables.projects || []).find((x) => x.id === r.project_id);
+        if (table !== "projects" && !p) return { data: null, error: { code: "23503", message: "No such project" } };
+        const row = { id: "demo-pj-new-" + (++made), ...copy(r), org_id: p ? p.org_id : r.org_id, created_by: USER, created_at: now, updated_by: USER, updated_at: now };
+        if (table === "projects") Object.assign(row, { shared_with_members: false, purpose: r.purpose || null });
+        if (table === "project_participants") {
+          if (row.kind === "subgroup") row.name = row.name || PJ_SUBS.find((s) => s.subgroup_id === row.participant_org_id)?.subgroup_name || "Sub-group";
+          if (row.kind === "member") row.name = row.name || GROUP_MEMBERS.find((m) => m.id === row.group_member_id)?.business_name || "Member";
+          Object.assign(row, { shared_with_members: false, left_on: null });
+          if (T.some((x) => x.project_id === row.project_id && !x.left_on && ((row.participant_org_id && x.participant_org_id === row.participant_org_id) || (row.group_member_id && x.group_member_id === row.group_member_id))))
+            return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
+        }
+        if (table === "project_dates_due" || table === "project_funders") row.archived_at = null;
+        T.push(row); added.push(row);
+      }
+      return { data: copy(singular ? added[0] : added), error: null };
+    }
+    const hit = T.filter((row) => filters.every(([key, val]) => matches(row, key, val)));
+    for (const r of hit) Object.assign(r, copy(changes), { updated_at: now, updated_by: USER });
+    return singular ? (hit.length === 1 ? { data: copy(hit[0]), error: null } : { data: null, error: { message: "Demo row not found" } }) : { data: copy(hit), error: null };
+  }
+  // As public.group_projects(g) for the demo group, and public.project_tag (the coordinators; an item of the group, a project of the group)
+  function projectsRpc(d, name, args) {
+    if (name === "group_projects") {
+      if (args.g !== GROUP) return [[], null];
+      return [projectRows(d, "projects").map((p) => ({ id: p.id, org_id: p.org_id, owner_name: "HDLG (example)", name: p.name, purpose: p.purpose, status: p.status,
+        starts_on: p.starts_on, ends_on: p.ends_on, shared_with_members: p.shared_with_members, own: true })), null];
+    }
+    if (name === "project_tag") {
+      const pool = args.p_kind === "file" ? [...(d.tables.documents || []), ...(d.groupTables?.documents || [])] : args.p_kind === "layer" ? [...(d.tables.map_layers || []), ...(d.groupTables?.map_layers || [])]
+        : args.p_kind === "event" ? d.tables.group_events || [] : null;
+      if (!pool) return [null, { code: "22023", message: "A project holds files, layers and events" }];
+      const item = pool.find((x) => x.id === args.p_item);
+      if (!item || item.org_id !== GROUP || !pjCoordinator(d)) return [null, { code: "42501", message: "No such item for you to put in a project" }];
+      if (args.p_project && !(d.tables.projects || []).some((p) => p.id === args.p_project && p.org_id === GROUP)) return [null, { code: "23514", message: "That project is not this group's" }];
+      Object.assign(item, { project_id: args.p_project || null, project_shared: !!args.p_project && !!args.p_shared });
+      return [true, null];
+    }
+    // the demo group's sub-groups, for "Who takes part" (the projects demo only; the overview demos have their own)
+    if (name === "subgroup_counts" && d.projectsDemo && !d.overview && args.parent_org === GROUP) return [PJ_SUBS.map((s) => ({ ...s, subgroup_slug: null, current_businesses: 0, is_member: s === PJ_SUBS[0] })), null];
+    return null;
   }
   // N4: the group's events (public.group_events) and attendance (public.group_event_attendees), invented: past and coming ones
   // around the fixture's date (29 Oct 2026), one all-day on the day daylight saving starts, one cancelled, one with a macron and
@@ -2175,7 +2304,9 @@
       async function execute() {
         if (table === "captures" && offlineNow()) return LOST();   // CAP1: no coverage
         const d = await ready, page = wqPageRows(d, table);   // WQV1
-        const rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : page !== undefined ? page : table === "captures" && d.tables.captures ? capturesFor(d) : d.tables[table];
+        if (PJ_TABLES.includes(table) && write) return projectWrite(d, table, { adding, changes, filters, singular });   // PJ1
+        const rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : page !== undefined ? page : table === "captures" && d.tables.captures ? capturesFor(d)
+          : PJ_TABLES.includes(table) ? projectRows(d, table) : d.tables[table];
         if (write && adding && KEPT.includes(table)) {
           const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
             ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));
@@ -2211,6 +2342,8 @@
         if (write) return error("The demo does not save changes");
         if (!rows) return error("This demo does not provide " + table);
         let selected = [...rows, ...((table === "places" && d.wqPage) ? [] : d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => matches(row, key, val)));
+        // PJ1: an item in a project, as the restrictive policies narrow it
+        if (table === "documents" || table === "map_layers" || table === "group_events") { const co = pjCoordinator(d), reads = pjReads(d); selected = selected.filter((r) => pjItemSeen(r, co, reads)); }
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
         const total = selected.length;   // (the count is of every row the filters pick, before a range)
         if (span) selected = selected.slice(span[0], span[1] + 1);
@@ -2248,6 +2381,7 @@
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
         if (name === "capture_save") return offlineNow() ? LOST() : result(...captureSave(d, args?.c));   // CAP1
+        { const r = projectsRpc(d, name, args || {}); if (r) return result(...r); }   // PJ1
         if (name === "sampling_round_save") return offlineNow() ? LOST() : result(...roundSave(d, args || {}));   // SR1
         if (name === "capture_tag_suggestions") return offlineNow() ? LOST() : result(captureTagSuggestions(d, args?.o));   // CAP1
         if (/^group_event_(notes|attendee_notes|set_notes|attendee_set_note)$/.test(name)) return result(...eventNotesRpc(d, name, args || {}));   // NP1

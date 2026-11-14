@@ -54,9 +54,10 @@
     // PH1: Locate me (the phone's position)
     locate: "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
     send: "M12 16V5M7 10l5-5 5 5M5 20h14",
+    projects: "M5 21V4M5 4h12.5l-2.5 4 2.5 4H5",   // PJ1: a group's projects (a flag)
   };
   // The icon each space view shows in the tab bar
-  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records", water: "water" };
+  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records", water: "water", projects: "projects" };
   const NS = "http://www.w3.org/2000/svg";
   function icon(name, size = 22) {
     const d = PATHS[name] || PATHS.file, doc = root.document;

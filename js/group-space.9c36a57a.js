@@ -203,6 +203,7 @@
     if (route.view !== "map") hideNeeds();   // UI2: What needs doing is the Working map's (UI2's Overview)
     if (route.view !== "home") { FP.placeHome?.close(); FP.groupOverview?.close(); FP.phoneArea?.close(); }
     if (route.view !== "records") FP.records?.close();   // CAP1
+    if (route.view !== "projects") FP.projects?.close();   // PJ1
     if (route.view !== "water") FP.wqPage?.close();   // WQV1: its map and charts go with the page
     if (route.view !== "water") FP.wqRound?.close();   // SR1: a round being typed is kept as a draft in the browser
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
@@ -211,7 +212,7 @@
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records" || route.view === "water") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records" || route.view === "projects" || route.view === "water") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
@@ -266,6 +267,16 @@
       document.title = group.name + " · " + G().viewLabel("records") + " | " + (FP.brand?.product || "");
       const panel = $("#group-panel");
       panel.replaceChildren(FP.records.view(group, { sb: FP.sb, item: route.item || null }));
+      panel.scrollTop = 0;
+      return;
+    }
+    // PJ1: Projects is a list, not a map: the group's projects and those it takes part in, or one project's page (projects.js), read as
+    // the person (row-level security decides who sees each project and each thing in it)
+    if (route.view === "projects") {
+      document.title = group.name + " · " + G().viewLabel("projects") + " | " + (FP.brand?.product || "");
+      const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
+      if (current !== token) return;
+      panel.replaceChildren(FP.projects.view(group, { sb: FP.sb, item: route.item || null, groups, today }));
       panel.scrollTop = 0;
       return;
     }

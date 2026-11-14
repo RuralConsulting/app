@@ -1,0 +1,67 @@
+/* PJ1: a group's Projects and one project's page (app/js/projects.js). A list, not a map: the panel takes the width, as Records.
+   Plain rows in one thin outline per set, hairlines between; the label at the right of each row, a switch beside it for the
+   coordinators; one filled button (New project, or Add); 44 px targets. */
+#screen-group[data-view="projects"] .group-map { display: none; }
+#screen-group[data-view="projects"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="projects"] .group-panel { padding: 0; border: 0; background: var(--wash); }
+@media (min-width: 801px) {
+  #screen-group[data-view="projects"] .group-head.space-head { padding-left: max(var(--s-3), calc((100% - var(--page-max)) / 2)); padding-right: max(var(--s-5), calc((100% - var(--page-max)) / 2 + var(--s-4))); }
+}
+.projects { display: grid; align-content: start; gap: var(--s-4); width: 100%; max-width: var(--page-max); margin: 0 auto;
+  padding: var(--s-4) var(--s-4) calc(var(--s-10) + var(--fab-gutter, 0px)); box-sizing: border-box; color: var(--ink); }
+.pj-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
+.pj-head > div { min-width: 0; }
+.pj-head h2 { margin: 0; font: 600 var(--text-heading)/1.2 var(--f-display); overflow-wrap: break-word; }
+.pj-quiet { margin: 2px 0 0; color: var(--ink-3); font-size: var(--text-small); line-height: 1.4; }
+.pj-status:empty, .pj-status[hidden] { display: none; }
+.pj-head .primary { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.pj-back { display: inline-flex; align-items: center; gap: var(--s-1); justify-self: start; min-height: var(--tap); margin: calc(-1 * var(--s-2)) 0 calc(-1 * var(--s-2)) calc(-1 * var(--s-1));
+  padding: 0 var(--s-2) 0 var(--s-1); color: var(--ink-2); text-decoration: none; font-size: var(--text-body); border-radius: var(--radius-s); }
+.pj-back:hover { color: var(--ink); background: var(--fill); }
+.pj-purpose { margin: calc(-1 * var(--s-2)) 0 0; font: 400 var(--text-body)/1.45 var(--f-ui); color: var(--ink); overflow-wrap: break-word; }
+
+.pj-sections { display: grid; gap: var(--s-5); }
+.pj-section { display: grid; gap: var(--s-2); min-width: 0; }
+.pj-section h3 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); color: var(--ink); }
+.pj-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.pj-never { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: var(--text-small); }
+.pj-rule { margin: 0 var(--s-1); }
+.pj-empty { margin: 0; padding: var(--s-1) var(--s-1) 0; }
+
+/* the set: one thin outline, hairlines between rows (ui.css .fs-set), rows the full width of the set */
+.pj-set, .pj-list { list-style: none; margin: 0; padding: 0 0 0 var(--s-4); }
+.pj-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: var(--s-3); min-height: 56px; padding: var(--s-2) var(--s-3) var(--s-2) 0; box-sizing: border-box; }
+.pj-list > li > .pj-link { grid-template-columns: minmax(0, 1fr) auto 16px; color: inherit; text-decoration: none; width: 100%; }
+@media (hover: hover) { .pj-link:hover { background: var(--fill); } }
+.pj-link:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: var(--radius-s); }
+.pj-text { display: grid; gap: 2px; min-width: 0; }
+.pj-text b { font-weight: 500; overflow-wrap: break-word; }
+.pj-text small { color: var(--ink-3); font-size: var(--text-small); overflow-wrap: break-word; }
+.pj-left .pj-text b { color: var(--ink-2); }
+.pj-side { color: var(--ink-3); font-size: var(--text-small); white-space: nowrap; }
+.pj-when.pj-overdue { color: var(--ink); font-weight: 600; }
+.pj-chev { color: var(--ink-3); display: grid; place-items: center; }
+
+/* the label every item carries; for the coordinators a switch beside it (the whole label is the 44 px target) */
+.pj-seen { display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--tap); color: var(--ink-3); font-size: var(--text-small); white-space: nowrap; }
+.pj-seen.pj-shared { color: var(--ink-2); }
+.pj-share { cursor: pointer; -webkit-tap-highlight-color: var(--clear); }
+.pj-share .fs-switch { flex: none; }
+/* the row's "…" is quiet: no fill and no ring until it is pointed at (still a 44 px target) */
+.pj-row .more-button { background: none; box-shadow: none; color: var(--ink-2); }
+.pj-row .more-button:hover, .pj-row .more-button:focus-visible { background: var(--fill); }
+.pj-say { margin: 0; color: var(--ink); font-size: var(--text-small); }
+.pj-say:empty { display: none; }
+
+/* the "off" switch keeps a visible edge in both themes (review of #563: faint in dark mode) */
+.pj-share .fs-switch:not(:checked) { box-shadow: inset 0 0 0 1px var(--field-border); }
+
+/* a phone: the label and its switch sit under the title, so a name keeps the row's width and never breaks mid-word (review of #563,
+   at 320 px); the "…" stays at the right */
+@media (max-width: 480px) {
+  .pj-row:not(.pj-link) { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-2); row-gap: 0; }
+  .pj-row:not(.pj-link) > .pj-text { grid-column: 1; grid-row: 1; }
+  .pj-row:not(.pj-link) > :is(.pj-seen, .pj-when) { grid-column: 1; grid-row: 2; justify-self: start; }
+  .pj-row:not(.pj-link) > .more-button { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .pj-row:not(.pj-link) > .pj-when { min-height: 0; padding-top: 2px; }
+}

@@ -16,7 +16,7 @@
   const SIGNIN = ["vendor/supabase.d6a5c441.js", "js/config.a14912fe.js", "js/brand.80965af9.js", "js/util.1d5eb095.js", "js/privacy.2bf69cda.js", "js/auth.1e4f2997.js", "js/signin.41091fef.js"];
   const LAST = "js/main.eafb5203.js";
   // PERF3a: the demo's own code, loaded only when the page opens on a demo address (demo.js picks the demo client at load)
-  const DEMO = ["js/demo.ab66b4bb.js", "js/demo-wq-page.a8b05130.js", "js/demo-documents.6bf46a91.js", "js/plans/demo.0d0eeef6.js"];
+  const DEMO = ["js/demo.54b957ff.js", "js/demo-wq-page.a8b05130.js", "js/demo-documents.6bf46a91.js", "js/plans/demo.0d0eeef6.js"];
   const hash = location.hash || "";
   const isDemo = (h) => /^#\/demo(?:\/|\?|$)/.test(h || "");
   const demo = isDemo(hash);
