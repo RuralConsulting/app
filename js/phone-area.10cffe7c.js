@@ -10,11 +10,23 @@
 //   places (kind area)   the group's area, as Places reads it (home.js readShapes)
 //   group_wq_sites       the group's sites, as Maps' water quality reads them (wq-sites.js), capped at phone-model READ_CAP rows
 //   a site's results     only when the person opens one, through wq-sites.js's own reads (wq_site_latest, measurement_series, ...)
+// HM1 (the owner, 14 Nov 2026: option A, "the map with a peek"): a thin sheet over the bottom of the map, above the bar, with ONE useful
+// line (the next event, else the latest thing added, else the place's facts). Pulled half way up (a drag, or a tap on its handle): a
+// search box for this place (place-home.js, compact), one quiet line of facts (the computer dashboard's figures, group-overview-model.js
+// tiles), at most four rows of what is new or next, and the sub-groups. Its reads are each one another screen already makes, as the
+// person, each bounded to one row or a head count, and only for a section the person may open:
+//   group_events         the next one (Events; place-home.js's read)
+//   captures             the newest one, and a head count of photos taken in the last week (Records; records.js's table and rules)
+//   sampling_rounds      the newest one (Water quality; the group's coordinators only, wq-round.js's read)
+//   proposals            a head count of questions to review (People's roles; place-home.js's read)
+//   group_members        a head count (the group's coordinators; group-overview.js's read)
+//   subgroup_counts and the areas   the map's names' own reads (below), shared
 (function (root) {
   const FP = root.FP;
   const P = () => FP.phoneModel;
   const el = (...a) => FP.el(...a);
   const NZ = [[166.3, -47.4], [178.6, -34.3]];
+  const AFTER_MAP_LATEST = 10000;   // HM1: the sheet's reads wait for the map's first draw, but never longer than this (ms)
   const BASE_KEY = "fp-overview-basemap";   // the overviews' background, remembered on this device (map-scene.js, group-overview.js)
   let shown = null;
 
@@ -34,8 +46,11 @@
   // label in the centre of where each subgroup is to quickly navigate to them if you want to (but not forced to)"): Home on a phone is
   // only the map: the group's outer outline, one small name at the centre of each sub-group, Locate me and the +. PH5 (the owner,
   // 14 Nov 2026): the aerial first, everything outside the area darkened (map-palette.js MASK_OPACITY), each sub-group a clear fill,
-  // and a tap on a name or a fill zooms there and opens it (goTo). Search is the bar's (space-nav.js). "Near you" is a small sheet that comes up only once Locate me is tapped, and closes.
-  function view({ group, sb = FP.sb }) {
+  // and a tap on a name or a fill zooms there and opens it (goTo). HM1: Home's sheet along the bottom (peekSheet), with the search in it
+  // when pulled up. "Near you" is a small sheet that comes up only once Locate me is tapped (Home's sheet stepping aside), and closes.
+  // opts.home: place-home.js's options for this group (its sections, whether People is the person's, the search's hand-over), for the
+  // sheet's search and which rows it may show (HM1); opts.today: "YYYY-MM-DD"
+  function view({ group, sb = FP.sb, home = null, today = null }) {
     close();
     const me = { place: group.id, alive: true, map: null, overlay: null, stop: null, wq: null, sites: null, rows: null, located: null, centre: null, timer: null, open: false, labels: [] };
     shown = me;
@@ -51,13 +66,261 @@
     const shut = el("button", { type: "button", class: "pa-shut", id: "pa-shut", "aria-label": "Close Near you", onclick: () => openSheet(false) }, FP.icon("close", 20));
     const sheet = el("section", { class: "pa-sheet", id: "pa-sheet", "aria-labelledby": "pa-near-title", hidden: true },
       el("div", { class: "pa-sheet-head" }, el("h2", { id: "pa-near-title" }, "Near you"), shut), line, say, set);
-    const wrap = el("section", { class: "pa", "data-view": "home", "aria-label": "Home" }, stage, sheet);
-    me.wrap = wrap;
+    // the group's area, its sub-groups and theirs: each read once, for the map and for the sheet alike
+    // (the area first, for the map's frame and its mask; the sub-groups, their shapes and the sheet's reads only after the map has drawn
+    // the area: afterMap, review of HM1)
+    const area = Promise.resolve().then(() => FP.home?.readShapes?.(sb, [], [group]) || new Map()).then((m) => m.get(group.id) || null, () => null);
+    let subgroupsRead = null, subShapesRead = null;
+    // the sub-groups' names and fills: drawn once, and only on a map that has loaded (its sources added), whichever comes last, the
+    // map's load or the reads (second review of HM1: a map loading after the timer still gets its fills)
+    function labels() {
+      if (me.labelled || !me.loaded || !subgroupsRead || !me.map || !live()) return;
+      me.labelled = true;
+      drawLabels().catch(() => {});
+    }
+    function afterMap() {
+      if (subgroupsRead || !live()) return;
+      subgroupsRead = readSubgroups().catch(() => []);
+      subShapesRead = subgroupsRead.then((subs) => (subs.length ? Promise.resolve(FP.home?.readShapes?.(sb, [], subs)).catch(() => null) : new Map()));
+      peek.start();
+      labels();
+    }
+    const peek = peekSheet();
+    const wrap = el("section", { class: "pa", "data-view": "home", "aria-label": "Home" }, stage, peek.node, sheet);
+    me.wrap = wrap; me.peek = peek;
     function openSheet(on) {
       me.open = on; sheet.hidden = !on;
+      // HM1: Near you takes the bottom while it is open; Home's own sheet steps aside, closed, and comes back after
+      peek.away(on);
       if (on) draw(); else { problem(null); locate.focus({ preventScroll: true }); }
       root.requestAnimationFrame?.(() => { me.map?.resize(); placeLabels(); });
       for (const ms of [450, 900]) root.setTimeout?.(() => live() && placeLabels(), ms);   // once the + has settled above the sheet (add.js)
+    }
+    // the map's frame keeps clear of the sheet along the bottom
+    const pad = () => ({ top: 72, bottom: 24 + (peek.node.hidden ? 60 : peek.height()), left: 28, right: 28 });
+
+    // ---- HM1: Home's sheet -------------------------------------------------------------------------------------------------------
+    // Closed ("peek"): a handle and one line. Pulled half way ("half"): search, the facts, what is new or next, the sub-groups. A drag
+    // on the handle or the line follows the finger and settles at the nearer stop (a quick flick goes the way it was flung); a tap on
+    // the handle opens or closes it; Escape closes it. The + rides just above it (add.js lifts it), the map's credit too, and the map's
+    // names keep off it; the sheet is opaque and takes its own taps, so nothing under it is ever tapped through it.
+    function peekSheet() {
+      const keys = (home?.sections || []).map((s) => (Array.isArray(s) ? s[0] : s?.key)).filter(Boolean);
+      const grip = el("button", { type: "button", class: "pa-grip", id: "pa-grip", "aria-expanded": "false", "aria-controls": "pa-peek-body", "aria-label": "Show more of " + group.name },
+        el("span", { class: "pa-grip-bar", "aria-hidden": "true" }));
+      const lineBox = el("div", { class: "pa-peek-line", id: "pa-peek-line" });
+      const searchSlot = el("div", { class: "pa-search-slot" });
+      const facts = el("p", { class: "pa-facts", id: "pa-facts", hidden: true });
+      const next = el("ul", { class: "pa-set pa-next", id: "pa-next", "aria-label": "New and next", hidden: true });
+      const quiet = el("p", { class: "pa-empty", id: "pa-empty", hidden: true });
+      const subsList = el("ul", { class: "pa-subs-list" });
+      const subsBox = el("section", { class: "pa-set pa-subs", id: "pa-subs", "aria-labelledby": "pa-subs-title", hidden: true }, el("h3", { id: "pa-subs-title" }, "Sub-groups"), subsList);
+      const body = el("div", { class: "pa-peek-body", id: "pa-peek-body", hidden: true }, searchSlot, facts, next, quiet, subsBox);
+      const node = el("section", { class: "pa-peek", id: "pa-peek", "data-state": "peek", "aria-label": "About " + group.name }, grip, lineBox, body);
+      const got = { event: undefined, latest: undefined, round: null, photos: null, review: null, members: null, subs: null, areas: new Map() };
+      let state = "peek", peekH = 0, halfH = 0, settleTimer = null, search = null, drag = null, dragged = false;
+      const reducedNow = () => !!root.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const setVar = () => me.wrap?.style.setProperty("--pa-peek-h", (node.hidden ? 0 : Math.round(node.getBoundingClientRect().height)) + "px");
+      // (the closed sheet's height: its handle and its line, measured while they show)
+      function measurePeek() {
+        if (!lineBox.hidden && !node.hidden && lineBox.offsetHeight) peekH = Math.round(lineBox.offsetTop + lineBox.offsetHeight + (parseFloat(getComputedStyle(node).paddingBottom) || 0));
+        return peekH || 80;
+      }
+      function measureHalf() {
+        const h = stage.getBoundingClientRect(), b = (bg.hidden ? locate : bg).getBoundingClientRect();
+        const bar = [...root.document.querySelectorAll(".space-tabs")].map((t) => t.getBoundingClientRect()).find((r) => r.height);
+        const plus = [...root.document.querySelectorAll(".add-button")].map((x) => x.getBoundingClientRect()).find((r) => r.height);
+        halfH = P().halfHeight({ stage: h.height, top: b.bottom - h.top, plus: (plus?.height || 52) + 14, floor: bar ? bar.top : root.innerHeight, screen: root.innerHeight, peek: measurePeek() });
+        return halfH;
+      }
+      // the search: Home's own (place-home.js, compact), made when the sheet first opens (it reads nothing until it is used), and made
+      // again when the bar's Search, or another screen, has since taken place-home's one live search
+      function ensureSearch() {
+        if (!home || !FP.placeHome?.view) return;
+        if (search?.isConnected && search.querySelector("input")?.value) return;
+        search = FP.placeHome.view({ ...home, compact: true });
+        searchSlot.replaceChildren(search);
+      }
+      // the map's names follow the sheet
+      function afterMove() { root.requestAnimationFrame?.(() => live() && placeLabels()); for (const ms of [450, 900]) root.setTimeout?.(() => live() && placeLabels(), ms); }
+      function settleAt(next, { animate = true } = {}) {
+        clearTimeout(settleTimer);
+        const from = node.getBoundingClientRect().height;
+        if (state === "peek" && !node.classList.contains("pa-dragging")) measurePeek();
+        state = next;
+        node.dataset.state = next;
+        grip.setAttribute("aria-expanded", String(next === "half"));
+        grip.setAttribute("aria-label", (next === "half" ? "Show less of " : "Show more of ") + group.name);
+        if (next === "half") { ensureSearch(); lineBox.hidden = true; body.hidden = false; }
+        const to = next === "half" ? measureHalf() : measurePeek();
+        const done = () => {
+          node.classList.remove("pa-moving");
+          if (state === "peek") { body.hidden = true; lineBox.hidden = false; node.style.height = ""; } else node.style.height = halfH + "px";
+          setVar(); afterMove();
+        };
+        if (!animate || reducedNow() || !from) { done(); return; }
+        node.style.height = from + "px";
+        void node.offsetHeight;   // (the start of the move, drawn)
+        node.classList.add("pa-moving");
+        node.style.height = to + "px";
+        settleTimer = setTimeout(done, 260);
+      }
+      grip.addEventListener("click", () => { if (dragged) { dragged = false; return; } settleAt(state === "half" ? "peek" : "half"); });
+      node.addEventListener("keydown", (e) => { if (e.key === "Escape" && state === "half" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); settleAt("peek"); grip.focus(); } });
+      // ---- the drag (on the handle, or on the one line) ----
+      // (the finger is followed over the whole page once it is down: it soon leaves the handle; nothing is captured, so a plain tap on the
+      // line's row is still a tap on it)
+      const doc = root.document;
+      const down = (e) => {
+        if (e.button > 0 || node.hidden) return;
+        drag = { y: e.clientY, h: node.getBoundingClientRect().height, t: performance.now(), id: e.pointerId, moved: false, peek: state === "peek" ? measurePeek() : peekH || 80, half: measureHalf() };
+        doc.addEventListener("pointermove", move, { passive: false });
+        doc.addEventListener("pointerup", up);
+        doc.addEventListener("pointercancel", up);
+      };
+      const move = (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dy = drag.y - e.clientY;
+        if (!drag.moved) {
+          if (Math.abs(dy) < 6) return;
+          drag.moved = true; dragged = true;
+          clearTimeout(settleTimer);
+          node.classList.remove("pa-moving"); node.classList.add("pa-dragging");
+          ensureSearch(); body.hidden = false;
+        }
+        const h = Math.max(drag.peek, Math.min(drag.half + 24, drag.h + dy));
+        node.style.height = h + "px";
+        lineBox.hidden = h > drag.peek + 24;   // (the one line gives way to the rest as it comes up)
+        setVar();
+        e.preventDefault();
+      };
+      const up = (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const d = drag; drag = null;
+        doc.removeEventListener("pointermove", move); doc.removeEventListener("pointerup", up); doc.removeEventListener("pointercancel", up);
+        if (!d.moved) return;
+        node.classList.remove("pa-dragging");
+        const h = node.getBoundingClientRect().height, fast = (d.y - e.clientY) / Math.max(1, performance.now() - d.t);
+        settleAt(Math.abs(fast) > 0.6 ? (fast > 0 ? "half" : "peek") : h > (d.peek + d.half) / 2 ? "half" : "peek");
+        setTimeout(() => { dragged = false; }, 0);
+      };
+      for (const target of [grip, lineBox]) target.addEventListener("pointerdown", down);
+      // (a drag that began on the line's row is not a tap on it)
+      lineBox.addEventListener("click", (e) => { if (dragged) { e.preventDefault(); e.stopPropagation(); dragged = false; } }, true);
+
+      // ---- what it says ----
+      const go = (open) => {
+        if (open.event) { if (FP.groupEvents?.open) FP.groupEvents.open(group.id, open.event.id); else root.location.hash = FP.href(FP.groupModel.href(group.id, "events")); return; }
+        if (open.round) { root.location.hash = FP.href(FP.wqRoundModel?.href?.(group.id, open.round.id) || FP.groupModel.href(group.id, "water")); return; }
+        root.location.hash = FP.href(FP.groupModel.href(group.id, open.view, open.tab || open.item || null));
+      };
+      const row = (r, id = null) => el("li", {}, el("button", { type: "button", class: "pa-row", "data-row": r.key, ...(id ? { id } : {}), onclick: () => go(r.open) },
+        el("span", { class: "pa-dot", "aria-hidden": "true" }, FP.icon(r.icon, 20)),
+        el("span", { class: "pa-text" }, el("b", {}, r.title), r.note ? el("small", {}, r.note) : null),
+        el("span", { class: "pa-chev", "aria-hidden": "true" }, FP.icon("chevron", 16))));
+      const factsTiles = () => FP.groupOverviewModel?.tiles?.({ group, subgroups: got.subs || [], areas: got.areas, members: got.members }) || [];
+      function drawLine() {
+        if (got.event === undefined || (got.event === null && got.latest === undefined)) return;   // (until the next event, or the latest thing, is known)
+        const r = P().peekLine({ event: got.event, latest: got.latest, facts: P().factsLine(factsTiles()), name: group.name });
+        lineBox.dataset.line = r.key;
+        if (r.open) lineBox.replaceChildren(el("ul", { class: "pa-peek-row" }, row(r, "pa-peek-open")));
+        else lineBox.replaceChildren(el("p", { class: "pa-row pa-row-plain", id: "pa-peek-open", "data-row": r.key },
+          el("span", { class: "pa-dot", "aria-hidden": "true" }, FP.icon(r.icon, 20)), el("span", { class: "pa-text" }, el("b", {}, r.title))));
+        if (state === "peek") root.requestAnimationFrame?.(() => { if (live()) { measurePeek(); setVar(); } });
+      }
+      function drawBody() {
+        const f = P().factsLine(factsTiles());
+        facts.textContent = f; facts.hidden = !f;
+        const rows = P().nextRows({ event: got.event || null, round: got.round, photos: got.photos, review: got.review });
+        next.replaceChildren(...rows.map((r) => row(r)));
+        next.hidden = !rows.length;
+        // nothing new or next: one honest sentence (what was added is older than a week; or nothing at all), never invented content
+        const settled = got.event !== undefined && got.latest !== undefined;
+        quiet.textContent = !rows.length && settled ? (got.latest ? "Nothing new in the last week." : P().emptyLine(group.name)) : "";
+        quiet.hidden = !quiet.textContent;
+        drawSubs();
+      }
+      function drawSubs() {
+        const subs = got.subs || [];
+        subsBox.hidden = !subs.length;
+        subsList.replaceChildren(...subs.map((s) => {
+          const colour = me.colours?.get(s.name) || null, ha = FP.groupOverviewModel?.hectares?.(got.areas.get(s.id)?.ha);
+          const parts = [el("span", { class: "pa-dot", "aria-hidden": "true" }, el("span", { class: "pa-swatch", ...(colour ? { style: "background:" + colour } : {}) })),
+            el("span", { class: "pa-name" }, s.name), ha ? el("span", { class: "pa-far" }, ha) : null];
+          const drawn = me.subs?.get(s.id);
+          // one the person is in opens (zoomed to first when it is on the map); one they are not in is only zoomed to, as on the map; one
+          // with neither is a plain, quieter line
+          if (!s.member && !drawn) return el("li", { class: "pa-sub-only" }, el("span", { class: "pa-row pa-row-plain", "data-sub": s.id }, ...parts));
+          return el("li", {}, el("button", { type: "button", class: "pa-row" + (s.member ? "" : " pa-sub-zoom"), "data-sub": s.id,
+            "aria-label": (s.member ? "Open " : "Zoom to ") + s.name + (ha ? ", " + ha : ""), onclick: () => {
+              settleAt("peek", { animate: false });
+              if (drawn) goTo(drawn); else root.location.hash = FP.href(FP.groupModel.href(s.id, "home"));
+            } }, ...parts));
+        }));
+      }
+
+      // ---- the reads (each the person's own; each one row or a head count; each for a section the person may open) ----
+      const rows1 = (q) => Promise.resolve(q).then((r) => (r?.error ? null : Array.isArray(r?.data) ? r.data : []), () => null);
+      const head = (q) => Promise.resolve(q).then((r) => (r?.error ? null : Number.isInteger(r?.count) ? r.count : Array.isArray(r?.data) ? r.data.length : null), () => null);
+      const safely = (make) => { try { return make(); } catch { return Promise.resolve(null); } };
+      const H = FP.placeHomeModel, day = String(today || H?.nzDay?.() || new Date().toISOString()).slice(0, 10);
+      const coordinator = ["facilitator", "advisor", "admin"].includes(group.role);
+      const redraw = () => { if (live()) { drawLine(); drawBody(); } };
+      // (review of HM1: started only once the map has drawn the area, from afterMap below, so none of them competes with the area read,
+      // the mask and the first tiles; until then the closed sheet holds its place, empty)
+      let started = false;
+      function start() {
+      if (started || !live()) return;
+      started = true;
+      if (keys.includes("events")) {
+        safely(() => rows1(sb.from("group_events").select("id,title,starts_at,ends_at,all_day,place_name,cancelled_at").eq("org_id", group.id).is("cancelled_at", null)
+          .gte("starts_at", H?.nzDayStart?.(day) || new Date().toISOString()).order("starts_at", { ascending: true }).range(0, 0)))
+          .then((r) => { got.event = r?.[0] || null; redraw(); });
+      } else got.event = null;
+      if (keys.includes("records")) {
+        safely(() => rows1(sb.from("captures").select("id,kind,note,taken_at").eq("org_id", group.id).is("archived_at", null).order("taken_at", { ascending: false }).range(0, 0)))
+          .then((r) => { got.latest = r?.[0] || null; redraw(); });
+        const since = P().daysBefore(day, P().NEW_DAYS);
+        if (since) safely(() => head(sb.from("captures").select("id", { count: "exact", head: true }).eq("org_id", group.id).is("archived_at", null).eq("kind", "photo").gte("taken_at", since)))
+          .then((n) => { got.photos = n ? { n, since } : null; redraw(); });
+      } else got.latest = null;
+      if (coordinator && keys.includes("water")) {
+        safely(() => rows1(sb.from("sampling_rounds").select("id,sampled_on,counts").eq("org_id", group.id).order("sampled_on", { ascending: false }).limit(1)))
+          .then((r) => { got.round = r?.[0] || null; redraw(); });
+      }
+      if (home?.people && keys.includes("people") && FP.reviewItemsModel) {
+        safely(() => head(sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", group.id).in("kind", FP.reviewItemsModel.KINDS).eq("status", "proposed")))
+          .then((n) => { got.review = n; redraw(); });
+      }
+      if (!group.parent_org_id && FP.peopleModel?.canSee?.(group.role)) {
+        safely(() => head(sb.from("group_members").select("id", { count: "exact", head: true }).eq("org_id", group.id).is("ended_at", null))).then((n) => { got.members = n; redraw(); });
+      }
+      // the sub-groups and the areas, as the map's names read them (shared)
+      Promise.all([subgroupsRead, area, subShapesRead]).then(([subs, own, shapes]) => {
+        if (!live()) return;
+        got.subs = subs || [];
+        const ha = (g) => (g ? FP.groupOverviewModel?.areaHa?.(g) : null);
+        if (ha(own?.geometry) > 0) got.areas.set(group.id, { ha: ha(own.geometry) });
+        for (const s of got.subs) { const v = ha(shapes?.get?.(s.id)?.geometry); if (v > 0) got.areas.set(s.id, { ha: v }); }
+        redraw();
+      });
+      }
+      drawBody();
+      return {
+        node, start, height: () => (node.hidden ? 0 : Math.round(node.getBoundingClientRect().height) || measurePeek()),
+        state: () => state, half: () => halfH || measureHalf(), peekHeight: () => measurePeek(),
+        open: (s, o) => settleAt(s, o), subs: drawSubs, setVar,
+        away(on) { if (on && state !== "peek") settleAt("peek", { animate: false }); node.hidden = !!on; setVar(); },
+        // the bar's Search on Home: this sheet's own box, pulled up
+        focusSearch() {
+          if (node.hidden) return false;
+          settleAt("half");
+          const input = searchSlot.querySelector("input");
+          if (!input) return false;
+          setTimeout(() => { if (live()) input.focus({ preventScroll: true }); }, 30);
+          return true;
+        },
+      };
     }
 
     // ---- the list -------------------------------------------------------------------------------------------------------------
@@ -152,7 +415,7 @@
       me.cancelGo = stop;
       for (const l of me.labels) l.node.classList.toggle("pa-going", l.id === s.id);
       const ms = reduced() ? 0 : FLY_MS;
-      map.fitBounds(x.bbox, { padding: { top: 72, bottom: 84, left: 28, right: 28 }, maxZoom: 14, duration: ms, essential: false });
+      map.fitBounds(x.bbox, { padding: pad(), maxZoom: 14, duration: ms, essential: false });
       // (listened for after the fly starts, so the end of a fly it stopped is not taken for its own)
       for (const ev of PRESSES) doc?.addEventListener(ev, cancel, true);
       map.on("movestart", byPerson);
@@ -171,8 +434,9 @@
       const map = me.map;
       if (!map || !me.labels.length) return;
       const h = stage.getBoundingClientRect();
-      const blockers = [locate, bg, ...stage.querySelectorAll(".maplibregl-ctrl-bottom-left > *, .maplibregl-ctrl-bottom-right > *"), ...root.document.querySelectorAll(".add-button:not([hidden])")]
-        .filter((n) => n.getClientRects().length).map((n) => { const r = n.getBoundingClientRect(); return { l: r.left - h.left - 4, t: r.top - h.top - 4, r: r.right - h.left + 4, b: r.bottom - h.top + 4 }; });
+      // (HM1: and Home's sheet, with the handle's reach above its edge: no name sits under it, or is tapped through it)
+      const blockers = [locate, bg, peek.node, ...stage.querySelectorAll(".maplibregl-ctrl-bottom-left > *, .maplibregl-ctrl-bottom-right > *"), ...root.document.querySelectorAll(".add-button:not([hidden])")]
+        .filter((n) => !n.hidden && n.getClientRects().length).map((n) => { const r = n.getBoundingClientRect(), up = n === peek.node ? 16 : 4; return { l: r.left - h.left - 4, t: r.top - h.top - up, r: r.right - h.left + 4, b: r.bottom - h.top + 4 }; });
       const boxes = me.labels.map((x) => {
         if (!x.w && x.node.offsetWidth) { x.w = x.node.offsetWidth; x.h = x.node.offsetHeight; }   // measured while it shows
         const p = map.project(x.at), w = x.w || 120, ht = x.h || 28;
@@ -185,16 +449,17 @@
       });
     }
     async function drawLabels() {
-      const subs = await readSubgroups();
+      const subs = await subgroupsRead;
       if (!live() || !subs.length) return;
-      const shapes = await Promise.resolve(FP.home?.readShapes?.(sb, [], subs)).catch(() => null);
-      if (!live() || !shapes) return;
-      const layer = el("div", { class: "pa-labels", "aria-label": "Sub-groups" });
-      const drawn = subs.filter((s) => shapes.get(s.id)?.geometry);
+      const shapes = await subShapesRead;
       // PH5: each sub-group's own fill, in the set that tells neighbours apart (map-palette.js subgroupColours), the same on every map
       // (every sub-group, with an area or not, keyed by its id: the same set and keys the Maps tab colours, review of #540, 2)
-      const colours = FP.mapPalette?.subgroupColours?.(subs.map((s) => ({ key: s.id, name: s.name, geometry: shapes.get(s.id)?.geometry || null }))) || new Map();
+      const colours = me.colours = FP.mapPalette?.subgroupColours?.(subs.map((s) => ({ key: s.id, name: s.name, geometry: shapes?.get(s.id)?.geometry || null }))) || new Map();
+      if (!live() || !shapes) { if (live()) peek.subs(); return; }
+      const layer = el("div", { class: "pa-labels", "aria-label": "Sub-groups" });
+      const drawn = subs.filter((s) => shapes.get(s.id)?.geometry);
       me.subs = new Map(drawn.map((s) => [s.id, { ...s, bbox: shapes.get(s.id).bbox }]));
+      peek.subs();   // HM1: the sheet's sub-groups, with their colours and somewhere to zoom to
       const look = (c) => FP.mapPalette?.subgroupLook?.(c, { onDark: me.onDark }) || { fill: c, fillOpacity: 0.5, line: c, lineWidth: 0.75, lineOpacity: 0.9 };
       // (drawn again when the background changes: the fills are for a dark or a light ground)
       me.paintSubs = () => me.map?.getSource("pa-subs")?.setData({ type: "FeatureCollection", features: drawn.map((s) => {
@@ -246,7 +511,6 @@
     }
 
     // ---- the map, once the Home is on the page ------------------------------------------------------------------------------------
-    const area = Promise.resolve().then(() => FP.home?.readShapes?.(sb, [], [group]) || new Map()).then((m) => m.get(group.id) || null, () => null);
     const sites = (async () => {
       const q = sb.rpc("group_wq_sites", { g: group.id });
       const r = await (q && typeof q.limit === "function" ? q.limit(P().READ_CAP) : q);
@@ -260,7 +524,7 @@
     function makeMap() {
       if (!live() || !wrap.isConnected) return;
       const gl = root.maplibregl;
-      if (!gl) { mapBox.replaceChildren(el("p", { class: "pa-quiet" }, "The map couldn't open here.")); return; }
+      if (!gl) { mapBox.replaceChildren(el("p", { class: "pa-quiet" }, "The map couldn't open here.")); afterMap(); return; }
       try {
         gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js");
         // PH5: the aerial, unless the person chose the plain map on an overview on this phone (map-scene.js's own key)
@@ -308,7 +572,7 @@
           map.addSource("pa-subs", { type: "geojson", data: none });
           map.addSource("pa-edge", { type: "geojson", data: none });
           // (the mask first: under the area, the sub-groups, the outline and the person's dot; the names and controls are over the map)
-          map.addLayer({ id: "pa-mask", type: "fill", source: "pa-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
+          map.addLayer({ id: "pa-mask", type: "fill", source: "pa-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.45, "fill-antialias": false } });
           map.addLayer({ id: "pa-area-fill", type: "fill", source: "pa-area", paint: { "fill-color": hue, "fill-opacity": 0.06, "fill-antialias": false } });   // (no seams where the areas meet)
           // PH5: the sub-groups told apart by fill, a hairline of the same hue between neighbours, no dashed casing
           map.addLayer({ id: "pa-subs-fill", type: "fill", source: "pa-subs", paint: { "fill-color": ["get", "fill"], "fill-opacity": ["get", "fo"] } });
@@ -343,15 +607,22 @@
             if (pts.length) box = [[Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1]))], [Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))]];
           }
           if (!live()) return;
-          if (box && !me.located) map.fitBounds(box, { padding: { top: 72, bottom: 84, left: 28, right: 28 }, maxZoom: 14, duration: 0 });
+          if (box && !me.located) map.fitBounds(box, { padding: pad(), maxZoom: 14, duration: 0 });
           const c = map.getCenter();
           me.centre = { lat: c.lat, lon: c.lng };
           draw();
-          drawLabels().catch(() => {});
+          me.loaded = true;
+          afterMap();   // the sub-groups' names and Home's sheet, now the area is drawn
+          labels();     // (the reads may have started already, from the timer)
         });
-      } catch { mapBox.replaceChildren(el("p", { class: "pa-quiet" }, "The map couldn't open here.")); }
+      } catch { mapBox.replaceChildren(el("p", { class: "pa-quiet" }, "The map couldn't open here.")); afterMap(); }
+      // (a map whose style never loads, its tiles failing on a poor connection, still gets its sheet, in time)
+      me.latest = root.setTimeout?.(() => afterMap(), FP.phoneArea.latestMs ?? AFTER_MAP_LATEST);   // (latestMs: the browser walk's shorter wait)
     }
-    root.requestAnimationFrame?.(() => root.requestAnimationFrame(makeMap));
+    root.requestAnimationFrame?.(() => root.requestAnimationFrame(() => { peek.setVar(); makeMap(); }));
+    // (a phone turned, or the browser's bars coming and going: the sheet's half way is worked out again)
+    me.onResize = () => { if (!live()) return; if (peek.state() === "half") peek.open("half", { animate: false }); peek.setVar(); };
+    root.addEventListener("resize", me.onResize);
     // already allowed: the person's position at once, without a prompt
     FP.locate?.permission?.().then((s) => { if (s === "granted" && live()) find(false); });
     return wrap;
@@ -362,11 +633,22 @@
     shown = null;
     if (!me) return;
     me.alive = false;
+    if (me.onResize) root.removeEventListener("resize", me.onResize);
+    root.clearTimeout?.(me.latest);
     try { me.cancelGo?.(); } catch { /* gone */ }
     try { me.stop?.(); } catch { /* gone */ }
     try { me.overlay?.remove(); } catch { /* gone */ }
     try { me.map?.remove(); } catch { /* gone */ }
   }
 
-  FP.phoneArea = { view, close, phone, debug: () => shown?.map || null, base: () => shown?.base || null, place: () => shown?.place || null };
+  // HM1: search() pulls Home's sheet up with its search box in hand (the bar's More, Search), false when Home is not showing;
+  // sheet() says where the sheet is (for the browser walk), and sheet("half" | "peek") moves it
+  const search = () => !!(shown?.alive && shown.wrap?.isConnected && shown.peek?.focusSearch());
+  const sheet = (to) => {
+    const p = shown?.alive ? shown.peek : null;
+    if (!p) return null;
+    if (to) p.open(to, { animate: false });
+    return { state: p.state(), height: p.height(), half: p.half(), peek: p.peekHeight() };
+  };
+  FP.phoneArea = { view, close, phone, search, sheet, debug: () => shown?.map || null, base: () => shown?.base || null, place: () => shown?.place || null };
 })(window);

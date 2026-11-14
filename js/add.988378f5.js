@@ -190,11 +190,12 @@
   // away until they go. Checked a few times a second while a button shows on a phone, and never otherwise.
   // (UI2: the group Overview's short map strip on a phone is not a sheet along the bottom: the button stays where it is over the page,
   // rather than climbing onto the strip's own controls; opened tall, the strip's controls lift it as any map's do)
-  const SHEETS = ".rv-panel, .pa-sheet, #overview-rail:not([hidden]), #space-content:not([hidden]), .maplibregl-ctrl-bottom-right:not(#screen-group.has-needs:not(.map-open) #group-map .maplibregl-ctrl-bottom-right)";
+  // (HM1: and Home's sheet on a phone, closed or pulled half way: the + rides just above it, whatever its height)
+  const SHEETS = ".rv-panel, .pa-sheet, .pa-peek:not([hidden]), #overview-rail:not([hidden]), #space-content:not([hidden]), .maplibregl-ctrl-bottom-right:not(#screen-group.has-needs:not(.map-open) #group-map .maplibregl-ctrl-bottom-right)";
   // panels that take the bottom of the screen while they are open: the button tucks away until they close (N2b's water quality
   // sites panel reaches 72% of a phone)
   // (PH2: and a map's own sheet opened tall on a phone, its layers and legend: the + never sits on its list)
-  const TUCK = ".fs-page, .fs-overlay, .events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden]), .rv-panel-open > .rv-panel, .maps-viewer.ph-more-open, .maps-viewer.rv-measuring, .maps-viewer.rv-comparing";
+  const TUCK = ".fs-page, .fs-overlay, .events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden]), .rv-panel-open > .rv-panel, .maps-viewer.ph-more-open, .maps-viewer.rv-measuring, .maps-viewer.rv-comparing, .pa-peek.pa-dragging, .pa-peek.pa-moving";   // (HM1: and while Home's sheet moves)
   let watching = null, clicks = false;
   // (SR1b: written only when they change. classList.remove of a class that is not there still rewrites the class attribute, so a page
   // whose + is hidden by a stylesheet, as a sampling round's sheet, changed every 400 ms on a phone and never came to rest.)
@@ -215,7 +216,8 @@
       // (PH2: the bar floats a few pixels clear of the screens above it, so a sheet ending within 20 px of its top is along the bottom)
       if (s.classList.contains("maplibregl-ctrl-bottom-right") ? r.bottom < floor - 260 || !s.childElementCount : r.bottom < floor - 20) continue;
       const covered = floor - r.top + (s.classList.contains("maplibregl-ctrl-bottom-right") ? 4 : 0);
-      if (covered > (floor * 0.5)) continue;   // a whole page (a client's Files): the button floats over it as over any page
+      // a whole page (a client's Files): the button floats over it as over any page (HM1: never Home's sheet, which keeps clear of it)
+      if (covered > (floor * 0.5) && !s.classList.contains("pa-peek")) continue;
       lift = Math.max(lift, covered);
     }
     // UI2: the group Overview's short map strip on a phone: the button rests on the strip's bottom right (over the map, its credit moved

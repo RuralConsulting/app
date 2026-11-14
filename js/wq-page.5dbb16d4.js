@@ -598,7 +598,7 @@
       map.addSource(SRC, { type: "geojson", data: empty(), ...(phoneMode ? { cluster: true, clusterRadius: M().CLUSTER.radius, clusterMaxZoom: M().CLUSTER.maxZoom } : {}) });
       map.addSource(OWN, { type: "geojson", data: empty() });
       map.addSource("wqp-chosen", { type: "geojson", data: empty() });
-      map.addLayer({ id: "wqp-mask", type: "fill", source: "wqp-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
+      map.addLayer({ id: "wqp-mask", type: "fill", source: "wqp-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.45, "fill-antialias": false } });
       // PH5: no dashes at overview scale: the sub-groups' edges a plain hairline
       map.addLayer({ id: "wqp-subs-line", type: "line", source: "wqp-subs", paint: { "line-color": "#5f6670", "line-width": 0.75, "line-opacity": 0.8 } });
       map.addLayer({ id: "wqp-area-line", type: "line", source: "wqp-area", paint: { "line-color": "#2f3542", "line-width": 1.5, "line-opacity": 0.85 } });

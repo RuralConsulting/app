@@ -695,7 +695,7 @@
         map.addSource("ov-mask", { type: "geojson", data: maskData() });
         map.addSource("ov-areas", { type: "geojson", data: areaData() });
         map.addSource("ov-sites", { type: "geojson", data: siteData() });
-        map.addLayer({ id: "ov-mask", type: "fill", source: "ov-mask", paint: { "fill-color": "#000000", "fill-opacity": P?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
+        map.addLayer({ id: "ov-mask", type: "fill", source: "ov-mask", paint: { "fill-color": "#000000", "fill-opacity": P?.MASK_OPACITY ?? 0.45, "fill-antialias": false } });
         map.addLayer({ id: "ov-area-fill", type: "fill", source: "ov-areas", paint: { "fill-color": ["get", "fill"], "fill-opacity": ["case", ["==", ["get", "dim"], 1], 0.08, ["get", "fo"]] } });
         map.addLayer({ id: "ov-area-hi", type: "fill", source: "ov-areas", filter: ["==", ["get", "id"], ""], paint: { "fill-color": ["get", "fill"], "fill-opacity": 0.2 } });
         // PH5: no casing round the sub-groups (the owner: no dotted or dashed lines at overview scale); kept, empty, for the switches below

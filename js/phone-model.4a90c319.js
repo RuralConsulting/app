@@ -326,7 +326,87 @@
   const QUICK_TAGS = 6;
   const quickTags = (chips, max = QUICK_TAGS) => C().tidyTags(chips).slice(0, max);
 
+  // ---- HM1: Home's sheet (the owner, 14 Nov 2026: option A, "the map with a peek") ---------------------------------------------------
+  // A thin sheet above the bar with ONE useful line: the next event if there is one, else the most recent thing added (a photo or a
+  // record, with its date), else the place's own facts in one plain line. Pulled half way up: a search box, one quiet line of facts,
+  // at most four rows of what is new or next, then the sub-groups. The words are here; phone-area.js reads and draws.
+  const TZ = "Pacific/Auckland";
+  const NEXT_MAX = 4;
+  const NEW_DAYS = 7;   // "new" photos: those taken in the last week
+  // "Tue 10 Nov" (a day, in New Zealand); a bare date ("2026-11-10") is that day
+  function shortDay(iso) {
+    const s = String(iso || ""), t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s + "T12:00:00+13:00" : s);
+    return Number.isFinite(t) ? new Date(t).toLocaleDateString("en-NZ", { weekday: "short", day: "numeric", month: "short", timeZone: TZ }).replace(/,/g, "") : "";
+  }
+  // "Thu 19 Nov · 10 am" (an all-day event: the day alone)
+  function eventWhen(e) {
+    const day = shortDay(e?.starts_at);
+    if (!day || e?.all_day) return day;
+    const t = new Date(Date.parse(e.starts_at)).toLocaleTimeString("en-NZ", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: TZ })
+      .replace(/\s+/g, " ").toLowerCase().replace(":00", "");
+    return day + " · " + t;
+  }
+  // The start of the New Zealand day `days` before `today` ("YYYY-MM-DD"), as an instant (ISO); null when today is not a day
+  function daysBefore(today, days) {
+    const t = Date.parse(String(today || "").slice(0, 10) + "T12:00:00Z");
+    if (!Number.isFinite(t)) return null;
+    const d = new Date(t - days * 86400000).toISOString().slice(0, 10), utc = Date.parse(d + "T00:00:00Z");
+    // (midnight in New Zealand is 11:00 or 12:00 the day before in UTC: the hour New Zealand shows at that day's UTC midnight)
+    const ahead = Number(new Intl.DateTimeFormat("en-NZ", { timeZone: TZ, hour: "numeric", hourCycle: "h23" }).format(new Date(utc))) || 12;
+    return new Date(utc - ahead * 3600000).toISOString();
+  }
+  const kindLabel = (kind) => C()?.KINDS?.[kind]?.label || "Record";
+  const kindIcon = (kind) => C()?.KINDS?.[kind]?.icon || "camera";
+  const clip = (s, n = 60) => { const t = String(s || "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + "…" : t; };
+  // The facts in one quiet line, from the computer dashboard's own figures (group-overview-model.js tiles): "10 sub-groups ·
+  // 243,700 ha · 28 members". Only those it has; "" when none.
+  function factsLine(tiles) {
+    const by = new Map((Array.isArray(tiles) ? tiles : []).map((t) => [t.key, t]));
+    return ["subgroups", "area", "members"].map((k) => by.get(k)).filter(Boolean)
+      .map((t) => (t.key === "area" ? t.value : t.value + " " + String(t.label || "").toLowerCase())).join(" · ");
+  }
+  // An empty place: one honest sentence, never invented content
+  const emptyLine = (name) => "Nothing has been added to " + (String(name || "").trim() || "this place") + " yet.";
+  const eventRow = (event) => ({ key: "event", icon: "events", title: clip(event.title || "Event"), note: [eventWhen(event), clip(event.place_name, 30)].filter(Boolean).join(" · "), open: { event } });
+  // The rows of what is new or next, in this order, at most four, each { key, icon, title, note, open }:
+  //   event   the next event (for those with Events)                        open: { event }
+  //   round   the latest sampling round (the group's coordinators)           open: { round }
+  //   photos  photos taken in the last week (those the person can see)       open: { view: "records" }
+  //   review  questions to review (the group's coordinators)                 open: { view: "people", tab: "review" }
+  // input: { event, round, photos: { n, since }, review } (each null when not read, none, or not this person's)
+  function nextRows({ event = null, round = null, photos = null, review = null } = {}) {
+    const out = [];
+    if (event) out.push(eventRow(event));
+    if (round) {
+      const sites = Number(round.counts?.sites) || 0;
+      out.push({ key: "round", icon: "water", title: "Sampling round" + (sites ? ", " + sites + (sites === 1 ? " site" : " sites") : ""), note: shortDay(round.sampled_on), open: { round } });
+    }
+    if (photos && Number(photos.n) > 0) out.push({ key: "photos", icon: "camera", title: Number(photos.n).toLocaleString("en-NZ") + (Number(photos.n) === 1 ? " new photo" : " new photos"),
+      note: photos.since ? "Since " + shortDay(photos.since) : "", open: { view: "records" } });
+    if (Number(review) > 0) out.push({ key: "review", icon: "due", title: Number(review).toLocaleString("en-NZ") + " to review",
+      note: Number(review) === 1 ? "A question about the register" : "Questions about the register", open: { view: "people", tab: "review" } });
+    return out.slice(0, NEXT_MAX);
+  }
+  // The one line on the closed sheet: the next event, else the latest thing added, else the facts, else the empty sentence.
+  // -> { key, icon, title, note, open } (open null: nothing to open)
+  function peekLine({ event = null, latest = null, facts = "", name = "" } = {}) {
+    if (event) return eventRow(event);
+    if (latest) return { key: "latest", icon: kindIcon(latest.kind), title: kindLabel(latest.kind) + (latest.note ? ": " + clip(latest.note, 40) : ""),
+      note: "Added " + shortDay(latest.taken_at), open: { view: "records", item: latest.id } };
+    if (facts) return { key: "facts", icon: "places", title: facts, note: "", open: null };
+    return { key: "empty", icon: "places", title: emptyLine(name), note: "", open: null };
+  }
+  // How far the sheet comes up when pulled half way (px): about 60% of the map, but never onto the map's top-right controls (the +
+  // rides just above the sheet, and must stay clear of them), and never so far that the + would have to hide (add.js tucks it when it
+  // would sit in the top 30% of the screen). stage: the map's height; top: the bottom of its top-right controls; plus: the +'s height
+  // and its gap above the sheet; floor: the bar's top; screen: the window's height; peek: the closed sheet. Never less than peek.
+  function halfHeight({ stage, top = 0, plus = 66, floor = stage, screen = stage, peek = 80 } = {}) {
+    const want = Math.round(stage * 0.6), clearOfControls = Math.floor(stage - top - 12 - plus), clearOfTuck = Math.floor(floor - 88 - screen * 0.3 - 2);
+    return Math.max(peek, Math.min(want, clearOfControls, clearOfTuck));
+  }
+
   return { PHONE, NEARBY, READ_CAP, PHOTO_FIX_AGE, LOCATE_WAIT, PRIMARY, QUICK_TAGS, PHOTO_NEEDS_LOCATION, NO_SITES, SITES_FAILED, LOCATE_HINT,
     fix, fresh, fixForShot, photoProblem, locateProblem, locationHelp, platformOf, photoGate, accuracyWords, sitesFrom, nearby, nearbyLine,
-    displayName, outerOutline, outlineFor, outlineHeld, labelPoint, keepLabels, rows, rowWords, quickTags };
+    displayName, outerOutline, outlineFor, outlineHeld, labelPoint, keepLabels, rows, rowWords, quickTags,
+    NEXT_MAX, NEW_DAYS, shortDay, eventWhen, daysBefore, factsLine, emptyLine, nextRows, peekLine, halfHeight };
 });

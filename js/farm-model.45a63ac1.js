@@ -380,10 +380,10 @@
   // E4 farm display (Josh, 2 Nov 2026). The fly-in to a farm is a gentle eased flight a person can follow (about 3.6 s);
   // a device that asks for reduced motion jumps instead. `essential: false` lets MapLibre's own reduced-motion check
   // agree with ours. The same easing as every other move (APP-STRUCTURE §3.7): ease in and out.
-  const FLY_MS = 3600, MASK_OPACITY = 0.35, MASK_FADE_MS = 600;   // PH5: 35%, as on every map about one place (map-palette.js)
+  const FLY_MS = 3600, MASK_OPACITY = 0.45, MASK_FADE_MS = 600;   // HM1: 45% (the owner, 14 Nov 2026), as on every map about one place (map-palette.js)
   const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
   const flight = (reduced) => (reduced ? { duration: 0, essential: false } : { duration: FLY_MS, easing: easeInOut, curve: 1.42, essential: false });
-  // Once the flight has landed, everything outside the farm fades to a 35% dim over ~600 ms (none with reduced motion).
+  // Once the flight has landed, everything outside the farm fades to a 45% dim over ~600 ms (none with reduced motion).
   const maskFade = (reduced) => (reduced ? 0 : MASK_FADE_MS);
   // The farm mask: the world with the farm's boundary cut out (DM1: the map outside is dimmed, never removed). Each part
   // of a multipart farm is its own hole; a hole in the farm itself (land inside the boundary that isn't the farm) is

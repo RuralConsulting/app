@@ -73,8 +73,9 @@
 
   // ---- PH5: a place's map is about that place; its sub-groups told apart by fill --------------------------------------------
   // Everything outside the place the map is about (a group, a sub-group, a farm) under black at this opacity: the place is the
-  // bright part. Chosen from pictures at 25, 35, 45 and 55% on the aerial and the plain map (_claude/look-rounds/ph5/mask/).
-  const MASK_OPACITY = 0.35;
+  // bright part. Chosen from pictures at 25, 35, 45 and 55% on the aerial and the plain map (_claude/look-rounds/ph5/mask/): 35% at
+  // first (PH5), 45% since HM1 (the owner, 14 Nov 2026).
+  const MASK_OPACITY = 0.45;
   // The sub-groups' fills: seven clear hues, none a brand's, none the strong red, orange or brown the published map had, and no white
   // (it read as haze, or as the group's own unfilled area). Bold enough to read on the aerial at SUBGROUP_FILL, so no strong outline
   // is needed: a hairline of the same hue between neighbours, and the mask shows the group's outer edge.

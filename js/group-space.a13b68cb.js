@@ -283,7 +283,8 @@
       if (FP.phoneArea?.phone()) {
         FP.placeHome?.close(); FP.groupOverview?.close();
         $("#screen-group").dataset.home = "area";
-        panel.replaceChildren(FP.phoneArea.view({ group, sb: FP.sb })); panel.scrollTop = 0; return;
+        // HM1: with Home's search and sections, for its sheet
+        panel.replaceChildren(FP.phoneArea.view({ group, sb: FP.sb, home, today })); panel.scrollTop = 0; return;
       }
       FP.phoneArea?.close();
       const overview = !!FP.groupOverview && computer();
@@ -455,7 +456,9 @@
   let pendingSearch = null;   // { view, q }: the words typed in the Overview's search, for the section it opens
   // PH2: the bar's Search on a phone: Home's search (the same box, over the same lists, with the same reads) in a sheet that takes the
   // screen; a result opens its section as on Home, and the sheet closes with the move
+  // HM1: on Home, Search (More's second row) is Home's own sheet pulled up, its search box in hand
   function searchSheet(opener, group, tabs) {
+    if (FP.phoneArea?.search?.()) return;
     if (!FP.sheet || !FP.placeHome) return;
     const home = { space: "group", place: group, sections: tabs, people: !!FP.peopleModel?.canSeeTab(group, groups), addCtx, sb: FP.sb, today: G().isoDay(Date.now()),
       search: (view, q) => { pendingSearch = { view, q }; }, compact: true };

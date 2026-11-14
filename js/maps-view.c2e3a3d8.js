@@ -143,7 +143,7 @@
         hues: FP.mapPalette && css ? FP.mapPalette.hues((k) => css.getPropertyValue(k)) : null });
     },
     // PH5: a map about one place. A group's (or sub-group's) map: the viewer's white-and-black dashed boundary is hidden (the owner: no
-    // dotted lines at overview scale) and everything outside the area is under the 35% mask, cut along the area's outer edge; a farm's
+    // dotted lines at overview scale) and everything outside the area is under the 45% mask, cut along the area's outer edge; a farm's
     // map keeps its boundary and gets the mask only when its own package has none. On a phone a published map's own text labels start
     // off (one tap away, Labels in Layers). viewer.js is not edited: its layers are switched from here once it has added them.
     focus: (map, holder, { group = false, manifest = null, url = null } = {}) => api.focusMap(map, holder, { group, manifest, url, phone: phone(), palette: FP.mapPalette, phoneModel: FP.phoneModel }),
@@ -475,7 +475,7 @@
           if (map.getSource("ph-mask")) return;
           map.addSource("ph-mask", { type: "geojson", data: mask });
           const above = (map.getStyle().layers || []).find((l) => !BASE_LAYER.test(l.id));
-          map.addLayer({ id: "ph-mask", type: "fill", source: "ph-mask", paint: { "fill-color": "#000000", "fill-opacity": palette.MASK_OPACITY ?? 0.35, "fill-antialias": false } }, above?.id);
+          map.addLayer({ id: "ph-mask", type: "fill", source: "ph-mask", paint: { "fill-color": "#000000", "fill-opacity": palette.MASK_OPACITY ?? 0.45, "fill-antialias": false } }, above?.id);
         });
       }).catch(() => { /* the map stays as it is */ });
     }
