@@ -9,7 +9,7 @@
 // is the page's IndexedDB, not a cache: a new version activating never touches it, so what waits to upload survives it.
 // SI1 (sign-in first): the page registers this worker only once the sign-in form or first screen is up and the page is quiet
 // (boot.js worker()), so its install never competes with them.
-const VERSION = "202611142211-b939b08";
+const VERSION = "202611142327-7ed69e2";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
 const FLOATING = ["./", "index.html", "layer-kinds.json", "privacy-terms.md", "demo/demo-farm.json", "demo/source.html"];
@@ -22,29 +22,55 @@ const SHELL = ["css/tokens.5432e59f.css", "css/app.ef2d60b6.css", "manifest.4006
   "fonts/source-sans-3-latin-ext-wght-normal.a85a7459.woff2", "fonts/source-sans-3-latin-wght-normal.19143dca.woff2", "fonts/source-serif-4-latin-ext-wght-normal.d10ccbbd.woff2", "fonts/source-serif-4-latin-wght-normal.382475f3.woff2",
   "brand/logo.a1046e5e.png", "brand/logo-dark.81183d54.png", "brand/icon.670b09db.png", "brand/icon-192.26ee2815.png", "brand/mccc-logo.e9d6f07b.png"];
 
+// PERF3c (the first open after a publish): the page is answered from this version's cache at once (see "the page" below), so
+// the open after a publish is as quick as any other and nothing the publish changed is downloaded by the page; the browser's
+// own check of sw.js (made after every open, past its ten-minute copy) finds the new version, whose install below runs in the
+// background and downloads each changed file once. It takes over the open tab when done (skipWaiting) and serves the next open.
+// A cache is whole only once its page is in it: the page is put last, and only when every script and stylesheet it names is
+// already there, so a page from another publish (a host copy not yet updated) never joins it. An install that fails deletes its
+// own part-filled cache, and the version in use stays as it was, whole.
+const PAGE = "index.html";
+// the scripts and stylesheets a page names (content-hashed: name.<hash8>.ext), which the cache that keeps the page must hold
+const named = (html) => [...new Set([...html.matchAll(/(?:src|href)="((?:js|css|vendor)\/[^"?#:]+\.[0-9a-f]{8}\.(?:js|css))"/g)].map((m) => m[1]))];
+async function whole(name) { return !!(await (await caches.open(name)).match(PAGE)); }
 self.addEventListener("install", (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    const older = (await caches.keys()).filter((k) => k.startsWith(APP + "-") && k !== CACHE);
-    const missing = [];
-    for (const url of SHELL) {
-      let hit = null;
-      for (const k of older) { hit = await (await caches.open(k)).match(url); if (hit) break; }
-      if (hit) await c.put(url, hit); else missing.push(url);
+    try {
+      const older = (await caches.keys()).filter((k) => k.startsWith(APP + "-") && k !== CACHE).sort().reverse();
+      const missing = [];
+      for (const url of SHELL) {
+        let hit = null;
+        for (const k of older) { hit = await (await caches.open(k)).match(url); if (hit) break; }
+        if (hit) await c.put(url, hit); else missing.push(url);
+      }
+      // SI1 (sign-in first): a shell name is one set of bytes, so a copy the browser already holds (the sign-in page's own files) is
+      // used as it is; the floating files are fetched past the browser's copy, and the page once, for both its names, last
+      const pages = FLOATING.filter((u) => u === "./" || u === PAGE);
+      await c.addAll([...missing.map((u) => new Request(u)), ...FLOATING.filter((u) => !pages.includes(u)).map((u) => new Request(u, { cache: "reload" }))]);
+      const page = await fetch(new Request(PAGE, { cache: "reload" }));
+      if (!page.ok) throw new Error(PAGE + ": " + page.status);
+      for (const name of named(await page.clone().text())) if (!(await c.match(name))) throw new Error(PAGE + " names " + name + ", which this version does not hold");
+      for (const u of pages.filter((u) => u !== PAGE)) await c.put(u, page.clone());
+      await c.put(PAGE, page);
+    } catch (err) {
+      await caches.delete(CACHE);   // never a part-filled cache: the version in use stays whole, and the next open tries again
+      throw err;
     }
-    // SI1 (sign-in first): a shell name is one set of bytes, so a copy the browser already holds (the sign-in page's own files) is
-    // used as it is; the floating files are fetched past the browser's copy
-    await c.addAll([...missing.map((u) => new Request(u)), ...FLOATING.map((u) => new Request(u, { cache: "reload" }))]);
     await self.skipWaiting();
   })());
 });
-// activate keeps the newest older cache (names sort by build time) and deletes the rest: a tab opened before this publish still
-// names the old files, and until it reloads its lazy requests (the map's worker script, a font) are answered from that cache
+// activate keeps the newest older cache that is whole (names sort by build time) and deletes the rest: a tab opened before this
+// version took over still names the old files, and until it reloads its lazy requests (the map's worker script, a font) are
+// answered from that cache. So at most two versions are kept once the new one is in use.
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((keys) => {
-    const older = keys.filter((k) => k.startsWith(APP + "-") && k !== CACHE).sort();
-    return Promise.all(older.slice(0, -1).map((k) => caches.delete(k)));
-  }).then(() => self.clients.claim()));
+  e.waitUntil((async () => {
+    const older = (await caches.keys()).filter((k) => k.startsWith(APP + "-") && k !== CACHE).sort();
+    let keep = null;
+    for (const k of [...older].reverse()) if (await whole(k)) { keep = k; break; }
+    await Promise.all(older.filter((k) => k !== keep).map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 // SH1: Android's Share. The installed app is a share target (manifest.webmanifest share_target): photos shared from the gallery or
 // WhatsApp arrive as a form POST to ./share-target, which no server answers. They are kept in a cache of their own (SHARE: not named
@@ -96,11 +122,19 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method === "POST" && url.origin === location.origin && /\/share-target$/.test(url.pathname)) { e.respondWith(takeShare(e.request)); return; }
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
-  // the page: network first (revalidated, so a copy the host let the browser keep for ten minutes is never an old page naming files
-  // the publish has since removed), so a new version shows on the next open; cached copy if there's no coverage
+  // the page (PERF3c): this version's own copy at once, with no network, so the app it names is the one this cache holds, whole,
+  // and a slow or absent signal never holds the first screen up. A new version is found by the browser's own check of sw.js and
+  // installs in the background (above); it is used from the next open. Only when this cache has no page (it never should, once
+  // this worker is in use) is the page fetched, past the browser's ten-minute copy. Any other page of the site: network first.
   if (e.request.mode === "navigate") {
     e.waitUntil?.(dropStaleShare());   // (SH1b: a share past its time is never kept)
-    e.respondWith(fetch(e.request, { cache: "no-cache" }).catch(() => caches.open(CACHE).then((c) => c.match("index.html"))));
+    const scope = new URL(self.registration.scope).pathname, app = url.pathname === scope || url.pathname === scope + PAGE;
+    const own = async () => ((await caches.has(CACHE)) ? (await caches.open(CACHE)).match(PAGE) : undefined);
+    e.respondWith((async () => {
+      const kept = app ? await own() : undefined;
+      if (kept) return kept;
+      return fetch(e.request, { cache: "no-cache" }).catch(own);
+    })());
     return;
   }
   // this version's cache, then the kept older cache (an open tab's old file names), then the network
