@@ -1,9 +1,10 @@
 /* WQV1: a group's Water quality page (js/wq-page.js). The page takes the space's width (no group map behind it). On a computer: the filter
-   bar, the headline figures, Map | Chart | Table, with the map getting the room and one panel for layers and legend (after Felt); on a
-   phone a quick answer: the two water types, one sentence and bar, the list. Ink controls, colour only for data; tokens only. */
+   bar, the headline (WQ2: the group's own first) and its figures, Map | Chart | Table, with the map getting the room and one panel for
+   layers (after Felt), a site's card on the map, LAWA's line last; on a phone a quick answer: the headline, the map, the list. Ink controls, colour only for data; tokens only. */
 #screen-group[data-view="water"] .group-map { display: none; }
 #screen-group[data-view="water"] .group-body { grid-template-columns: minmax(0, 1fr); }
-#screen-group[data-view="water"] .group-panel { border-left: 0; border-top: 0; padding: var(--s-4) var(--space) var(--s-6); background: var(--wash); }
+#screen-group[data-view="water"] .group-panel { border-left: 0; border-top: 0; padding: var(--s-4) var(--space) var(--s-6); background: var(--wash);
+  scrollbar-gutter: stable; }   /* (WQ2: a scroll bar appearing later never narrows the map; see .wqp-off) */
 
 .wqp { max-width: 1600px; margin: 0 auto; color: var(--ink); }
 .wqp-phonebox { display: none; }
@@ -51,51 +52,64 @@
 .wqp-switch small { color: var(--ink-3); font-size: var(--text-small); }
 .wqp-show-all { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 
-/* ---- the headline figures (after Plausible: a few numbers, one bar, one sentence) ---- */
-/* plain numbers with their labels, on one straight line; no tiles */
-.wqp-figures { display: grid; grid-template-columns: repeat(3, minmax(110px, auto)) minmax(280px, 1fr); gap: var(--s-6); align-items: start; margin: 0 0 var(--s-3); }
+/* ---- the headline (WQ2: the group's own sampling first), then a few plain numbers saying what they count; the caveats one click away ---- */
+.wqp-figures { display: grid; grid-template-columns: minmax(320px, 2.2fr) repeat(3, minmax(110px, auto)); gap: var(--s-2) var(--s-6); align-items: start; margin: 0 0 var(--s-3); }
+.wqp-lead { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .wqp-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .wqp-fig b { font: 700 var(--text-heading)/1.2 var(--f-display); letter-spacing: -.01em; }
 .wqp-fig span { color: var(--ink-2); font-size: var(--text-small); }
-.wqp-fig-trend { gap: var(--s-2); }
-.wqp-bar { display: flex; height: 12px; border-radius: var(--radius-pill); overflow: hidden; background: var(--fill); }
-.wqp-bar-part { display: block; min-width: 4px; }
-.wqp-bar-empty { opacity: .6; }
-.wqp-bar-key { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); font-size: var(--text-small); color: var(--ink-2); }
-.wqp-bar-key i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: var(--s-1); vertical-align: -1px; }
 .wqp-sentence { margin: 0; font-weight: 500; line-height: 1.35; }
-.wqp-notes p { margin: 0 0 var(--s-2); color: var(--ink-2); font-size: var(--text-small); }
-.wqp-notes:empty { display: none; }
+.wqp-others { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.wqp-counts { grid-column: 1 / -1; margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+.wqp-about { display: inline; }
+.wqp-about summary { display: inline; cursor: pointer; color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; list-style: none; }
+.wqp-about summary::-webkit-details-marker { display: none; }
+.wqp-about[open] summary { color: var(--ink); }
+.wqp-about .wqp-notes { display: block; max-width: 72ch; margin: var(--s-2) 0 0; padding: var(--s-2) var(--s-3); border-left: 2px solid var(--rule); }
+.wqp-notes p { margin: 0 0 var(--s-1); color: var(--ink-2); font-size: var(--text-small); }
+.wqp-lawa { margin: var(--s-3) 0 0; color: var(--ink-2); font-size: var(--text-small); max-width: 90ch; }
+.wqp-lawa:empty { display: none; }
+/* whose sites: three plain ticks */
+.wqp-whose { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); font-size: var(--text-small); }
+.wqp-whose-label { color: var(--ink-2); }
+.wqp-tick { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 28px; cursor: pointer; }
+.wqp-tick input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .wqp-error { margin: 0; }
 
 /* ---- Map | Chart | Table ---- */
 .wqp-viewbar { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-4) 0 var(--s-2); }
 .wqp-download { margin-left: auto; }
 .wqp-pane[hidden] { display: none !important; }
+/* WQ2: WebKit (Safari's engine) stops drawing a MapLibre map whose box is resized after its first draw. So the map's box never changes:
+   set aside for the Chart or the Table, its pane keeps its size, out of sight and out of the flow; a site's view lies over the map. */
+.wqp-desk { position: relative; }
+.wqp-mappane.wqp-off { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; }
+/* (everything in it too: MapLibre's own stylesheet makes its compact credit visible, which would show over the Chart or the Table) */
+.wqp-mappane.wqp-off * { visibility: hidden !important; }
 /* hairlines, no card: the map runs edge to edge between two rules */
-.wqp-mappane { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 0; height: clamp(440px, calc(100vh - 340px), 780px); border: 0;
+.wqp-mappane { position: relative; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 0; height: clamp(440px, calc(100vh - 340px), 780px); border: 0;
   border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); overflow: hidden; background: var(--panel); }
-.wqp-mappane.wqp-with-site { grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 400px); }
 .wqp-layers { overflow-y: auto; padding: var(--s-3) var(--s-4) var(--s-3) 0; border-right: 1px solid var(--rule-soft); background: var(--wash); }
 /* Layers, Legend, Sites: small headings (above .group-panel h2's) */
 .wqp h2.wqp-h { font: 600 var(--text-body)/1.3 var(--f-ui); letter-spacing: 0; margin: var(--s-2) 0; }
 /* the Chart block without its card: a hairline above */
 .wqp .chart-block { border: 0; border-top: 1px solid var(--rule-soft); border-radius: 0; padding: var(--s-3) 0 0; background: none; }
-.wqp-layerlist, .wqp-legend, .wqp-ticklist, .wqp-phonelist { list-style: none; margin: 0 0 var(--s-3); padding: 0; }
+.wqp-layerlist, .wqp-ticklist, .wqp-phonelist { list-style: none; margin: 0 0 var(--s-3); padding: 0; }
 .wqp-layerlist label { display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-1) 0; cursor: pointer; }
 .wqp-layerlist input { margin-top: 3px; accent-color: var(--accent); }
 .wqp-layerlist span { display: flex; flex-direction: column; }
 .wqp-layernote, .wqp-hint { color: var(--ink-3); font-size: var(--text-small); }
-.wqp-legend li { display: flex; align-items: center; gap: var(--s-2); padding: 2px 0; font-size: var(--text-small); }
-.wqp-swatch { flex: none; }
 .wqp-mapbox { position: relative; min-height: 0; min-width: 0; }
 .wqp-map { position: absolute; inset: 0; background: var(--map-background); }
 .wqp-bgswitch { position: absolute; left: var(--s-3); top: var(--s-3); z-index: 2; display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--radius-s);
   background: var(--panel); box-shadow: var(--shadow-1); }
 .wqp-bgswitch button { min-height: 28px; padding: 0 var(--s-3); border: 0; border-radius: 6px; background: none; font-size: var(--text-small); font-weight: 500; color: var(--ink-2); cursor: pointer; }
 .wqp-bgswitch button[aria-pressed="true"] { background: var(--fill); color: var(--ink); font-weight: 600; }
-.wqp-site { overflow-y: auto; padding: var(--s-3) var(--s-4); border-left: 1px solid var(--rule-soft); background: var(--panel); }
+.wqp-site { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: min(400px, 42%); box-sizing: border-box; overflow-y: auto; padding: var(--s-3) var(--s-4);
+  border-left: 1px solid var(--rule-soft); background: var(--panel); box-shadow: var(--shadow-1); }
 .wqp-site[hidden] { display: none; }
+/* with a site's view open, the map's right-hand controls (zoom, credit) sit at its left edge, in sight and reachable; no box changes size */
+.wqp-mappane.wqp-siteopen .wqp-mapbox :is(.maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-right) { right: var(--wqp-site-w, 400px); }
 .wqp-sitehead { display: flex; align-items: flex-start; gap: var(--s-2); }
 .wqp-sitehead h2 { font: 600 var(--text-body)/1.3 var(--f-ui); margin: var(--s-1) 0 0; flex: 1; }
 .wqp-close { min-width: 32px; min-height: 32px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font-size: var(--text-heading); line-height: 1; cursor: pointer; }
@@ -128,8 +142,7 @@
 
 @media (max-width: 1100px) {
   .wqp-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .wqp-fig-trend { grid-column: 1 / -1; }
-  .wqp-mappane.wqp-with-site { grid-template-columns: 220px minmax(0, 1fr) minmax(280px, 340px); }
+  .wqp-lead { grid-column: 1 / -1; }
   .wqp-mappane { grid-template-columns: 220px minmax(0, 1fr); }
   .wqp-chartpane { grid-template-columns: minmax(0, 1fr) 240px; }
 }
@@ -173,7 +186,7 @@
   .wqp-phonebox .wqp-sentence { margin-bottom: var(--s-2); }
   .wqp-phonebox .wqp-phonelead { margin: var(--s-2) 0 0; color: var(--ink-3); font-size: var(--text-small); }
   .wqp-mapchips { position: absolute; z-index: 3; top: var(--s-3); left: var(--s-3); right: var(--s-3); display: flex; flex-wrap: wrap; gap: 8px; }
-  /* RF1: one row: Sites, Layers, Key in words, then Aerial | Topo at its end (each choice 32 px to see, 44 px to tap) */
+  /* RF1: one row: Sites, Layers in words, then Aerial | Topo at its end (each choice 32 px to see, 44 px to tap) */
   .wqp-mapchips .wqp-bgswitch { position: static; margin-left: auto; }
   .wqp-phonemap .wqp-bgswitch button { min-height: 32px; }
   .wqp-mapchips .wqp-mapchip { padding: 0 10px; }
@@ -183,9 +196,30 @@
   .wqp-mapchip::after { content: ""; position: absolute; inset: -5px 0; }
   .wqp-mapchip[hidden] { display: none; }
   .wqp-layersheet .wqp-layers { display: block; padding: 0 var(--s-4); }
-  /* RF1: the Key, one tap from the map whenever trend colours show: the key's rows and its one sentence */
-  .wqp-keysheet .wqp-keybox { padding: 0 var(--s-4) var(--s-3); }
-  .wqp-keysheet .wqp-legend { list-style: none; margin: 0 0 var(--s-2); padding: 0; }
-  .wqp-keysheet .wqp-legend li { min-height: 32px; font-size: var(--text-body); }
   .wqp-sitesheet .wqp-phonelist { padding: 0 var(--s-4); }
+}
+
+/* ---- WQ2: a site's card, over the map at its foot: what the site is and the number its colour stands for; Open shows the whole site ---- */
+.wqp-card { position: absolute; z-index: 4; left: var(--s-3); top: 56px; width: min(340px, calc(100% - 2 * var(--s-3))); box-sizing: border-box;
+  padding: var(--s-2) var(--s-3) var(--s-3); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-shadow: var(--shadow-2, var(--shadow-1)); }
+.wqp-card[hidden] { display: none; }
+.wqp-cardhead { display: flex; align-items: flex-start; gap: var(--s-2); }
+.wqp-cardhead h3 { flex: 1; margin: var(--s-1) 0 0; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.wqp-carddot { flex: none; width: 12px; height: 12px; margin-top: 8px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 2.5px var(--rule); }
+.wqp-card p { margin: 0 0 var(--s-1); font-size: var(--text-small); }
+.wqp-cardwho { color: var(--ink-2); }
+.wqp-cardlevel { font-weight: 500; }
+.wqp-cardquiet { color: var(--ink-3); }
+.wqp-open { margin-top: var(--s-1); min-height: 32px; padding: 0 var(--s-4); border: 1px solid var(--rule); border-radius: var(--radius-pill); background: none; color: var(--ink);
+  font-size: var(--text-small); font-weight: 600; cursor: pointer; }
+.wqp-open:hover { background: var(--fill); }
+.wqp-cardfoot { display: flex; align-items: flex-end; gap: var(--s-3); }
+.wqp-cardfoot p { flex: 1; margin: 0; }
+.wqp-cardfoot .wqp-open { flex: none; margin-top: 0; }
+@media (max-width: 800px) {
+  .wqp-card { left: var(--s-2); right: var(--s-2); top: 52px; width: auto; padding: var(--s-1) var(--s-3) var(--s-2); }
+  .wqp-card p { margin: 0 0 2px; }
+  .wqp-open { position: relative; }
+  .wqp-open::after { content: ""; position: absolute; inset: -6px -2px; }
+  .wqp-phonebox .wqp-others { margin-top: calc(-1 * var(--s-1)); }
 }

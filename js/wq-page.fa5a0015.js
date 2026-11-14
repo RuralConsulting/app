@@ -1,9 +1,10 @@
 // WQV1: a group's Water quality page (`#/group/<id>/water`), for a group and for a sub-group. On a computer, top to bottom: one filter bar
-// for the whole page (Surface water | Groundwater, the measure, the sub-group, the period, the older-and-sparse switch), the headline
-// figures with LAWA's trend as a stacked bar and one sentence, then the same rows three ways: Map (one panel for the supporting layers and
-// the legend; a site opens its chart in a column beside the map), Chart (the ticked sites, or the median of the sites' yearly medians) and
-// Table (sortable, downloadable). On a phone a quick answer: the two water types, the sentence and bar for the first measure, the sites
-// (the group's own first), each opening its chart, and the map one tap away.
+// for the whole page (Surface water | Groundwater, the measure; whose sites, the sub-group, the period, the older-and-sparse switch), the
+// headline (WQ2: the group's own sampling first, then the other sources' sites with a good record) and its figures, every caveat under
+// "About these numbers", then the same rows three ways: Map (the supporting layers beside it; each site coloured by its level of the
+// measure; a click on a site says what it is in a small card, whose Open shows its chart beside the map), Chart (the ticked sites, or the
+// median of the sites' yearly medians) and Table (sortable, downloadable), and LAWA's published trend last, in words. On a phone a quick
+// answer: the headline, the map (a tap on a site, its card), the sites (the group's own first) one tap away, each opening its chart.
 // Every read is the signed-in person's own, through the existing policies and the security-invoker functions of migration 20261113071000:
 // wq_area_sites (the group's area: every served water-quality site source and the group's own sites the person may read), places (the
 // group's and its sub-groups' areas the person may read), subgroup_counts (the sub-groups' names), site_record_summary (WQ1, one family at a
@@ -122,26 +123,22 @@
   }
 
   // ---- the overview card's one call (MC1's Water quality card on a group's computer Home) -----------------------------------------------
-  // One sentence, the stacked bar and how many sites LAWA's classes rest on, for a group (or one of its sub-groups, picked out of the
-  // group's own sites exactly as the page's sub-group filter does), a water type and a measure, from the same rows as the page. A lighter
-  // read than the page's: the sites, the summary of one family and LAWA, never wq_site_figures. A sub-group whose boundary the person
-  // cannot read is said as such (noArea), never as having no sites.
+  // The page's headline (WQ2: the group's own sampling first, then the other sources' sites with a good record) and, quieter, LAWA's line,
+  // for a group (or one of its sub-groups, picked out of the group's own sites exactly as the page's sub-group filter does), a water type
+  // and a measure, from the same rows as the page with its default ticks. A lighter read than the page's: the sites, the summary of one
+  // family and LAWA, never wq_site_figures (so the latest round's values are the page's). A sub-group whose boundary the person cannot
+  // read is said as such (noArea), never as having no sites.
   async function summary(sb, groupId, { measure = "nitrate", type = "surface", today = null, names = null, sub = null } = {}) {
     const now = today ? Date.parse(today + "T12:00:00+13:00") : Date.now();
     const L = loader(sb, groupId);
     if (sub) {
       const s = (await L.base()).subs.find((x) => x.id === sub);
-      if (!s || !s.rings.length) return { sentence: null, bar: [], figures: null, basis: null, noArea: true, href: href(groupId) };
+      if (!s || !s.rings.length) return { sentence: null, others: null, lawa: null, figures: null, noArea: true, href: href(groupId) };
     }
     const st = { org: groupId, names: names || namesOf(), measure, type, sub, period: "all", includeField: false };
     const { rows } = await rowsOf(L, st, now, { figures: false });
-    const h = M().headline(M().shownRows(rows, false));
-    return { sentence: M().sentence(h, measure, type), bar: M().bar(h), figures: h, basis: M().basis(h, type), noArea: false, href: href(groupId) };
-  }
-  // The stacked bar, small: one element the card can place.
-  function miniBar(parts, label = "LAWA's 10-year trends") {
-    return el("div", { class: "wqp-bar", role: "img", "aria-label": label + ": " + list(parts).map((p) => p.n + " " + p.label.toLowerCase()).join(", ") },
-      ...list(parts).map((p) => el("span", { class: "wqp-bar-part", style: "flex-grow: " + p.n + "; background: " + p.colour, title: p.label + ": " + p.n })));
+    const picked = M().whoseRows(rows), h = M().headline(M().shownRows(picked, false), { figures: false });
+    return { sentence: M().sentence(h, measure, type, M().hiddenCount(picked)), others: M().others(h, measure, type), lawa: M().lawaLine(h, measure, type), figures: h, noArea: false, href: href(groupId) };
   }
   const namesOf = () => new Map(list(FP.groupSpace?.groups?.()).map((g) => [g.id, g.name]));
 
@@ -154,7 +151,7 @@
     const names = new Map(list(groups).map((g) => [g.id, g.name]));
     const coordinator = ["facilitator", "advisor", "admin"].includes(group.role) || !!FP.ops?.isStaff?.();
     const st = { org: group.id, names, type: "surface", measure: "nitrate", sub: null, period: "all", showAll: false, view: "map", ticked: null, chosen: null,
-      includeField: false, sort: { key: "own", dir: "asc" }, chartMode: "sites", layersOn: {} };
+      includeField: false, sort: { key: "own", dir: "asc" }, chartMode: "sites", layersOn: {}, whose: { ...M().WHOSE_DEFAULT }, carded: null, about: false };
     const L = loader(sb, group.id);
     let token = 0, data = null, gone = false, phone = isPhone(), mapUi = null, chart = null, siteChart = null;
     const root_ = el("section", { class: "wqp", "aria-labelledby": "wqp-title", "data-type": st.type, "data-view": st.view });
@@ -168,9 +165,12 @@
     const subBox = el("label", { class: "wqp-field wqp-subgroup", hidden: true });
     const periodBox = select("Period", "wqp-period", M().PERIODS, () => st.period, (v) => { st.period = v; draw(); });
     const switchBox = el("label", { class: "wqp-switch" });
-    const filters = el("div", { class: "wqp-filters", role: "group", "aria-label": "Filter the page" }, typeSeg.node, measureBox, el("span", { class: "wqp-break", "aria-hidden": "true" }), subBox, periodBox, switchBox);
+    // WQ2: whose data is shown: the group's own, Environment Canterbury's (and NIWA's), LAWA-assessed (ticks)
+    const whoseBox = el("div", { class: "wqp-whose", role: "group", "aria-label": "Whose sites" });
+    const filters = el("div", { class: "wqp-filters", role: "group", "aria-label": "Filter the page" }, typeSeg.node, measureBox, el("span", { class: "wqp-break", "aria-hidden": "true" }), whoseBox, subBox, periodBox, switchBox);
     const figures = el("div", { class: "wqp-figures", "aria-live": "polite" });
-    const notes = el("div", { class: "wqp-notes" });
+    // LAWA's published trend, last and in words (WQ2), under the map, chart or table
+    const lawaBox = el("p", { class: "wqp-lawa" });
     const viewSeg = segment("Show as", [["map", "Map"], ["chart", "Chart"], ["table", "Table"]], () => st.view, (v) => { st.view = v; drawView(); }, "wqp-views");
     const download = el("button", { type: "button", class: "wqp-quiet wqp-download", hidden: true, onclick: () => downloadCsv() }, FP.icon ? FP.icon("download", 18) : null, el("span", {}, "Download"));
     const viewBar = el("div", { class: "wqp-viewbar" }, viewSeg.node, download);
@@ -179,7 +179,7 @@
     // SR1: for the group's coordinators, "Enter a round" and the latest rounds (wq-round.js), under the page's name
     const rounds = FP.wqRound?.entry(group, { sb }) || null;
     let phoneRounds = null;
-    const desk = el("div", { class: "wqp-desk" }, el("header", { class: "wqp-head" }, title, sources), rounds, filters, figures, notes, viewBar, mapPane, chartPane, tablePane, credit);
+    const desk = el("div", { class: "wqp-desk" }, el("header", { class: "wqp-head" }, title, sources), rounds, filters, figures, viewBar, mapPane, chartPane, tablePane, lawaBox, credit);
     const phoneBox = el("div", { class: "wqp-phonebox" });
     root_.append(status, desk, phoneBox);
 
@@ -222,6 +222,17 @@
       fill(switchBox, box, el("span", {}, "Show older and sparse sites", el("small", {}, hidden ? " (" + fmt(hidden) + " hidden)" : " (none hidden)")));
       switchBox.title = M().HELD_WORDS;
     }
+    const present = (all) => ({ own: list(all).some((s) => s.own), public: list(all).some((s) => !s.own) });
+    // the three ticks; the second named for the sources present ("Environment Canterbury and NIWA")
+    function drawWhose(all) {
+      const label = { own: "The group's own", public: M().publicLabel(all), lawa: "LAWA-assessed" }, has = present(all);
+      // (only the kinds the area has: no tick for sampling that is not there)
+      fill(whoseBox, has.own || has.public ? el("span", { class: "wqp-whose-label" }, "Show") : null, M().WHOSE.filter(([k]) => (k === "own" ? has.own : has.public)).map(([k]) => {
+        const box = el("input", { type: "checkbox", "data-whose": k, ...(st.whose[k] ? { checked: true } : {}) });
+        box.addEventListener("change", () => { st.whose = { ...st.whose, [k]: box.checked }; st.chosen = null; st.carded = null; st.ticked = null; draw(true); });
+        return el("label", { class: "wqp-tick" }, box, el("span", {}, label[k]));
+      }));
+    }
 
     // ---- drawing --------------------------------------------------------------------------------------------------------------
     // keep: only the switch changed (the reads are the same): no new reads
@@ -239,14 +250,14 @@
       }
       if (t !== token || gone) return;
       status.textContent = "";
-      const shown = M().shownRows(data.rows, st.showAll), h = M().headline(shown);
+      const picked = M().whoseRows(data.rows, st.whose), shown = M().shownRows(picked, st.showAll), h = M().headline(shown);
       if (!st.ticked) st.ticked = M().defaultTicks(shown);
       st.ticked = st.ticked.filter((id) => shown.some((r) => r.id === id));
-      data.shown = shown; data.h = h;
-      drawSub(data.base); drawSwitch(M().hiddenCount(data.rows));
+      data.shown = shown; data.h = h; data.hidden = st.showAll ? 0 : M().hiddenCount(picked);
+      drawSub(data.base); drawSwitch(M().hiddenCount(picked)); drawWhose(data.typeSites);
       sources.textContent = M().sourcesLine(data.all.filter((s) => s.view));
       drawFigures(h);
-      drawNotes(h);
+      lawaBox.textContent = M().lawaLine(h, st.measure, st.type) || "";
       credit.textContent = creditLine(shown);
       if (phone) return drawPhone();
       drawView();
@@ -257,45 +268,96 @@
         keys.has("niwa-nrwqn-sites") ? "NIWA's results: Earth Sciences New Zealand (NIWA)." : "",
         list(rows).some((r) => r.trend) ? "Trends: LAWA (Land, Air, Water Aotearoa), 27 Oct 2026 release, CC BY 4.0." : ""].filter(Boolean).join(" ");
     };
+    // the headline sentence; with no box under Show ticked, it says so (the sites are there, only not shown)
+    const headlineOf = (h) => M().sentence(h, st.measure, st.type, data.hidden, { ticked: M().anyTicked(st.whose, present(data.typeSites)) });
+    // WQ2: the headline first (the group's own sampling when there is any), the other sources' good records quieter under it, then the
+    // numbers, saying what they count (they follow the ticks), and "About these numbers": every caveat, one click away.
     function drawFigures(h) {
-      const m = M().measure(st.measure), parts = M().bar(h);
+      const m = M().measure(st.measure), what = M().countsWhat(st.whose, M().publicLabel(data.typeSites), present(data.typeSites));
       const fig = (n, label, cls = "") => el("div", { class: "wqp-fig " + cls }, el("b", {}, n), el("span", {}, label));
+      const others = M().others(h, st.measure, st.type);
       fill(figures,
-        fig(fmt(h.sites), h.sites === 1 ? "site monitored" : "sites monitored", "wqp-fig-sites"),
-        fig(fmt(h.samples), (h.samples === 1 ? "sample" : "samples") + " of " + (m?.name || st.measure).replace(/^E\. coli$/, "E. coli"), "wqp-fig-samples"),
+        el("div", { class: "wqp-lead" }, el("p", { class: "wqp-sentence" }, headlineOf(h)), others ? el("p", { class: "wqp-others" }, others) : null),
+        fig(fmt(h.sites), (h.sites === 1 ? "site" : "sites") + " with results", "wqp-fig-sites"),
+        fig(fmt(h.samples), (h.samples === 1 ? "sample" : "samples") + " of " + (m?.name || st.measure), "wqp-fig-samples"),
         fig(h.latest ? W().date(h.latest) : "–", "latest sample", "wqp-fig-latest"),
-        el("div", { class: "wqp-fig wqp-fig-trend" }, parts.length ? miniBar(parts) : st.type === "groundwater" ? null : el("div", { class: "wqp-bar wqp-bar-empty", "aria-hidden": "true" }),
-          parts.length ? el("ul", { class: "wqp-bar-key" }, ...parts.map((p) => el("li", {}, el("i", { style: "background: " + p.colour, "aria-hidden": "true" }), p.label + " " + p.n))) : null,
-          el("p", { class: "wqp-sentence" }, M().sentence(h, st.measure, st.type))));
+        el("p", { class: "wqp-counts" }, "Counting " + what + (st.showAll ? ", older and sparse records included" : "") + ". ", about(h)));
     }
-    function drawNotes(h) {
+    // Every caveat in one quiet disclosure (the owner, 14 Nov 2026: "those caveats are taking up valuable room"), nothing left out.
+    function about(h) {
       const unknown = M().needsType(data.all).length, hasSubsNotOn = data.base.subs.some((s) => !s.member) && !group.parent_org_id;
-      fill(notes,
-        M().fieldNote(h, st.includeField) ? el("p", {}, M().fieldNote(h, st.includeField), " ", el("button", { type: "button", class: "wqp-link", onclick: () => { st.includeField = !st.includeField; draw(); } }, st.includeField ? "Use laboratory results only" : "Include field readings")) : null,
-        coordinator && unknown ? el("p", { class: "wqp-needs" }, fmt(unknown) + (unknown === 1 ? " site has" : " sites have") + " no water type recorded; " + (unknown === 1 ? "it is" : "they are") + " shown with surface water.") : null,
-        hasSubsNotOn ? el("p", {}, M().NOT_SHARED) : null);
+      const d = el("details", { class: "wqp-about", ...(st.about ? { open: true } : {}) }, el("summary", {}, "About these numbers"),
+        el("div", { class: "wqp-notes" },
+          M().fieldNote(h, st.includeField) ? el("p", {}, M().fieldNote(h, st.includeField), " ", el("button", { type: "button", class: "wqp-link", onclick: () => { st.includeField = !st.includeField; draw(); } }, st.includeField ? "Use laboratory results only" : "Include field readings")) : null,
+          el("p", {}, M().GOOD_WORDS + " " + M().HELD_WORDS),
+          el("p", {}, "A site's colour is its median of the chosen measure over the period (its latest result where it has fewer than " + M().LEVEL_MEDIAN_MIN + "); open a site to see the number."),
+          coordinator && unknown ? el("p", { class: "wqp-needs" }, fmt(unknown) + (unknown === 1 ? " site has" : " sites have") + " no water type recorded; " + (unknown === 1 ? "it is" : "they are") + " shown with surface water.") : null,
+          hasSubsNotOn ? el("p", {}, M().NOT_SHARED) : null));
+      d.addEventListener("toggle", () => { st.about = d.open; });
+      return d;
     }
     function drawView() {
       root_.dataset.view = st.view; viewSeg.mark();
-      mapPane.hidden = st.view !== "map"; chartPane.hidden = st.view !== "chart"; tablePane.hidden = st.view !== "table"; download.hidden = st.view !== "table";
+      // WQ2 (WebKit, Safari's engine, stops drawing a MapLibre map whose box is resized after its first draw): the map's pane is never
+      // display: none; set aside it keeps its size, out of sight and out of the flow (.wqp-off)
+      mapPane.classList.toggle("wqp-off", st.view !== "map"); mapPane.toggleAttribute("inert", st.view !== "map");
+      chartPane.hidden = st.view !== "chart"; tablePane.hidden = st.view !== "table"; download.hidden = st.view !== "table";
       if (!data) return;
       if (st.view === "map") drawMap(); else if (st.view === "chart") drawChart(); else drawTable();
     }
 
     // ---- the map -----------------------------------------------------------------------------------------------------------------
+    // WQ2: a click on a site says what it is in a small card on the map; its Open shows the whole site beside the map
     function drawMap() {
-      if (!mapUi) mapUi = makeMap(mapPane, { L, group, st, onSite: (id) => { st.chosen = id; drawSite(); }, phoneMode: false });
+      if (!mapUi) mapUi = makeMap(mapPane, { L, group, st, onSite: (id) => { if (st.chosen != null && id != null) { st.chosen = null; drawSite(); } st.carded = id; drawCard(() => { st.chosen = st.carded; st.carded = null; drawCard(); drawSite(); }); }, phoneMode: false });
       mapUi.update(data, st);
+      drawCard(() => { st.chosen = st.carded; st.carded = null; drawCard(); drawSite(); });
       drawSite();
+    }
+    // The card: the site's name, whose it is, the water type, its level (the number its colour stands for) and results, and Open.
+    function drawCard(open) {
+      const box = mapUi?.card;
+      if (!box) return;
+      const row = st.carded == null ? null : data?.shown.find((r) => r.id === st.carded);
+      box.hidden = !row;
+      mapUi.choose(row ? row.id : st.chosen ?? null);
+      if (!row) { box.replaceChildren(); return; }
+      const c = M().card(row, st.measure, st.period, { includeField: st.includeField });
+      fill(box, el("div", { class: "wqp-cardhead" }, el("span", { class: "wqp-carddot", style: "background: " + c.colour, "aria-hidden": "true" }), el("h3", {}, c.name),
+          el("button", { type: "button", class: "wqp-close", "aria-label": "Close", onclick: () => { st.carded = null; drawCard(open); } }, "×")),
+        el("p", { class: "wqp-cardwho" }, [c.whose, c.type, c.tags].filter(Boolean).join(" · ")),
+        c.level ? el("p", { class: "wqp-cardlevel" }, c.level) : null,
+        c.band ? el("p", { class: "wqp-cardquiet" }, c.band) : null,
+        el("div", { class: "wqp-cardfoot" }, el("p", { class: "wqp-cardquiet" }, [c.results, c.latest, c.note].filter(Boolean).join(" · ")),
+          el("button", { type: "button", class: "wqp-open", onclick: () => open(row.id) }, "Open")));
+      // the site it describes stays in sight beside it; on a phone the card is clear of the floating +
+      mapUi.keepClear?.(row.lngLat, box);
+      if (phone) clearOfPlus(box);
+    }
+    // On a phone the + floats over the page: a card it would cover is scrolled up clear of it.
+    function clearOfPlus(node) {
+      const plus = [...document.querySelectorAll(".add-button")].find((n) => n.getClientRects().length && getComputedStyle(n).visibility !== "hidden");
+      if (!plus) return;
+      const p = plus.getBoundingClientRect(), c = node.getBoundingClientRect();
+      if (c.right <= p.left || c.left >= p.right || c.bottom <= p.top || c.top >= p.bottom) return;
+      const by = Math.ceil(c.bottom - p.top + 8);
+      let s = node.parentElement;
+      while (s && !(s.scrollHeight > s.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(s).overflowY))) s = s.parentElement;
+      (s || document.scrollingElement || document.documentElement).scrollBy({ top: by, behavior: "instant" });
     }
     function drawSite() {
       siteChart?.destroy(); siteChart = null;
       const box = mapUi?.side;
       if (!box) return;
       const row = data?.shown.find((r) => r.id === st.chosen) || data?.rows.find((r) => r.id === st.chosen);
-      box.hidden = !row; mapPane.classList.toggle("wqp-with-site", !!row);
-      mapUi.choose(row?.id ?? null);
+      // (the site's view lies over the map's right side: the map's box never changes; the site is panned clear of it)
+      box.hidden = !row;
+      // (the map's zoom and credit move to the view's left edge while it is open)
+      mapPane.classList.toggle("wqp-siteopen", !!row);
+      mapUi.choose(row?.id ?? st.carded ?? null);
       if (!row) return;
+      mapPane.style.setProperty("--wqp-site-w", box.offsetWidth + "px");
+      requestAnimationFrame(() => mapUi?.keepClear?.(row.lngLat, box));
       const host = el("div", { class: "block-host wqp-sitechart" });
       const ticked = st.ticked.includes(row.id);
       fill(box, el("div", { class: "wqp-sitehead" }, el("h2", { tabindex: "-1" }, row.name),
@@ -392,6 +454,10 @@
       FP.sheet?.menu(opener, "Show", [
         ...M().TYPES.map(([v, t]) => ({ label: t, current: st.type === v, icon: "water", run: () => setType(v) })),
         ...first.concat(more).map((x) => ({ label: x.name, current: st.measure === x.key, run: () => { st.measure = x.key; st.chosen = null; st.ticked = null; draw(); } })),
+        // WQ2: whose sites, as on a computer (each a switch: shown or hidden)
+        ...(() => { const has = present(data?.typeSites), label = { own: "The group's own", public: M().publicLabel(data?.typeSites), lawa: "LAWA-assessed" };
+          return M().WHOSE.filter(([k]) => (k === "own" ? has.own : has.public)).map(([k]) => ({ label: label[k], hint: st.whose[k] ? "Shown: tap to hide" : "Hidden: tap to show", current: !!st.whose[k],
+            run: () => { st.whose = { ...st.whose, [k]: !st.whose[k] }; st.carded = null; st.ticked = null; draw(true); } })); })(),
       ]);
     }
     function sitesSheet(opener, rows, open = null) {
@@ -413,7 +479,7 @@
       }));
     }
     function drawPhone() {
-      const h = data.h, m = M().measure(st.measure), rows = [...data.shown].sort((a, b) => (b.own - a.own) || String(b.last || "").localeCompare(String(a.last || "")));
+      const h = data.h, m = M().measure(st.measure), rows = M().sortRows(data.shown, "own");
       const typeWords = M().TYPES.find(([v]) => v === st.type)?.[1] || st.type;
       const choose = el("button", { type: "button", class: "wqp-choose", id: "wqp-choose", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => chooseShown(choose) },
         el("span", {}, typeWords + " · " + (m?.name || st.measure)), FP.icon ? FP.icon("chevron", 16) : null);
@@ -421,15 +487,20 @@
       const sitesBtn = el("button", { type: "button", class: "wqp-mapchip wqp-sitesbtn", id: "wqp-sites", "aria-haspopup": "dialog", onclick: () => sitesSheet(sitesBtn, rows) }, FP.icon ? FP.icon("files", 16) : null, el("span", {}, "Sites"));
       // review of #538, 10: above the map only the one quiet control, the sentence and the bar (the page's name is for a screen
       // reader; the bar's More already marks where you are); the count and the latest date go quietly under the map
+      // WQ2: the headline is the group's own sampling when there is any; LAWA's line goes low, under the map
+      const others = M().others(h, st.measure, st.type), lawa = M().lawaLine(h, st.measure, st.type);
       fill(phoneBox, el("h1", { class: "wqp-phonetitle visually-hidden" }, "Water quality"), choose,
-        el("p", { class: "wqp-sentence" }, M().sentence(h, st.measure, st.type)), M().bar(h).length ? miniBar(M().bar(h)) : null, mapHost,
-        el("p", { class: "wqp-phonelead" }, fmt(h.sites) + (h.sites === 1 ? " site" : " sites") + (h.latest ? " · latest " + W().date(h.latest) : "")),
+        el("p", { class: "wqp-sentence" }, headlineOf(h)), others ? el("p", { class: "wqp-others" }, others) : null, mapHost,
+        el("p", { class: "wqp-phonelead" }, fmt(h.sites) + (h.sites === 1 ? " site" : " sites") + " with results" + (h.latest ? " · latest " + W().date(h.latest) : "")),
         (phoneRounds = phoneRounds || FP.wqRound?.entry(group, { sb, compact: true }) || null),
+        lawa ? el("p", { class: "wqp-lawa" }, lawa) : null,
         el("p", { class: "wqp-credit" }, creditLine(data.shown)));
       mapUi?.destroy(); mapUi = null;
-      // a dot tapped opens its site in the sites' sheet, with its chart
-      mapUi = makeMap(mapHost, { L, group, st, onSite: (id) => sitesSheet(sitesBtn, rows, id), phoneMode: true, extra: [sitesBtn] });
+      // a dot tapped says what it is in a small card; its Open opens the site in the sites' sheet, with its chart
+      const open = (id) => { st.carded = null; drawCard(open); sitesSheet(sitesBtn, rows, id); };
+      mapUi = makeMap(mapHost, { L, group, st, onSite: (id) => { st.carded = id; drawCard(open); }, phoneMode: true, extra: [sitesBtn] });
       mapUi.update(data, st);
+      drawCard(open);
     }
 
     // ---- start, and a phone turning into a computer -----------------------------------------------------------------------------
@@ -473,25 +544,23 @@
   function makeMap(host, { L, group, st, onSite, phoneMode, extra = [] }) {
     const gl = root.maplibregl;
     const side = el("aside", { class: "wqp-site", hidden: true, "aria-label": "The site chosen" });
-    const panel = el("aside", { class: "wqp-layers", "aria-label": "Layers and legend" });
+    const panel = el("aside", { class: "wqp-layers", "aria-label": "Layers" });
+    // WQ2: a site's card (what it is, its number), over the map at its foot; filled by the page
+    const card = el("div", { class: "wqp-card", role: "group", "aria-label": "The site tapped", hidden: true });
     const canvas = el("div", { class: "wqp-map", role: "region", "aria-label": "Map of the water quality sites" });
     const bg = el("div", { class: "wqp-bgswitch maplibregl-ctrl", role: "group", "aria-label": "Background" });
     // PH2: on a phone the layers and the legend are one button on the map, opening them in a sheet; beside it whatever the page adds
     // (its Sites)
     const layersBtn = phoneMode ? el("button", { type: "button", class: "wqp-mapchip wqp-layersbtn", id: "wqp-layers", "aria-haspopup": "dialog",
-      onclick: () => FP.sheet?.open({ opener: layersBtn, title: "Layers and legend", className: "wqp-layersheet", body: () => panel }) }, FP.icon ? FP.icon("layers", 16) : null, el("span", {}, "Layers")) : null;
-    // RF1 (the owner's phone, 14 Nov 2026: coloured dots with no key in view read as a grade): on a phone, whenever LAWA's trend colours
-    // are on the map, "Key" sits beside Layers and opens the key alone, one tap away (keyBtn.hidden follows the sites shown: push())
-    const keyBox = el("div", { class: "wqp-keybox" });
-    const keyBtn = phoneMode ? el("button", { type: "button", class: "wqp-mapchip wqp-keybtn", id: "wqp-key", "aria-haspopup": "dialog", hidden: true,
-      onclick: () => FP.sheet?.open({ opener: keyBtn, title: "Key", className: "wqp-keysheet", body: () => keyBox }) }, el("span", {}, "Key")) : null;
-    const chips = phoneMode ? el("div", { class: "wqp-mapchips" }, ...extra, layersBtn, keyBtn) : null;
+      onclick: () => FP.sheet?.open({ opener: layersBtn, title: "Layers", className: "wqp-layersheet", body: () => panel }) }, FP.icon ? FP.icon("layers", 16) : null, el("span", {}, "Layers")) : null;
+    // WQ2 (the owner, 14 Nov 2026: "colours are self explanitory and no key (can be clicked on)"): no Key chip and no legend; a tap says
+    const chips = phoneMode ? el("div", { class: "wqp-mapchips" }, ...extra, layersBtn) : null;
     // (review of #538, 5: on a phone Map | Aerial is the last chip in the same row, which wraps on a narrow phone, so none sits on another;
-    // RF1: the chips are words only on a phone, so Sites, Layers, Key and Aerial | Topo fit one row at 390 px. Not bottom right: the +
+    // RF1: the chips are words only on a phone, so Sites, Layers and Aerial | Topo fit one row at 390 px. Not bottom right: the +
     // floats there over a scrolled page)
     if (chips) chips.append(bg);
-    fill(host, phoneMode ? null : panel, el("div", { class: "wqp-mapbox" }, canvas, ...(chips ? [chips] : [bg])), phoneMode ? null : side);
-    if (!gl?.Map) { fill(canvas, el("p", { class: "wqp-empty" }, "The map can't be shown in this browser.")); return { side, update() {}, choose() {}, destroy() {} }; }
+    fill(host, phoneMode ? null : panel, el("div", { class: "wqp-mapbox" }, canvas, ...(chips ? [chips] : [bg]), card), phoneMode ? null : side);
+    if (!gl?.Map) { fill(canvas, el("p", { class: "wqp-empty" }, "The map can't be shown in this browser.")); return { side, card, update() {}, choose() {}, destroy() {} }; }
     if (!protocol && root.pmtiles?.Protocol) { try { gl.addProtocol("pmtiles", new root.pmtiles.Protocol().tile); } catch { /* already there */ } protocol = true; }
     try { gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js"); } catch { /* set already */ }
     // (PH2: on a phone the credit's "i" sits bottom left by the scale, clear of the + that floats bottom right)
@@ -516,47 +585,57 @@
     } else bg.hidden = true;
 
     let rows = [], framed = false, chosen = null, layers = [], rowsByType = null, typeNow = null, coreRows = null;
-    const SRC = "wqp-sites";
+    // WQ2: the group's own sites in a source of their own, never clustered and drawn above everything else; the other sources' sites in
+    // SRC (clustered on a phone)
+    const SRC = "wqp-sites", OWN = "wqp-own";
     ready.then(() => {
       for (const ic of M().ICONS) if (!map.hasImage(ic.icon)) map.addImage(ic.icon, iconImage(ic), { pixelRatio: 2 });
       map.addSource("wqp-mask", { type: "geojson", data: empty() });
       map.addSource("wqp-area", { type: "geojson", data: empty() });
       map.addSource("wqp-subs", { type: "geojson", data: empty() });
       // RF1: on a phone, sites that would sit on one another at this zoom are one quiet mark with their count (MapLibre's own
-      // clustering of the GeoJSON source); a tap on it eases in to its sites. A computer keeps every site (its key is always beside the map).
+      // clustering of the GeoJSON source); a tap on it eases in to its sites. A computer keeps every site.
       map.addSource(SRC, { type: "geojson", data: empty(), ...(phoneMode ? { cluster: true, clusterRadius: M().CLUSTER.radius, clusterMaxZoom: M().CLUSTER.maxZoom } : {}) });
+      map.addSource(OWN, { type: "geojson", data: empty() });
+      map.addSource("wqp-chosen", { type: "geojson", data: empty() });
       map.addLayer({ id: "wqp-mask", type: "fill", source: "wqp-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
       // PH5: no dashes at overview scale: the sub-groups' edges a plain hairline
       map.addLayer({ id: "wqp-subs-line", type: "line", source: "wqp-subs", paint: { "line-color": "#5f6670", "line-width": 0.75, "line-opacity": 0.8 } });
       map.addLayer({ id: "wqp-area-line", type: "line", source: "wqp-area", paint: { "line-color": "#2f3542", "line-width": 1.5, "line-opacity": 0.85 } });
       const single = ["!", ["has", "point_count"]];
-      map.addLayer({ id: "wqp-chosen", type: "circle", source: SRC, filter: ["all", single, ["==", ["get", "site"], -1]], paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#1d1d1f", "circle-stroke-width": 2.5 } });
       // RF1: every site a 44 px target on a phone, however small its dot looks: an unseen circle of 22 px round each (the nearest wins)
-      if (phoneMode) map.addLayer({ id: "wqp-hit", type: "circle", source: SRC, filter: single, paint: { "circle-radius": M().CLUSTER.hit, "circle-color": "rgba(0,0,0,0)" } });
-      map.addLayer({ id: "wqp-sites", type: "symbol", source: SRC, filter: single, layout: { "icon-image": ["get", "icon"], "icon-allow-overlap": true, "icon-ignore-placement": true,
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 13, 1.1], "symbol-sort-key": ["get", "order"] } });
       if (phoneMode) {
-        // the cluster: a dark ink circle, a thin light edge and the number, no colour that could read as a state; drawn as a picture per
+        map.addLayer({ id: "wqp-hit", type: "circle", source: SRC, filter: single, paint: { "circle-radius": M().CLUSTER.hit, "circle-color": "rgba(0,0,0,0)" } });
+        map.addLayer({ id: "wqp-hit-own", type: "circle", source: OWN, paint: { "circle-radius": M().CLUSTER.hit, "circle-color": "rgba(0,0,0,0)" } });
+      }
+      const marks = { "icon-image": ["get", "icon"], "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 13, 1.1], "symbol-sort-key": ["get", "order"] };
+      map.addLayer({ id: "wqp-sites", type: "symbol", source: SRC, filter: single, layout: marks });
+      if (phoneMode) {
+        // the cluster: a dark ink circle, a thin light edge and the number, no colour that could read as a level; drawn as a picture per
         // count (made when first asked for), so it needs no map font
         map.addLayer({ id: "wqp-clusters", type: "symbol", source: SRC, filter: ["has", "point_count"],
           layout: { "icon-image": ["concat", "wqp-n-", ["to-string", ["get", "point_count"]]], "icon-allow-overlap": true, "icon-ignore-placement": true } });
         map.on("styleimagemissing", (e) => { const n = /^wqp-n-(\d+)$/.exec(e.id || "")?.[1]; if (n && !map.hasImage(e.id)) map.addImage(e.id, countImage(Number(n)), { pixelRatio: 2 }); });
-        map.on("click", "wqp-clusters", async (e) => {
-          const f = e.features?.[0], id = f?.properties?.cluster_id;
-          if (id == null) return;
-          let zoom = null;
-          try { zoom = await map.getSource(SRC).getClusterExpansionZoom(id); } catch { zoom = map.getZoom() + 2; }
-          map.easeTo({ center: f.geometry.coordinates, zoom: Math.min(zoom + 0.25, 18), duration: root.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 450 });
-        });
       }
+      map.addLayer({ id: "wqp-own-sites", type: "symbol", source: OWN, layout: marks });
+      map.addLayer({ id: "wqp-chosen", type: "circle", source: "wqp-chosen", paint: { "circle-radius": 16, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#1d1d1f", "circle-stroke-width": 2.5 } });
       paint();
-      const hitLayer = phoneMode ? "wqp-hit" : "wqp-sites";
-      map.on("click", hitLayer, (e) => {
-        // (two near targets overlap: the site nearest the finger)
-        const pick = M().nearestSite((e.features || []).map((f) => ({ id: Number(f.properties.site), at: map.project(f.geometry.coordinates) })), e.point);
-        if (pick != null) onSite(pick);
+      // one click: the site nearest the pointer among the sites under it (own or not); else a cluster eases in; else the card closes
+      const siteLayers = phoneMode ? ["wqp-hit", "wqp-hit-own"] : ["wqp-sites", "wqp-own-sites"];
+      map.on("click", async (e) => {
+        const hits = map.queryRenderedFeatures(e.point, { layers: siteLayers.filter((l) => map.getLayer(l)) });
+        const targets = hits.map((f) => ({ id: Number(f.properties.site), at: map.project(f.geometry.coordinates) })), pick = M().nearestSite(targets, e.point);
+        const f = phoneMode ? map.queryRenderedFeatures(e.point, { layers: ["wqp-clusters"] })[0] : null, id = f?.properties?.cluster_id;
+        // (a site's unseen target and a cluster's mark overlapping: whichever's middle is nearer the finger)
+        const away = (at) => Math.hypot(at.x - e.point.x, at.y - e.point.y);
+        const near = pick == null ? Infinity : Math.min(...targets.filter((t) => t.id === pick).map((t) => away(t.at)));
+        if (pick != null && (id == null || near <= away(map.project(f.geometry.coordinates)))) { onSite(pick); return; }
+        if (id == null) { onSite(null); return; }
+        let zoom = null;
+        try { zoom = await map.getSource(SRC).getClusterExpansionZoom(id); } catch { zoom = map.getZoom() + 2; }
+        map.easeTo({ center: f.geometry.coordinates, zoom: Math.min(zoom + 0.25, 18), duration: root.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 450 });
       });
-      for (const l of [hitLayer, ...(phoneMode ? ["wqp-clusters"] : [])]) {
+      for (const l of [...siteLayers, ...(phoneMode ? ["wqp-clusters"] : [])]) {
         map.on("mouseenter", l, () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", l, () => { map.getCanvas().style.cursor = ""; });
       }
@@ -578,28 +657,40 @@
     }
     const scheme = root.matchMedia?.("(prefers-color-scheme: dark)"), themeWatch = typeof MutationObserver === "undefined" ? null : new MutationObserver(paint);
     scheme?.addEventListener?.("change", paint); themeWatch?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] });
-    function iconImage({ shape, cls, ring, faded }) {
+    // A site's mark (WQ2): the shape its water type's (circle, triangle), the fill its level's, the size and edge whose it is (the
+    // group's own the largest, with a bold dark ring; an older or sparse record small and faint; no result of the measure smaller still).
+    function iconImage({ shape, tier, fill, small }) {
       const size = 48, c = document.createElement("canvas"); c.width = c.height = size;
-      const g = c.getContext("2d"), mid = size / 2, r = faded ? 8 : 11, colour = M().CLASS_COLOURS[cls] || M().CLASS_COLOURS.none;
-      g.globalAlpha = faded ? 0.5 : 1;
-      if (ring) { g.beginPath(); g.arc(mid, mid, r + 8, 0, Math.PI * 2); g.fillStyle = "#ffffff"; g.fill(); g.lineWidth = 3.5; g.strokeStyle = "#1d1d1f"; g.stroke(); }
-      g.beginPath();
-      if (shape === "square") g.rect(mid - r, mid - r, r * 2, r * 2); else g.arc(mid, mid, r, 0, Math.PI * 2);
-      g.fillStyle = colour; g.fill(); g.lineWidth = 3; g.strokeStyle = "#ffffff"; g.stroke();
+      const g = c.getContext("2d"), mid = size / 2, z = M().SIZES[tier], r = small ? Math.min(z.r, 6) : z.r;
+      const path = (rr) => {
+        g.beginPath();
+        // (a triangle a little larger than a circle of the same r, so a well reads as large as a river site; the own one fits its 48 px)
+        if (shape === "triangle") { const h = rr * (z.ring ? 1.25 : 1.45); g.moveTo(mid, mid - h); g.lineTo(mid + h * 0.95, mid + h * 0.62); g.lineTo(mid - h * 0.95, mid + h * 0.62); g.closePath(); }
+        else if (shape === "square") g.rect(mid - rr, mid - rr, rr * 2, rr * 2);
+        else g.arc(mid, mid, rr, 0, Math.PI * 2);
+      };
+      g.globalAlpha = z.alpha;
+      // a thin dark outline under the white edge, so the mark reads on the pale topo as well as the aerial
+      path(r); g.lineJoin = "round"; g.lineWidth = z.edgeWidth + 2; g.strokeStyle = "rgba(16, 24, 40, 0.55)"; g.stroke();
+      path(r); g.fillStyle = fill; g.fill(); g.lineWidth = z.edgeWidth; g.strokeStyle = "#ffffff"; g.stroke();
+      // the group's own: a bold dark ring, and a white hairline outside it so the ring reads on a dark aerial too
+      if (z.ring) {
+        path(r + z.edgeWidth / 2 + z.ringWidth / 2); g.lineWidth = z.ringWidth; g.strokeStyle = z.ring; g.stroke();
+        path(r + z.edgeWidth / 2 + z.ringWidth + 0.75); g.lineWidth = 1.5; g.strokeStyle = "rgba(255, 255, 255, 0.9)"; g.stroke();
+      }
       const d = g.getImageData(0, 0, size, size);
       return { width: size, height: size, data: new Uint8Array(d.data.buffer) };
     }
     function push() {
       if (!map.getSource?.(SRC)) return;
-      map.getSource(SRC).setData({ type: "FeatureCollection", features: rows.filter((r) => r.lngLat).map((r) => {
-        const s = M().symbol(r);
-        return { type: "Feature", id: r.id, geometry: { type: "Point", coordinates: r.lngLat }, properties: { site: r.id, icon: s.icon, name: r.name, order: (r.own ? 2 : 0) + (r.held ? 0 : 1) } };
-      }) });
+      const feature = (r) => { const s = M().symbol(r); return { type: "Feature", id: r.id, geometry: { type: "Point", coordinates: r.lngLat }, properties: { site: r.id, icon: s.icon, name: r.name, order: s.order * 10 + (s.small ? 0 : 1) } }; };
+      const placed = rows.filter((r) => r.lngLat);
+      map.getSource(SRC).setData({ type: "FeatureCollection", features: placed.filter((r) => !r.own).map(feature) });
+      map.getSource(OWN)?.setData({ type: "FeatureCollection", features: placed.filter((r) => r.own).map(feature) });
       mark();
-      if (keyBtn) keyBtn.hidden = !M().trendsShown(rows);
     }
-    // (the site's id is a property: a clustered source keeps properties, not every feature's own id)
-    const mark = () => { if (map.getLayer?.("wqp-chosen")) map.setFilter("wqp-chosen", ["all", ["!", ["has", "point_count"]], ["==", ["get", "site"], chosen ?? -1]]); };
+    // the ring round the site chosen or tapped: its own small source (the sites are in two)
+    const mark = () => { const r = rows.find((x) => x.id === chosen && x.lngLat); map.getSource?.("wqp-chosen")?.setData(r ? { type: "FeatureCollection", features: [{ type: "Feature", geometry: { type: "Point", coordinates: r.lngLat }, properties: {} }] } : empty()); };
     // A cluster's mark: a dark ink circle with a thin light edge and the count in white (48 px drawn, 24 px shown); larger for 100 and more
     function countImage(n) {
       const words = n > 999 ? "999+" : String(n), size = words.length > 2 ? 64 : 52, c = document.createElement("canvas"); c.width = c.height = size;
@@ -618,21 +709,14 @@
       map.fitBounds(bounds, { padding: phoneMode ? 30 : 50, duration: 0, maxZoom: 13 });
     }
     // ---- the supporting layers, by water type ---------------------------------------------------------------------------------
+    // (WQ2: layers only; no legend: the colours explain themselves and a click on a site says what it is)
     function drawPanel(type) {
-      const legendItems = M().legend({ type, own: rows.some((r) => r.own), held: rows.some((r) => r.held) });
       fill(panel, el("h2", { class: "wqp-h" }, "Layers"),
         el("ul", { class: "wqp-layerlist" }, ...layers.filter((l) => !l.missing).map((l) => {
           const box = el("input", { type: "checkbox", "data-layer": l.def.id, ...(l.on ? { checked: true } : {}) });
           box.addEventListener("change", () => { l.on = box.checked; st.layersOn[l.def.id] = l.on; show(l); });
           return el("li", {}, el("label", {}, box, el("span", {}, l.def.title, el("small", { class: "wqp-layernote" }, l.say || l.def.note || ""))));
-        })),
-        el("h2", { class: "wqp-h" }, "Legend"),
-        el("ul", { class: "wqp-legend" }, ...legendItems.map((x) => el("li", {}, swatch(x), el("span", {}, x.label)))),
-        el("p", { class: "wqp-hint" }, type === "groundwater" ? "Groundwater sites are not graded: the river bands do not apply to wells." : "Colour is LAWA's published 10-year trend of the chosen measure; LAWA reports river sites only."));
-      // RF1: the phone's Key sheet: the same key and its sentence, and what a numbered mark is
-      if (phoneMode) fill(keyBox, el("ul", { class: "wqp-legend" }, ...legendItems.map((x) => el("li", {}, swatch(x), el("span", {}, x.label))),
-        el("li", {}, clusterSwatch(), el("span", {}, M().CLUSTER_WORDS))),
-        el("p", { class: "wqp-hint" }, type === "groundwater" ? "Groundwater sites are not graded: the river bands do not apply to wells." : M().TREND_NOT_GRADE));
+        })));
     }
     async function setType(type) {
       if (typeNow === type) return;
@@ -725,54 +809,49 @@
       map.getSource("wqp-rivers")?.setData(error ? empty() : FP.farmModel.riverFeatures(data));
     }
 
-    let lastKey = null;
+    let lastKey = null, drawnAt = canvas.clientWidth + "x" + canvas.clientHeight;
     return {
-      side,
+      side, card,
       async update(data, s) {
         rows = data.shown;
         await ready;
         const b = data.base, sub = s.sub ? b.subs.find((x) => x.id === s.sub) : null;
-        map.getSource("wqp-area")?.setData({ type: "FeatureCollection", features: b.area.length ? [{ type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: b.area } }] : [] });
-        // PH5: outside the group's area under the mask
-        map.getSource("wqp-mask")?.setData((b.area.length && FP.mapPalette?.outsideMask?.({ type: "MultiLineString", coordinates: b.area })) || empty());
+        // PH5: outside the place under the mask. WQ2 (the owner, 14 Nov 2026): a sub-group chosen, the outline, the mask and the fit
+        // follow that sub-group's area; all of the group, the group's
+        const place = sub?.rings?.length ? sub.rings : b.area;
+        map.getSource("wqp-area")?.setData({ type: "FeatureCollection", features: place.length ? [{ type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: place } }] : [] });
+        map.getSource("wqp-mask")?.setData((place.length && FP.mapPalette?.outsideMask?.({ type: "MultiLineString", coordinates: place })) || empty());
         map.getSource("wqp-subs")?.setData({ type: "FeatureCollection", features: b.subs.filter((x) => x.rings.length).map((x) => ({ type: "Feature", properties: { id: x.id }, geometry: { type: "MultiLineString", coordinates: x.rings } })) });
         push(); paintNow();
         const key = (s.sub || "") + "|" + s.type;
         if (!framed || key !== lastKey) { frame(b, sub); framed = true; lastKey = key; }
         await setType(s.type);
         drawPanel(s.type);
-        map.resize();
+        // (only when the box really changed size: a resize after the first draw is what blanks the map in WebKit)
+        const now = canvas.clientWidth + "x" + canvas.clientHeight;
+        if (now !== drawnAt) { drawnAt = now; map.resize(); }
       },
       choose(id) { chosen = id; mark(); },
+      // A site under a card or the site's view (node): the map eases so the site sits in the largest clear part of the map beside it.
+      keepClear(lngLat, node) {
+        if (!lngLat || !node || node.hidden) return;
+        const c = canvas.getBoundingClientRect(), r = node.getBoundingClientRect(), p = map.project(lngLat), pad = 28;
+        // (on a phone the chips along the map's top are no place for it either)
+        const top = chips ? Math.max(0, chips.getBoundingClientRect().bottom - c.top + 4) : 0;
+        const box = { l: r.left - c.left - pad, t: r.top - c.top - pad, r: r.right - c.left + pad, b: r.bottom - c.top + pad };
+        if ((p.x < box.l || p.x > box.r || p.y < box.t || p.y > box.b) && p.y > top) return;
+        const ways = [
+          { room: c.height - box.b, to: [p.x, box.b + (c.height - box.b) / 2] }, { room: box.t - top, to: [p.x, top + (box.t - top) / 2] },
+          { room: c.width - box.r, to: [box.r + (c.width - box.r) / 2, p.y] }, { room: box.l, to: [box.l / 2, p.y] },
+        ].sort((a, b) => b.room - a.room);
+        const [x, y] = ways[0].to;
+        map.panBy([p.x - x, p.y - y], { duration: root.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 300 });
+      },
       map,
       destroy() { scheme?.removeEventListener?.("change", paint); themeWatch?.disconnect(); try { map.remove(); } catch { /* gone */ } },
     };
   }
-  // A legend swatch: the map's symbol as a small picture (shape, colour, ring, faded).
-  function swatch({ shape, cls, ring, faded }) {
-    const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
-    for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: 22, height: 22, "aria-hidden": "true", class: "wqp-swatch" })) svg.setAttribute(k, String(v));
-    const colour = M().CLASS_COLOURS[cls] || M().CLASS_COLOURS.none, add = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v)); svg.append(n); };
-    if (ring) add("circle", { cx: 12, cy: 12, r: 10, fill: "#ffffff", stroke: "#1d1d1f", "stroke-width": 1.75 });
-    const r = faded ? 4 : 5.5, op = faded ? 0.5 : 1;
-    if (shape === "square") add("rect", { x: 12 - r, y: 12 - r, width: 2 * r, height: 2 * r, fill: colour, stroke: "#ffffff", "stroke-width": 1.5, opacity: op });
-    else add("circle", { cx: 12, cy: 12, r, fill: colour, stroke: "#ffffff", "stroke-width": 1.5, opacity: op });
-    return svg;
-  }
-  // RF1: the cluster's mark in the key: a dark circle with a number
-  function clusterSwatch() {
-    const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
-    for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: 22, height: 22, "aria-hidden": "true", class: "wqp-swatch" })) svg.setAttribute(k, String(v));
-    const c = document.createElementNS(NS, "circle");
-    for (const [k, v] of Object.entries({ cx: 12, cy: 12, r: 10.5, fill: M().CLUSTER.ink, stroke: M().CLUSTER.edge, "stroke-width": 1.25 })) c.setAttribute(k, String(v));
-    const t = document.createElementNS(NS, "text");
-    for (const [k, v] of Object.entries({ x: 12, y: 16, "text-anchor": "middle", fill: "#ffffff", "font-size": 11, "font-weight": 600 })) t.setAttribute(k, String(v));
-    t.textContent = "3";
-    svg.append(c, t);
-    return svg;
-  }
-
   // SR1: a saved sampling round changes the group's results: the next visit reads them again
   const forget = (groupId) => loaders.delete(groupId);
-  FP.wqPage = { view, summary, miniBar, href, loader, forget, close: () => live?.destroy(), debugMap: () => live?.map?.() || null };
+  FP.wqPage = { view, summary, href, loader, forget, close: () => live?.destroy(), debugMap: () => live?.map?.() || null };
 })(typeof window === "undefined" ? globalThis : window);

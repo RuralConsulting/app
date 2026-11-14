@@ -3,8 +3,11 @@
 // groundwater kept apart (wq-model.js waterType, mirrored by public.wq_water_type), one measure at a time as a family (nitrate-N and
 // nitrate-nitrite-N are "Nitrate", never pooled: each site's line is one key), the method of every result in view (lab solid, field
 // hollow: methodKind, mirrored by public.wq_method_kind), N2c's one useful-sites rule (wq-sites-model.js isCurrent) applied per measure,
-// LAWA's published 10-year trend as the only class (nothing is graded here), and the same rows behind the headline figures, the map, the
-// chart and the table. No DOM, network or clock.
+// and the same rows behind the headline figures, the map, the chart and the table. WQ2 (the owner, 14 Nov 2026: "less emphasis on lawa
+// data, much more on the groups own data, and ecan sites with good data are between the groups and lawa"): everywhere on the page the
+// group's own sampling (its sub-groups' too) comes first, then the council's and NIWA's sites with a good record (N2c's rule), then LAWA's
+// published trend, in words, last. A dot's colour is the site's level of the chosen measure in fixed bands (the owner, 14 Nov 2026);
+// whose it is, is the mark's size and ring. Nothing is graded here. No DOM, network or clock.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./wq-model.js") : root.FP.wqModel, node ? require("./wq-sites-model.js") : root.FP.wqSitesModel,
@@ -161,10 +164,11 @@
       const counted = sum ? Number(sum.n) : f ? Number(f.n) : null;
       const current = S.isCurrent({ owned: s.own, lastAt: Number.isFinite(lastAt) ? lastAt : null, counted: counted ?? 0 }, now);
       const cls = classOf(lawa[s.id], measureKey);
-      out.push({ ...s, current, held: !current, key: f?.parameter || null, keyName: f?.parameter ? keyName(f.parameter) : null, unit: f?.unit || measure(measureKey)?.unit || "",
+      out.push({ ...s, current, held: !current, measureKey, key: f?.parameter || null, keyName: f?.parameter ? keyName(f.parameter) : null, unit: f?.unit || measure(measureKey)?.unit || "",
         n: f?.n || 0, nLab: f?.n_lab || 0, nField: (f?.n_field || 0) + (f?.n_strip || 0), nStrip: f?.n_strip || 0, nUnrecorded: f?.n_unrecorded || 0, nCensored: f?.n_censored || 0,
         first: f?.first_sampled || null, last: f?.last_sampled || null, recordN: counted, recordLast: Number.isFinite(lastAt) ? new Date(lastAt).toISOString() : null,
         latestText: f?.latest_text ?? null, latestAt: f?.latest_at || null, latestMethod: f?.latest_method || null,
+        latestValue: f?.latest_value == null || f.latest_value === "" || !Number.isFinite(Number(f.latest_value)) ? null : Number(f.latest_value),
         median: f?.median == null ? null : Number(f.median), medianN: f?.median_n || 0, medianCensored: !!f?.median_censored, yearly: list(f?.yearly),
         trend: cls.trend, trendWords: cls.trendWords, band: cls.band, bandWords: cls.bandWords,
         // the site's other keys of the family: said and drawn on its own chart, never in its figures
@@ -176,11 +180,22 @@
   const shownRows = (rows, showAll = false) => list(rows).filter((r) => showAll || !r.held);
   const hiddenCount = (rows) => list(rows).filter((r) => r.held).length;
 
-  // ---- LAWA's trend: the only class on the page ----------------------------------------------------------------------------------
+  // ---- whose the data is: the order of the whole page (WQ2) --------------------------------------------------------------------------
+  // own: the group's own sampling and its sub-groups' (always shown); good: another source's site (ECan's, NIWA's) with a good record of
+  // the measure, N2c's rule (a result in the last 5 years and at least 12 results: wq-sites-model.js isCurrent); held: an older or sparse
+  // record, shown only by the switch. The headline, the map's draw order and size, the lists and the table's first sort all follow it.
+  const TIERS = ["own", "good", "held"];
+  const tierOf = (r) => (r?.own ? "own" : r?.held ? "held" : "good");
+  const tierRank = (r) => TIERS.indexOf(tierOf(r));
+  const GOOD_WORDS = "A good record: a result in the last " + S.CURRENT.years + " years and at least " + S.CURRENT.minResults + " results of the measure.";
+  // Whose a site is, in a card's words: "The group's own sampling", "Ford Creek sub-group's own sampling", "Environment Canterbury", "NIWA".
+  const whoseWords = (r) => (!r ? "" : !r.own ? r.source : r.source === "This group's own" ? "The group's own sampling" : String(r.source).replace(/'s own$/, "'s own sampling"));
+
+  // ---- LAWA's trend: last, in words ----------------------------------------------------------------------------------------------
   // LAWA's published 10-year trend of the measure's indicator (group-wq-answer.js lawaOf matches the indicator, as the group's answer and
-  // the Maps panel read it), as one of three classes, and its latest state band. Nothing is graded here.
+  // the Maps panel read it), as one of three classes, and its latest state band. Said in a site's own view, in the table and in one line
+  // low on the page; never the headline or a dot's colour (WQ2). Nothing is graded here.
   const CLASSES = [["degrading", "Getting worse"], ["indeterminate", "No clear trend"], ["improving", "Getting better"]];
-  const CLASS_COLOURS = { improving: "#4a8fc8", indeterminate: "#c4b17e", degrading: "#d8773c", none: "#8e8e96" };
   function classOf(rows, measureKey) {
     const m = measure(measureKey), param = m?.keys[0] || measureKey;
     const l = list(rows).length ? G.lawaOf(rows, param) : null;
@@ -190,48 +205,179 @@
     return { trend, trendWords: t ? t.description : null, band: s ? s.band : null, bandWords: s ? s.attribute + " band " + s.band + (s.period ? " (" + s.period + ")" : "") : null };
   }
 
-  // ---- the headline figures: from the rows shown, so they always equal the table ---------------------------------------------------
-  function headline(rows) {
-    const r = list(rows), withResults = r.filter((x) => x.n > 0);
-    const latest = withResults.map((x) => x.last).filter(Boolean).sort().pop() || null;
+  // ---- the headline: from the rows shown, so its figures always equal the table ------------------------------------------------------
+  // figures: false (the overview card, which reads no wq_site_figures): a site's count and latest date are its whole record's (the summary).
+  // own*: the group's own sampling (its sub-groups' too) with results; round: the own sites whose latest result is on the latest day any
+  // of them was sampled (the latest round), with that result; good*: the other sources' sites with a good record; held: the rest shown.
+  function headline(rows, { figures = true } = {}) {
+    const r = list(rows), count = (x) => (figures ? x.n || 0 : Number(x.recordN) || 0), lastOf = (x) => (figures ? x.last : x.recordLast) || null;
+    const withResults = r.filter((x) => count(x) > 0), latestOf = (xs) => xs.map(lastOf).filter(Boolean).sort().pop() || null;
     const classes = Object.fromEntries(CLASSES.map(([k]) => [k, r.filter((x) => x.trend === k).length]));
     const assessed = CLASSES.reduce((n, [k]) => n + classes[k], 0);
-    return { sites: withResults.length, samples: withResults.reduce((n, x) => n + x.n, 0), latest, classes, assessed, rows: r.length,
-      field: withResults.reduce((n, x) => n + x.nField, 0), own: r.filter((x) => x.own).length };
+    const own = withResults.filter((x) => x.own), good = withResults.filter((x) => !x.own && !x.held), held = withResults.filter((x) => !x.own && x.held);
+    const roundAt = figures ? own.map((x) => x.latestAt).filter(Boolean).sort().pop() || null : null;
+    const round = roundAt ? own.filter((x) => x.latestAt && x.latestText != null && day(x.latestAt) === day(roundAt))
+      .map((x) => ({ id: x.id, name: x.name, text: x.latestText, value: x.latestValue, unit: x.unit, key: x.key })) : [];
+    const who = (xs) => [...new Set(xs.map((x) => x.source).filter(Boolean))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+    return { sites: withResults.length, samples: withResults.reduce((n, x) => n + count(x), 0), latest: latestOf(withResults), classes, assessed, rows: r.length,
+      field: withResults.reduce((n, x) => n + (x.nField || 0), 0), own: r.filter((x) => x.own).length,
+      ownSites: own.length, ownWho: who(own), ownLatest: latestOf(own), roundAt, round, good: good.length, goodWho: who(good), goodLatest: latestOf(good), held: held.length };
   }
-  // The one plain sentence under the figures.
-  function sentence(h, measureKey, type) {
-    const name = measure(measureKey)?.name || measureKey;
-    if (!h.rows) return "No " + (type === "groundwater" ? "groundwater" : "surface water") + " site here has " + lower(name) + " results.";
-    if (!h.assessed) return type === "groundwater" ? "LAWA publishes trends for river sites only. Open a site to see its results."
-      : "LAWA publishes no 10-year trend of " + lower(name) + " at these sites. Open a site to see its results.";
-    const c = h.classes, rest = [c.improving ? "better at " + fmt(c.improving) : "", c.indeterminate ? "no clear trend at " + fmt(c.indeterminate) : ""].filter(Boolean);
-    return name + " is getting worse at " + fmt(c.degrading) + " of the " + plural(h.assessed, "site", "sites") + " LAWA assessed over 10 years" + (rest.length ? "; " + rest.join(", ") : "") + ".";
-  }
-  // What the classes rest on, said beside the bar so it is not read as the whole group's picture: "LAWA assesses 35 of the 120
-  // surface-water sites here." Nothing for groundwater (LAWA reports rivers only) or when there are no sites.
-  const basis = (h, type) => (type === "groundwater" || !h.rows ? null
-    : "LAWA assesses " + fmt(h.assessed) + " of the " + plural(h.rows, "surface-water site", "surface-water sites") + " here.");
   const lower = (name) => (/^E\. coli/.test(name) ? name : name.charAt(0).toLowerCase() + name.slice(1));
-  // The stacked bar's parts, in order, each with its share (0 to 1).
-  const bar = (h) => CLASSES.map(([k, label]) => ({ key: k, label, n: h.classes[k], share: h.assessed ? h.classes[k] / h.assessed : 0, colour: CLASS_COLOURS[k] })).filter((x) => x.n);
-
-  // ---- symbols: one set for every source --------------------------------------------------------------------------------------------
-  // Shape by water type (circle surface water, square groundwater); colour by LAWA's trend when there is one, else a quiet neutral
-  // dot; a ring for the group's own sites (its sub-groups' too); paler and smaller for an older or sparse site shown by the switch.
-  function symbol(row) {
-    const shape = row.type === "groundwater" ? "square" : "circle", cls = row.trend || "none";
-    return { shape, cls, ring: !!row.own, faded: !!row.held, icon: ["wq", shape, cls, row.own ? "own" : "pub", row.held ? "faded" : "full"].join("-") };
+  const and = (xs) => (xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1]);
+  // "This group's own" is "The group"; "Ford Creek sub-group's own" is "Ford Creek sub-group".
+  const ownNames = (sources) => and(list(sources).map((s) => (s === "This group's own" ? "The group" : String(s).replace(/'s own$/, ""))));
+  const typeNoun = (type) => (type === "groundwater" ? "groundwater" : "surface water");
+  // The latest round's results, as plainly as they read: one to three sites by name; more of one form of the measure as a range; else
+  // how many sites were sampled. Never a grade.
+  function roundWords(round) {
+    const rd = list(round), at = (x) => S.tidy(x.text) + (x.unit ? " " + x.unit : "") + " at " + x.name;
+    if (rd.length <= 3) return and(rd.map(at));
+    const keys = new Set(rd.map((x) => x.key)), valued = rd.filter((x) => Number.isFinite(x.value));
+    if (keys.size > 1 || valued.length < rd.length) return plural(rd.length, "site", "sites") + " sampled";
+    const sorted = [...valued].sort((a, b) => a.value - b.value), lo = sorted[0], hi = sorted[sorted.length - 1];
+    return "from " + S.tidy(lo.text) + " to " + S.tidy(hi.text) + (hi.unit ? " " + hi.unit : "") + " across " + plural(rd.length, "site", "sites");
   }
-  const ICONS = (() => { const out = []; for (const shape of ["circle", "square"]) for (const cls of [...CLASSES.map(([k]) => k), "none"]) for (const own of [true, false]) for (const held of [true, false]) out.push({ shape, cls, ring: own, faded: held, icon: ["wq", shape, cls, own ? "own" : "pub", held ? "faded" : "full"].join("-") }); return out; })();
+  // The headline sentence: about the group's own sampling when there is any; else about the other sources' sites with a good record;
+  // never LAWA's classes. hidden: how many older or sparse sites the switch holds back.
+  // ticked: false when no box under Show is ticked (the sites are there, only not shown).
+  const NONE_TICKED = "No sites are ticked under Show.";
+  function sentence(h, measureKey, type, hidden = 0, { ticked = true } = {}) {
+    if (!ticked) return NONE_TICKED;
+    const name = lower(measure(measureKey)?.name || measureKey), noun = typeNoun(type);
+    if (h.ownSites) {
+      const lead = ownNames(h.ownWho) + (h.ownWho.length > 1 ? " sample " : " samples ") + plural(h.ownSites, noun + " site", noun + " sites") + " for " + name + ".";
+      if (h.round?.length) return lead + " Latest round, " + W.date(h.roundAt) + ": " + roundWords(h.round) + ".";
+      return lead + (h.ownLatest ? " The latest result is from " + W.date(h.ownLatest) + "." : "");
+    }
+    const none = h.own ? "None of the group's own sites here has " + name + " results. " : "";
+    if (h.good) return none + and(h.goodWho) + (h.goodWho.length > 1 ? " monitor " : " monitors ") + plural(h.good, noun + " site", noun + " sites") + " here with a good record of " + name +
+      (h.goodLatest ? "; the latest result is from " + W.date(h.goodLatest) : "") + ".";
+    if (h.held) return none + "No " + noun + " site here has a good record of " + name + "; " + plural(h.held, "site with an older or sparse record is", "sites with older or sparse records are") + " shown.";
+    if (hidden) return none + "No " + noun + " site here has a good record of " + name + "; " + plural(hidden, "older or sparse site is", "older or sparse sites are") + " hidden.";
+    return none || "No " + noun + " site here has " + name + " results.";
+  }
+  // Under the headline, quieter, when the group's own leads: the other sources' sites with a good record. null otherwise.
+  const others = (h, measureKey, type) => (!h.ownSites || !h.good ? null
+    : and(h.goodWho) + (h.goodWho.length > 1 ? " also monitor " : " also monitors ") + plural(h.good, typeNoun(type) + " site", typeNoun(type) + " sites") + " here with a good record of " + lower(measure(measureKey)?.name || measureKey) + ".");
+  // LAWA's published trends, last and in words: how many of the sites it assesses, and what it says of them. Groundwater: rivers only.
+  function lawaLine(h, measureKey, type) {
+    const name = lower(measure(measureKey)?.name || measureKey);
+    if (type === "groundwater") return "LAWA publishes trends for river sites only.";
+    if (!h.rows) return null;
+    if (!h.assessed) return "LAWA publishes no 10-year trend of " + name + " at these sites.";
+    const c = h.classes, parts = [c.improving ? "getting better at " + fmt(c.improving) : "", c.indeterminate ? "no clear trend at " + fmt(c.indeterminate) : "", c.degrading ? "getting worse at " + fmt(c.degrading) : ""].filter(Boolean);
+    return "LAWA's published 10-year trend of " + name + " covers " + fmt(h.assessed) + " of the " + plural(h.rows, "site", "sites") + " here: " + and(parts) + ". It is a trend, not a grade; a site's own view says which.";
+  }
+
+  // ---- symbols (WQ2) -------------------------------------------------------------------------------------------------------------------
+  // Three things, each said one way, independent of each other (the owner, 14 Nov 2026: "Yes, colour by level like my QGIS"):
+  //   * the water type is the shape: a circle for surface water, a triangle for groundwater;
+  //   * whose it is is the mark's size and edge: the group's own (its sub-groups' too) the largest, with a bold dark ring, drawn on top;
+  //     another source's site with a good record smaller, with a plain white edge; an older or sparse record (shown by the switch)
+  //     smallest and faint. So own reads from ECan at a glance whatever the fill;
+  //   * the fill is the site's level of the chosen measure in fixed bands (LEVEL_BANDS), blue (low) to red (high); a site with no result
+  //     of the measure a small neutral grey; a measure with no bands held one plain colour by water type. The number is in the card.
+  // Each mark has a white edge and a thin dark outline, so it reads on the aerial and the topo. No key: a tap or click says what a site is.
+  const SHAPES = Object.freeze({ surface: "circle", groundwater: "triangle" });
+  const SIZES = Object.freeze({
+    own: Object.freeze({ r: 11, edgeWidth: 3, ring: "#1d1d1f", ringWidth: 3, alpha: 1, order: 3 }),
+    good: Object.freeze({ r: 8.5, edgeWidth: 2.5, ring: null, alpha: 1, order: 2 }),
+    held: Object.freeze({ r: 7, edgeWidth: 2, ring: null, alpha: 0.6, order: 1 }),
+  });
+  // Blue, green, yellow, orange, red: the owner's QGIS order, in tones that read on the aerial and the topo; lightness rises to yellow and
+  // falls to red, and blue against red keeps the blue-yellow axis colour-blind eyes keep, so the ends never read alike.
+  const RAMP = Object.freeze(["#2f6fc6", "#3a9a4f", "#f2cf3b", "#f08c2a", "#cf3a2e"]);
+  const NO_LEVEL = "#a7adb5";
+  const PLAIN = Object.freeze({ surface: "#6f86a6", groundwater: "#8f7bb5" });
+  // The bands, each [upper edge (null: no upper edge), colour], lowest first. Nitrate (nitrate-N, mg/L): the owner's five bands exactly,
+  // for both water types. E. coli and DRP: the NPS-FM median band edges the app already holds (wq-sites-model.js NPSFM_MEDIAN, mirrored
+  // from bands.data.ts), surface water only (they are river attributes). No other thresholds are made up: other measures are plain.
+  const edgesOf = (attr) => S.NPSFM_MEDIAN[attr].edges.map(([, e]) => e);
+  const spread = (edges) => { const n = edges.length + 1, pick = n === 5 ? [0, 1, 2, 3, 4] : n === 4 ? [0, 1, 3, 4] : n === 3 ? [0, 2, 4] : [0, 4];
+    return [...edges, null].map((e, i) => [e, RAMP[pick[i]]]); };
+  const LEVEL_BANDS = Object.freeze({
+    nitrate: Object.freeze({ unit: "mg/L", types: ["surface", "groundwater", "unknown"], bands: spread([1, 2.4, 6.9, 11.3]) }),
+    "e-coli": Object.freeze({ unit: "per 100 mL", types: ["surface", "unknown"], bands: spread(edgesOf("e-coli")) }),
+    drp: Object.freeze({ unit: "mg/L", types: ["surface", "unknown"], bands: spread(edgesOf("drp")) }),
+  });
+  // A median needs this many results to stand for a site's level; with fewer, its latest result does (and the card says which).
+  const LEVEL_MEDIAN_MIN = 5;
+  // The site's level of the row's measure: { value, text, basis: "median" | "latest", n, at, field } or null when it has no result.
+  // The median is the page's (laboratory results over the chosen period, field readings too when the person includes them); a site
+  // whose own results are field readings only has no laboratory median, so its latest reading stands, said as a field reading.
+  function levelOf(r) {
+    if (!r) return null;
+    if (r.median != null && Number.isFinite(r.median) && (r.medianN || 0) >= LEVEL_MEDIAN_MIN)
+      // (the dates of the results the median used: the row's first and last are of all its results, so they are said only when the
+      // median used every one of them)
+      return { value: r.median, text: (r.medianCensored ? "about " : "") + S.tidy(r.median), basis: "median", n: r.medianN, ...(r.medianN === r.n ? { from: r.first, to: r.last } : {}), field: false };
+    if (Number.isFinite(r.latestValue)) return { value: r.latestValue, text: S.tidy(r.latestText ?? r.latestValue), basis: "latest", at: r.latestAt, field: hollow(r.latestMethod),
+      censored: /^\s*[<>]/.test(String(r.latestText ?? "")) };
+    return null;
+  }
+  const bandsFor = (r) => { const b = LEVEL_BANDS[r?.measureKey]; return b && b.types.includes(r.type) ? b : null; };
+  // The band a level falls in: its index and its range in words ("2.4 to 6.9 mg/L", "over 11.3 mg/L"). A value on an edge is in the lower band.
+  function bandOf(value, set) {
+    if (!set || !Number.isFinite(value)) return null;
+    const i = set.bands.findIndex(([e]) => e == null || value <= e), lo = i > 0 ? set.bands[i - 1][0] : 0, hi = set.bands[i][0];
+    return { index: i, colour: set.bands[i][1], words: (hi == null ? "over " + S.tidy(lo) : S.tidy(lo) + " to " + S.tidy(hi)) + " " + set.unit };
+  }
+  // The fill of one site: [key, colour].
+  function fillOf(r) {
+    const set = bandsFor(r), level = levelOf(r);
+    if (!level) return ["none", NO_LEVEL];
+    if (!set) return ["plain-" + (r.type === "groundwater" ? "groundwater" : "surface"), PLAIN[r.type === "groundwater" ? "groundwater" : "surface"]];
+    const b = bandOf(level.value, set);
+    return ["band" + RAMP.indexOf(b.colour), b.colour];
+  }
+  function symbol(row) {
+    const shape = SHAPES[row.type] || SHAPES.surface, tier = tierOf(row), [fillKey, fill] = fillOf(row), level = fillKey !== "none";
+    // a site with no result of the measure: smaller still, whoever's it is
+    return { shape, tier, fillKey, fill, small: !level, order: SIZES[tier].order, icon: ["wq", shape, tier, fillKey].join("-") };
+  }
+  // Every mark the map may draw: each shape, each whose, each fill.
+  const FILLS = [...RAMP.map((c, i) => ["band" + i, c]), ["none", NO_LEVEL], ["plain-surface", PLAIN.surface], ["plain-groundwater", PLAIN.groundwater]];
+  const ICONS = [...new Set(Object.values(SHAPES))].flatMap((shape) => TIERS.flatMap((tier) => FILLS.map(([fillKey, fill]) => ({ shape, tier, fillKey, fill, small: fillKey === "none",
+    icon: ["wq", shape, tier, fillKey].join("-") }))));
+
+  // ---- whose data is shown (WQ2, the owner, 14 Nov 2026: "filter / distinguish betweens the groups own sampling sites, ecans, and lawas")
+  // own: the group's own sampling (its sub-groups' too); public: Environment Canterbury's and NIWA's sites; lawa: sites LAWA assesses
+  // (whatever the other two say). A row shows when any of its ticks is on; the older-and-sparse switch still holds back weak records.
+  const WHOSE = [["own", "The group's own"], ["public", "Environment Canterbury"], ["lawa", "LAWA-assessed"]];
+  const WHOSE_DEFAULT = Object.freeze({ own: true, public: true, lawa: false });
+  const whoseRows = (rows, on = WHOSE_DEFAULT) => list(rows).filter((r) => (r.own ? on.own : on.public) || (on.lawa && !!r.trend));
+  // The public tick's label from the sources present: "Environment Canterbury", "Environment Canterbury and NIWA".
+  const publicLabel = (all) => and([...new Set(list(all).filter((s) => !s.own).map((s) => s.source).filter(Boolean))].sort((a, b) => a.localeCompare(b))) || "Environment Canterbury";
+  // What the headline numbers count, in words: "the group's own and Environment Canterbury's sites".
+  // present: which kinds the area has at all ({ own, public }), so nothing absent is named.
+  // Whether any box under Show that the area has is ticked (an area with no sites at all counts as ticked: it has nothing to tick).
+  const anyTicked = (on = WHOSE_DEFAULT, present = { own: true, public: true }) => (!present.own && !present.public) ||
+    !!((on.own && present.own) || (on.public && present.public) || (on.lawa && present.public));
+  function countsWhat(on = WHOSE_DEFAULT, pub = "Environment Canterbury", present = { own: true, public: true }) {
+    const parts = [on.own && present.own ? "the group's own" : "", on.public && present.public ? pub + (/s$/.test(pub) ? "'" : "'s") : "", on.lawa && present.public ? "LAWA-assessed" : ""].filter(Boolean);
+    if (!present.own && !present.public) return "the sites here";
+    return parts.length ? and(parts) + " sites" : "no sites (nothing ticked)";
+  }
+  // A tap or a click on a site: what it is, in a small card: its name, whose it is, the water type, its level (the number its colour
+  // stands for, what it is, and the band's range in plain numbers; never a grade), how many results and the latest. includeField: the
+  // page's medians include field readings.
+  function card(r, measureKey = r?.measureKey, period = "all", { includeField = false } = {}) {
+    const name = lower(measure(measureKey)?.name || measureKey), when = period === "all" ? "" : " in the " + periodWords(period);
+    const lv = levelOf(r), set = bandsFor(r), band = lv && set ? bandOf(lv.value, set) : null, unit = r.unit ? " " + r.unit : "";
+    const field = lv && (lv.basis === "latest" ? lv.field : includeField && r.nField > 0);
+    const level = !lv ? null : (lv.basis === "median" ? "Median " + lv.text + unit + " of " + plural(lv.n, "result", "results") + (lv.from && lv.to ? ", " + W.date(lv.from) + " to " + W.date(lv.to) : "")
+      : "Latest result " + lv.text + unit + (lv.at ? ", " + W.date(lv.at) : "")) + (field ? (lv.basis === "median" ? " (field readings included)" : " (a field reading)") : "");
+    return { name: r.name, whose: whoseWords(r), type: r.type === "unknown" ? "Water type not recorded" : TYPE_WORDS[r.type] || "", tags: tagsOf(r),
+      level, band: band ? "Colour: " + band.words + (lv.censored ? " (a result reported as " + lv.text + " is coloured at " + S.tidy(lv.value) + ")" : "") : null, colour: fillOf(r)[1],
+      results: r.n ? plural(r.n, name + " result", name + " results") + when : "No " + name + " results" + when,
+      latest: lv?.basis === "latest" ? null : r.latestText != null && r.latestAt ? "Latest " + latestText(r) + ", " + W.date(r.latestAt) : r.last ? "Last sampled " + W.date(r.last) : null,
+      note: r.held ? "An older or sparse record" : null };
+  }
   // RF1: on a phone, sites closer than `radius` px at the zoom shown are one cluster mark (MapLibre's clustering) until `maxZoom`; the
-  // mark is a dark ink circle with a thin light edge and the count, never a colour that reads as a state. Each site is a 44 px target
-  // (`hit` px round it). Trend colours on the map are LAWA's 10-year trend, never a grade, and the key says so.
+  // mark is a dark ink circle with a thin light edge and the count, never a colour of whose a site is. Each site is a 44 px target (`hit`
+  // px round it). WQ2: the group's own sites are never folded into a cluster (they are few, and they lead).
   const CLUSTER = { radius: 26, maxZoom: 14, hit: 22, ink: "#1d1d1f", edge: "rgba(255,255,255,0.9)" };
-  const CLUSTER_WORDS = "Several sites close together: tap to zoom in";
-  const TREND_NOT_GRADE = "Colour is LAWA's published 10-year trend of the chosen measure (getting better, worse, or no clear trend), not a grade of the water. LAWA reports river sites only.";
-  // Whether any site drawn (one with a place) is coloured by a LAWA trend
-  const trendsShown = (rows) => list(rows).some((r) => r && r.lngLat && r.trend !== "none" && !!CLASS_COLOURS[r.trend]);
   // The site nearest a tap among the targets under it ([{ id, at: {x, y} }], point {x, y}); null when none
   function nearestSite(targets, point) {
     let best = null, d = Infinity;
@@ -242,22 +388,12 @@
     }
     return best;
   }
-  // The legend, the same on the map, beside the chart and under the table.
-  function legend({ type = "surface", own = true, held = false } = {}) {
-    const shape = type === "groundwater" ? "square" : "circle";
-    return [
-      { shape, cls: "none", label: type === "groundwater" ? "Groundwater site (well or bore)" : "Surface water site (river, stream, drain, lake)" },
-      ...(own ? [{ shape, cls: "none", ring: true, label: "The group's own sampling (its sub-groups' too)" }] : []),
-      // LAWA reports rivers only: a groundwater legend has no trend classes
-      ...(type === "groundwater" ? [] : [...CLASSES.map(([k, label]) => ({ shape, cls: k, label: label + " (LAWA, 10 years)" })), { shape, cls: "none", label: "No LAWA trend" }]),
-      ...(held ? [{ shape, cls: "none", faded: true, label: "Older or sparse site" }] : []),
-    ];
-  }
 
   // ---- the table ------------------------------------------------------------------------------------------------------------------
+  // The first sort ("own"): the group's own, then the sites with a good record, then the older or sparse; each newest first.
   const COLUMNS = [["name", "Site"], ["source", "Source"], ["typeWords", "Water type"], ["n", "Results"], ["first", "First"], ["last", "Last"], ["latestText", "Latest"], ["median", "Median"], ["trendWords", "LAWA trend"]];
   function sortRows(rows, key = "own", dir = "asc") {
-    const k = (r) => (key === "own" ? (r.own ? 0 : 1) : key === "typeWords" ? TYPE_WORDS[r.type] : key === "latestText" ? r.latestAt : r[key]);
+    const k = (r) => (key === "own" ? tierRank(r) : key === "typeWords" ? TYPE_WORDS[r.type] : key === "latestText" ? r.latestAt : r[key]);
     const sign = dir === "desc" ? -1 : 1;
     return [...list(rows)].sort((a, b) => {
       const x = k(a), y = k(b);
@@ -290,11 +426,11 @@
   // The sites ticked when the page opens: the group's own with results first, then the current sites with the most results; three.
   function defaultTicks(rows, n = 3) {
     const r = list(rows).filter((x) => x.n > 0);
-    return [...r.filter((x) => x.own), ...r.filter((x) => !x.own).sort((a, b) => b.n - a.n)].slice(0, n).map((x) => x.id);
+    return [...r.filter((x) => x.own), ...r.filter((x) => !x.own).sort((a, b) => tierRank(a) - tierRank(b) || b.n - a.n)].slice(0, n).map((x) => x.id);
   }
   const tick = (ticked, id) => (list(ticked).includes(id) ? list(ticked).filter((x) => x !== id) : list(ticked).length >= MAX_TICKED ? list(ticked) : [...list(ticked), id]);
-  // The tick list beside the chart: the group's own first, then the rest by their latest result.
-  const tickList = (rows) => [...list(rows).filter((x) => x.own && x.n > 0), ...list(rows).filter((x) => !x.own && x.n > 0).sort((a, b) => String(b.last).localeCompare(String(a.last)))];
+  // The tick list beside the chart (and a phone's Sites): the group's own first, then the good records, then the rest; each by its latest result.
+  const tickList = (rows) => list(rows).filter((x) => x.n > 0).sort((a, b) => tierRank(a) - tierRank(b) || String(b.last || "").localeCompare(String(a.last || "")));
   // A site's results as the chart block draws them: one key (the row's), field and test-strip readings hollow, censored ones as N2 draws
   // them. series: rows read from public.measurements (method, lab, source_parameter, source_key with each).
   function points(series, key, shared) {
@@ -351,7 +487,8 @@
   const whenText = (t) => (t ? W.date(t) : "–");
 
   return { TYPES, TYPE_WORDS, viewOf, methodKind, METHOD_WORDS, hollow, MEASURES, FIRST, measure, measuresFor, keyName, PERIODS, periodFrom, periodWords,
-    sites, depthText, tagsOf, keyLine, KEY_RULE, needsType, inRings, rings, near, filterSites, pickFigure, rowsFor, shownRows, hiddenCount, CLASSES, CLASS_COLOURS, classOf, headline, sentence, basis, bar,
-    symbol, ICONS, legend, CLUSTER, CLUSTER_WORDS, TREND_NOT_GRADE, trendsShown, nearestSite, COLUMNS, sortRows, medianText, latestText, methodsText, CSV_COLUMNS, csv, fileName, MAX_TICKED, defaultTicks, tick, tickList,
+    sites, depthText, tagsOf, keyLine, KEY_RULE, needsType, inRings, rings, near, filterSites, pickFigure, rowsFor, shownRows, hiddenCount,
+    TIERS, tierOf, tierRank, GOOD_WORDS, whoseWords, CLASSES, classOf, headline, roundWords, NONE_TICKED, sentence, others, lawaLine, anyTicked,
+    SHAPES, SIZES, RAMP, NO_LEVEL, PLAIN, LEVEL_BANDS, LEVEL_MEDIAN_MIN, levelOf, bandsFor, bandOf, fillOf, symbol, FILLS, ICONS, WHOSE, WHOSE_DEFAULT, whoseRows, publicLabel, countsWhat, card, CLUSTER, nearestSite, COLUMNS, sortRows, medianText, latestText, methodsText, CSV_COLUMNS, csv, fileName, MAX_TICKED, defaultTicks, tick, tickList,
     points, chartData, siteChartData, MIN_YEAR_SITES, medianByYear, medianChart, sourcesLine, fieldNote, NOT_SHARED, HELD_WORDS, whenText };
 });

@@ -209,11 +209,11 @@
       const link = c.O.waterQualityLink(c.group.id, (id, view) => FP.href(FP.groupModel.href(id, view)));
       if (!w) return c.areas.size ? [quiet(c.sitesRead ? "No water quality monitoring sites lie inside the boundaries held." : "The monitoring sites will show here."), cardLink(link.href, "Open water quality", link.opensPanel ? c.waterQuality : null)]
         : [quiet("Once a boundary is held, the monitoring sites inside it show here.")];
-      // WQV1: the Water quality page's own sentence and bar (LAWA's 10-year trends, the one class it shows), always read from this group,
-      // with the sub-group selected picked out as the page does
+      // WQV1, WQ2: the Water quality page's own headline (the group's own sampling first, then the other sources' sites with a good
+      // record) and, last and quiet, LAWA's line; always read from this group, with the sub-group selected picked out as the page does
       const s = c.wqSummary(c.filter.sub || null);
-      if (s !== null) return [s ? el("p", { class: "ov-sentence", id: "ov-wq-sentence" }, s.sentence) : el("p", { class: "ov-quiet ov-working", id: "ov-wq-sentence", role: "status" }, "Reading LAWA's trends…"),
-        s && s.bar.length ? FP.wqPage.miniBar(s.bar) : null, s?.basis ? quiet(s.basis) : null, s?.noArea ? null : quiet(w.line),
+      if (s !== null) return [s ? el("p", { class: "ov-sentence", id: "ov-wq-sentence" }, s.sentence) : el("p", { class: "ov-quiet ov-working", id: "ov-wq-sentence", role: "status" }, "Reading the water quality sites…"),
+        s?.others ? quiet(s.others) : null, s?.noArea ? null : quiet(w.line), s?.lawa ? quiet(s.lawa) : null,
         cardLink(s?.href || link.href, "Open water quality")].filter(Boolean);
       // (without the page's code, MC1's own indicative trends)
       return [w.pending ? el("p", { class: "ov-quiet ov-working", id: "ov-wq-sentence", role: "status" }, w.sentence) : el("p", { class: "ov-sentence", id: "ov-wq-sentence" }, w.sentence),
