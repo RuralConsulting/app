@@ -14,9 +14,15 @@
 (() => {
   const FP = (window.FP = window.FP || {});
   const SIGNIN = ["vendor/supabase.d6a5c441.js", "js/config.a14912fe.js", "js/brand.80965af9.js", "js/util.1d5eb095.js", "js/privacy.2bf69cda.js", "js/auth.1e4f2997.js", "js/signin.41091fef.js"];
-  const LAST = "js/main.eb040308.js";
+  const LAST = "js/main.cbbd09ad.js";
+  // PERF3a: the demo's own code, loaded only when the page opens on a demo address (demo.js picks the demo client at load)
+  const DEMO = ["js/demo.c6ed4293.js", "js/demo-wq-page.a8b05130.js", "js/demo-documents.6bf46a91.js", "js/plans/demo.0d0eeef6.js"];
   const hash = location.hash || "";
-  const demo = /^#\/demo(?:\/|\?|$)/.test(hash);
+  const isDemo = (h) => /^#\/demo(?:\/|\?|$)/.test(h || "");
+  const demo = isDemo(hash);
+  // A demo address entered later starts a fresh page, which loads the demo (demo.js did this when it was always loaded; this listener
+  // is added first, so it still comes before the app's own)
+  if (!demo) addEventListener("hashchange", (event) => { if (isDemo(location.hash)) { event.stopImmediatePropagation(); location.reload(); } });
   const link = /(?:^#|&)(?:access_token|error|error_code)=/.test(hash);
   // A saved session (the Auth client keeps it as sb-<project>-auth-token): most likely signed in, so the app is loaded straight away.
   // Only a hint: signin.js still asks the Auth client, and a session this misses loads the app from there.
@@ -45,10 +51,12 @@
     })));
     return started.get(src);
   }
-  // The scripts the templates list, in order (with signin.js after privacy.js, where the sign-in set has it)
+  // The scripts the templates list, in order (with signin.js after privacy.js, where the sign-in set has it). PERF3a: the demo's own
+  // code (DEMO) only when the page opened on a demo address; a real session never needs it (see below for entering one later).
   function scriptsInOrder() {
     const out = [];
     for (const t of files()) for (const n of t.content.querySelectorAll("script[data-src]")) {
+      if (!demo && DEMO.includes(n.getAttribute("data-src"))) continue;
       out.push(n.getAttribute("data-src"));
       if (n.getAttribute("data-src") === "js/privacy.2bf69cda.js") out.push("js/signin.41091fef.js");
     }
@@ -97,7 +105,7 @@
   }
 
   const eager = demo || link || saved;
-  FP.boot = { app, worker, eager, isDemo: (h) => /^#\/demo(?:\/|\?|$)/.test(h || ""), SIGNIN, loaded: () => !!whole };
+  FP.boot = { app, worker, eager, isDemo, SIGNIN, DEMO, loaded: () => !!whole };
   const failed = (text) => () => whenParsed(() => { const p = document.getElementById("loading"); if (p) p.textContent = text; });
   if (eager) app().catch(failed("The app couldn't load. Check your connection and reload the page."));
   else signIn().catch(failed("The sign-in page couldn't load. Check your connection and reload the page."));

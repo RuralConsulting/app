@@ -124,7 +124,7 @@
   // Every screen put away, for the "not available" page.
   function closeAll() {
     FP.routeTiming?.cancel();
-    FP.farmPlansDemo.close(); FP.farmPlanDraft.close(); FP.gallery.close(); FP.tokens?.close();
+    FP.farmPlansDemo?.close(); FP.farmPlanDraft.close(); FP.gallery.close(); FP.tokens?.close();
     FP.ops.close(); FP.opsLayers.close(); FP.opsLooks?.close(); FP.groupSpace.close(); FP.farmSpace.close();
   }
   // The view a person's one farm or group opens on: its Home (J2), for clients (the first of the allow-list) and staff alike.
@@ -158,7 +158,7 @@
     if (!toGroup) FP.routeTiming?.cancel("group");
     // The Farm Environment Plan and Freshwater Farm Plan documents, on the invented farm: only in the demo.
     if (FP.demo?.active && /^#\/plans(?:\?|$)/.test(hash || "")) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.close(); FP.farmPlansDemo.open(hash); return; }
-    FP.farmPlansDemo.close();
+    FP.farmPlansDemo?.close();   // (PERF3a: the demo's code is loaded only in the demo)
     // A draft Freshwater Farm Plan (FW1), signed in: gap list first; Accept, Edit and Draft with AI. Never printed.
     const draft = !FP.demo?.active && /^#\/plan-draft\/([0-9a-f-]{36})$/.exec(hash || "");
     if (draft) { FP.farmSpace.close(); FP.ops.close(); FP.gallery.close(); FP.farmPlanDraft.open(FP.sb, draft[1]); return; }

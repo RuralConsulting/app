@@ -8,6 +8,20 @@
 <!-- GitHub Pages can't send security headers, so the page carries its own policy (same as _headers) -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://*.supabase.co https://basemaps.linz.govt.nz; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://basemaps.linz.govt.nz; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#231f20">
+<!-- PERF3a: the files every visit needs, named first so they are asked for with the page instead of one round trip after another
+     (guard.js, then boot.js, then the rest). A preload only downloads: nothing here runs any earlier, and never modulepreload, which would.
+     boot.js, the three base stylesheets and boot.js's SIGNIN list, in its order (tests/app/signin-first.test.cjs keeps them in step). -->
+<link rel="preload" as="script" href="js/boot.7ade5814.js">
+<link rel="preload" as="style" href="css/tokens.5432e59f.css">
+<link rel="preload" as="style" href="css/app.ef2d60b6.css">
+<link rel="preload" as="style" href="css/ui.b7ce0982.css">
+<link rel="preload" as="script" href="vendor/supabase.d6a5c441.js">
+<link rel="preload" as="script" href="js/config.a14912fe.js">
+<link rel="preload" as="script" href="js/brand.80965af9.js">
+<link rel="preload" as="script" href="js/util.1d5eb095.js">
+<link rel="preload" as="script" href="js/privacy.2bf69cda.js">
+<link rel="preload" as="script" href="js/auth.1e4f2997.js">
+<link rel="preload" as="script" href="js/signin.41091fef.js">
 <script src="js/guard.7f69455e.js"></script>
 <!-- SI1 (sign-in first): the app's scripts, in the order they run. A <template> is never fetched or run by the browser: js/boot.js loads
      only the sign-in form's few files for a signed-out visitor, and all of these (asked for together, run in this order) once signed in.
@@ -128,9 +142,9 @@
 <script data-src="js/tokens-model.c6a721ec.js"></script>
 <script data-src="js/tokens.368b3ae6.js"></script>
 <script data-src="js/two-factor.a22a65e5.js"></script>
-<script data-src="js/main.eb040308.js"></script>
+<script data-src="js/main.cbbd09ad.js"></script>
 </template>
-<script src="js/boot.36690751.js"></script>
+<script src="js/boot.7ade5814.js"></script>
 <title>Farm platform | Rural Consulting</title>
 <link rel="manifest" href="manifest.4006e3b5.webmanifest">
 <link rel="icon" type="image/png" href="brand/icon.670b09db.png">
@@ -172,7 +186,7 @@
 
 <main id="screen-signin" class="screen" hidden>
   <div class="card">
-    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting" loading="lazy"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting" loading="lazy"></span></div>
     <h1>Farm platform</h1>
     <form id="f-signin" novalidate>
       <label for="email">Email address</label>
@@ -190,7 +204,7 @@
 
 <main id="screen-password" class="screen" hidden>
   <div class="card">
-    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting" loading="lazy"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting" loading="lazy"></span></div>
     <h1>Change password</h1>
     <form id="f-password" novalidate>
       <input type="email" id="pw-email" autocomplete="username" hidden>
@@ -210,14 +224,14 @@
 
 <main id="screen-tokens" class="screen" hidden>
   <div class="card wide">
-    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting" loading="lazy"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting" loading="lazy"></span></div>
     <div id="tokens-card"></div>
   </div>
 </main>
 
 <main id="screen-welcome" class="screen" hidden>
   <div class="card">
-    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting" loading="lazy"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting" loading="lazy"></span></div>
     <h1>Choose a password</h1>
     <form id="f-welcome" novalidate>
       <input type="email" id="welcome-email" autocomplete="username" hidden>
@@ -234,7 +248,7 @@
 
 <main id="screen-two-factor" class="screen" hidden>
   <div class="card">
-    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting" loading="lazy"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting" loading="lazy"></span></div>
     <h1>Two-factor sign-in</h1>
     <div id="tf-enrol" hidden>
       <p class="help">RCL staff need a code from an authenticator app as well as a password. Scan this with an app such as Google Authenticator or Authy, then type the 6-digit code it shows.</p>
@@ -265,7 +279,7 @@
 
 <main id="screen-farms" class="screen" hidden>
   <div class="card wide">
-    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting" loading="lazy"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting" loading="lazy"></span></div>
     <h1>Farms</h1>
     <p id="farms-msg" class="msg"></p>
     <p class="fine"><span class="who"></span><span class="password-link"> · <button type="button" class="link b-password">Change password</button></span><span class="ops-link" hidden> · <a href="#/ops">Operations</a></span> · <button type="button" class="link b-signout">Sign out</button> · <a class="privacy-link" href="#/privacy">Privacy and terms</a></p>
@@ -285,7 +299,7 @@
      after sign-in for each new version of the note. -->
 <main id="screen-privacy" class="screen privacy-screen" hidden>
   <div class="card wide privacy-card">
-    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting"></span></div>
+    <div class="org"><span class="brand"><img class="logo logo-light" src="brand/logo.a1046e5e.png" alt="Rural Consulting" loading="lazy"><img class="logo logo-dark" src="brand/logo-dark.81183d54.png" alt="Rural Consulting" loading="lazy"></span></div>
     <article id="privacy-note" class="privacy-note"><p>Loading…</p></article>
     <p id="privacy-version" class="fine"></p>
     <div class="privacy-actions">
