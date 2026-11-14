@@ -240,7 +240,7 @@
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
     if (group) groupDemo(data, queue, longPeople);
-    if (group && (overview === "full" || overview === "empty")) overviewDemo(data, overview);   // MC1
+    if (group && (overview === "full" || overview === "empty" || overview === "sub")) overviewDemo(data, overview);   // MC1, CO1
     if (group && titles) titleQuestionsDemo(data);   // LT1
     demoMaps(data, sparse);
     if (farmer) {
@@ -626,16 +626,20 @@
   // SG2: the invented sub-groups of "HDLG (example)" (not among the demo person's own groups: their spaces are not part of the demo).
   const SUBGROUPS = [{ id: "de000000-0000-4000-8000-0000000003c1", name: "Ford Creek sub-group (synthetic)", slug: "demo-ford-creek", member: true },
     { id: "de000000-0000-4000-8000-0000000003c2", name: "Hill Country sub-group (synthetic)", slug: "demo-hill-country", member: false }];
-  // MC1: the overview demos. "full": the group as a collective (an invented "Plains Catchment Collective") with eight sub-groups the
-  // person is in, each with an invented boundary (a wobbly ring in NZTM metres, as places rows hold them), the group's own area around
+  // MC1: the overview demos. "full": the group as a collective (an invented "Plains Catchment Collective") with ten sub-groups (CO1;
+  // the person is in eight of them), each with an invented boundary (a wobbly ring in NZTM metres, as places rows hold them), the group's own area around
   // them all (as MCCC's is its sub-groups joined), invented monitoring sites inside (rivers sampled monthly, wells quarterly, some
   // stopped long ago, some with a short record), and two sub-groups' own sampling (an owner source). "empty": the group as MCCC
-  // started: ten sub-groups by name, no boundary, no members, no water data. Every name and number is invented; the reads have the
+  // started: ten sub-groups by name, no boundary, no members, no water data. "sub" (CO1): the demo group is itself one sub-group
+  // ("Hinds Plains") of the collective, with its boundary, its sites and its records, for a sub-group's own overview. Every name and number is invented; the reads have the
   // real functions' shapes (subgroup_counts, places, group_wq_sites, wq_site_result_counts, the analysis function's trend preview).
   const OV_ID = (n) => "de000000-0000-4000-8000-0000000009" + String(n).padStart(2, "0");
   const OV_FULL = [["Rakaia Terraces", 171.98, -43.66, 0.10], ["Upper Ashburton", 171.45, -43.62, 0.12], ["Ashburton Forks", 171.68, -43.78, 0.07],
     ["Mayfield Downs", 171.38, -43.85, 0.07], ["Hinds Plains", 171.58, -44.0, 0.09], ["Lower Ashburton", 171.85, -43.95, 0.075],
-    ["Wakanui Coast", 172.05, -43.92, 0.07], ["Lake Heron Basin", 171.2, -43.48, 0.06]];
+    ["Wakanui Coast", 172.05, -43.92, 0.07], ["Lake Heron Basin", 171.2, -43.48, 0.06],
+    // CO1: ten, as MCCC has; the last two are sub-groups the demo person is not in (listed, quieter, not clickable)
+    ["Methven Foothills", 171.66, -43.5, 0.055, false], ["Coastal Lagoons", 172.2, -43.78, 0.05, false]];
+  const OV_PARENT = "de000000-0000-4000-8000-000000000999";   // CO1: "?overview=sub": the collective the demo group is a sub-group of
   const OV_EMPTY = ["Upper Plains", "Lake Basin", "North Branch", "South Branch", "Foothills", "Coastal Strip", "Middle Reaches", "Gorge", "Lower Plains", "Spring-fed Streams"];
   const OV_RIVERS = ["Rakaia River", "Ashburton River", "Hinds River", "Wakanui Creek", "Taylors Stream", "Lismore Creek", "Mayfield Drain", "Stoney Creek", "Home Stream", "Bowyers Stream", "Pudding Hill Stream", "Hekeao Drain"];
   const OV_PLACES = ["the bridge", "SH1", "Mayfield Road", "the gorge", "Ealing", "the coast road", "Wheatstone", "the ford", "Tinwald", "Hakatere"];
@@ -643,13 +647,18 @@
   function overviewDemo(data, mode) {
     const t = data.groupTables, W = () => (typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel);
     const g = t.organisations.find((o) => o.id === GROUP);
-    Object.assign(g, { name: mode === "full" ? "Plains Catchment Collective (synthetic)" : "Foothills Collective (synthetic)", slug: null });
+    Object.assign(g, { name: mode === "full" ? "Plains Catchment Collective (synthetic)" : mode === "sub" ? "Hinds Plains (synthetic)" : "Foothills Collective (synthetic)", slug: null });
     t.places = t.places.filter((p) => p.org_id !== GROUP);   // the demo group's older area (no shape) is not this group's
-    const subs = mode === "full" ? OV_FULL.map(([name, x, y, r], i) => ({ id: OV_ID(i + 1), name: name + " (synthetic)", x, y, r }))
-      : OV_EMPTY.map((name, i) => ({ id: OV_ID(20 + i), name: name + " sub-group (synthetic)" }));
+    if (mode === "sub") {
+      g.parent_org_id = OV_PARENT;
+      t.organisations.push({ id: OV_PARENT, name: "Plains Catchment Collective (synthetic)", slug: null, kind: "catchment_group", parent_org_id: null });
+      t.org_members.push({ org_id: OV_PARENT, user_id: USER, role: "member" });
+    }
+    const subs = mode === "full" ? OV_FULL.map(([name, x, y, r, member = true], i) => ({ id: OV_ID(i + 1), name: name + " (synthetic)", x, y, r, member }))
+      : mode === "sub" ? [] : OV_EMPTY.map((name, i) => ({ id: OV_ID(20 + i), name: name + " sub-group (synthetic)", member: true }));
     for (const s of subs) {
       t.organisations.push({ id: s.id, name: s.name, slug: null, kind: "catchment_group", parent_org_id: GROUP });
-      t.org_members.push({ org_id: s.id, user_id: USER, role: "member" });
+      if (s.member) t.org_members.push({ org_id: s.id, user_id: USER, role: "member" });
     }
     const ov = data.overview = { subs, sites: [], bySub: new Map() };
     if (mode === "empty") { t.group_members = []; data.tables.group_events = []; data.tables.group_event_attendees = []; return; }
@@ -668,12 +677,24 @@
       t.places.push(row);
     };
     subs.forEach((s, i) => place(s.id, s.name + " area", () => ({ type: "Polygon", coordinates: [ring(s.x, s.y, s.r, 140, i)] })));
-    place(GROUP, g.name + " area", () => ({ type: "Polygon", coordinates: [ring(171.62, -43.76, 0.36, 220, 7)] }));
+    const [, hx, hy, hr] = OV_FULL[4];
+    place(GROUP, g.name + " area", () => ({ type: "Polygon", coordinates: [mode === "sub" ? ring(hx, hy, hr, 140, 4) : ring(171.62, -43.76, 0.36, 220, 7)] }));
+    // CO1: invented records and photos this year (the group's own, and in five of the sub-groups the person is in), spread over the
+    // months so the overview's month-by-month tile has a real series to draw
+    const sampled = mode === "sub" ? [{ id: GROUP, n: 26 }] : [{ id: GROUP, n: 64 }, ...subs.filter((s) => s.member).slice(0, 5).map((s, i) => ({ id: s.id, n: 6 + i * 5 }))];
+    const lastMonth = Number(String(data.asAt).slice(5, 7)) || 10;
+    for (const { id: org, n } of sampled) for (let k = 0; k < n; k++) {
+      const h = ovHash(org + ":rec:" + k), month = 1 + (h % lastMonth), day = 1 + ((h >>> 5) % 27), when = "2026-" + String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0") + "T0" + (h % 9) + ":15:00Z";
+      const cid = "de000000-0000-4000-8000-0000000c" + String(sampled.findIndex((x) => x.id === org)).padStart(2, "0") + String(k).padStart(2, "0");
+      (data.tables.captures ||= []).push({ id: cid, client_id: cid, org_id: org, kind: h % 4 === 0 ? "pest_control" : "photo", created_by: USER, created_by_name: "Demo advisor", taken_at: when,
+        taken_at_from: "photo", position_from: "photo", accuracy_m: null, latitude: null, longitude: null, note: "Invented record (synthetic)", tags: [], data: {}, shared_with_group: true,
+        photo_path: null, thumb_path: null, photo_width: null, photo_height: null, archived_at: null, archived_by: null, created_at: when, updated_at: when });
+    }
     // the sites: four to nine a sub-group, a river sampled monthly (from 1990 to 2014 on) or a well quarterly; a few stopped years ago,
     // a few with a short record; positions are worked out when first read (wq-model.js may load after the fixture)
     const end = String(data.asAt).slice(0, 7);
     let n = 0;
-    subs.forEach((s, si) => {
+    (mode === "sub" ? [{ id: GROUP, name: g.name, x: hx, y: hy, r: hr }] : subs).forEach((s, si) => {
       const k = 4 + (ovHash(s.name) % 6);
       for (let j = 0; j < k; j++) {
         const h = ovHash(s.id + ":" + j), well = h % 5 === 0, a = (ovHash("angle" + s.id + j) % 360) * Math.PI / 180, d = s.r * (0.12 + (ovHash("reach" + j + s.id) % 55) / 100);
@@ -702,7 +723,7 @@
   // As public.subgroup_counts, group_wq_sites(org, 0) and wq_site_result_counts for the overview demos; null for anything else.
   function overviewRpc(d, name, args) {
     const ov = d.overview, sub = (id) => ov.subs.find((s) => s.id === id), W = () => (typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel);
-    if (name === "subgroup_counts") return args.parent_org === GROUP ? [ov.subs.map((s) => ({ subgroup_id: s.id, subgroup_name: s.name, subgroup_slug: null, current_businesses: 0, is_member: true }))] : null;
+    if (name === "subgroup_counts") return args.parent_org === GROUP ? [ov.subs.map((s) => ({ subgroup_id: s.id, subgroup_name: s.name, subgroup_slug: null, current_businesses: 0, is_member: s.member !== false }))] : null;
     if (name === "group_wq_sites" && Number(args.km) === 0 && (args.g === GROUP || sub(args.g))) {
       const rows = args.g === GROUP ? ov.sites : ov.bySub.get(args.g) || [];
       return [rows.map((x) => ({ site_id: x.site_id, external_id: x.external_id, name: x.name, site_type: x.site_type, distance_m: 0, geom: x.geom, last_sampled: x.last_sampled,

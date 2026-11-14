@@ -1,6 +1,6 @@
 // MC1: a group's overview on a computer, the pure parts (group-overview.js reads and draws). On a computer a group's Home is its
-// overview (docs/PRODUCT.md, "Home"): a few headline numbers, the water quality trends, and the map of the group's area and its
-// sub-groups, with a ranked list beside it and one filter (sub-group, period) for the whole page. A phone keeps Home as it is.
+// overview (docs/PRODUCT.md, "Home"): the sub-groups down the side (one selected at a time: CO1, in place of MC1's filter), the group
+// in numbers as tiles the person chooses, and the map of the group's area and its sub-groups. A phone keeps Home as it is.
 // No DOM, no reads, no clock: every input is handed in.
 //
 // Nothing here calculates a statistic. Each site's trend is the analysis library's (the `analysis` function's preview, exactly as a
@@ -262,9 +262,11 @@
   function tiles({ group, subgroups = [], areas: A = new Map(), filter = { sub: null, period: "all" }, members = null, events = null } = {}) {
     const out = [], subs = list(subgroups), isSub = !!group?.parent_org_id;
     if (!isSub && subs.length) {
-      const mapped = subs.filter((s) => A.has(s.id)).length;
+      // (#544 review: the boundaries counted are those the person may read, the sub-groups they are in; said so when not all of them)
+      const mapped = subs.filter((s) => A.has(s.id)).length, mine = subs.filter((s) => s.member !== false).length;
       out.push({ key: "subgroups", value: count(subs.length), label: subs.length === 1 ? "Sub-group" : "Sub-groups",
-        note: mapped === subs.length ? null : mapped ? count(mapped) + " with a boundary" : "No boundaries held yet" });
+        note: mapped === subs.length ? null : !mapped ? (mine === subs.length ? "No boundaries held yet" : "No boundaries held for yours yet")
+          : mine === subs.length ? count(mapped) + " with a boundary" : mapped === mine ? "All " + count(mine) + " of yours with a boundary" : count(mapped) + " of your " + count(mine) + " with a boundary" });
     }
     const own = A.get(group?.id);
     const ha = filter.sub ? A.get(filter.sub)?.ha : own ? own.ha : subs.reduce((s, x) => s + (A.get(x.id)?.ha || 0), 0);
@@ -329,17 +331,35 @@
       available: (viewer) => defs.filter((d) => { try { return !!d.can(viewer || {}); } catch { return false; } }),
     };
   }
-  const cardsKey = (personId, groupId) => "fp-overview-cards:" + String(personId || "anyone") + ":" + String(groupId || "");
-  // A person's layout for the cards available ({ order: [ids], hidden: [ids] }), made safe: unknown ids dropped, a card new since it
-  // was saved added at its default place (shown), every card once. The default: every available card shown, in the registry's order.
+  // CO1: the tiles' own key (the cards' "fp-overview-cards:" layouts are left behind, so everyone starts from the new defaults: water
+  // quality is no longer on by default). Kept on this device only (localStorage), per person and group; no database change.
+  const cardsKey = (personId, groupId) => "fp-overview-tiles:" + String(personId || "anyone") + ":" + String(groupId || "");
+  // A person's layout for the tiles available ({ order: [ids], hidden: [ids] }), made safe: unknown ids dropped, a tile new since it
+  // was saved added at its default place, every tile once. The default: every available tile in the registry's order, shown unless it
+  // is marked `off` (CO1: Water quality is offered under "Add a tile", not on by default); a tile new since a save follows its own default.
   function layoutFrom(stored, available) {
     let v = stored;
     if (typeof v === "string") { try { v = JSON.parse(v); } catch { v = null; } }
-    const ids = list(available).map((d) => (typeof d === "string" ? d : d.id));
+    const defs = list(available).map((d) => (typeof d === "string" ? { id: d } : d)), ids = defs.map((d) => d.id);
     const kept = list(v?.order).filter((id, i, a) => ids.includes(id) && a.indexOf(id) === i);
     const order = [...kept];
     for (const id of ids) if (!order.includes(id)) order.splice(Math.min(ids.indexOf(id), order.length), 0, id);
-    return { order, hidden: list(v?.hidden).filter((id, i, a) => ids.includes(id) && a.indexOf(id) === i) };
+    const hidden = list(v?.hidden).filter((id, i, a) => ids.includes(id) && a.indexOf(id) === i);
+    for (const d of defs) if (d.off && !kept.includes(d.id) && !hidden.includes(d.id)) hidden.push(d.id);
+    return { order, hidden };
+  }
+  // CO1: a series per month of this year so far (January to the month of `today`, New Zealand time), from the times things happened;
+  // a time outside the year is not counted. -> [{ month: "2026-01", label: "Jan", n }]
+  const nzMonth = (t) => { const d = Date.parse(t); if (!Number.isFinite(d)) return null; const p = new Intl.DateTimeFormat("en-NZ", { timeZone: "Pacific/Auckland", year: "numeric", month: "2-digit" }).formatToParts(new Date(d));
+    return p.find((x) => x.type === "year").value + "-" + p.find((x) => x.type === "month").value; };
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function monthSeries(times, today) {
+    const day = String(today || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+    const year = day.slice(0, 4), last = Number(day.slice(5, 7)), out = [];
+    for (let m = 1; m <= last; m++) out.push({ month: year + "-" + String(m).padStart(2, "0"), label: MONTHS[m - 1], n: 0 });
+    for (const t of list(times)) { const k = nzMonth(t), row = out.find((r) => r.month === k); if (row) row.n++; }
+    return out;
   }
   const layoutText = (l) => JSON.stringify({ order: list(l?.order), hidden: list(l?.hidden) });
   const shownCards = (l) => list(l?.order).filter((id) => !list(l?.hidden).includes(id));
@@ -356,6 +376,36 @@
     return CARD_GROUPS.map((g) => ({ name: g, cards: defs.filter((d) => d.group === g).sort((a, b) => pos(a.id) - pos(b.id))
       .map((d) => ({ id: d.id, title: d.title, line: d.line || "", shown: !list(l?.hidden).includes(d.id) })) })).filter((g) => g.cards.length);
   }
+  // ---- CO1 (#544 review): what "the group in numbers" covers --------------------------------------------------------------------
+  // The places the tiles read for: one sub-group selected, its own; else the group and every sub-group the person is in (row-level
+  // security decides the rest). -> [org ids]
+  function orgsInScope(groupId, subgroups, selected = null) {
+    if (selected) return [selected];
+    return [groupId, ...list(subgroups).filter((s) => s.member !== false && s.id !== groupId).map((s) => s.id)];
+  }
+  // The dated line's words: never "the whole group" when some sub-groups are left out.
+  // input: { name (the group's), isSub (the page is a sub-group's own), subgroups, selectedName }
+  function scopeWords({ name = "", isSub = false, subgroups = [], selectedName = null } = {}) {
+    if (selectedName) return selectedName + " in numbers";
+    const subs = list(subgroups), mine = subs.filter((s) => s.member !== false).length;
+    if (isSub || !subs.length) return (name || "The group") + " in numbers";
+    if (mine === subs.length) return "The whole group in numbers";
+    if (!mine) return "The group's own numbers (not its sub-groups)";
+    return "The group and your " + (mine === 1 ? "1 sub-group" : count(mine) + " sub-groups") + " in numbers";
+  }
+  // The records' month chart: counted first, then read in pages of the API's 1,000 rows up to the cap; none past the cap.
+  // -> [[from, to], ...] (inclusive)
+  const PAGE_ROWS = 1000, RECORDS_CAP = 2000;
+  function recordPages(n, cap = RECORDS_CAP, size = PAGE_ROWS) {
+    const total = Number(n);
+    if (!Number.isInteger(total) || total <= 0 || total > cap) return [];
+    const out = [];
+    for (let from = 0; from < total; from += size) out.push([from, Math.min(total, from + size) - 1]);
+    return out;
+  }
+  // The chart only when every row counted came back (a short read draws no chart: the number stands alone).
+  const wholeSeries = (times, n, today) => (Array.isArray(times) && times.length === Number(n) && n > 0 ? monthSeries(times, today) : null);
+
   // Where "Open water quality" goes, in one place: the group's Water quality page (WQV1, `#/group/<id>/water`).
   const waterQualityLink = (groupId, href) => ({ href: href(groupId, "water"), opensPanel: false });
 
@@ -421,5 +471,5 @@
   return { PERIODS, periodOf, since, trendYears, storeKey, filterFrom, filterText, count, hectares, plural, metreRings, areaHa, labelPoint, areas, sites, inScope,
     headlineMeasure, wqCard, KEYS, TREND_CAP, PARAMETER_NAMES, CARD_GROUPS, createCards, cardsKey, layoutFrom, layoutText, shownCards, moveCard, toggleCard, pickerGroups, waterQualityLink,
     MEASURES, measureOf, minTimes, windowFloor, trendPlan, band, bands, CLASS_WORDS, BAR, bandWords, trendSentence, tiles, emptyLine, subgroupRows, siteRows, classLabel,
-    contextThemes, YEAR_MS };
+    contextThemes, YEAR_MS, monthSeries, orgsInScope, scopeWords, recordPages, wholeSeries, PAGE_ROWS, RECORDS_CAP };
 });
