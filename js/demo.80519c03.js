@@ -400,6 +400,9 @@
       row(3, THIRD_MEMBER, "Ben Example (synthetic)", { taken_at: "2026-10-21T01:05:00Z", latitude: -42.9931, longitude: 172.0835, kind: "water_sample", tags: ["Water sample"],
         data: { site_name: "Ford Road culvert (synthetic)", readings: [{ name: "Nitrate", value: 2.5, unit: "mg/L" }] }, note: null }),
       row(4, OTHER_MEMBER, "Aroha Example (synthetic)", { taken_at: "2026-10-18T20:30:00Z", latitude: -43.0301, longitude: 172.0198, tags: ["Planting", "Wetland"], note: "Carex planted along the drain (synthetic)", shared_with_group: true }),
+      // SP1: hares, the groups' largest tally
+      row(5, THIRD_MEMBER, "Ben Example (synthetic)", { taken_at: "2026-10-12T07:15:00Z", latitude: -43.0055, longitude: 172.0712, kind: "pest_control", tags: ["Pest control"], data: { species: "hare", count: 14 },
+        note: "Night shoot on the flats (synthetic)", shared_with_group: true }),
     ];
     data.tables.capture_tags = [{ id: id(90), org_id: GROUP, name: "Water sample", colour: "hue-2", sort_order: 0, archived_at: null }];
     data.objects = new Map();   // the photos sent in this session, by path

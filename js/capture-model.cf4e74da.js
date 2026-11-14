@@ -17,7 +17,18 @@
     water_sample: { label: "Water sample", title: "Water sample", preset: "Water sample", icon: "water" },
     pest_control: { label: "Pest control", title: "Pest control", preset: "Pest control", icon: "pest" },
   };
-  const SPECIES = [["deer", "Deer"], ["pig", "Pig"], ["possum", "Possum"], ["rabbit", "Rabbit"], ["other", "Other"]];
+  // SP1: what the catchment groups' own reports count (hares the largest, then possums, magpies, rabbits, geese, cats and more), in
+  // the order a phone list reads best: the likely ones, then predators, then birds, then Other. The keys are the database's
+  // (app.capture_data_problem, migration 20261113072000; tests/app/sp1-species.test.cjs holds the two lists equal). The picker
+  // adds "Not sure" (no species) after these.
+  const SPECIES = [["hare", "Hare"], ["possum", "Possum"], ["rabbit", "Rabbit"], ["deer", "Deer"], ["pig", "Pig"], ["goat", "Goat"], ["wallaby", "Wallaby"],
+    ["stoat", "Stoat"], ["ferret", "Ferret"], ["weasel", "Weasel"], ["rat", "Rat"], ["hedgehog", "Hedgehog"], ["feral_cat", "Feral cat"],
+    ["magpie", "Magpie"], ["goose", "Canada goose"], ["other", "Other"]];
+  // How a count says each one: [one, many] ("1 hare", "14 hares", "3 deer", "2 Canada geese")
+  const COUNTED = { hare: ["hare", "hares"], possum: ["possum", "possums"], rabbit: ["rabbit", "rabbits"], deer: ["deer", "deer"], pig: ["pig", "pigs"],
+    goat: ["goat", "goats"], wallaby: ["wallaby", "wallabies"], stoat: ["stoat", "stoats"], ferret: ["ferret", "ferrets"], weasel: ["weasel", "weasels"],
+    rat: ["rat", "rats"], hedgehog: ["hedgehog", "hedgehogs"], feral_cat: ["feral cat", "feral cats"], magpie: ["magpie", "magpies"],
+    goose: ["Canada goose", "Canada geese"], other: ["other", "other"] };
   // A group with no tags yet is offered these; each becomes a real tag the first time it is used (it is stored on the capture).
   const SUGGESTED = ["Water sample", "Planting", "Pest control", "Deer", "Fencing", "Wetland", "Weed", "Meeting"];
   const MAX_TAGS = 12, MAX_TAG = 40, MAX_NOTE = 1000, MAX_READINGS = 3;
@@ -195,8 +206,9 @@
   function detailLine(c) {
     const d = c?.data || {};
     if (c?.kind === "pest_control") {
-      const sp = SPECIES.find(([k]) => k === d.species)?.[1];
-      return [Number.isInteger(d.count) ? d.count + " " : "", sp ? sp.toLowerCase() : d.count != null ? "seen" : ""].join("").trim() || null;
+      const w = SPECIES.some(([k]) => k === d.species) ? COUNTED[d.species] : null;
+      const sp = w ? (d.count === 1 || !Number.isInteger(d.count) ? w[0] : w[1]) : null;
+      return [Number.isInteger(d.count) ? d.count + " " : "", sp || (d.count != null ? "seen" : "")].join("").trim() || null;
     }
     if (c?.kind === "water_sample") {
       const r = (d.readings || []).map((x) => [x.name, x.value, x.unit].filter((v) => v !== undefined && v !== null && v !== "").join(" ")).join(", ");
@@ -291,7 +303,7 @@
     return (p.position_from === "device" ? "Here" : p.position_from === "pin" ? "Pin you dropped" : "From the photo") + acc;
   }
 
-  return { KINDS, SPECIES, SUGGESTED, MAX_TAGS, MAX_TAG, MAX_NOTE, MAX_READINGS, MAX_EDGE, THUMB_EDGE, PHOTO_BUDGET, THUMB_BUDGET, MAX_UPLOAD, FALLBACK_EDGE,
+  return { KINDS, SPECIES, COUNTED, SUGGESTED, MAX_TAGS, MAX_TAG, MAX_NOTE, MAX_READINGS, MAX_EDGE, THUMB_EDGE, PHOTO_BUDGET, THUMB_BUDGET, MAX_UPLOAD, FALLBACK_EDGE,
     tidyTags, chips, fieldProblems, nzLocalToIso, takenAt, position, latLonWords, positionLine, nearest, kmWords, sizes, paths, data, record,
     SAVED, SAVED_OFFLINE, waitingLine, badgeCount, unsentCount, signOutWarning, SIGN_OUT_UNKNOWN, STATE_WORDS, when, day, detailLine, tagCounts, hasTag, who, plural,
     whenWords, summary, seenBy, placeWords, factRows, siteOptions, whereShort, speciesWord, readingWords, FROM_WORDS, closeSite, SITE_NEAR, SITE_NEAR_MAX, HERE_OLD, refusedWords };
