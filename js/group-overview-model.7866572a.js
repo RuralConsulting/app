@@ -51,6 +51,102 @@
     };
   }
   const filterText = (f) => JSON.stringify({ sub: f.sub || null, period: f.period, sort: f.sort });
+  // CO1b (the owner, 14 Nov 2026: the overview "often opens filtered"): each visit opens on "All sub-groups". Only the sort is kept on
+  // this device; a sub-group is chosen at the start only when the address names one the person is in (`#/group/<id>/home?item=<sub>`).
+  function startFilter(stored, subgroups, addressSub = null) {
+    const kept = filterFrom(stored, []), sub = addressSub && list(subgroups).some((s) => s.id === addressSub && s.member !== false) ? addressSub : null;
+    return { sub, period: "all", sort: kept.sort };
+  }
+  const startText = (f) => JSON.stringify({ sub: null, period: "all", sort: f.sort });
+
+  // ---- CO1b: the map framed before the shapes arrive -------------------------------------------------------------------------
+  // The frame of the group's areas the last time the overview drew them, kept on this device per person and group (localStorage) so
+  // the next visit opens on the group, not on the whole region. A frame is [[west, south], [east, north]] in degrees, inside New
+  // Zealand's reach; anything else is null (the map then waits, hidden behind "Loading map…", for the shapes).
+  const frameKey = (personId, groupId) => "fp-overview-frame:" + String(personId || "anyone") + ":" + String(groupId || "");
+  function frameFrom(stored) {
+    let v = stored;
+    if (typeof v === "string") { try { v = JSON.parse(v); } catch { return null; } }
+    if (!Array.isArray(v) || v.length !== 2 || !v.every((p) => Array.isArray(p) && p.length === 2 && p.every(fin))) return null;
+    const [[w, s], [e, n]] = v.map((p) => p.map(Number));
+    if (!(w < e && s < n) || w < 160 || e > 185 || s < -53 || n > -28) return null;
+    return [[w, s], [e, n]];
+  }
+  const frameText = (b) => (frameFrom(b) ? JSON.stringify(frameFrom(b)) : null);
+
+  // ---- CO1b: a short code for each sub-group's marker, never the same for two ---------------------------------------------------
+  // The codes start from the app's monogram (icons.js: the first letters of the first two words, "Hekeao Hinds Lowlands" HH). Where two
+  // or more sub-groups would share one, each takes the first code of its own that no other sub-group uses: the first word's letter with
+  // the last word's ("Hekeao Hinds Hill Country" HC, "Hekeao Hinds Lowlands" HL), then with each word before it, then the first word's
+  // letter with each later letter of the name. Derived from the names, never a list of names. items: [{ key, name }];
+  // monogram: icons.js's. -> Map(key -> code)
+  const graphemes = (w) => (typeof Intl === "object" && Intl.Segmenter ? [...new Intl.Segmenter("en-NZ", { granularity: "grapheme" }).segment(w)].map((s) => s.segment) : Array.from(w));
+  const wordsOf = (name) => String(name || "").normalize("NFC").replace(/\([^)]*\)|\[[^\]]*\]/g, " ").replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ").trim().split(/\s+/)
+    .map((w) => w.replace(/^\p{M}+/u, "")).filter(Boolean);
+  const upper = (s) => s.toLocaleUpperCase("en-NZ").normalize("NFC");
+  function codeChoices(name) {
+    const words = wordsOf(name);
+    if (!words.length) return [];
+    const first = graphemes(words[0])[0], out = [];
+    for (let i = words.length - 1; i >= 1; i--) out.push(first + graphemes(words[i])[0]);
+    for (const w of words) for (const g of graphemes(w).slice(1)) out.push(first + g);
+    for (const w of words.slice(1)) for (const g of graphemes(w).slice(1)) out.push(graphemes(w)[0] + g);
+    return [...new Set(out.map(upper))];
+  }
+  function distinctCodes(items, monogram) {
+    const rows = list(items).filter((x) => x && x.key != null).map((x) => ({ key: x.key, name: String(x.name || ""), base: upper(String((monogram ? monogram(x.name) : codeChoices(x.name)[0]) || "")) }));
+    const out = new Map(), taken = new Set();
+    const counts = rows.reduce((m, r) => m.set(r.base, (m.get(r.base) || 0) + 1), new Map());
+    for (const r of rows) if (counts.get(r.base) === 1) { out.set(r.key, r.base); taken.add(r.base); }
+    // (the clashing ones in name order, so the same names always get the same codes)
+    for (const r of rows.filter((x) => counts.get(x.base) > 1).sort((a, b) => a.name.localeCompare(b.name, "en-NZ") || String(a.key).localeCompare(String(b.key)))) {
+      const pick = codeChoices(r.name).find((c) => !taken.has(c) && !(counts.get(c) > 0));
+      const code = pick || r.base;
+      out.set(r.key, code); taken.add(code);
+    }
+    return out;
+  }
+
+  // ---- CO1b: markers never sit on each other ------------------------------------------------------------------------------------
+  // points: [{ x, y }] in screen pixels (the marker's centre); gap: the least distance between two centres. Each marker is moved the
+  // least it can be, half each way along the line between two that touch (straight up and down when they share a place), a few rounds
+  // over, so a marker stays beside its own place. -> [{ dx, dy }] (whole pixels)
+  function spreadMarks(points, gap = 32, rounds = 24) {
+    const p = list(points).map((q) => ({ x: Number(q?.x) || 0, y: Number(q?.y) || 0 })), d = p.map(() => ({ dx: 0, dy: 0 }));
+    for (let round = 0; round < rounds; round++) {
+      let moved = false;
+      for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) {
+        let vx = (p[j].x + d[j].dx) - (p[i].x + d[i].dx), vy = (p[j].y + d[j].dy) - (p[i].y + d[i].dy);
+        const dist = Math.hypot(vx, vy);
+        if (dist >= gap - 0.5) continue;
+        if (dist < 0.01) { vx = 0; vy = 1; } else { vx /= dist; vy /= dist; }
+        const push = (gap - dist) / 2 + 0.5;
+        d[i].dx -= vx * push; d[i].dy -= vy * push; d[j].dx += vx * push; d[j].dy += vy * push;
+        moved = true;
+      }
+      if (!moved) break;
+    }
+    return d.map((o) => ({ dx: Math.round(o.dx), dy: Math.round(o.dy) }));
+  }
+
+  // ---- CO1b: a tile's number said with where it is held -------------------------------------------------------------------------
+  // The tiles count the group's own and its sub-groups' (those the person is in), but each section's page lists one place's own. So a
+  // tile says where its number lies and links to the place that holds each part.
+  // rows: [{ org_id }] (one per item counted); groupId: the group's; subgroups: [{ id, name }].
+  // -> { total, own, subs: [{ id, name, n }] (largest first, then by name) }
+  function heldBy(rows, groupId, subgroups) {
+    const by = new Map();
+    for (const r of list(rows)) if (r && r.org_id != null) by.set(r.org_id, (by.get(r.org_id) || 0) + 1);
+    const subs = list(subgroups).filter((s) => s.id !== groupId && by.get(s.id) > 0).map((s) => ({ id: s.id, name: s.name, n: by.get(s.id) }))
+      .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "en-NZ"));
+    return { total: list(rows).filter((r) => r && r.org_id != null).length, own: by.get(groupId) || 0, subs };
+  }
+  // The quiet line under such a number: "Across the group and 3 sub-groups · 4 the group's own" (or nothing to add, when all are the
+  // group's own). held: heldBy's; what: "file"/"files" words for the group's own part.
+  function heldWords(held, { ownName = "the group's own" } = {}) {
+    if (!held || !held.subs.length) return null;
+    return "Across the group and " + plural(held.subs.length, "sub-group", "sub-groups") + " · " + count(held.own) + " " + ownName;
+  }
 
   // ---- numbers in words ------------------------------------------------------------------------------------------------------
   const count = (n) => (fin(n) ? Math.round(num(n)).toLocaleString("en-NZ") : "");
@@ -471,5 +567,6 @@
   return { PERIODS, periodOf, since, trendYears, storeKey, filterFrom, filterText, count, hectares, plural, metreRings, areaHa, labelPoint, areas, sites, inScope,
     headlineMeasure, wqCard, KEYS, TREND_CAP, PARAMETER_NAMES, CARD_GROUPS, createCards, cardsKey, layoutFrom, layoutText, shownCards, moveCard, toggleCard, pickerGroups, waterQualityLink,
     MEASURES, measureOf, minTimes, windowFloor, trendPlan, band, bands, CLASS_WORDS, BAR, bandWords, trendSentence, tiles, emptyLine, subgroupRows, siteRows, classLabel,
-    contextThemes, YEAR_MS, monthSeries, orgsInScope, scopeWords, recordPages, wholeSeries, PAGE_ROWS, RECORDS_CAP };
+    contextThemes, YEAR_MS, monthSeries, orgsInScope, scopeWords, recordPages, wholeSeries, PAGE_ROWS, RECORDS_CAP,
+    startFilter, startText, frameKey, frameFrom, frameText, codeChoices, distinctCodes, spreadMarks, heldBy, heldWords };
 });

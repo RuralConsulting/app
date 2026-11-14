@@ -288,7 +288,7 @@
       FP.phoneArea?.close();
       const overview = !!FP.groupOverview && computer();
       $("#screen-group").dataset.home = overview ? "overview" : "launcher";
-      if (overview) panel.replaceChildren(FP.groupOverview.view({ group, groups, person, sb: FP.sb, today, home }));
+      if (overview) panel.replaceChildren(FP.groupOverview.view({ group, groups, person, sb: FP.sb, today, home, sub: route.item || null }));   // CO1b: `?item=<sub-group>`
       else { FP.groupOverview?.close(); panel.replaceChildren(FP.placeHome.view(home)); }
       panel.scrollTop = 0;
       return;

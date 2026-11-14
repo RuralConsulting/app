@@ -11,7 +11,8 @@
 // Reads, each the signed-in person's own (row-level security and the functions' own rules decide what comes back), each bounded:
 //   subgroup_counts(parent)      the group's current sub-groups, by name, and which the person is in (SG2; any member of the
 //                                group). The number of businesses in each is NOT shown, to anyone.
-//   places (kind area, current)  the areas of the group and of the sub-groups the person is in (counted, then at most that many)
+//   places (kind area, current)  the areas of the group and of the sub-groups the person is in (one request, at most 500; CO1b: asked
+//                                beside subgroup_counts, from the person's own places, and drawn as they come)
 //   group_wq_sites(org, 0)       the monitoring sites inside each of those areas (S5; at most 5,000 each)
 //   wq_site_result_counts        MC1: per site, every result held and those of the five keys the card may ask about (150 sites a call,
 //                                so an answer stays under the API's 1,000 rows)
@@ -20,10 +21,10 @@
 //   group_members (head count)   the members, for the group's facilitators, advisors and admins only (People's roles)
 //   For the group and every sub-group the person is in (`org_id in (...)`, one read per tile), or the one sub-group selected (CO1),
 //   each read only while its tile is shown, once per set of places:
-//   captures (head count, then at most 2,000 times, 1,000 a request)   records and photos this year, and how many a month
-//   documents (head count)       the files held
+//   captures (the count with the first 1,000 times, at most 2,000)   records and photos this year, and how many a month
+//   documents (head count; across several places, the count and each one's place, CO1b)   the files held, and where
 //   group_events                 the next two, and head counts of those held this year (ended before now), for those with Events
-//   proposals (head count)       the open review questions, for People's roles only (as Home's waiting line counts them)
+//   proposals (as documents)     the open review questions, for People's roles only (as Home's waiting line counts them)
 //   core_layers + map-packages   the context layers' themes (N1), read and signed only when one is switched on
 // A read that fails leaves its part out: the page never says "not available" and never shows an error.
 (function (root) {
@@ -58,12 +59,11 @@
       : list(groups).filter((g) => g.parent_org_id === group.id).map((g) => ({ id: g.id, name: g.name, slug: g.slug || null, member: true }));
     return subs.filter((s) => s.id && s.name).sort((a, b) => a.name.localeCompare(b.name, "en-NZ"));
   }
+  // CO1b: one request, not a count and then the rows (one wait fewer before the map has its shapes): at most AREA_CAP rows, as before
   async function readAreas(sb, ids) {
     if (!ids.length) return [];
-    const where = (q) => q.eq("kind", "area").is("valid_to", null).in("org_id", ids);
-    const n = await headCount(where(sb.from("places").select("id", { count: "exact", head: true })));
-    if (n === 0) return [];
-    return (await rows(where(sb.from("places").select("org_id,geom")).limit(Math.min(n ?? AREA_CAP, AREA_CAP)))) || [];
+    const r = await Promise.resolve(sb.from("places").select("org_id,geom").eq("kind", "area").is("valid_to", null).in("org_id", ids).limit(AREA_CAP)).catch(() => null);
+    return !r || r.error ? [] : list(r.data).slice(0, AREA_CAP);
   }
   async function readCounts(sb, ids, since) {
     const batches = [];
@@ -127,12 +127,15 @@
       const from = nzYearStart(c);
       if (!from) return null;
       const where = (q) => q.in("org_id", orgs).is("archived_at", null).gte("taken_at", from);
-      const n = await headCount(where(c.sb.from("captures").select("id", { count: "exact", head: true })));
-      if (n === null) return null;
       // (#544 review: the API gives at most 1,000 rows a request, so pages of 1,000 up to the cap; over the cap, or a short read, the
-      // number alone, never a cut-off chart)
-      const times = [];
-      for (const [a, b] of c.O.recordPages(n)) {
+      // number alone, never a cut-off chart. CO1b: the first page comes with the count, so one request where there are 1,000 or fewer)
+      const first = await Promise.resolve(where(c.sb.from("captures").select("taken_at", { count: "exact" })).order("taken_at", { ascending: true }).range(0, c.O.PAGE_ROWS - 1)).catch(() => null);
+      const n = first && !first.error && Number.isInteger(first.count) ? first.count : null;
+      if (n === null) return null;
+      const pages = c.O.recordPages(n);
+      if (!pages.length) return { n, series: null };
+      const times = list(first.data).map((r) => r.taken_at);
+      for (const [a, b] of pages.slice(1)) {
         const got = await rows(where(c.sb.from("captures").select("taken_at")).order("taken_at", { ascending: true }).range(a, b));
         if (!got) return { n, series: null };
         times.push(...got.map((r) => r.taken_at));
@@ -144,19 +147,48 @@
       if (!d || !d.n) return null;
       return [big(c.O.count(d.n)), d.series && d.series.length ? monthChart(d.series) : null, since1Jan(c, "Those you can see, taken")].filter(Boolean);
     } });
+  // CO1b (the owner's walk: "Files 47" opened a Files page of 4; "Coming up" sat beside an Events page with none): a tile counts the
+  // group's own and its sub-groups' (those the person is in), but each section's page lists one place's own. So where a number spans
+  // places, the tile says so ("Across the group and 1 sub-group · 4 the group's own"), its link says it opens the group's own, and each
+  // sub-group holding some is named with a link to its own page. Read in one request: the count, and the place of each item (org_id
+  // only, of rows the person already reads) up to the API's 1,000; past that, or on a short read, the split is not said.
+  const subHref = (id, view, tab) => FP.href(FP.groupModel.href(id, view, tab || null));
+  // read(columns, options): the tile's own read across `orgs`, with those columns
+  async function countHeld(c, orgs, read) {
+    if (orgs.length < 2) return { n: await headCount(read("id", { count: "exact", head: true })), held: null, multi: false };
+    const r = await Promise.resolve(read("org_id", { count: "exact" }).limit(c.O.PAGE_ROWS)).catch(() => null);
+    if (!r || r.error || !Number.isInteger(r.count)) return null;
+    const got = list(r.data);
+    return { n: r.count, held: got.length === r.count ? c.O.heldBy(got, c.group.id, c.subs) : null, multi: true };
+  }
+  // the quiet line and the links under such a number. open: (place id) -> href, or null where that place's page is not the person's
+  const MAX_HELD = 3;
+  function heldParts(c, d, { plain, own, open, word = "Held" }) {
+    if (!d.multi || (d.held && !d.held.subs.length)) return [counted(c, word), cardLink(open(c.group.id) || c.href(), plain)];
+    if (!d.held) return [quiet("Across the group and your sub-groups"), cardLink(open(c.group.id), own)];
+    const subs = d.held.subs, shown = subs.slice(0, MAX_HELD);
+    return [quiet(c.O.heldWords(d.held)), d.held.own ? cardLink(open(c.group.id), own) : null,
+      el("ul", { class: "ov-held" }, ...shown.map((s) => { const href = open(s.id); return el("li", {}, href ? el("a", { class: "ov-card-link", href, "data-held": s.id }, s.name + ": " + c.O.count(s.n), FP.icon ? FP.icon("chevron", 14) : null) : el("span", {}, s.name + ": " + c.O.count(s.n))); })),
+      subs.length > shown.length ? quiet("and " + c.O.plural(subs.length - shown.length, "more sub-group", "more sub-groups")) : null].filter(Boolean);
+  }
   const TZ = "Pacific/Auckland";
   const eventDay = (t) => { const d = Date.parse(t); return Number.isFinite(d) ? new Date(d).toLocaleDateString("en-NZ", { weekday: "short", day: "numeric", month: "short", timeZone: TZ }).replace(",", "") : ""; };
   cards.register({ id: "coming", title: "Coming up", group: "Activity", order: 50, line: "The next two events", can: (v) => v.sections.includes("events"),
     async load(c, orgs) {
       const from = FP.placeHomeModel?.nzDayStart?.(String(c.today || new Date().toISOString()).slice(0, 10)) || new Date().toISOString();
-      return rows(c.sb.from("group_events").select("id,title,starts_at,all_day,place_name,cancelled_at").in("org_id", orgs).is("cancelled_at", null).gte("starts_at", from)
+      return rows(c.sb.from("group_events").select("id,org_id,title,starts_at,all_day,place_name,cancelled_at").in("org_id", orgs).is("cancelled_at", null).gte("starts_at", from)
         .order("starts_at", { ascending: true }).range(0, 1));
     },
     render(c, d) {
       if (d === undefined) return [quiet("Reading the calendar…")];
       if (!d || !d.length) return null;   // couldn't be read, or nothing coming: left out, never an error
-      return [el("ul", { class: "ov-events" }, ...d.map((e) => el("li", {}, el("b", {}, eventDay(e.starts_at)), el("span", {}, e.title || "Event", e.place_name ? el("small", {}, e.place_name) : null)))),
-        cardLink(c.href("events"), "All events")];
+      // CO1b: an event a sub-group holds names it, with a link to that sub-group's Events (the group's own page lists only its own)
+      const subOf = (e) => (e.org_id && e.org_id !== c.group.id && !c.filter.sub ? c.subs.find((s) => s.id === e.org_id) || null : null);
+      const anySub = d.some((e) => subOf(e));
+      return [el("ul", { class: "ov-events" }, ...d.map((e) => { const s = subOf(e);
+          return el("li", {}, el("b", {}, eventDay(e.starts_at)), el("span", {}, e.title || "Event", e.place_name ? el("small", {}, e.place_name) : null,
+            s ? el("a", { class: "ov-event-sub", href: subHref(s.id, "events"), "data-held": s.id, title: "Open the events of " + s.name }, "In " + s.name) : null)); })),
+        cardLink(c.href("events"), anySub ? "The group's own events" : "All events")];
     } });
   cards.register({ id: "held", title: "Events this year", group: "Activity", order: 60, line: "How many events were held since 1 January", can: (v) => v.sections.includes("events"),
     // (#544 review: held means ended before now; an event with no end is held once its day is over)
@@ -176,23 +208,25 @@
       return [big(c.O.count(d)), since1Jan(c, "Held")];
     } });
   cards.register({ id: "files", title: "Files", group: "About the group", order: 70, line: "How many files are held", can: (v) => v.sections.includes("documents"),
-    async load(c, orgs) { return headCount(c.sb.from("documents").select("id", { count: "exact", head: true }).in("org_id", orgs)); },
+    load(c, orgs) { return countHeld(c, orgs, (cols, o) => c.sb.from("documents").select(cols, o).in("org_id", orgs)); },
     render(c, d) {
       if (d === undefined) return [quiet("Counting…")];
-      if (!d) return null;
-      return [big(c.O.count(d)), counted(c, "Held"), cardLink(c.href("documents"), "Open Files")];
+      if (!d || !d.n) return null;
+      return [big(c.O.count(d.n)), ...heldParts(c, d, { plain: "Open Files", own: "Open the group's own Files", open: (id) => (id === c.group.id ? c.href("documents") : subHref(id, "documents")) })];
     } });
   cards.register({ id: "review", title: "To review", group: "Activity", order: 80, line: "How many questions about the register wait for an answer (coordinators)",
     can: (v) => !!v.people && v.sections.includes("people"),
     async load(c, orgs) {
       const R = FP.reviewItemsModel;
       if (!R) return null;
-      return headCount(c.sb.from("proposals").select("id", { count: "exact", head: true }).in("org_id", orgs).in("kind", R.KINDS).eq("status", "proposed"));
+      return countHeld(c, orgs, (cols, o) => c.sb.from("proposals").select(cols, o).in("org_id", orgs).in("kind", R.KINDS).eq("status", "proposed"));
     },
     render(c, d) {
       if (d === undefined) return [quiet("Counting…")];
-      if (!d) return null;
-      return [big(c.O.count(d)), counted(c, d === 1 ? "Question waiting" : "Questions waiting"), cardLink(c.href("people", "review"), "Open To review")];
+      if (!d || !d.n) return null;
+      // (a sub-group's To review is linked only where the person sees that sub-group's People)
+      const open = (id) => (id === c.group.id ? c.href("people", "review") : (() => { const g = c.groups.find((x) => x.id === id); return g && FP.peopleModel?.canSeeTab?.(g, c.groups) ? subHref(id, "people", "review") : null; })());
+      return [big(c.O.count(d.n)), ...heldParts(c, d, { plain: "Open To review", own: "Open the group's own To review", open, word: d.n === 1 ? "Question waiting" : "Questions waiting" })];
     } });
   cards.register({ id: "wqsites", title: "Water quality sites", group: "Water", order: 90, off: true, line: "The monitoring sites inside the boundaries, and their samples",
     render(c) {
@@ -231,7 +265,8 @@
   }
 
   // ---- the page ------------------------------------------------------------------------------------------------------------
-  // opts: { group, groups (the person's), person, sb, today, home (place-home.js's options, for its search) }
+  // opts: { group, groups (the person's), person, sb, today, home (place-home.js's options, for its search), sub (CO1b: the sub-group the
+  // address names, `?item=`, chosen at the start when the person is in it) }
   function view(opts) {
     close();
     const { group, groups = [], person = null } = opts, sb = opts.sb || FP.sb;
@@ -240,12 +275,13 @@
     const live = () => me.alive && shown === me;
     const now = Date.parse(String(opts.today || "").slice(0, 10) + "T12:00:00Z") || Date.now();
     const P = FP.mapPalette;
-    let subs = [], A = new Map(), all = [], sitesRead = true, members = null, loaded = false, classes = new Map(), plan = null, token = 0;
+    let subs = [], subsKnown = false, A = new Map(), all = [], sitesRead = true, members = null, loaded = false, classes = new Map(), plan = null, token = 0;
     const counts = new Map();   // period key -> rows of wq_site_result_counts (all time)
     const key = O().storeKey(person?.id, group.id);
-    // CO1: the selection (the sub-group chosen in the list or on the map) is remembered as the old filter was; the period is no longer
-    // offered (nothing on the page by default used it, and the Water quality page has its own), so it is always all time
-    let filter = { ...O().filterFrom(store.get(key), []), period: "all" };
+    // CO1b (the owner: the overview "often opens filtered"): every visit opens on "All sub-groups", unless the address names one
+    // (`?item=<sub-group>`); only the list's sort is remembered on this device. The period is always all time (CO1).
+    let filter = O().startFilter(store.get(key), [], null);
+    let codes = new Map();   // CO1b: sub-group id -> its marker's short code, never the same for two
     const hrefOf = (id) => FP.href(FP.groupModel.href(id, "home"));
     const subName = (id) => subs.find((s) => s.id === id)?.name || "";
     const isSub = !!group.parent_org_id;
@@ -254,7 +290,8 @@
     const search = FP.placeHome?.view ? FP.placeHome.view({ ...(opts.home || {}), compact: true }) : null;
     const head = el("div", { class: "ov-head" }, search || el("span"));
     // -- LEFT: the sub-groups (a group with sub-groups only)
-    const listBox = el("nav", { class: "ov-list", "aria-label": "Sub-groups", hidden: true });
+    // (CO1b: a group's list keeps its place, under its heading, while the sub-groups are read)
+    const listBox = el("nav", { class: "ov-list", "aria-label": "Sub-groups", hidden: isSub }, ...(isSub ? [] : [el("div", { class: "ov-list-head" }, el("h2", {}, "Sub-groups"))]));
     // -- MIDDLE: the tiles
     const cardsBox = el("div", { class: "ov-cards ov-tiles-grid", "aria-label": "Tiles" });
     const addCard = el("button", { type: "button", class: "ov-add-card", id: "ov-add-card", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => picker() },
@@ -283,6 +320,12 @@
     // -- RIGHT: the map, with its one Layers panel (folded to a button by default)
     const mapHost = el("div", { class: "ov-map", id: "ov-map", role: "region", "aria-label": "Map of " + group.name });
     const mapNote = el("p", { class: "ov-map-note", role: "status", hidden: true });
+    // CO1b (the owner: "it takes a few seconds to load the map properly. This leaves you thinking its missing something"): until the
+    // group's shapes are on the map, a quiet "Loading map…" in its box. The map opens on the frame the overview last drew for this group
+    // on this device; with none kept, the map stays hidden behind the box's own ground until it can open on the group (never the region)
+    const frameStore = O().frameKey(person?.id, group.id);
+    const keptFrame = O().frameFrom(store.get(frameStore));
+    const mapWait = el("p", { class: "ov-map-wait", id: "ov-map-wait", role: "status" }, "Loading map…");
     const layersToggle = el("button", { type: "button", id: "ov-layers-toggle", class: "ov-layers-toggle", "aria-expanded": "false", "aria-controls": "ov-layers" }, FP.icon ? FP.icon("layers", 18) : null, el("span", {}, "Layers"),
       el("span", { class: "ov-layers-x", "aria-hidden": "true" }, FP.icon ? FP.icon("close", 14) : "×"));
     const bgBox = el("div", { class: "ov-bg", role: "group", "aria-label": "Background" });
@@ -290,7 +333,7 @@
     const legendBox = el("ul", { class: "ov-legend", "aria-label": "Key" });
     const layersBody = el("div", { id: "ov-layers", class: "ov-layers-body" }, bgBox, showBox, legendBox);
     const layersPanel = el("div", { class: "ov-layers" }, layersToggle, layersBody);
-    const mapBox = el("div", { class: "ov-mapbox" }, mapHost, layersPanel, mapNote);
+    const mapBox = el("div", { class: "ov-mapbox loading" + (keptFrame ? " framed" : "") }, mapHost, layersPanel, mapNote, mapWait);
     const main = el("div", { class: "ov-main" + (isSub ? " no-list" : "") }, listBox, headline, side, mapBox);
     const wrap = el("section", { class: "group-overview", "data-view": "home", "aria-label": "Home", "aria-busy": "true" }, head, main);
 
@@ -327,7 +370,7 @@
     }
     // Escape in the list clears the choice ("All sub-groups"), as on the map
     listBox.addEventListener("keydown", (e) => { if (e.key === "Escape" && filter.sub) { e.preventDefault(); select(null); listBox.querySelector("#ov-all")?.focus(); } });
-    const save = () => store.set(key, O().filterText(filter));
+    const save = () => store.set(key, O().startText(filter));   // (the sort only: CO1b)
     // choosing a sub-group (in the list or on the map): the tiles and the map follow it; a second click on it (or its row's Open) goes
     // into it; "All sub-groups" clears it (the owner, 14 Nov 2026: on a computer the first click filters, the second opens; a phone
     // goes straight in, PH5)
@@ -345,7 +388,7 @@
     const org = () => filter.sub || group.id;
     // the places the tiles read for (#544 review): one selected sub-group's own, else the group and every sub-group the person is in
     const orgs = () => O().orgsInScope(group.id, subs, filter.sub || null);
-    const ctx = () => ({ group, subs, areas: A, sites: all, scope: scope(), classes, plan, filter, loaded, sitesRead, members, el, O: O(), bar, hrefOf, sb, today: opts.today || null, now,
+    const ctx = () => ({ group, groups, subs, areas: A, sites: all, scope: scope(), classes, plan, filter, loaded, sitesRead, members, el, O: O(), bar, hrefOf, sb, today: opts.today || null, now,
       href: (view, tab) => FP.href(FP.groupModel.href(org(), view, tab || null)), waterQuality: () => { wqIntent = true; }, wqSummary });
     // WQV1: the Water quality page's summary for this group, or for one of its sub-groups picked out of this group's sites, once per choice
     const wqSums = new Map();
@@ -373,13 +416,16 @@
         (def.lead ? lead : nodes).push(el("section", { class: "ov-card" + (def.wide ? " wide" : ""), "data-card": id, "aria-labelledby": "ov-card-h-" + id }, el("h2", { id: "ov-card-h-" + id }, def.title), ...[].concat(body)));
       }
       leadBox.replaceChildren(...lead);
+      for (const q of leadBox.querySelectorAll(".ov-quiet, h2")) q.title = q.textContent;   // (CO1b review: the row's lines are clamped; whole on hover)
       leadBox.hidden = !lead.length;
       cardsBox.replaceChildren(...nodes);
       cardsBox.parentElement.hidden = !nodes.length;
       copyText.hidden = !leadBox.querySelector(".ov-num") && !cardsBox.querySelector(".ov-num");
       const c0 = ctx();
-      scopeLine.textContent = [O().scopeWords({ name: group.name, isSub, subgroups: subs, selectedName: filter.sub ? subName(filter.sub) : null }), asAt(c0)].filter(Boolean).join(" · ");
+      // (CO1b: said once the sub-groups are known, so the line never changes under the reader)
+      scopeLine.textContent = !subsKnown ? "" : [O().scopeWords({ name: group.name, isSub, subgroups: subs, selectedName: filter.sub ? subName(filter.sub) : null }), asAt(c0)].filter(Boolean).join(" · ");
       scopeLine.hidden = !scopeLine.textContent;
+      scopeLine.title = scopeLine.textContent;   // (CO1b: at most three lines are shown; the whole line on hover)
     }
     function picker() {
       const holder = el("div", { class: "ov-picker" });
@@ -424,12 +470,13 @@
     }
     function badge(sub) {
       const logo = FP.groupModel?.groupLogo?.(sub);
-      return el("span", { class: "ov-badge", style: "--ring: " + hueOf(sub.id), "aria-hidden": "true" }, logo ? el("img", { src: logo.src, alt: "" }) : FP.icons?.monogram(sub.name) || "");
+      return el("span", { class: "ov-badge", style: "--ring: " + hueOf(sub.id), "aria-hidden": "true" }, logo ? el("img", { src: logo.src, alt: "" }) : codes.get(sub.id) || FP.icons?.monogram(sub.name) || "");
     }
     // (PH5: a sub-group's own fill colour, the same on every map; CO1's list swatches use it too)
     const hueOf = (id) => (id !== group.id && P?.subgroupColours && subColour(id) ? subColour(id) : P ? P.look(P.hues(css)[P.hueIndex(id)], { sub: true, onDark: onDark() }).line : "currentColor");
     function drawNote() {
-      // the calm line, on the map, when no boundary is held
+      // the calm line, on the map, when no boundary is held (CO1b review: never over "The map couldn't open here.")
+      if (mapFailed) return;
       const line = loaded ? O().emptyLine({ areas: A, sites: all, filter, sitesRead }) : null, onMap = !!line && /^No boundary/.test(line);
       mapNote.textContent = onMap ? line : ""; mapNote.hidden = !onMap;
     }
@@ -518,7 +565,15 @@
         markers.push({ id: group.id, group: true, node, ha: own.ha, marker: new gl.Marker({ element: node, anchor: "left", offset: [-20, 0] }).setLngLat(own.at).addTo(map) });
       }
       zoomMarks();
+      spread();
       declutter();
+    }
+    // CO1b (the owner's walk: the GR marker sat under LW): markers never sit on each other. Each shown marker's round badge is moved the
+    // least it takes (group-overview-model spreadMarks), worked out again as the map zooms; the name beside it follows
+    function spread() {
+      if (!map) return;
+      const shownMarks = markers.filter((m) => !m.node.hidden), off = O().spreadMarks(shownMarks.map((m) => map.project(m.marker.getLngLat())), 32);
+      shownMarks.forEach((m, i) => m.marker.setOffset([(m.group ? -20 : -14) + off[i].dx, off[i].dy]));
     }
     const GROUP_ZOOM = 8;
     function zoomMarks() {
@@ -549,16 +604,42 @@
     // the map framed on the group, or on the sub-group selected (a selection moves there smoothly, unless the person asks for less motion)
     function frame(force = false, smooth = false) {
       if (!map) return;
-      const fk = (filter.sub || "all") + "|" + A.size + "|" + all.length;
+      // (CO1b: with areas held, the sites arriving later never move the map: they are not part of the frame then)
+      const fk = (filter.sub || "all") + "|" + A.size + "|" + (A.size ? "" : all.length);
       if (!force && fk === framedKey) return;
       framedKey = fk;
+      const { bounds, padding, maxZoom } = frameOf();
+      map.resize();
+      map.fitBounds(bounds, { padding, maxZoom, duration: smooth && !reducedMotion() ? 750 : 0 });
+    }
+    function frameOf() {
       const boxes = filter.sub ? [A.get(filter.sub)?.shape.bbox].filter(Boolean) : [...A.values()].map((a) => a.shape.bbox);
       const pts = scope().map((s) => s.lngLat).filter(Boolean);
       if (!boxes.length && pts.length) boxes.push([[Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1]))], [Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))]]);
-      const b = boxes.length ? FP.homeModel.union(boxes) : CANTERBURY;
       const right = layersBody.hidden ? 48 : Math.min(300, layersPanel.offsetWidth + 40);
-      map.resize();
-      map.fitBounds(b, { padding: { top: 48, bottom: 48, left: 48, right }, maxZoom: boxes.length ? 13 : 8, duration: smooth && !reducedMotion() ? 750 : 0 });
+      return { bounds: boxes.length ? FP.homeModel.union(boxes) : keptFrame || CANTERBURY, padding: { top: 48, bottom: 48, left: 48, right }, maxZoom: boxes.length || keptFrame ? 13 : 8 };
+    }
+    // CO1b: the group's shapes are on the map (or it is known there are none): "Loading map…" goes and the map shows. The frame they
+    // make is kept on this device for the next visit.
+    function reveal() {
+      if (!live() || !mapBox.classList.contains("loading")) return;
+      mapBox.classList.remove("loading", "framed");
+      mapWait.hidden = true;
+      if (A.size) { const t = O().frameText(FP.homeModel.union([...A.values()].map((a) => a.shape.bbox))); if (t) store.set(frameStore, t); }
+    }
+    let areasKnown = false;
+    // the shapes drawn once both the map and the areas are ready; shown once the map has the shapes' tiles (or after a moment)
+    function shapesIn() {
+      if (!map?.getSource("ov-areas") || !areasKnown) return;
+      drawAreas(); drawSites();
+      if (keepCamera) { map.jumpTo(keepCamera); keepCamera = null; } else frame(true);   // (made again: where it was)
+      if (!A.size) { reveal(); return; }
+      let done = false;
+      const go = () => { if (done) return; done = true; map.off("sourcedata", check); reveal(); };
+      const check = () => { if (map.isSourceLoaded?.("ov-areas")) map.once("render", go); };
+      map.on("sourcedata", check);
+      setTimeout(go, 1500);
+      check();
     }
     async function useBase(k) {
       base = k; markBg();
@@ -568,20 +649,43 @@
       paint();
     }
     function markBg() { for (const b of bgBox.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.base === base)); }
+    // CO1b review: a map that cannot open says so, never "Loading map…" for good (the box leaves its loading state first)
+    let mapFailed = false;
+    function cannotOpen() { mapFailed = true; reveal(); mapNote.textContent = "The map couldn't open here."; mapNote.hidden = false; }
+    // CO1b review: a map made again in place (FP.mapKeep, in a WebKit browser whose map went blank when its box changed size): the
+    // same place and zoom, the same sub-group chosen, the same layers; its markers and shapes drawn again by the map's own ready step
+    let keepCamera = null;
+    function rebuild() {
+      if (!live() || !map) return;
+      keepCamera = { center: map.getCenter(), zoom: map.getZoom() };
+      for (const m of markers) m.marker.remove();
+      markers = [];
+      hover?.remove(); popup?.remove();
+      themes.added.clear();
+      try { map.remove(); } catch { /* already gone */ }
+      map = me.map = null;
+      makeMap();
+    }
     function makeMap() {
-      if (!live() || map || !gl?.Map || !FP.basemaps?.style) return;
+      if (!live() || map) return;
+      if (!gl?.Map || !FP.basemaps?.style) { cannotOpen(); return; }
       if (!mapHost.isConnected || !mapHost.clientWidth || !mapHost.clientHeight) {
         // (no zero-size map: made once the box has a size)
         if (typeof ResizeObserver !== "undefined" && !me.sizeWatch) { me.sizeWatch = new ResizeObserver(() => { if (mapHost.clientWidth && mapHost.clientHeight) { me.sizeWatch.disconnect(); me.sizeWatch = null; makeMap(); } }); me.sizeWatch.observe(mapHost); }
         return;
       }
-      gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js");
-      const start = P ? P.startBackground(store.get(BASE_KEY), choices()) : "aerial";
+      try { gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js"); } catch { /* set already */ }
+      const start = base || (P ? P.startBackground(store.get(BASE_KEY), choices()) : "aerial");
       base = start;
+      // CO1b: opened on the group (its areas when they are read, else the frame kept from the last visit), never the whole region while
+      // the group's shapes are on their way (the map is hidden behind "Loading map…" until then when no frame is kept); made again, where
+      // it was
+      const first = frameOf(), at = keepCamera ? { center: keepCamera.center, zoom: keepCamera.zoom } : { bounds: first.bounds, fitBoundsOptions: { padding: first.padding, maxZoom: first.maxZoom } };
       try {
-        map = me.map = new gl.Map({ container: mapHost, style: FP.basemaps.style(start, { reliefOnAerial: false }), bounds: CANTERBURY, maxZoom: 18,
+        map = me.map = new gl.Map({ container: mapHost, style: FP.basemaps.style(start, { reliefOnAerial: false }), ...at, maxZoom: 18,
           dragRotate: false, pitchWithRotate: false, attributionControl: { compact: true, ...(FP.brand?.org_legal ? { customAttribution: FP.brand.org_legal } : {}) } });
-      } catch { mapNote.textContent = "The map couldn't open here."; mapNote.hidden = false; return; }
+      } catch { map = me.map = null; cannotOpen(); return; }
+      me.keep?.made();
       map.touchZoomRotate?.disableRotation?.();
       map.addControl(new gl.NavigationControl({ showCompass: false }), "bottom-right");
       map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
@@ -624,19 +728,27 @@
           const f = at(e), sub = f && subs.find((x) => x.id === f.properties.id);
           if (sub?.member) { if (sub.id === filter.sub) open(sub.id); else select(sub.id); }
         });
-        map.on("moveend", declutter); map.on("zoom", zoomMarks);
-        drawAreas(); drawSites(); frame(true);
+        map.on("moveend", declutter); map.on("zoom", () => { zoomMarks(); spread(); });
+        if (areasKnown) shapesIn(); else drawSites();
         useBase(start);
+        for (const t of themes.list || []) if (t.layers.some((L) => themes.layersOn.has(L.key))) showLayers(t);   // (made again: its layers back)
       };
       if (map.isStyleLoaded?.()) ready(); else { map.once("load", ready); map.once("style.load", ready); }
+      if (me.watching) return;   // (the page's own watchers, once, whichever map is current)
+      me.watching = true;
+      me.keep = FP.mapKeep?.watch?.(mapBox, rebuild) || null;
+      me.keep?.made();
+      me.offs.push(() => me.keep?.stop());
       // the theme changed: the same places in the colours for it
       const scheme = root.matchMedia?.("(prefers-color-scheme: dark)"), recolour = () => paint();
       scheme?.addEventListener?.("change", recolour);
       const watch = typeof MutationObserver === "undefined" ? null : new MutationObserver(recolour);
       watch?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
       me.offs.push(() => scheme?.removeEventListener?.("change", recolour), () => watch?.disconnect());
-      // a window resized (or the panel folded): the map keeps its frame
-      const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { map?.resize(); declutter(); });
+      // a window resized (or the panel folded): the map keeps its frame. (CO1b: the map is made only once the page around it has its
+      // final shape, so loading never resizes it; a browser built on WebKit, as the review rig's is, stopped showing a map whose canvas
+      // changed size after it was first drawn: the overview's map was made at once and then squeezed as the list and numbers arrived)
+      const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { map?.resize(); spread(); declutter(); });
       resize?.observe(mapHost); me.offs.push(() => resize?.disconnect());
     }
 
@@ -743,19 +855,28 @@
 
     // ---- load ------------------------------------------------------------------------------------------------------------
     let siteReads = [], siteIds = [];
+    // CO1b: the areas are asked for at once, beside the sub-groups (not after them): the group's own and those of its sub-groups the
+    // person is in, known from their own places; any other sub-group the list says they are in is asked for when the list comes
+    const firstIds = [group.id, ...(isSub ? [] : list(groups).filter((g) => g.parent_org_id === group.id).map((g) => g.id))];
+    const areasAsked = readAreas(sb, firstIds).catch(() => []);
     (async () => {
       const [s, m] = await Promise.all([readSubgroups(sb, group, groups).catch(() => []),
         isCoordinator ? headCount(sb.from("group_members").select("id", { count: "exact", head: true }).eq("org_id", group.id).is("ended_at", null)) : null]);
       if (!live()) return;
-      subs = s; members = m;
+      subs = s; members = m; subsKnown = true;
+      codes = O().distinctCodes(subs.map((x) => ({ key: x.id, name: x.name })), FP.icons?.monogram);
       layout = O().layoutFrom(store.get(O().cardsKey(person?.id, group.id)), cards.available(viewer));
-      // a remembered selection holds only while it is still one of the group's sub-groups the person is in
-      filter = { ...O().filterFrom(store.get(key), subs.filter((x) => x.member)), period: "all" };
+      // (CO1b: All sub-groups, unless the address names one the person is in)
+      filter = O().startFilter(store.get(key), subs, opts.sub || null);
       drawList(); drawCards(); loadCards();
-      const visible = [group.id, ...subs.filter((x) => x.member).map((x) => x.id)];
-      A = O().areas(await readAreas(sb, visible).catch(() => []));
+      // the page has its final shape now (the list, the headline): the map is made at its own size, never squeezed afterwards
+      (root.requestAnimationFrame || ((f) => setTimeout(f, 0)))(() => makeMap());
+      const visible = [group.id, ...subs.filter((x) => x.member).map((x) => x.id)], more = visible.filter((id) => !firstIds.includes(id));
+      const got = [...await areasAsked, ...(more.length ? await readAreas(sb, more).catch(() => []) : [])];
       if (!live()) return;
-      drawList(); drawCards();
+      A = O().areas(got.filter((r) => visible.includes(r?.org_id)));
+      areasKnown = true;
+      drawList(); drawCards(); drawLayers(); shapesIn();
       // the sites inside each area: the group's own (when it has one) and each sub-group's (to know which sub-group a site is in)
       const orgs = [...(A.has(group.id) ? [group.id] : []), ...subs.filter((x) => A.has(x.id)).map((x) => x.id)];
       siteReads = await pool(orgs.map((o) => async () => ({ org: o, rows: await rows(sb.rpc("group_wq_sites", { g: o, km: 0 })) })), SITES_POOL);
@@ -771,8 +892,8 @@
       wrap.setAttribute("aria-busy", "false");
       startTrends();
       drawList(); drawCards(); drawLayers(); drawNote();
-      if (map?.getSource("ov-areas")) { drawAreas(); drawSites(); frame(true); }
-    })().catch(() => { if (live()) { loaded = true; wrap.setAttribute("aria-busy", "false"); drawList(); drawCards(); drawLayers(); drawNote(); } });
+      if (map?.getSource("ov-areas")) { drawSites(); frame(); }
+    })().catch(() => { if (live()) { loaded = true; areasKnown = true; subsKnown = true; wrap.setAttribute("aria-busy", "false"); drawList(); drawCards(); drawLayers(); drawNote(); makeMap(); shapesIn(); } });
 
     // the context layers' themes (N1), listed in the Layers panel; their files are signed only when a theme is switched on
     const safe = (make) => { try { return rows(make()); } catch { return Promise.resolve(null); } };
@@ -780,7 +901,6 @@
       .then((r) => { if (!live() || !r) return; themes.list = O().contextThemes(r); drawLayers(); });
 
     drawLayers(); drawCards();
-    (root.requestAnimationFrame || ((f) => setTimeout(f, 0)))(() => makeMap());
     me.wrap = wrap;
     return wrap;
   }

@@ -18,7 +18,8 @@
   const TABS = { manage: ["members", "gaps", "updates", "sites", "settings"], people: ["log", "follow-ups", "add-person", "add-contact", "review"], water: ["round"] };   // SR1: `/water/round[?item=<round>]` enters or reopens a sampling round
   function match(hash) {
     const m = String(hash || "").match(ROUTE);
-    if (!m || (m[3] && !TABS[m[2]]?.includes(m[3])) || (m[4] && m[2] !== "maps" && m[2] !== "records" && !(m[2] === "water" && m[3] === "round"))) return null;
+    if (!m || (m[3] && !TABS[m[2]]?.includes(m[3])) || (m[4] && m[2] !== "maps" && m[2] !== "records" && m[2] !== "home" && !(m[2] === "water" && m[3] === "round"))) return null;
+    if (m[2] === "home" && m[4]) return { group: m[1], view: "home", item: m[4] };   // CO1b: the overview opened on one sub-group
     if (m[2] === "water" && m[3]) return { group: m[1], view: "water", tab: m[3], item: m[4] || null };   // SR1
     if (m[2] === "people") return { group: m[1], view: "people", tab: m[3] || null };
     if (m[2] === "maps") return { group: m[1], view: "maps", item: m[4] || null };   // V4: a published map, or the group's list
@@ -26,7 +27,7 @@
     if (m[2] === "settings") return { group: m[1], view: "manage", tab: "settings" };
     return m[2] === "manage" ? { group: m[1], view: "manage", tab: m[3] || null } : { group: m[1], view: m[2] || "map" };
   }
-  const href = (id, view = "map", tab = null) => "#/group/" + id + (view && view !== "map" ? "/" + view : "") + ((view === "manage" || view === "people") && tab ? "/" + tab : "") + ((view === "maps" || view === "records") && tab ? "?item=" + encodeURIComponent(tab) : "");
+  const href = (id, view = "map", tab = null) => "#/group/" + id + (view && view !== "map" ? "/" + view : "") + ((view === "manage" || view === "people") && tab ? "/" + tab : "") + ((view === "maps" || view === "records" || view === "home") && tab ? "?item=" + encodeURIComponent(tab) : "");
   const viewLabel = (key) => views.find(([k]) => k === key)?.[1] || null;
 
   // ---- levels -------------------------------------------------------------------------------------------------------------

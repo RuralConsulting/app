@@ -31,6 +31,19 @@
    row, so the row costs the map less height) */
 .ov-headline { grid-area: head; display: flex; align-items: stretch; overflow: hidden; border: 1px solid var(--rule-soft); border-radius: var(--radius); background: var(--panel); }
 .ov-headline > .ov-scope { flex: 0 1 200px; align-self: center; padding: var(--s-2) var(--s-4); }
+/* CO1b: the row keeps one height whatever it holds (the numbers arriving, a sub-group chosen, a long name), so the map beside it is
+   never resized once drawn (a WebKit browser stopped showing a map whose canvas changed size): room for one tile (its label, figure
+   and line), the dated line at most three lines; on a narrow computer, where a tile's line can wrap, room for two lines */
+/* (CO1b review: a fixed height, not a least one, and every line in it clamped, so no wrapping can grow it: a tile's line one line
+   from 1,200 px wide, two below, where the tiles are narrow; the whole line on hover) */
+.ov-main > .ov-headline { --ov-lines: 1; --ov-tile: calc(2 * var(--s-3) + 2 * var(--s-1) + 1.3 * var(--text-small) + 1.1 * var(--text-title) + var(--ov-lines) * 1.35 * var(--text-small));
+  height: calc(2px + var(--ov-tile)); }
+.ov-headline > .ov-scope { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; padding: 0; margin: var(--s-2) var(--s-4);
+  line-height: 1.3; max-height: calc(3 * 1.3 * var(--text-small)); }
+.ov-lead > .ov-card h2 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ov-lead > .ov-card .ov-quiet { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--ov-lines); overflow: hidden; max-height: calc(var(--ov-lines) * 1.35 * var(--text-small)); }
+@media (max-height: 800px) { .ov-main > .ov-headline { --ov-tile: calc(2 * var(--s-2) + 1.3 * var(--text-small) + 1.1 * var(--text-heading) + var(--ov-lines) * 1.35 * var(--text-small)); } }
+@media (max-width: 1199px) { .ov-main > .ov-headline { --ov-lines: 2; } }
 .ov-side { grid-area: side; }
 .ov-mapbox { grid-area: map; }
 .ov-main > * { min-height: 0; min-width: 0; }
@@ -46,6 +59,14 @@
 }
 .ov-mapbox { position: relative; height: 100%; overflow: hidden; border-radius: var(--radius); background: var(--map-background); box-shadow: inset 0 0 0 1px var(--rule-soft); }
 .ov-map { position: absolute; inset: 0; }
+/* CO1b: until the group's shapes are drawn, a quiet "Loading map…" in the box; the map itself is hidden unless it already opens on the
+   group (a frame kept from the last visit), so the whole region is never shown on the way */
+.ov-mapbox.loading:not(.framed) .ov-map { visibility: hidden; }
+.ov-mapbox.loading :is(.ov-layers, .ov-map-note, .ov-mark) { visibility: hidden; }
+.ov-map-wait { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: var(--s-2) var(--s-4); border-radius: var(--radius-pill);
+  background: var(--raised); box-shadow: var(--shadow-1); color: var(--ink-2); font: 500 var(--text-small) var(--f-ui); white-space: nowrap; pointer-events: none; }
+.ov-mapbox.framed .ov-map-wait { top: auto; bottom: var(--s-4); transform: translateX(-50%); }
+.ov-map-wait[hidden] { display: none; }
 
 /* LEFT: the sub-groups, plain rows with hairlines and one outline round the set */
 .ov-list { overflow: auto; border: 1px solid var(--rule-soft); border-radius: var(--radius); background: var(--panel); }
@@ -170,6 +191,13 @@ span.ov-mark { cursor: default; }
 .ov-events b { color: var(--ink-2); font-size: var(--text-small); font-weight: 600; }
 .ov-events span { display: grid; min-width: 0; overflow-wrap: anywhere; }
 .ov-events small { color: var(--ink-3); font-size: var(--text-small); }
+/* CO1b: where a tile's number lies (the sub-groups holding some, each a link to its own page), and an event's sub-group */
+.ov-held { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.ov-held .ov-card-link { font-weight: 500; }
+.ov-held span { color: var(--ink-2); font-size: var(--text-small); }
+.ov-event-sub { justify-self: start; color: var(--ink-2); font-size: var(--text-small); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.ov-event-sub:hover { color: var(--ink); text-decoration-color: currentColor; }
+.ov-event-sub:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-s); }
 /* a month-by-month series: thin columns in one quiet ink tone on one baseline, rounded tops, the months' initials under them */
 .ov-chart { display: flex; align-items: stretch; gap: 3px; height: 64px; margin: var(--s-1) 0 0; padding: 0; list-style: none; }
 .ov-chart li { flex: 1 1 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; min-width: 0; max-width: 44px; }

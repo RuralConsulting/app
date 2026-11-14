@@ -39,6 +39,8 @@
 /* the panel sits at the right on a computer: the map's own controls move to its left while it is open, so none is hidden */
 @media (min-width: 721px) {
   .wqs-open .maplibregl-ctrl-top-right, .wqs-open .maplibregl-ctrl-bottom-right { right: 454px; }
+  /* CO1b (the owner's walk: the panel covered "Whole area"): the viewer's "Whole area" moves with them */
+  .wqs-open .rv-fit { right: 454px; }
 }
 .wqs-pin.wqs-chosen { z-index: 2; }
 .wqs-pin.wqs-chosen i { width: 22px; height: 22px; outline: 2px solid var(--map-halo); color: var(--panel); }

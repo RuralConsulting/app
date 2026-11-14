@@ -77,6 +77,7 @@
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
       if (suffix === "/records") return "#/group/" + GROUP + "/records" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // CAP1
+      if (suffix === "/home" && /[?&]item=[0-9a-f-]{36}/.test(hash)) return "#/group/" + GROUP + "/home" + /[?&]item=[0-9a-f-]{36}/.exec(hash)[0].replace("&", "?");   // CO1b
       if (suffix === "/water/round") return "#/group/" + GROUP + "/water/round" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // SR1
       return /^(?:\/(?:home|documents|events|water|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
