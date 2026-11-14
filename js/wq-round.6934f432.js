@@ -95,7 +95,62 @@
       clearTimeout(timer);
       timer = setTimeout(() => { if (st && !gone && mode !== "saved") store.set(key(), JSON.stringify({ ...st, keptAt: new Date().toISOString() })); }, 250);
     };
-    const keepNow = () => { clearTimeout(timer); if (st && mode !== "saved") store.set(key(), JSON.stringify({ ...st, keptAt: new Date().toISOString() })); };
+    const keepNow = () => {
+      clearTimeout(timer);
+      if (!st || mode === "saved") return;
+      // (SR1b review: a sheet with nothing typed, as just after Clear, is not written back as an empty draft)
+      if (!st.revision && !st.rows.some((r) => r.value || r.check || r.note || r.notSampled)) return;
+      store.set(key(), JSON.stringify({ ...st, keptAt: new Date().toISOString() }));
+    };
+
+    // SR1b: the row being typed in stays in what shows: below the page's header, above the sheet's foot, the bar and the phone's keyboard
+    // (the visual viewport). Moving down, the page moves only as far as the row needs, so the row before stays in view where there is
+    // room; a row taller than what shows puts the site's name first. Nothing moves when the row already shows.
+    function reveal(n) {
+      const row = n?.closest?.("tr");
+      if (!row || !row.isConnected) return;
+      const d = root.document, vv = root.visualViewport;
+      const top0 = vv ? vv.offsetTop : 0, bottom0 = vv ? vv.offsetTop + vv.height : root.innerHeight, mid = (top0 + bottom0) / 2;
+      const pinned = (x) => /^(fixed|sticky)$/.test(getComputedStyle(x).position);
+      let top = top0, floor = bottom0;
+      for (const h of d.querySelectorAll(".space-head, .group-head, .demo-banner")) {
+        const r = h.getBoundingClientRect();
+        if (r.height && pinned(h) && r.top <= top + 1 && r.bottom > top && r.bottom < mid) top = r.bottom;
+      }
+      for (const c of [body.querySelector(".wqr-kbar:not([hidden])"), body.querySelector(".wqr-foot"), ...d.querySelectorAll(".space-tabs")]) {
+        if (!c) continue;
+        const r = c.getBoundingClientRect();
+        if (r.height && pinned(c) && r.top > mid && r.top < floor) floor = r.top;
+      }
+      const r = row.getBoundingClientRect(), pad = 8;
+      let dy = 0;
+      if (r.bottom > floor - pad) dy = r.bottom - floor + pad;
+      if (r.top - dy < top + pad) dy = r.top - top - pad;
+      if (Math.abs(dy) >= 1) root.scrollBy({ top: dy, behavior: "instant" });
+    }
+    // the keyboard coming up (the visual viewport shrinking) keeps the box being typed in in view
+    let placeKbar = null;   // the sheet's helper above the keyboard (drawSheet sets it): placed again when the visual viewport moves
+    // (on the screen: on the page and shown; a group's panel left for another place stays on the page, hidden, and never comes back)
+    const onScreen = () => node.isConnected && node.getClientRects().length > 0;
+    const onViewport = () => {
+      if (!onScreen()) { detach(); return; }
+      placeKbar?.();
+      const a = root.document.activeElement;
+      if (a && mode === "edit" && a.closest?.(".wqr-table") && body.contains(a)) setTimeout(() => { placeKbar?.(); reveal(a); }, 60);
+    };
+    const onViewportScroll = () => { if (onScreen()) placeKbar?.(); };
+    // a phone locked, the app switched away or the page closed: what is typed is kept at once, not a moment later. Only while the sheet
+    // is on the screen (SR1b review: leaving the group for another place keeps this view, never closed, from writing the draft again)
+    const onHide = () => { if (!onScreen()) { detach(); return; } if (!gone && root.document.visibilityState === "hidden") keepNow(); };
+    const onPageHide = () => { if (!onScreen()) { detach(); return; } if (!gone) keepNow(); };
+    function detach() {
+      root.visualViewport?.removeEventListener("resize", onViewport); root.visualViewport?.removeEventListener("scroll", onViewportScroll);
+      root.document.removeEventListener("visibilitychange", onHide); root.removeEventListener("pagehide", onPageHide);
+    }
+    root.visualViewport?.addEventListener("resize", onViewport);
+    root.visualViewport?.addEventListener("scroll", onViewportScroll);
+    root.document.addEventListener("visibilitychange", onHide);
+    root.addEventListener("pagehide", onPageHide);
 
     async function start() {
       // whose sheet: the signed-in person's own (an earlier version's per-group drafts are cleared, so no one inherits another's)
@@ -181,12 +236,14 @@
         const s = sites.find((x) => x.id === r.site_id) || { name: "Site " + r.site_id };
         const h = history[r.site_id];
         const label = s.name || s.external_id;
-        const val = el("input", { class: "wqr-in", type: "text", inputmode: "decimal", autocomplete: "off", "aria-label": "This round, " + label, placeholder: unit(), "data-col": "value", "data-row": i });
+        // (SR1b: a phone's keyboard shows Next, which moves down the column as Enter does; Done on the last site, which goes to Review)
+        const hint = i < st.rows.length - 1 ? "next" : "done";
+        const val = el("input", { class: "wqr-in", type: "text", inputmode: "decimal", enterkeyhint: hint, autocomplete: "off", "aria-label": "This round, " + label, placeholder: unit(), "data-col": "value", "data-row": i });
         val.value = r.value;
-        const chk = checks ? el("input", { class: "wqr-in wqr-in-check", type: "text", inputmode: "decimal", autocomplete: "off", "aria-label": "Laboratory check, " + label, placeholder: "Lab check", "data-col": "check", "data-row": i }) : null;
+        const chk = checks ? el("input", { class: "wqr-in wqr-in-check", type: "text", inputmode: "decimal", enterkeyhint: hint, autocomplete: "off", "aria-label": "Laboratory check, " + label, placeholder: "Lab check", "data-col": "check", "data-row": i }) : null;
         if (chk) chk.value = r.check;
         const ns = el("input", { type: "checkbox", class: "wqr-ns", "aria-label": "Not sampled, " + label, "data-col": "ns", "data-row": i, ...(r.notSampled ? { checked: true } : {}) });
-        const note = el("input", { class: "wqr-in wqr-in-note", type: "text", autocomplete: "off", maxlength: "500", placeholder: "Note", "aria-label": "Note, " + label, "data-col": "note", "data-row": i });
+        const note = el("input", { class: "wqr-in wqr-in-note", type: "text", enterkeyhint: hint, autocomplete: "off", maxlength: "500", placeholder: "Note", "aria-label": "Note, " + label, "data-col": "note", "data-row": i });
         note.value = r.note;
         inputs.value.push(val); if (chk) inputs.check.push(chk); inputs.ns.push(ns); inputs.note.push(note);
         val.addEventListener("input", () => { r.value = val.value; if (val.value.trim() && r.notSampled) { r.notSampled = false; ns.checked = false; } keep(); recheck(i); });
@@ -207,20 +264,23 @@
           // a message about the row: a plain sentence on its own line under it, the table's full width
           el("tr", { class: "wqr-msgrow", "data-for": i, hidden: true }, el("td", { colspan: String(cols.length + 2) }, msg)));
       });
-      // keyboard: Tab and Enter move down the column (Shift: up); at a column's end, Tab goes on to the top of the next
+      // the next site along that was not ticked Not sampled (SR1b review: a paddock round skips them), or null at the end
+      const nextOpen = (i, step = 1) => { for (let j = i + step; j >= 0 && j < st.rows.length; j += step) if (!st.rows[j].notSampled) return j; return null; };
+      // keyboard: Tab and Enter move down the column (Shift: up; Enter past sites ticked Not sampled); at a column's end, Tab goes on to
+      // the top of the next
       tbody.addEventListener("keydown", (e) => {
         const t = e.target, col = t?.dataset?.col, i = Number(t?.dataset?.row);
         if (!col || !Number.isFinite(i) || e.altKey || e.ctrlKey || e.metaKey) return;
         if (e.key !== "Tab" && !(e.key === "Enter" && t.type !== "checkbox")) return;
         const n = st.rows.length, c = cols.indexOf(col), up = e.shiftKey;
         let to = null;
-        if (e.key === "Enter") to = inputs[col][up ? i - 1 : i + 1] || null;
+        if (e.key === "Enter") { const j = nextOpen(i, up ? -1 : 1); to = j == null ? null : inputs[col][j] || null; }
         else if (!up) to = inputs[col][i + 1] || (cols[c + 1] ? inputs[cols[c + 1]][0] : null);
         else to = inputs[col][i - 1] || (cols[c - 1] ? inputs[cols[c - 1]][n - 1] : null);
         if (e.key === "Enter" && !to && !up) { e.preventDefault(); reviewBtn.focus(); return; }
         if (!to) return;
-        e.preventDefault(); to.focus(); to.select?.();
-        to.closest("tr")?.scrollIntoView?.({ block: "nearest" });
+        e.preventDefault(); to.focus({ preventScroll: true }); to.select?.();
+        reveal(to);
       });
       // a column pasted from a spreadsheet fills down from the box it was pasted in (a second column goes into the checks)
       tbody.addEventListener("paste", (e) => {
@@ -247,18 +307,104 @@
       const counts = el("p", { class: "wqr-counts", "aria-live": "polite" });
       const sheetMsg = el("div", { class: "wqr-sheetmsg", role: "alert" });
       const reviewBtn = el("button", { type: "button", class: "primary wqr-primary", onclick: () => toReview() }, "Review");
-      const discard = el("button", { type: "button", class: "wqr-link", onclick: () => {
+      // (SR1b: it sits beside Review: with anything typed, a first tap asks and only a second one clears, so a slip of the thumb loses nothing)
+      const discardWords = st.revision ? "Cancel the corrections" : "Clear the sheet";
+      let armed = null;
+      // (SR1b review: anything else done on the sheet, a box typed in, a tick, a field chosen, Review, puts it back as it was)
+      const disarm = () => { if (!armed) return; clearTimeout(armed); armed = null; if (discard.isConnected) { discard.textContent = discardWords; status.textContent = ""; } };
+      const discard = el("button", { type: "button", class: "wqr-link wqr-discard", onclick: () => {
+        const typed = st.rows.some((r) => r.value || r.check || r.note || r.notSampled);
+        if (typed && !armed) {
+          discard.textContent = st.revision ? "Press again to cancel them" : "Press again to clear it";
+          status.textContent = st.revision ? "Press again to drop the corrections typed here." : "Press again to clear every value typed on this sheet.";
+          armed = setTimeout(disarm, 5000);
+          return;
+        }
+        clearTimeout(armed); armed = null;
         store.drop(key());
-        if (st.revision && savedRow) { st = M().fromSaved(savedRow, sites); mode = "saved"; draw(); return; }
+        if (st.revision && savedRow) { st = M().fromSaved(savedRow, sites); mode = "saved"; draw(); status.textContent = ""; return; }
         st = { ...st, id: M().newId(), rows: M().rowsFor(sites, []), note: "" }; drawSheet(); status.textContent = "Cleared.";
-      } }, st.revision ? "Cancel the corrections" : "Clear the sheet");
-      const kept = el("span", { class: "wqr-kept" }, "Kept on this computer until it is saved");
+      } }, discardWords);
+      const kept = el("span", { class: "wqr-kept" }, "Kept on this device until it is saved");
+      // SR1b review: the helper just above a phone's keyboard while a site's value or lab check is being typed: "<" and ">" (a phone's
+      // number keypad has neither) set or clear the sign at the start of the box, and Next site moves down to the next site's value
+      // (an iPhone's keypad has no Next or return key), past sites ticked Not sampled; on the last site it reads Done and closes the
+      // keyboard. Its buttons never take the focus from the box. Only on a phone; placed clear of the foot, the bar and the keyboard (the
+      // visual viewport), and moved only when its place changes, so a page at rest stays at rest.
+      const signBtn = (sign, words) => el("button", { type: "button", class: "wqr-kb-sign", "data-sign": sign, "aria-pressed": "false", "aria-label": words }, sign);
+      const lt = signBtn("<", "Below the detection limit (<)"), gt = signBtn(">", "Above the reporting limit (>)");
+      const nextBtn = el("button", { type: "button", class: "wqr-kb-next" }, "Next site");
+      const kbar = el("div", { class: "wqr-kbar", hidden: true, role: "group", "aria-label": "Typing a result" }, lt, gt, nextBtn);
+      const isPhone = () => !!root.matchMedia?.("(max-width: 800px)").matches;
+      let kbFor = null;   // the box the helper serves
+      const setAttr = (n, a, v) => { if (n.getAttribute(a) !== v) n.setAttribute(a, v); };
+      const setText = (n, v) => { if (n.textContent !== v) n.textContent = v; };
+      const syncKbar = () => {
+        if (!kbFor) return;
+        const sign = /^[<>≤≥]/.exec(kbFor.value.trim())?.[0] || "";
+        setAttr(lt, "aria-pressed", String(sign === "<" || sign === "≤")); setAttr(gt, "aria-pressed", String(sign === ">" || sign === "≥"));
+        setText(nextBtn, nextOpen(Number(kbFor.dataset.row)) == null ? "Done" : "Next site");
+      };
+      placeKbar = () => {
+        if (kbar.hidden || !kbar.isConnected) return;
+        const vv = root.visualViewport, bottom = vv ? vv.offsetTop + vv.height : root.innerHeight, mid = bottom / 2;
+        let floor = bottom;
+        for (const c of [body.querySelector(".wqr-foot"), ...root.document.querySelectorAll(".space-tabs")]) {
+          if (!c) continue;
+          const r = c.getBoundingClientRect();
+          if (r.height && r.top > mid && r.top < floor) floor = r.top;
+        }
+        const top = Math.round(floor - kbar.offsetHeight - 8) + "px";
+        if (kbar.style.top !== top) kbar.style.top = top;
+      };
+      const showKbar = (box) => {
+        kbFor = box;
+        if (kbar.hidden) kbar.hidden = false;
+        syncKbar(); placeKbar();
+      };
+      const hideKbar = () => { kbFor = null; if (!kbar.hidden) kbar.hidden = true; };
+      table.addEventListener("focusin", (e) => {
+        const t = e.target, col = t?.dataset?.col;
+        if (!isPhone() || (col !== "value" && col !== "check")) { hideKbar(); return; }
+        showKbar(t);
+        setTimeout(() => { if (kbFor === t) reveal(t); }, 0);
+      });
+      table.addEventListener("focusout", () => setTimeout(() => { const a = root.document.activeElement; if (!a || !a.dataset?.col || !table.contains(a)) hideKbar(); }, 0));
+      table.addEventListener("input", (e) => { if (e.target === kbFor) syncKbar(); });
+      table.addEventListener("change", () => { if (kbFor) syncKbar(); });
+      kbar.addEventListener("pointerdown", (e) => e.preventDefault());   // the box keeps the focus (and the keyboard stays up)
+      kbar.addEventListener("mousedown", (e) => e.preventDefault());
+      for (const b of [lt, gt]) b.addEventListener("click", () => {
+        const box = kbFor;
+        if (!box) return;
+        const v = box.value.trim(), had = /^[<>≤≥]/.exec(v)?.[0] || "", rest = had ? v.slice(had.length).trim() : v;
+        const want = b.dataset.sign, same = had === want || (want === "<" && had === "≤") || (want === ">" && had === "≥");
+        box.value = (same ? "" : want) + rest;
+        box.dispatchEvent(new Event("input", { bubbles: true }));   // the row, the draft and the checks as if typed
+        if (root.document.activeElement !== box) box.focus({ preventScroll: true });
+      });
+      nextBtn.addEventListener("click", () => {
+        const box = kbFor;
+        if (!box) return;
+        const j = nextOpen(Number(box.dataset.row));
+        if (j == null) { box.blur(); hideKbar(); return; }   // Done: the keyboard goes
+        const to = inputs.value[j];
+        to.focus({ preventScroll: true }); to.select?.();
+        reveal(to);
+      });
+      const headset = el("div", { class: "wqr-headset fs-sheet" }, R.set(...head), dupNote);
       fill(body,
-        el("div", { class: "wqr-headset fs-sheet" }, R.set(...head), dupNote),
+        headset,
         el("div", { class: "wqr-help" }, el("p", {}, "Type each site's result. ", el("b", {}, "Tab"), " or ", el("b", {}, "Enter"), " moves down the column; paste a column from a spreadsheet into the first box to fill it down. Write a result below the detection limit like ", el("b", {}, "<0.05"), "."),
-          el("p", {}, "A round entered here is the group's record of it: don't also import the same readings from a spreadsheet, or each would count twice.")),
+          el("p", {}, "A round entered here is the group's record of it: don't also import the same readings from a spreadsheet, or each would count twice."),
+          // (SR1b: a phone has no Tab key and seldom a spreadsheet: its own two lines, true on an iPhone and on Android)
+          el("p", { class: "wqr-help-phone" }, "Tap a site's box and type its result. ", el("b", {}, "Next site"), ", just above the keyboard, moves down to the next one; ",
+            el("b", {}, "<"), " beside it marks a result below the detection limit."),
+          el("p", { class: "wqr-help-phone" }, "What you type is kept on this device until the round is saved.")),
         el("div", { class: "wqr-tablewrap" }, table),
-        el("div", { class: "wqr-foot" }, el("div", { class: "wqr-foot-words" }, counts, kept, sheetMsg), el("div", { class: "wqr-foot-actions" }, discard, reviewBtn)));
+        el("div", { class: "wqr-foot" }, el("div", { class: "wqr-foot-words" }, counts, kept, sheetMsg), el("div", { class: "wqr-foot-actions" }, discard, reviewBtn)),
+        kbar);
+      for (const t of ["input", "change", "focusin"]) for (const part of [table, headset]) part.addEventListener(t, disarm);
       let shown = false;
       function recheck(only = null) {
         const c = M().check(st.rows, ctx());
@@ -276,6 +422,7 @@
         return c;
       }
       function toReview() {
+        disarm();
         shown = true;
         const c = recheck();
         if (c.errors) {
@@ -390,7 +537,11 @@
     }
 
     start().then(() => { if (FP.wqRound.notice) { status.textContent = FP.wqRound.notice; FP.wqRound.notice = null; } });
-    const api = { node, destroy() { if (!gone) keepNow(); gone = true; clearTimeout(timer); if (live === api) live = null; }, state: () => st };
+    const api = { node, destroy() {
+      if (!gone) keepNow();
+      gone = true; clearTimeout(timer); if (live === api) live = null;
+      detach();
+    }, state: () => st };
     node.wqr = api;
     live = api;
     return node;

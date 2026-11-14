@@ -26,6 +26,8 @@
 .wqr-help p + p { margin-top: 2px; }
 .wqr-help p { margin: 0; color: var(--ink-2); font-size: var(--text-small); max-width: 72ch; }
 .wqr-help b { color: var(--ink); font-weight: 600; }
+.wqr-help p.wqr-help-phone { display: none; }
+@media (max-width: 800px) { .wqr-help p.wqr-help-phone { display: block; } }
 
 /* the table: one outline, hairlines between rows, the boxes a soft fill (no border) that the focus rings in ink */
 .wqr-tablewrap { border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); overflow: hidden; }
@@ -138,16 +140,29 @@
   .wqr-table tbody tr { grid-template-rows: auto auto auto; }
   .wqr-table tbody tr::after { content: none; }
   .wqr-table tbody .wqr-c-check, .wqr-table tbody .wqr-c-ns, .wqr-table tbody .wqr-c-note { margin-top: 6px; }
-  .wqr-table tbody tr { grid-template-columns: minmax(0, 1fr) 7.5rem; }
+  /* (SR1b: the value's column no wider than 40% of the row, so larger text or a narrow phone leaves the site's name its room) */
+  .wqr-table tbody tr { grid-template-columns: minmax(0, 1fr) min(7.5rem, 40%); }
   .wqr-table tbody tr > .wqr-c-ns { grid-column: 1; justify-self: start; }
   .wqr-table tbody tr > .wqr-c-check { grid-column: 2; }
   .wqr-table tbody tr > .wqr-c-note { grid-column: 1 / -1; grid-row: 4; margin-top: 2px; }
-  .wqr-table tbody .wqr-c-check .wqr-in { min-height: 36px; font-size: var(--text-small); text-align: right; }
+  /* SR1b: every box and the tick a 44 px target on a phone (the app's rule): the boxes simply as tall, the tick through its label */
+  .wqr-table tbody .wqr-c-check .wqr-in { min-height: var(--tap); font-size: var(--text-small); text-align: right; }
   .wqr-table tbody .wqr-c-check .wqr-in::placeholder { font-weight: 400; }
-  .wqr-c-ns label { min-height: 36px; font-size: var(--text-small); }
-  .wqr-in-note { min-height: 32px; padding: 0; }
-  .wqr-help { display: none; }
-  .wqr-foot { bottom: 72px; padding: var(--s-2) 0; }
+  .wqr-c-ns label { min-height: var(--tap); font-size: var(--text-small); padding-right: var(--s-2); }
+  .wqr-ns { width: 20px; height: 20px; }
+  .wqr-in-note { min-height: var(--tap); padding: 0; }
+  .wqr-back { min-height: var(--tap); }
+  .wqr-help p:not(.wqr-help-phone) { display: none; }
+  /* the foot: the count over the two actions, Clear at the left and Review at the right, apart; its wash runs down behind the bar, so no
+     row shows between the two */
+  .wqr-foot { bottom: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: var(--s-2) 0 calc(var(--tabbar-h, 56px) + var(--s-2)); }
+  .wqr-foot .wqr-kept { display: none; }
+  .wqr-counts { font-size: var(--text-small); }
+  .wqr-foot .wqr-foot-actions { justify-content: space-between; margin-left: 0; }
+  /* the Copy button keeps its small pill, its tap area 44 px */
+  .wqr-quietbtn { position: relative; }
+  .wqr-quietbtn::after { content: ""; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+  .wqr-go { min-height: var(--tap); }
   /* a round is a sheet of its own: the + steps aside while it is open, so it never sits on Review or Save (as PH4's forms cover it) */
   body:has(#screen-group[data-view="water"] .wqr) .add-button { display: none; }
   .wqr-foot-actions { gap: var(--s-3); }
@@ -159,3 +174,17 @@
 @media (min-width: 801px) { .wqr-c-val .wqr-in::placeholder, .wqr-c-check .wqr-in::placeholder { opacity: 0; } }
 /* (the panel's own bottom padding would leave a strip under the sticky foot: the foot reaches the panel's edge) */
 @media (min-width: 801px) { .wqr-foot { bottom: calc(-1 * var(--s-6)); padding-bottom: calc(var(--s-3) + var(--s-6)); margin-bottom: calc(-1 * var(--s-6)); } }
+
+/* SR1b review: the helper just above a phone's keyboard while a result is typed: "<", ">" and Next site, 44 px each, in one floating
+   outline (wq-round.js places it). Quiet buttons, so Review stays the screen's one filled button; a sign that is on shows in ink. A computer
+   types "<" itself: no helper there. */
+.wqr-kbar { display: none; }
+@media (max-width: 800px) {
+  .wqr-foot .wqr-discard { white-space: nowrap; }
+  .wqr-kbar:not([hidden]) { position: fixed; z-index: 9; left: var(--s-4); right: var(--s-4); top: 0; display: flex; align-items: center; gap: var(--s-2); padding: 4px;
+    border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--panel); box-shadow: var(--shadow-2); }
+  .wqr-kbar button { min-height: var(--tap); min-width: var(--tap); margin: 0; padding: 0 var(--s-3); border: 0; border-radius: var(--radius-pill); background: var(--fill);
+    color: var(--ink); font: 600 var(--text-body)/1 var(--f-ui); cursor: pointer; touch-action: manipulation; }
+  .wqr-kbar .wqr-kb-sign[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .wqr-kbar .wqr-kb-next { margin-left: auto; padding: 0 var(--s-4); white-space: nowrap; }
+}

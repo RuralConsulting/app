@@ -196,9 +196,13 @@
   // (PH2: and a map's own sheet opened tall on a phone, its layers and legend: the + never sits on its list)
   const TUCK = ".fs-page, .fs-overlay, .events-form, .add-block-form, #layers-drawer:not([hidden]), .photo-card, .wqs-panel:not([hidden]), .rv-panel-open > .rv-panel, .maps-viewer.ph-more-open, .maps-viewer.rv-measuring, .maps-viewer.rv-comparing";
   let watching = null, clicks = false;
+  // (SR1b: written only when they change. classList.remove of a class that is not there still rewrites the class attribute, so a page
+  // whose + is hidden by a stylesheet, as a sampling round's sheet, changed every 400 ms on a phone and never came to rest.)
+  const setLift = (d, v) => { if (d.documentElement.style.getPropertyValue("--add-lift") !== v) d.documentElement.style.setProperty("--add-lift", v); };
+  const setTucked = (d, on) => { if (d.body.classList.contains("add-tucked") !== on) d.body.classList.toggle("add-tucked", on); };
   function settle() {
     const d = root.document, b = [...buttons.values()].find((x) => !x.hidden && x.getClientRects().length);
-    if (!b || !phone()) { d.documentElement.style.setProperty("--add-lift", "0px"); d.body.classList.remove("add-tucked"); return; }
+    if (!b || !phone()) { setLift(d, "0px"); setTucked(d, false); return; }
     const tabs = [...d.querySelectorAll(".space-tabs")].map((t) => t.getBoundingClientRect()).find((r) => r.height), floor = tabs ? tabs.top : root.innerHeight;
     let lift = 0, tuck = false;
     const br = b.getBoundingClientRect();
@@ -223,8 +227,8 @@
     if (vv && vv.height < root.innerHeight * 0.75) tuck = true;   // the keyboard is up
     if ([...d.querySelectorAll(TUCK)].some((f) => f.getClientRects().length)) tuck = true;   // a form being filled in, the Layers drawer, a photo or a sites panel open
     if (floor - lift - 88 < root.innerHeight * 0.3) tuck = true;
-    d.documentElement.style.setProperty("--add-lift", Math.round(lift) + "px");
-    d.body.classList.toggle("add-tucked", tuck);
+    setLift(d, Math.round(lift) + "px");
+    setTucked(d, tuck);
   }
   function watch() {
     const on = [...buttons.values()].some((x) => !x.hidden) && phone();
