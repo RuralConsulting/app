@@ -9,7 +9,7 @@
 // is the page's IndexedDB, not a cache: a new version activating never touches it, so what waits to upload survives it.
 // SI1 (sign-in first): the page registers this worker only once the sign-in form or first screen is up and the page is quiet
 // (boot.js worker()), so its install never competes with them.
-const VERSION = "202611141008-f943680";
+const VERSION = "202611141027-b1e89af";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
 const FLOATING = ["./", "index.html", "layer-kinds.json", "privacy-terms.md", "demo/demo-farm.json", "demo/source.html"];
