@@ -167,6 +167,9 @@
     const dir = rationals(gps[0x0011]);
     return {
       taken: ascii(exif[0x9003]) || ascii(root[0x0132]) || null,   // DateTimeOriginal, else DateTime
+      // SH1b: OffsetTimeOriginal, else OffsetTime ("+13:00": the clock's own time zone, when the camera wrote it), and
+      // SubSecTimeOriginal (the fraction of the second: tells photos of one burst apart)
+      offset: ascii(exif[0x9011]) || ascii(exif[0x9010]) || null, subsec: ascii(exif[0x9291]) || null,
       lat: dms(gps[0x0002], ascii(gps[0x0001])), lon: dms(gps[0x0004], ascii(gps[0x0003])),
       direction: dir && dir.length && Number.isFinite(dir[0]) ? dir[0] : null, directionRef: ascii(gps[0x0010]) || "",
     };
@@ -191,15 +194,25 @@
     if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3] || +m[4] > 23 || +m[5] > 59) return null;
     return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || "00"}`;
   }
+  // SH1b: EXIF OffsetTime "+13:00" / "-05:30" -> the same text, or null (blank, "   :  ", or no real offset: -12:00 to +14:00)
+  function zone(s) {
+    const m = typeof s === "string" && s.trim().match(/^([+-])(\d{2}):(\d{2})$/);
+    if (!m || +m[3] > 59 || +m[2] * 60 + +m[3] > (m[1] === "+" ? 14 * 60 : 12 * 60)) return null;
+    return m[1] + m[2] + ":" + m[3];
+  }
+  // SH1b: SubSecTimeOriginal "07" -> "07" (digits only), or null
+  const subsec = (s) => (typeof s === "string" && /^\d{1,9}$/.test(s.trim()) ? s.trim() : null);
 
-  // What a photo file says: { taken_at, lat, lon, direction, direction_from: "exif"|"xmp"|null, magnetic_left_out }.
+  // What a photo file says: { taken_at, taken_offset, taken_subsec, lat, lon, direction, direction_from: "exif"|"xmp"|null, magnetic_left_out }.
+  // SH1b: taken_at stays the camera's own clock; taken_offset is that clock's time zone when the photo says it ("+00:00"), else null
+  // (and the clock is then read as New Zealand time: capture-model.js takenAt); taken_subsec the fraction of that second, or null.
   // `bytes` is a Uint8Array or ArrayBuffer of the file (only its first 1 MB is read); `declination` is the farm's
   // magnetic declination in degrees, east positive, or null. Nothing found is null, never a guess.
   // SH1: a HEIF's Exif item can lie past the first 1 MB; `heifItem` (that item's bytes, read by the caller from where heifExif said)
   // is read in its place.
   function read(bytes, declination = null, { heifItem = null } = {}) {
     declination = degrees(declination);   // a number or numeric text ("24.5"), as the loader's float()
-    const out = { taken_at: null, lat: null, lon: null, direction: null, direction_from: null, magnetic_left_out: false };
+    const out = { taken_at: null, taken_offset: null, taken_subsec: null, lat: null, lon: null, direction: null, direction_from: null, magnetic_left_out: false };
     if (!bytes) return out;
     let b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     b = b.subarray(0, HEAD);
@@ -210,6 +223,7 @@
       if (t) tags = readTiff(t);
     } catch (_) { tags = {}; }
     out.taken_at = stamp(tags.taken);
+    if (out.taken_at) { out.taken_offset = zone(tags.offset); out.taken_subsec = subsec(tags.subsec); }
     if (Number.isFinite(tags.lat) && Number.isFinite(tags.lon) && Math.abs(tags.lat) <= 90 && Math.abs(tags.lon) <= 180 && !(tags.lat === 0 && tags.lon === 0)) {
       out.lat = Math.round(tags.lat * 1e7) / 1e7; out.lon = Math.round(tags.lon * 1e7) / 1e7;
     }

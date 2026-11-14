@@ -42,14 +42,14 @@
   function close() {
     if (!screen) return;
     const s = screen; screen = null;
-    s.stop?.();
+    s.stop?.(); s.ro?.disconnect();
     s.node.querySelectorAll("img").forEach((i) => { if (i.src.startsWith("blob:")) URL.revokeObjectURL(i.src); });
     s.node.remove();
     root.document.body.classList.remove("cap-open");
     if (s.opener?.isConnected) s.opener.focus();
   }
 
-  async function review(ctx, fileList) {
+  async function review(ctx, fileList, { before = false } = {}) {
     const me = FP.captures?.userId?.();
     if (!me) { FP.add?.toast?.("Sign in again to add photos here."); return; }
     FP.captures.close?.();
@@ -80,7 +80,12 @@
       onChange: (on) => { st.all.shared = on; } });
     const forAll = el("div", { class: "lib-all" }, el("h3", { class: "lib-all-head" }, "For all of them"), R.set(tagRow, noteRow),
       R.more({ label: "More details", rows: [placeRow, shareRow] }));
-    s.body.append(status, list, note, msg, forAll);
+    // SH1b: shared to the app before this person signed in: said first, with a plain way to throw them away (nothing was added)
+    const beforeBox = before ? el("div", { class: "lib-before-box", id: "lib-before" }, el("p", { class: "fs-quiet lib-before" }, M().BEFORE_WORDS + "."),
+      el("button", { type: "button", class: "lib-discard", id: "lib-discard", onclick: () => { close(); FP.add?.toast?.("Discarded."); } }, M().NOT_MINE)) : null;
+    // SH1b: Tag and Note for all of them above the list, so twenty photos never push them out of reach
+    const photosHead = el("h3", { class: "lib-all-head lib-photos-head", id: "lib-photos-head" }, "The photos");
+    s.body.append(...(beforeBox ? [beforeBox] : []), status, forAll, photosHead, list, note, msg);
     s.body.classList.add("lib-body");
 
     const from = root.document.activeElement;
@@ -88,6 +93,17 @@
     root.document.body.append(node);
     s.mounted();
     root.document.body.classList.add("cap-open");
+    // (the Add label fitted again when the screen's width changes: a phone turned, or the text size changed)
+    // (keyed on the width and the text size, so the label's own change of width never sets it off again)
+    let fitted = "";
+    const titleEl = s.top.querySelector(".fs-title");
+    const ro = typeof root.ResizeObserver === "function" ? new root.ResizeObserver(() => {
+      const key = s.top.clientWidth + "|" + (titleEl ? root.getComputedStyle(titleEl).fontSize : "");
+      if (key !== fitted && live() && st.mode !== "sent") { fitted = key; root.requestAnimationFrame(() => { if (live() && st.mode !== "sent") label(M().going(st.items).length); }); }
+    }) : null;
+    ro?.observe(s.top);
+    if (titleEl) ro?.observe(titleEl);
+    screen.ro = ro;
     save.disabled = true;
     s.top.querySelector(".fs-title")?.focus();
 
@@ -143,12 +159,18 @@
       list.replaceChildren(...st.items.map((it) => (held && it.id === st.open ? held : line(it))));
       const n = M().going(st.items).length;
       if (st.mode !== "sent") {
-        save.textContent = M().addLabel(n);
+        label(n);
         save.disabled = st.busy || st.mode === "reading" || !n;
         const t = M().noPlaceNote(st.items, FP.locate?.platform?.() || "other");
         note.textContent = t || ""; note.hidden = !t || st.mode === "reading";
         if (st.mode === "review" && !st.busy) msg.textContent = M().nothingNew(st.items) || (st.items.some((it) => it.state === "ready") ? "" : msg.textContent);
       }
+    }
+    // SH1b: "Add 19 photos", or "Add 19" when the top row is too narrow for it beside the whole title (320 px with large text)
+    function label(n) {
+      save.textContent = M().addLabel(n);
+      const title = s.top.querySelector(".fs-title");
+      if (title && title.scrollWidth > title.clientWidth + 1) save.textContent = M().addShort(n);
     }
     function line(it) {
       const sent = st.mode === "sent" && (it.clientId || it.state === "notkept");
@@ -280,20 +302,34 @@
   // ---- B: Android's Share, after the sign-in ----------------------------------------------------------------------------------------------
   // What sw.js kept is read once and cleared (a share is for now; sharing again brings it back). The person chooses the place first when
   // they have more than one; the photos then land on the review screen.
+  // SH1b: the photos are only ever shown to the person they were shared for (M().shareFor: the one signed in on this phone when they
+  // arrived, or, when nobody was, the first sign-in within ten minutes, told so with "Not mine: discard"). Anyone else's are deleted
+  // unseen. Each sign-in first notes who is signed in here (WHO, read by sw.js when a share arrives); sign-out clears both (forget).
+  const WHO = "fp-share-who";
+  async function signedInAs(id) {
+    try { if (id && root.caches?.open) await (await root.caches.open(WHO)).put("who", new Response(JSON.stringify({ id }), { headers: { "content-type": "application/json" } })); }
+    catch { /* not noted: a share then waits as if nobody were signed in (ten minutes, said so) */ }
+  }
+  async function forget() {
+    try { await root.caches?.delete?.(SHARE); } catch { /* nothing kept */ }
+    try { await root.caches?.delete?.(WHO); } catch { /* nothing kept */ }
+  }
   let sharing = false;
-  async function sharedIn(groups) {
-    if (sharing || !root.caches?.open) return;
+  async function sharedIn(groups, userId = FP.captures?.userId?.() || null) {
+    if (!root.caches?.open) return;
+    // (read before noting this sign-in: the index already holds who it was for)
+    if (sharing) { await signedInAs(userId); return; }
     sharing = true;
     try {
       const has = await root.caches.has?.(SHARE);
       if (has === false) return;
       const c = await root.caches.open(SHARE), idx = await c.match("share-in/index");
-      if (!idx) return;
+      if (!idx) { await root.caches.delete(SHARE); return; }
       let index = null;
       try { index = await idx.json(); } catch { index = null; }
-      const list = M().sharedFiles(index);
+      const whose = M().shareFor(index, userId);
       const files = [];
-      for (const f of list || []) {
+      for (const f of whose ? M().sharedFiles(index) || [] : []) {
         const r = await c.match(f.key);
         if (r) { const blob = await r.blob(); files.push(new File([blob], f.name || "shared-photo", { type: f.type || blob.type, lastModified: f.modified || Date.now() })); }
       }
@@ -301,12 +337,14 @@
       clean();
       if (!files.length) return;
       await quiet();
+      if (FP.captures?.userId?.() !== userId) return;   // (signed out, or someone else, while it settled)
+      const before = whose === "before";
       const targets = M().shareTargets(groups);
       if (!targets.length) { FP.add?.toast?.("These photos can't be added: you're not a member of a group here."); return; }
-      if (targets.length === 1) { review(ctxOf(targets[0]), files); return; }
-      whichPlace(targets, files);
-    } catch { /* nothing kept to read */ }
-    finally { sharing = false; }
+      if (targets.length === 1) { review(ctxOf(targets[0]), files, { before }); return; }
+      whichPlace(targets, files, before);
+    } catch { try { await root.caches.delete(SHARE); } catch { /* as it is */ } }
+    finally { sharing = false; await signedInAs(userId); }
   }
   const ctxOf = (g) => ({ space: "group", id: g.id, name: g.name, role: g.role });
   // the address the share opened (?shared=1) put back to the plain one
@@ -318,14 +356,17 @@
     let last = root.location.hash, still = 0;
     for (let i = 0; i < 25 && still < 3; i++) { await new Promise((r) => setTimeout(r, 200)); if (root.location.hash === last) still++; else { last = root.location.hash; still = 0; } }
   }
-  function whichPlace(targets, files) {
-    const opts = targets.map((g) => el("button", { type: "button", class: "fs-option lib-which", "data-place": g.id, onclick: () => { FP.sheet.close(); review(ctxOf(g), files); } },
+  function whichPlace(targets, files, before = false) {
+    const opts = targets.map((g) => el("button", { type: "button", class: "fs-option lib-which", "data-place": g.id, onclick: () => { FP.sheet.close(); review(ctxOf(g), files, { before }); } },
       el("span", { class: "fs-circle", "aria-hidden": "true" }), el("span", { class: "fs-option-words" }, el("span", {}, g.name))));
+    // SH1b: shared before this person signed in: said first, with a plain way to throw them away unseen by anyone
+    const head = before ? [el("div", { class: "lib-before-box" }, el("p", { class: "fs-quiet lib-before", id: "lib-which-before" }, M().BEFORE_WORDS + "."),
+      el("button", { type: "button", class: "lib-discard", id: "lib-which-discard", onclick: () => { FP.sheet.close(); FP.add?.toast?.("Discarded."); } }, M().NOT_MINE))] : [];
     FP.sheet.open({ opener: null, title: files.length === 1 ? "Which place is this photo for?" : "Which place are these " + files.length + " photos for?", className: "fs-list lib-which-sheet",
-      body: () => [el("div", { class: "fs-set fs-options", role: "group" }, ...opts)] });
+      body: () => [...head, el("div", { class: "fs-set fs-options", role: "group" }, ...opts)] });
     root.document.querySelector(".lib-which")?.focus();
   }
 
   // (the review stays over the page when the address changes: its photos are only on this screen until added)
-  FP.captureLibrary = { choose, review, sharedIn, close, isOpen: () => !!screen, SHARE };
+  FP.captureLibrary = { choose, review, sharedIn, forget, signedInAs, close, isOpen: () => !!screen, SHARE, WHO };
 })(window);

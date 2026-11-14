@@ -19,10 +19,11 @@
   // ---- one photo ------------------------------------------------------------------------------------------------------------------------
   // Its keys for spotting the same photo again: the hash of its bytes, and (when the photo has its own time) that time with its place.
   // The second catches the same photo handed over again as a fresh copy (an iPhone makes a new JPEG of it each time it is chosen).
+  // SH1b: the time carries the fraction of the second when the photo has it (SubSecTimeOriginal), so photos of one burst differ.
   function keysFor({ sha256 = null, meta = null } = {}) {
     const out = [];
     if (sha256) out.push("h:" + sha256);
-    if (meta?.taken_at) out.push("t:" + meta.taken_at + "|" + (meta.lat ?? "") + "|" + (meta.lon ?? ""));
+    if (meta?.taken_at) out.push("t:" + meta.taken_at + (meta.taken_subsec ? "." + meta.taken_subsec : "") + "|" + (meta.lat ?? "") + "|" + (meta.lon ?? ""));
     return out;
   }
   // An item for the review: { id, name, size, sha256, meta, prepared, problem } as read. Where starts at the photo's own place when
@@ -38,12 +39,15 @@
   // ---- duplicates -------------------------------------------------------------------------------------------------------------------------
   // In the order chosen: a photo whose key was seen earlier in this go is "twice" (chosen twice); one whose key this phone remembers
   // adding (known) is "added". The first of a pair is kept. Unreadable photos are left as they are.
+  // SH1b: within one go the bytes' hash decides: photos taken in the same second at the same place with different bytes (a burst) are
+  // different photos. The time-and-place key counts within a go only for a photo whose hash could not be taken.
   function markDuplicates(items, known = new Set()) {
     const seen = new Set();
+    const same = (it) => (it.sha256 ? seen.has("h:" + it.sha256) : it.keys.some((k) => seen.has(k)));
     return (items || []).map((it) => {
       if (it.state === "unreadable") return it;
       let dup = null;
-      if (it.keys.some((k) => seen.has(k))) dup = "twice";
+      if (same(it)) dup = "twice";
       else if (it.keys.some((k) => known.has(k))) dup = "added";
       it.keys.forEach((k) => seen.add(k));
       return { ...it, dup: dup || (it.dup === "server" ? "server" : null) };
@@ -92,6 +96,8 @@
   // ---- words --------------------------------------------------------------------------------------------------------------------------------
   const plural = (n, one, many) => C().plural(n, one, many);
   const addLabel = (n) => (n ? "Add " + plural(n, "photo", "photos") : "Add");
+  // SH1b: the same, short, for a top row too narrow for it beside the title (320 px with large text): "Add 19"
+  const addShort = (n) => (n ? "Add " + n : "Add");
   const dateLine = (it) => (it.state === "unreadable" ? it.name || "A file" : it.taken?.from === "photo" ? C().whenWords(it.taken.at) : "No date in this photo");
   // The Where row of an opened photo, short (the line above it gives the place itself)
   const WHERE_WORDS = { photo: "From the photo", here: "Where you are", pin: "Pin you dropped", none: "No place" };
@@ -152,10 +158,22 @@
     const files = index.files.filter((f) => f && typeof f.key === "string" && (/^image\//.test(f.type || "") || /\.(jpe?g|png|webp|hei[cf]|gif)$/i.test(f.name || ""))).slice(0, MAX_PHOTOS);
     return files.length ? files : null;
   }
+  // SH1b: whose they are. sw.js writes into the index who was last signed in on this phone when the share arrived (`for`: their id, or
+  // null when nobody was). "mine": the person now signed in is that person. "before": nobody was signed in, and this is a sign-in within
+  // SHARE_WAIT of the share (the review then says so, with "Not mine: discard"). null: someone else's, or waited too long; they are
+  // discarded unseen. Shown at most once either way: the cache is cleared as it is read.
+  const SHARE_WAIT = 10 * 60 * 1000;
+  const BEFORE_WORDS = "Photos shared to the app before you signed in", NOT_MINE = "Not mine: discard";
+  function shareFor(index, me, now = Date.now()) {
+    if (!me || !sharedFiles(index, now)) return null;
+    if (index.for != null) return index.for === me ? "mine" : null;
+    return now - index.at <= SHARE_WAIT ? "before" : null;
+  }
   // The places shared photos can go: the groups the person is a member of with a role that may capture (add.js mayCapture's roles)
   const MEMBER_ROLES = ["member", "editor", "facilitator", "advisor", "admin"];
   const shareTargets = (groups) => (groups || []).filter((g) => g?.id && MEMBER_ROLES.includes(g.role));
 
   return { MAX_PHOTOS, REMEMBER, ADDED_KEY, SHARE_AGE, keysFor, item, hasOwnPlace, markDuplicates, queryTimes, serverMatches, readAdded, remember, addedKey,
-    going, position, tagsOf, noteOf, keepInput, addLabel, dateLine, whereWord, nothingNew, placeLine, dupLine, DUP_WORDS, problemWords, noPlaceNote, sendState, doneLine, sharedFiles, shareTargets };
+    going, position, tagsOf, noteOf, keepInput, addLabel, dateLine, whereWord, nothingNew, placeLine, dupLine, DUP_WORDS, problemWords, noPlaceNote, sendState, doneLine, sharedFiles, shareTargets,
+    SHARE_WAIT, BEFORE_WORDS, NOT_MINE, shareFor, addShort };
 });

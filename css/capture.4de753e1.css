@@ -327,3 +327,13 @@ li.rec-row { cursor: default; }
 .lib .lib-noplace { margin: -8px var(--s-1) 0; }
 .lib .lib-all { display: grid; gap: var(--s-3); min-width: 0; }
 .lib .lib-all-head { margin: 0 var(--s-1); color: var(--ink-3); font: 500 var(--text-small)/1.3 var(--f-ui); }
+/* SH1b: the Tag and Note for all sit above the list (twenty photos never push them out of reach); the list has its own small head */
+.lib .lib-photos-head { margin-bottom: calc(-1 * var(--s-2)); }
+/* SH1b: photos shared before this person signed in: one quiet line and a plain way to discard them (Add stays the one filled button) */
+.lib-before-box { display: grid; gap: var(--s-2); justify-items: start; min-width: 0; }
+.lib-before { margin: 0 var(--s-1); color: var(--ink); overflow-wrap: anywhere; }
+.lib-discard { min-height: var(--tap); margin: 0; padding: 0 var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--panel); color: var(--ink);
+  font: 500 var(--text-small)/1.2 var(--f-ui); cursor: pointer; max-width: 100%; }
+.lib-which-sheet .lib-before-box { flex: none; margin: 0 var(--s-4) var(--s-3); }
+.lib-which-sheet .lib-before { margin: 0; }
+@media (hover: hover) { .lib-discard:hover { background: var(--fill); } }

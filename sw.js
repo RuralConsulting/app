@@ -9,7 +9,7 @@
 // is the page's IndexedDB, not a cache: a new version activating never touches it, so what waits to upload survives it.
 // SI1 (sign-in first): the page registers this worker only once the sign-in form or first screen is up and the page is quiet
 // (boot.js worker()), so its install never competes with them.
-const VERSION = "202611141109-b87fb4c";
+const VERSION = "202611141130-728e8a7";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
 const FLOATING = ["./", "index.html", "layer-kinds.json", "privacy-terms.md", "demo/demo-farm.json", "demo/source.html"];
@@ -17,7 +17,7 @@ const SHELL = ["css/tokens.5432e59f.css", "css/app.ef2d60b6.css", "manifest.4006
   "js/consent-no.711a9161.js", "js/demo.d21e9821.js", "css/demo.09842fda.css",
   "js/blocks/registry.108f6d88.js", "js/blocks/answer.ce39f59d.js", "js/blocks/map-scene.606260c3.js", "js/blocks/list.cce37062.js", "js/blocks/timeline.d3df4ebf.js", "js/blocks/checklist.956251f9.js", "js/blocks/gallery.a50a6865.js", "css/blocks.f3c6faa5.css", "css/gallery.e67863d6.css", "js/plans/render.744f9380.js", "js/plans/demo.0d0eeef6.js", "js/plans/draft.2b379004.js", "css/plan-print.ac7ecabf.css", "css/plans-demo.04d0dd02.css", "js/farm-model.64e591ea.js", "js/classify.e399e148.js", "js/blocks/documents.86aa66d0.js", "js/document-files.c4ac637b.js", "js/blocks/chart.61d36860.js", "js/wq-model.475917b0.js", "js/provenance-model.d43ee00f.js", "js/provenance-view.a1397604.js", "js/wq.37d54d0e.js","js/demo-documents.6bf46a91.js", "js/consent-conditions.5810278d.js", "js/wq-import.72949b21.js", "js/wq-analysis.ce793178.js", "js/ask.a4dbc8f6.js", "js/block-model.442f7f01.js", "js/add-block.8917b951.js", "js/decision-card-model.c452574d.js", "js/decision-card.2f57af07.js", "js/onboarding-model.a6e70f01.js", "js/onboarding.0bd65249.js", "js/farm-reference.44ef4bd8.js", "js/farm-space.77bf5550.js", "css/farm-space.d71cb8e1.css", "js/group-model.5230d1c6.js", "js/group-update.0bd365c9.js", "js/group-wq-answer.4709145a.js", "js/group-manage-model.bffefdae.js", "js/group-manage.73b21940.js", "js/group-layers.76cf63c1.js", "js/events-model.28744ea6.js", "js/events.58d48a6d.js", "css/events.5915445b.css", "js/people-model.0d690240.js", "js/review-items-model.89924369.js", "js/review-items.68d430b7.js", "js/subgroups.427fe5ba.js", "js/membership-model.baa23e78.js", "js/membership.ebab1026.js", "js/people.fc7ec27d.js", "css/people.0b56b149.css", "js/place-home-model.a55d75db.js", "js/place-home.0e4d0bc0.js", "js/working-notes.6acfaded.js", "css/place-home.6fdae8e2.css", "js/group-space.b6731525.js", "js/shape-edit-model.ae81c31a.js", "js/shape-editor.0ee097ec.js", "css/group-space.ba8a4945.css", "js/wq-sites-model.fc6132ae.js", "js/wq-sites.f7d2f76e.js", "js/wq-page-model.c6cad392.js", "js/wq-page.fa5a0015.js", "css/wq-page.6a2f06a0.css", "js/wq-round-model.526b7a38.js", "js/wq-round.1d5cfa2f.js", "css/wq-round.8a9b9d83.css", "js/demo-wq-page.a8b05130.js", "js/viewer.269d4a07.js", "js/maps-view.9f018735.js", "js/home-model.a084eb92.js", "js/home.58757ca1.js", "css/maps.cdd8505f.css",
   "js/group-overview-model.0357409d.js", "js/group-overview.9ed06c46.js", "css/group-overview.415264d2.css",
-  "js/guard.7f69455e.js", "js/boot.36690751.js", "js/signin.41091fef.js", "js/config.a14912fe.js", "js/brand.80965af9.js", "js/util.1d5eb095.js", "js/icons.74dfe65a.js", "js/account-menu.0f64e677.js", "js/sheet.99705a4c.js", "js/form-rows.774cb66a.js", "js/space-nav.c05db60f.js", "js/map-palette.beac1a05.js", "js/add.9a9ec145.js", "css/ui.b7ce0982.css", "js/simple-view.0fa3d749.js", "js/privacy.2bf69cda.js", "js/layer-kinds.f0f86f81.js", "js/route-timing.eb451185.js", "js/qml.5b2c66e1.js", "js/layer-style.be9878e2.js", "js/basemaps.39e074e6.js", "js/auth.1e4f2997.js", "js/photo-model.7d519141.js", "js/photo-read.7927a8b0.js", "js/capture-queue.dd1bd2f1.js", "js/capture.cfd0bd2b.js", "js/capture-model.cf4e74da.js", "js/capture-ring-model.cf8ac5f0.js", "js/phone-model.5e4b0c86.js", "js/locate.31951666.js", "js/phone-area.2b065320.js", "js/capture-ring.b84ea47f.js", "js/capture-photo.c4c38339.js", "js/capture-library-model.cdf40d73.js", "js/capture-library.f1b06ad6.js", "js/records.595fd15e.js", "css/capture.54a22910.css", "js/popup.02390ce3.js", "js/ops-model.432d61f3.js", "js/ops.327c3ef6.js", "js/layer-notes-model.37f62a4d.js", "js/ops-layers.4df67f78.js", "js/looks-model.63776d70.js", "js/ops-looks.d52bb32b.js", "js/tokens-model.c6a721ec.js", "js/tokens.368b3ae6.js", "js/two-factor.a22a65e5.js", "css/ops.7e44c4d5.css", "js/main.eb040308.js",
+  "js/guard.7f69455e.js", "js/boot.36690751.js", "js/signin.41091fef.js", "js/config.a14912fe.js", "js/brand.80965af9.js", "js/util.1d5eb095.js", "js/icons.74dfe65a.js", "js/account-menu.0f64e677.js", "js/sheet.99705a4c.js", "js/form-rows.774cb66a.js", "js/space-nav.c05db60f.js", "js/map-palette.beac1a05.js", "js/add.9a9ec145.js", "css/ui.b7ce0982.css", "js/simple-view.0fa3d749.js", "js/privacy.2bf69cda.js", "js/layer-kinds.f0f86f81.js", "js/route-timing.eb451185.js", "js/qml.5b2c66e1.js", "js/layer-style.be9878e2.js", "js/basemaps.39e074e6.js", "js/auth.1e4f2997.js", "js/photo-model.7d519141.js", "js/photo-read.6c164874.js", "js/capture-queue.dd1bd2f1.js", "js/capture.cfd0bd2b.js", "js/capture-model.7987bfae.js", "js/capture-ring-model.d1a95745.js", "js/phone-model.5e4b0c86.js", "js/locate.31951666.js", "js/phone-area.2b065320.js", "js/capture-ring.b84ea47f.js", "js/capture-photo.3f3c1edf.js", "js/capture-library-model.34d656ed.js", "js/capture-library.b1515855.js", "js/records.595fd15e.js", "css/capture.4de753e1.css", "js/popup.02390ce3.js", "js/ops-model.432d61f3.js", "js/ops.327c3ef6.js", "js/layer-notes-model.37f62a4d.js", "js/ops-layers.4df67f78.js", "js/looks-model.63776d70.js", "js/ops-looks.d52bb32b.js", "js/tokens-model.c6a721ec.js", "js/tokens.368b3ae6.js", "js/two-factor.a22a65e5.js", "css/ops.7e44c4d5.css", "js/main.eb040308.js",
   "vendor/supabase.d6a5c441.js", "vendor/maplibre-gl-csp.a1f1847b.js", "vendor/maplibre-gl-csp-worker.f950e7b1.js", "vendor/maplibre-gl.ab1e70d5.css", "vendor/pmtiles.caf981bc.js", "vendor/viewer.374d7780.css",
   "fonts/source-sans-3-latin-ext-wght-normal.a85a7459.woff2", "fonts/source-sans-3-latin-wght-normal.19143dca.woff2", "fonts/source-serif-4-latin-ext-wght-normal.d10ccbbd.woff2", "fonts/source-serif-4-latin-wght-normal.382475f3.woff2",
   "brand/logo.a1046e5e.png", "brand/logo-dark.81183d54.png", "brand/icon.670b09db.png", "brand/icon-192.26ee2815.png", "brand/mccc-logo.e9d6f07b.png"];
@@ -51,7 +51,29 @@ self.addEventListener("activate", (e) => {
 // like this app's versioned caches, so activating a new version never clears it, and nothing here reads it) and the app opens at
 // ./?shared=1; once the person is signed in, capture-library.js reads them once, clears the cache, and shows its review screen.
 // Anything that goes wrong still opens the app (at ?shared=0), so a share never leaves the person on an error page.
-const SHARE = "fp-share-in", SHARE_MAX = 20;
+// SH1b: the photos are tied to whoever was last signed in on this phone when they arrived (WHO: a one-entry cache the page writes at
+// each sign-in and clears at sign-out; the index's `for`, or null when nobody was). Only that person is shown them; when nobody was
+// signed in, only a sign-in within SHARE_WAIT (capture-library-model.js shareFor). Opening the app drops a share past its time unseen.
+const SHARE = "fp-share-in", SHARE_MAX = 20, WHO = "fp-share-who";
+const SHARE_WAIT = 10 * 60 * 1000, SHARE_AGE = 24 * 3600 * 1000;
+async function signedInHere() {
+  try {
+    const r = await (await caches.open(WHO)).match("who");
+    const v = r ? await r.json() : null;
+    return v && typeof v.id === "string" && v.id ? v.id : null;
+  } catch { return null; }
+}
+// a share no one may see any more (nobody was signed in and SHARE_WAIT has passed, or past SHARE_AGE, or unreadable): deleted
+async function dropStaleShare() {
+  try {
+    if (!(await caches.has(SHARE))) return;
+    const r = await (await caches.open(SHARE)).match("share-in/index");
+    let idx = null;
+    try { idx = r ? await r.json() : null; } catch { idx = null; }
+    const age = idx && Number.isFinite(idx.at) ? Date.now() - idx.at : Infinity;
+    if (!idx || age > (idx.for ? SHARE_AGE : SHARE_WAIT) || age < -60000) await caches.delete(SHARE);
+  } catch { /* nothing to drop */ }
+}
 async function takeShare(request) {
   const back = (n) => Response.redirect(new URL("./?shared=" + n, self.registration.scope).href, 303);
   try {
@@ -59,13 +81,14 @@ async function takeShare(request) {
     const files = form.getAll("photos").filter((f) => f && typeof f === "object" && typeof f.size === "number" && f.size > 0).slice(0, SHARE_MAX);
     await caches.delete(SHARE);
     if (!files.length) return back(0);
+    const who = await signedInHere();
     const c = await caches.open(SHARE), list = [];
     for (const [i, f] of files.entries()) {
       const key = "share-in/" + i;
       await c.put(key, new Response(f, { headers: { "content-type": f.type || "application/octet-stream" } }));
       list.push({ key, name: String(f.name || ""), type: String(f.type || ""), size: f.size, modified: Number.isFinite(f.lastModified) ? f.lastModified : null });
     }
-    await c.put("share-in/index", new Response(JSON.stringify({ at: Date.now(), files: list }), { headers: { "content-type": "application/json" } }));
+    await c.put("share-in/index", new Response(JSON.stringify({ at: Date.now(), for: who, files: list }), { headers: { "content-type": "application/json" } }));
     return back(list.length);
   } catch { return back(0); }
 }
@@ -76,6 +99,7 @@ self.addEventListener("fetch", (e) => {
   // the page: network first (revalidated, so a copy the host let the browser keep for ten minutes is never an old page naming files
   // the publish has since removed), so a new version shows on the next open; cached copy if there's no coverage
   if (e.request.mode === "navigate") {
+    e.waitUntil?.(dropStaleShare());   // (SH1b: a share past its time is never kept)
     e.respondWith(fetch(e.request, { cache: "no-cache" }).catch(() => caches.open(CACHE).then((c) => c.match("index.html"))));
     return;
   }

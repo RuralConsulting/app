@@ -1,7 +1,8 @@
 // CAP1: the add menu on a phone, the pure parts. Tapping the round + on a phone opens a short stack of options rising straight up
 // from it, in reach of the thumb: the Add registry's actions this person may use here (add.js available(ctx), never a second list),
-// in the person's own order, the first nearest the +; at most five, and when there are more (or some are turned off) the last one is
-// "More" (the full Add list, where "Choose what's in the add menu" also is). The choice is kept per person on this device
+// in the person's own order, the first nearest the +; at most five actions, and when there are more (or some are turned off) a sixth
+// row, "More", follows them (the full Add list, where "Choose what's in the add menu" also is). (Six rows since SH1, 15 Nov 2026; the
+// owner to confirm.) The choice is kept per person on this device
 // (localStorage, never the database). This file decides what the menu holds and where each option sits; capture-ring.js draws it.
 // (The owner, 13 Nov 2026, on the first version's fan of options: "buttons randomly placed". So: one straight, even column.)
 // PH1 (the owner, 13 Nov 2026: plain rows, "rather than every button being bounded"): the menu is a list rising from the +, one thin
@@ -10,7 +11,7 @@
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api; else { root.FP = root.FP || {}; root.FP.captureRingModel = api; }
 })(typeof window === "undefined" ? globalThis : window, function () {
-  const MAX = 5;                         // actions in the stack at most (More takes the top place when there are more)
+  const MAX = 5;                         // actions in the stack at most; More is a sixth row after them when there are more (SH1; the owner to confirm)
   // PH1: each option is a row ROW px high (a 44 px target), in a list LIST_W wide (narrower on a small window), PAD above and below
   // the rows inside its outline, a hairline (SEP px with its space) between groups; the list's foot sits GAP above the +.
   const ROW = 44, PAD = 6, SEP = 9, LIST_W = 280, GAP = 12, SIZE = 44;

@@ -18,6 +18,7 @@
   const el = (...a) => FP.el(...a);
   const uuid = () => root.crypto.randomUUID();
   const PLACES_KEY = "fp-places-v1", TAGS_KEY = "fp-cap-tags-v1:";
+  const SHARE_IN = "fp-share-in", SHARE_WHO = "fp-share-who";   // (SH1b: sw.js's shared photos and its note of who is signed in here)
   let me = null, confirmed = false, unwatch = null;
   const phoneNow = () => !!root.matchMedia?.(FP.phoneModel?.PHONE || "(max-width: 800px)").matches;
 
@@ -49,9 +50,9 @@
     if (!user?.id) return;
     if (!FP.demo?.active) rememberPlaces(user, groups);   // (the demo's invented places are never kept for an offline start)
     setUser(user.id, true);
-    FP.captureLibrary?.sharedIn?.(groups);   // SH1: photos shared in from Android's Share wait for the sign-in, then are reviewed
+    FP.captureLibrary?.sharedIn?.(groups, user.id);   // SH1: photos shared in from Android's Share wait for the sign-in, then are reviewed (SH1b: only by the person they were for)
   }
-  function offline(user) { setUser(user.id, false); FP.captureLibrary?.sharedIn?.(lastPlaces()?.groups || []); }
+  function offline(user) { setUser(user.id, false); FP.captureLibrary?.sharedIn?.(lastPlaces()?.groups || [], user.id); }
   const queue = () => (me ? FP.capture.queue : null);
   async function waiting(org) { const q = queue(); return q ? q.captures(org) : []; }
   // Signing out (review of #529, 1): everything this person saved on the phone and has not sent (group captures, and a farm's offline
@@ -59,8 +60,13 @@
   // out removes it: the phone may be shared, and no one's unsent records stay for the next person. Cancel removes nothing and the
   // person stays signed in. Only after they confirm does everything of theirs leave this phone, with the places kept for an offline
   // start. Returns false when the person chose to stay signed in.
+  // SH1b: photos shared in and still waiting, and the note of who is signed in here, go at every sign-out: no one else is shown them
+  async function forgetShares() {
+    try { await root.caches?.delete?.(SHARE_IN); } catch { /* nothing kept */ }
+    try { await root.caches?.delete?.(SHARE_WHO); } catch { /* nothing kept */ }
+  }
   async function beforeSignOut() {
-    if (!me) return true;
+    if (!me) { await forgetShares(); return true; }
     let open = 0;
     try { open = C().unsentCount(await (queue()?.list() || [])); }
     catch { if (!root.confirm(C().SIGN_OUT_UNKNOWN)) return false; open = 0; }
@@ -68,6 +74,7 @@
     try { await queue()?.forget(me); } catch { /* nothing kept to clear */ }
     drop(PLACES_KEY);
     for (const k of Object.keys(ls() || {})) if (k.startsWith(TAGS_KEY + me) || k.startsWith("fp-cap-added-v1:" + me)) drop(k);   // (SH1: and what this phone remembers adding)
+    await forgetShares();
     me = null; confirmed = false;
     return true;
   }

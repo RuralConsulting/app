@@ -79,9 +79,20 @@
     }
     return null;
   }
+  // SH1b: a photo's own clock with its own time zone (EXIF OffsetTimeOriginal, "+00:00"): the instant it names, as an ISO string; a
+  // photo taken overseas keeps its true moment. Without an offset (or with one that is not a real one) it is read as New Zealand time.
+  function localToIso(local, offset = null) {
+    const m = typeof local === "string" && local.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    const z = typeof offset === "string" && offset.match(/^([+-])(\d{2}):(\d{2})$/);
+    if (!m || !z) return nzLocalToIso(local);
+    const mins = (z[1] === "-" ? -1 : 1) * (+z[2] * 60 + +z[3]);
+    const t = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) - mins * 60000;
+    const d = new Date(t);
+    return Number.isFinite(t) && d.getUTCFullYear() > 1900 ? d.toISOString() : null;
+  }
   // { at, from }: the photo's own time when it has one that is not in the future (a camera clock set wrong); otherwise now.
   function takenAt(meta, now) {
-    const iso = meta?.taken_at ? nzLocalToIso(meta.taken_at) : null;
+    const iso = meta?.taken_at ? localToIso(meta.taken_at, meta.taken_offset || null) : null;
     if (iso && Date.parse(iso) <= Date.parse(now) + 5 * 60000) return { at: iso, from: "photo" };
     return { at: new Date(Date.parse(now)).toISOString(), from: "device" };
   }
@@ -304,7 +315,7 @@
   }
 
   return { KINDS, SPECIES, COUNTED, SUGGESTED, MAX_TAGS, MAX_TAG, MAX_NOTE, MAX_READINGS, MAX_EDGE, THUMB_EDGE, PHOTO_BUDGET, THUMB_BUDGET, MAX_UPLOAD, FALLBACK_EDGE,
-    tidyTags, chips, fieldProblems, nzLocalToIso, takenAt, position, latLonWords, positionLine, nearest, kmWords, sizes, paths, data, record,
+    tidyTags, chips, fieldProblems, nzLocalToIso, localToIso, takenAt, position, latLonWords, positionLine, nearest, kmWords, sizes, paths, data, record,
     SAVED, SAVED_OFFLINE, waitingLine, badgeCount, unsentCount, signOutWarning, SIGN_OUT_UNKNOWN, STATE_WORDS, when, day, detailLine, tagCounts, hasTag, who, plural,
     whenWords, summary, seenBy, placeWords, factRows, siteOptions, whereShort, speciesWord, readingWords, FROM_WORDS, closeSite, SITE_NEAR, SITE_NEAR_MAX, HERE_OLD, refusedWords };
 });
