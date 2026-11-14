@@ -60,6 +60,9 @@
   // short: the one line under an option in the phone's + ring (capture-ring.js), where there is room for a word or two
   registry.register({ id: "photo", label: "Photo", short: "Photo", hint: "A photo with tags: anything worth keeping", icon: "camera", where: ["group"], order: 1, verb: "Take a photo",
     can: mayCapture, run: (ctx) => root.FP.captures.start(ctx, "photo") });
+  // SH1: photos the person already has (the library, several at once), second only to taking one: the same captures, the same rules
+  registry.register({ id: "photos", label: "Photos you already have", short: "Photos", hint: "Several at once, from your photo library", icon: "photos", where: ["group"], order: 1.5, verb: "Choose photos",
+    can: mayCapture, run: (ctx) => root.FP.captureLibrary.choose(ctx) });
   registry.register({ id: "water_sample", label: "Water sample", short: "Water", hint: "A photo of the sample or tester, with readings", icon: "water", where: ["group"], order: 2, verb: "Record a water sample",
     can: mayCapture, run: (ctx) => root.FP.captures.start(ctx, "water_sample") });
   registry.register({ id: "pest_control", label: "Pest control", short: "Pests", hint: "What you saw or shot, and how many", icon: "pest", where: ["group"], order: 3, verb: "Record pest control",

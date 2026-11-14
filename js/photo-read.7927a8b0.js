@@ -48,6 +48,80 @@
     return null;
   }
 
+  // SH1: a HEIF/HEIC photo (an iPhone's own format, when the phone hands the file over as it is): an ISO box file whose `meta` box
+  // names an item of type "Exif" (iinf) and where its bytes lie in the file (iloc). heifExif(b) gives { offset, length } of that item
+  // in the file, or null (not a HEIF, no Exif item, or one stored some other way than at a plain file offset). The item's own first
+  // four bytes say how far past them the TIFF header starts (usually "Exif\0\0" first).
+  const fourcc = (b, at) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3]);
+  const isHeif = (b) => b.length >= 12 && fourcc(b, 4) === "ftyp" && /^(heic|heix|hevc|hevx|heim|heis|mif1|msf1|avif|avis)$/.test(fourcc(b, 8));
+  function boxes(b, start, end) {
+    const out = [];
+    let at = start;
+    while (at + 8 <= end) {
+      let size = ((b[at] << 24) >>> 0) + (b[at + 1] << 16) + (b[at + 2] << 8) + b[at + 3], head = 8;
+      if (size === 1) { if (at + 16 > end) break; size = Number(new DataView(b.buffer, b.byteOffset + at + 8, 8).getBigUint64(0)); head = 16; }
+      else if (size === 0) size = end - at;
+      if (size < head) break;
+      out.push({ type: fourcc(b, at + 4), start: at + head, end: Math.min(end, at + size) });
+      at += size;
+    }
+    return out;
+  }
+  function heifExif(b) {
+    if (!b || !isHeif(b)) return null;
+    const meta = boxes(b, 0, b.length).find((x) => x.type === "meta");
+    if (!meta) return null;
+    const kids = boxes(b, meta.start + 4, meta.end);   // (meta is a full box: version and flags first)
+    const iinf = kids.find((x) => x.type === "iinf"), iloc = kids.find((x) => x.type === "iloc");
+    if (!iinf || !iloc) return null;
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    const uint = (at, n) => (n === 0 ? 0 : n === 2 ? dv.getUint16(at) : n === 4 ? dv.getUint32(at) : n === 8 ? Number(dv.getBigUint64(at)) : NaN);
+    // the Exif item's id
+    let id = null;
+    const iv = b[iinf.start], entriesAt = iinf.start + 4 + (iv === 0 ? 2 : 4);
+    for (const e of boxes(b, entriesAt, iinf.end)) {
+      if (e.type !== "infe") continue;
+      const v = b[e.start];
+      if (v < 2) continue;
+      const item = v === 2 ? dv.getUint16(e.start + 4) : dv.getUint32(e.start + 4), typeAt = e.start + 4 + (v === 2 ? 2 : 4) + 2;
+      if (typeAt + 4 <= e.end && fourcc(b, typeAt) === "Exif") { id = item; break; }
+    }
+    if (id === null) return null;
+    // where it is
+    const v = b[iloc.start];
+    let at = iloc.start + 4;
+    const offSize = b[at] >> 4, lenSize = b[at] & 15, baseSize = b[at + 1] >> 4, indexSize = v === 1 || v === 2 ? b[at + 1] & 15 : 0;
+    at += 2;
+    const count = v < 2 ? dv.getUint16(at) : dv.getUint32(at);
+    at += v < 2 ? 2 : 4;
+    for (let i = 0; i < count && at < iloc.end; i++) {
+      const item = v < 2 ? dv.getUint16(at) : dv.getUint32(at);
+      at += v < 2 ? 2 : 4;
+      let method = 0;
+      if (v === 1 || v === 2) { method = dv.getUint16(at) & 15; at += 2; }
+      at += 2;   // data_reference_index
+      const base = uint(at, baseSize); at += baseSize;
+      const extents = dv.getUint16(at); at += 2;
+      let first = null;
+      for (let k = 0; k < extents; k++) {
+        at += indexSize;
+        const off = uint(at, offSize); at += offSize;
+        const len = uint(at, lenSize); at += lenSize;
+        if (k === 0) first = { off, len };
+      }
+      if (item === id) return method === 0 && first && Number.isFinite(first.off + base) ? { offset: base + first.off, length: first.len || null } : null;
+    }
+    return null;
+  }
+  // The TIFF block inside a HEIF Exif item's bytes (its first four bytes: how far past them the TIFF header is), or null.
+  function heifTiff(item) {
+    if (!item || item.length < 8) return null;
+    const skip = new DataView(item.buffer, item.byteOffset, 4).getUint32(0), at = 4 + skip;
+    if (isTiff(item, at)) return item.subarray(at);
+    for (let i = 4; i + 4 <= Math.min(item.length, 64); i++) if (isTiff(item, i)) return item.subarray(i);   // (a writer that got the count wrong)
+    return null;
+  }
+
   // The tags this reads, from the TIFF: DateTimeOriginal (Exif IFD), and GPS latitude, longitude and image direction.
   function readTiff(t) {
     if (!isTiff(t)) return {};
@@ -121,14 +195,20 @@
   // What a photo file says: { taken_at, lat, lon, direction, direction_from: "exif"|"xmp"|null, magnetic_left_out }.
   // `bytes` is a Uint8Array or ArrayBuffer of the file (only its first 1 MB is read); `declination` is the farm's
   // magnetic declination in degrees, east positive, or null. Nothing found is null, never a guess.
-  function read(bytes, declination = null) {
+  // SH1: a HEIF's Exif item can lie past the first 1 MB; `heifItem` (that item's bytes, read by the caller from where heifExif said)
+  // is read in its place.
+  function read(bytes, declination = null, { heifItem = null } = {}) {
     declination = degrees(declination);   // a number or numeric text ("24.5"), as the loader's float()
     const out = { taken_at: null, lat: null, lon: null, direction: null, direction_from: null, magnetic_left_out: false };
     if (!bytes) return out;
     let b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     b = b.subarray(0, HEAD);
     let tags = {};
-    try { const t = exifTiff(b); if (t) tags = readTiff(t); } catch (_) { tags = {}; }
+    try {
+      let t = heifItem ? heifTiff(heifItem instanceof Uint8Array ? heifItem : new Uint8Array(heifItem)) : exifTiff(b);
+      if (!t && isHeif(b)) { const x = heifExif(b); if (x && x.offset < b.length) t = heifTiff(b.subarray(x.offset, x.length ? x.offset + x.length : b.length)); }
+      if (t) tags = readTiff(t);
+    } catch (_) { tags = {}; }
     out.taken_at = stamp(tags.taken);
     if (Number.isFinite(tags.lat) && Number.isFinite(tags.lon) && Math.abs(tags.lat) <= 90 && Math.abs(tags.lon) <= 180 && !(tags.lat === 0 && tags.lon === 0)) {
       out.lat = Math.round(tags.lat * 1e7) / 1e7; out.lon = Math.round(tags.lon * 1e7) / 1e7;
@@ -171,5 +251,5 @@
     return best ? { ...best, over: true } : null;
   }
 
-  return { read, fit, encodeUnder, HEAD };
+  return { read, fit, encodeUnder, HEAD, heifExif, isHeif };
 });

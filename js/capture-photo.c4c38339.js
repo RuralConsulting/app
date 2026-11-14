@@ -49,8 +49,9 @@
     if (!user?.id) return;
     if (!FP.demo?.active) rememberPlaces(user, groups);   // (the demo's invented places are never kept for an offline start)
     setUser(user.id, true);
+    FP.captureLibrary?.sharedIn?.(groups);   // SH1: photos shared in from Android's Share wait for the sign-in, then are reviewed
   }
-  function offline(user) { setUser(user.id, false); }
+  function offline(user) { setUser(user.id, false); FP.captureLibrary?.sharedIn?.(lastPlaces()?.groups || []); }
   const queue = () => (me ? FP.capture.queue : null);
   async function waiting(org) { const q = queue(); return q ? q.captures(org) : []; }
   // Signing out (review of #529, 1): everything this person saved on the phone and has not sent (group captures, and a farm's offline
@@ -66,7 +67,7 @@
     if (open && !root.confirm(C().signOutWarning(open))) return false;
     try { await queue()?.forget(me); } catch { /* nothing kept to clear */ }
     drop(PLACES_KEY);
-    for (const k of Object.keys(ls() || {})) if (k.startsWith(TAGS_KEY + me)) drop(k);
+    for (const k of Object.keys(ls() || {})) if (k.startsWith(TAGS_KEY + me) || k.startsWith("fp-cap-added-v1:" + me)) drop(k);   // (SH1: and what this phone remembers adding)
     me = null; confirmed = false;
     return true;
   }
@@ -102,7 +103,16 @@
 
   // ---- reading a photo: what it says about itself, then a smaller copy --------------------------------------------------------------------
   async function readMeta(file) {
-    try { return FP.photoRead.read(new Uint8Array(await file.slice(0, FP.photoRead.HEAD).arrayBuffer())); } catch { return null; }
+    try {
+      const P = FP.photoRead, head = new Uint8Array(await file.slice(0, P.HEAD).arrayBuffer());
+      // SH1: a HEIC whose Exif lies past the first 1 MB: that item's own bytes (at most 1 MB of them) are read from where it is
+      const x = P.isHeif?.(head) ? P.heifExif(head) : null;
+      if (x && x.offset >= head.length && x.offset < file.size) {
+        const item = new Uint8Array(await file.slice(x.offset, x.offset + Math.min(x.length || P.HEAD, P.HEAD)).arrayBuffer());
+        return P.read(head, null, { heifItem: item });
+      }
+      return P.read(head);
+    } catch { return null; }
   }
   async function decode(file) {
     if (typeof root.createImageBitmap === "function") {
@@ -623,5 +633,5 @@
 
   root.addEventListener("hashchange", () => close(false));
   FP.captures = { start, close, signedIn, offline, beforeSignOut, rememberPlaces, lastPlaces, badge, waiting, sendNow: () => queue()?.sync(),
-    userId: () => me, confirmed: () => confirmed, isOpen: () => !!screen, prepare, quick, sitesFor };
+    userId: () => me, confirmed: () => confirmed, isOpen: () => !!screen, prepare, quick, sitesFor, keep, placesFor, tagChoices };   // (SH1: keep, placesFor, tagChoices for photos from the library)
 })(window);

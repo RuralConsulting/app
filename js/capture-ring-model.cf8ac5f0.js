@@ -1,6 +1,6 @@
 // CAP1: the add menu on a phone, the pure parts. Tapping the round + on a phone opens a short stack of options rising straight up
 // from it, in reach of the thumb: the Add registry's actions this person may use here (add.js available(ctx), never a second list),
-// in the person's own order, the first nearest the +; at most five, and when there are more (or some are turned off) the top one is
+// in the person's own order, the first nearest the +; at most five, and when there are more (or some are turned off) the last one is
 // "More" (the full Add list, where "Choose what's in the add menu" also is). The choice is kept per person on this device
 // (localStorage, never the database). This file decides what the menu holds and where each option sits; capture-ring.js draws it.
 // (The owner, 13 Nov 2026, on the first version's fan of options: "buttons randomly placed". So: one straight, even column.)
@@ -43,12 +43,13 @@
     return pinned.map((id) => ({ action: byId.get(id), on: id === PRIMARY || !off.has(id) }));
   }
   // The menu's options, nearest the + first: [{ kind: "action", action } ..., { kind: "more" }?]. Every action when they fit (at most
-  // MAX) and none is turned off; otherwise the first MAX - 1 that are on, then More (the full list). No tool among the actions: the
+  // MAX) and none is turned off; otherwise the first MAX that are on, then More (the full list). No tool among the actions: the
   // choice of what is in the menu is in the More list and in Records' menu.
   function ring(available, prefs, max = MAX) {
     const all = arrange(available, prefs), on = all.filter((x) => x.on).map((x) => x.action);
     const fitsAll = on.length === all.length && on.length <= max;
-    const out = (fitsAll ? on : on.slice(0, max - 1)).map((action) => ({ kind: "action", action }));
+    // (SH1: five actions, then More: Choose photos joined the captures, and a coordinator's Add a file stays in the menu)
+    const out = (fitsAll ? on : on.slice(0, max)).map((action) => ({ kind: "action", action }));
     if (!fitsAll) out.push({ kind: "more" });
     return out;
   }

@@ -298,3 +298,32 @@ li.rec-row { cursor: default; }
 .rec-viewer .rec-seen { margin: -8px var(--s-1) 0; color: var(--ink-3); font-size: var(--text-small); }
 .rec-viewer .rec-say { margin: 0; color: var(--ink); font-size: var(--text-small); }
 .rec-viewer .rec-say:empty { display: none; }
+
+/* ---- SH1: photos you already have: the review screen ----------------------------------------------------------------------------------- */
+/* the photos as one outlined list: a thumbnail, the date found, the place found; a tap opens that photo's own choices under it */
+.lib .lib-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); min-width: 0; }   /* (no overflow: hidden: in the sheet's grid it would let the list shrink under its rows) */
+.lib .lib-list:empty { display: none; }
+.lib .lib-item + .lib-item { border-top: 1px solid var(--rule-soft); }
+.lib .lib-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 72px; margin: 0; padding: 10px var(--s-3) 10px 10px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; box-sizing: border-box; -webkit-tap-highlight-color: var(--clear); }
+.lib button.lib-row { cursor: pointer; }
+.lib button.lib-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; border-radius: var(--radius); }
+@media (hover: hover) { .lib button.lib-row:hover { background: var(--fill); } }
+.lib .lib-thumb { flex: none; width: 52px; height: 52px; border-radius: var(--radius-s); object-fit: cover; background: var(--fill); }
+.lib .lib-thumb-none { display: grid; place-items: center; color: var(--ink-3); }
+.lib .lib-words { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.lib .lib-date { font-weight: 500; overflow-wrap: anywhere; }
+.lib .lib-line { color: var(--ink-2); font-size: var(--text-small); line-height: 1.35; overflow-wrap: anywhere; }
+.lib .lib-place[data-place="none"] { color: var(--ink-3); }
+.lib .lib-flag, .lib .lib-problem, .lib .lib-state[data-state="failed"], .lib .lib-state[data-state="notkept"] { color: var(--ink); font-weight: 500; }
+.lib .lib-item[data-state="dup"] .lib-thumb, .lib .lib-item[data-state="out"] .lib-thumb, .lib .lib-item[data-state="unreadable"] .lib-thumb { opacity: .45; }
+.lib .lib-row .fs-chev { flex: none; color: var(--ink-3); }
+.lib .lib-edit { display: grid; gap: var(--s-3); padding: 0 var(--s-3) var(--s-3); }
+.lib .lib-edit .cap-pin-map { height: 220px; border-radius: var(--radius); overflow: hidden; background: var(--fill); }
+.lib .lib-again { display: block; min-height: var(--tap); margin: -4px 0 var(--s-2) calc(52px + 10px + var(--s-3)); padding: 0 var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-pill);
+  background: var(--panel); color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; }
+.lib .lib-status:empty, .lib .lib-noplace[hidden], .lib .lib-all[hidden] { display: none; }
+.lib .lib-status { margin: 0 var(--s-1); }
+.lib .lib-noplace { margin: -8px var(--s-1) 0; }
+.lib .lib-all { display: grid; gap: var(--s-3); min-width: 0; }
+.lib .lib-all-head { margin: 0 var(--s-1); color: var(--ink-3); font: 500 var(--text-small)/1.3 var(--f-ui); }
