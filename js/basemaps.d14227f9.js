@@ -124,12 +124,12 @@ FP.basemaps = (() => {
     let own = merged.get(which);
     if (VECTOR[which] && !own) {
       const json = await fetchStyle(which);
-      if (mine !== st.token) return;
+      if (mine !== st.token || map._removed) return;   // (WQ3: the map was removed while the style was fetched)
       if (json.glyphs && map.setGlyphs) map.setGlyphs(json.glyphs);
       if (json.sprite && map.setSprite) map.setSprite(json.sprite);
       own = merge(map, which, json); merged.set(which, own);
     }
-    if (mine !== st.token) return;
+    if (mine !== st.token || map._removed) return;
     map.setLayoutProperty("bm-aerial", "visibility", which === "aerial" ? "visible" : "none");
     if (map.getLayer?.("bm-topo")) map.setLayoutProperty("bm-topo", "visibility", which === "topo" ? "visible" : "none");
     // (no relief over the aerial or the topo on an overview map; with a vector map it comes back)

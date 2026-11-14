@@ -484,6 +484,11 @@
     // ---- the map ---------------------------------------------------------------------------------------------------------
     const gl = root.maplibregl;
     let map = null, base = null, markers = [], hover = null, popup = null, framedKey = null;
+    // WQ3 (the live walk's "Cannot read properties of undefined (reading 'getLayer')" on leaving Home for Maps): leaving the page removed
+    // the map but this view still held it, and the pointer leaving a sub-group's row as Maps replaced the page lit the row's area on the
+    // removed map (highlight -> map.getLayer -> this.style.getLayer, its style gone). The map is let go here, as it is removed, so every
+    // `map?.` and `if (map)` below finds none; and nothing is lit once the page has closed.
+    me.offs.push(() => { const m = map; map = me.map = null; for (const x of markers) { try { x.marker.remove(); } catch { /* gone */ } } markers = []; try { hover?.remove(); popup?.remove(); } catch { /* gone */ } try { m?.remove(); } catch { /* already gone */ } });
     const choices = () => { const n = FP.basemaps?.names || []; return n.length >= 2 ? n : FP.demo?.active ? ["aerial", "topo"] : []; };
     const onDark = () => (base === "aerial" && (FP.basemaps?.names || []).includes("aerial")) || darkTheme();
     const show = { subs: true, sites: false };   // the water quality sites are off on the overview, on in the Layers panel
@@ -592,6 +597,7 @@
       }
     }
     function highlight(id) {
+      if (!live()) return;
       if (map?.getLayer("ov-area-hi")) for (const l of ["ov-area-hi", "ov-area-hiline"]) map.setFilter(l, ["==", ["get", "id"], id || ""]);
       for (const m of markers) m.node.classList.toggle("hi", m.id === id);
       for (const r of listBox.querySelectorAll("[data-row]")) r.classList.toggle("hi", r.dataset.row === id);
@@ -634,17 +640,28 @@
       drawAreas(); drawSites();
       if (keepCamera) { map.jumpTo(keepCamera); keepCamera = null; } else frame(true);   // (made again: where it was)
       if (!A.size) { reveal(); return; }
-      let done = false;
-      const go = () => { if (done) return; done = true; map.off("sourcedata", check); reveal(); };
-      const check = () => { if (map.isSourceLoaded?.("ov-areas")) map.once("render", go); };
-      map.on("sourcedata", check);
-      setTimeout(go, 1500);
+      // WQ3 (CI: "Cannot read properties of null (reading 'off')"): this map is held in `m`; the 1.5 s timer and the map's events can
+      // come after the page closed (the map let go) or after the map was made again, so none of them reaches for `map`, and the timer
+      // is cleared when the page closes
+      const m = map;
+      let done = false, timer = 0;
+      const go = () => {
+        if (done) return; done = true; clearTimeout(timer);
+        try { m.off("sourcedata", check); } catch { /* the map is gone */ }
+        reveal();
+      };
+      const check = () => { if (done || !live() || map !== m) return; if (m.isSourceLoaded?.("ov-areas")) m.once("render", go); };
+      m.on("sourcedata", check);
+      timer = setTimeout(go, 1500);
+      me.offs.push(() => clearTimeout(timer));
       check();
     }
     async function useBase(k) {
       base = k; markBg();
       const names = FP.basemaps?.names || [];
-      if (map && names.includes(k)) { try { await FP.basemaps.pick(map, k); } catch { if (k !== "aerial") { try { await FP.basemaps.pick(map, "aerial"); base = "aerial"; markBg(); } catch { /* the plain ground */ } } } }
+      const m = map;
+      if (m && names.includes(k)) { try { await FP.basemaps.pick(m, k); } catch { if (k !== "aerial" && live() && map === m) { try { await FP.basemaps.pick(m, "aerial"); base = "aerial"; markBg(); } catch { /* the plain ground */ } } } }
+      if (!live() || map !== m) return;   // (the page closed, or the map was made again: its own ready step does this)
       if (map) { const first = ["ov-mask", "ov-area-fill"].find((l) => map.getLayer(l)); if (first && map.getLayer("ov-veil")) map.moveLayer("ov-veil", first); }
       paint();
     }
@@ -689,8 +706,9 @@
       map.touchZoomRotate?.disableRotation?.();
       map.addControl(new gl.NavigationControl({ showCompass: false }), "bottom-right");
       map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
+      const made = map;
       const ready = () => {
-        if (!live() || !map || map.getSource("ov-areas")) return;
+        if (!live() || !map || map !== made || map.getSource("ov-areas")) return;   // (a late load of a map already replaced does nothing)
         map.addLayer({ id: "ov-veil", type: "background", paint: { "background-color": css("--map-background") || "#e4e6e2", "background-opacity": 0 } });
         map.addSource("ov-mask", { type: "geojson", data: maskData() });
         map.addSource("ov-areas", { type: "geojson", data: areaData() });
@@ -798,7 +816,8 @@
     }
     // each layer's file is signed and added the first time it is switched on
     async function showLayers(t) {
-      if (!map) return;
+      const m = map;
+      if (!m) return;
       for (const L of t.layers) {
         const want = themes.layersOn.has(L.key), src = "ov-ctx-" + L.key;
         if (want && !themes.added.has(L.key)) {
@@ -806,12 +825,13 @@
           pmtilesProtocol(gl);
           try {
             const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(L.tiles_path, LINK_SECONDS);
-            if (error || !data?.signedUrl || !live()) continue;
-            if (!map.getSource(src)) map.addSource(src, { type: "vector", url: "pmtiles://" + data.signedUrl });
-            L.layers.forEach((d, j) => { try { map.addLayer({ id: src + "-" + j, source: src, "source-layer": L.source_layer, ...d, layout: { ...d.layout, visibility: "none" } }, "ov-area-fill"); } catch { /* a definition the map refuses is left out */ } });
+            if (error || !data?.signedUrl || !live() || map !== m) continue;
+            if (!m.getSource(src)) m.addSource(src, { type: "vector", url: "pmtiles://" + data.signedUrl });
+            L.layers.forEach((d, j) => { try { m.addLayer({ id: src + "-" + j, source: src, "source-layer": L.source_layer, ...d, layout: { ...d.layout, visibility: "none" } }, "ov-area-fill"); } catch { /* a definition the map refuses is left out */ } });
           } catch { /* this layer is left out; the rest of the theme still draws */ }
         }
-        L.layers.forEach((_, j) => { const id = src + "-" + j; if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", want ? "visible" : "none"); });
+        if (!live() || map !== m) return;
+        L.layers.forEach((_, j) => { const id = src + "-" + j; if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", want ? "visible" : "none"); });
       }
     }
     // CO1: the panel never sits over the map by itself: folded to one "Layers" button until opened, and remembered either way

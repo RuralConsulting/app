@@ -559,18 +559,11 @@
     // RF1: the chips are words only on a phone, so Sites, Layers and Aerial | Topo fit one row at 390 px. Not bottom right: the +
     // floats there over a scrolled page)
     if (chips) chips.append(bg);
-    fill(host, phoneMode ? null : panel, el("div", { class: "wqp-mapbox" }, canvas, ...(chips ? [chips] : [bg]), card), phoneMode ? null : side);
-    if (!gl?.Map) { fill(canvas, el("p", { class: "wqp-empty" }, "The map can't be shown in this browser.")); return { side, card, update() {}, choose() {}, destroy() {} }; }
+    const mapbox = el("div", { class: "wqp-mapbox" }, canvas, ...(chips ? [chips] : [bg]), card);
+    fill(host, phoneMode ? null : panel, mapbox, phoneMode ? null : side);
+    if (!gl?.Map) { fill(canvas, el("p", { class: "wqp-empty" }, "The map can't be shown in this browser.")); return { side, card, map: null, update() {}, choose() {}, destroy() {} }; }
     if (!protocol && root.pmtiles?.Protocol) { try { gl.addProtocol("pmtiles", new root.pmtiles.Protocol().tile); } catch { /* already there */ } protocol = true; }
     try { gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js"); } catch { /* set already */ }
-    // (PH2: on a phone the credit's "i" sits bottom left by the scale, clear of the + that floats bottom right)
-    const map = new gl.Map({ container: canvas, style: FP.basemaps.style("aerial", { reliefOnAerial: false }), bounds: [[171.4, -43.6], [172.7, -42.7]], maxZoom: 18,
-      attributionControl: phoneMode ? false : { compact: true, customAttribution: FP.brand?.org_legal || "" } });
-    if (phoneMode) map.addControl(new gl.AttributionControl({ compact: true, customAttribution: FP.brand?.org_legal || "" }), "bottom-left");
-    if (!phoneMode) map.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");   // (a phone pinches)
-    map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
-    if (phoneMode) FP.basemaps.quietCredit?.(map);
-    const ready = new Promise((res) => { map.once("load", res); const poll = () => (map.style?._loaded ? res() : setTimeout(poll, 50)); poll(); });
     // PH5: the aerial first, the plain map one tap away; the person's choice on an overview map on this device is kept (map-scene.js's key)
     const choices = (FP.basemaps.names || []).length >= 2 ? ["aerial", "topo"] : FP.demo?.active ? ["aerial", "topo"] : [];
     const BASE_KEY = "fp-overview-basemap";
@@ -578,17 +571,57 @@
     const start = FP.mapPalette?.startBackground ? FP.mapPalette.startBackground(stored, choices) : "aerial";
     let base = start;
     const markBg = () => { for (const b of bg.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.base === base)); };
-    const useBase = async (k) => { base = k; markBg(); await ready; if (!(FP.basemaps.names || []).includes(k)) return; if (k !== "aerial") FP.basemaps.ground(map); try { await FP.basemaps.pick(map, k); } catch { /* the plain ground stays */ } };
-    if (choices.length) {
-      fill(bg, ...[["aerial", "Aerial"], ["topo", "Topo"]].map(([k, t]) => el("button", { type: "button", "data-base": k, onclick: () => { try { root.localStorage.setItem(BASE_KEY, k); } catch { /* kept for this visit */ } useBase(k); } }, t)));
-      useBase(start);
-    } else bg.hidden = true;
+    const useBase = async (k) => { base = k; markBg(); await whenReady(); if (gone || !(FP.basemaps.names || []).includes(k)) return; if (k !== "aerial") FP.basemaps.ground(map); try { await FP.basemaps.pick(map, k); } catch { /* the plain ground stays */ } };
+    if (choices.length) fill(bg, ...[["aerial", "Aerial"], ["topo", "Topo"]].map(([k, t]) => el("button", { type: "button", "data-base": k, onclick: () => { try { root.localStorage.setItem(BASE_KEY, k); } catch { /* kept for this visit */ } useBase(k); } }, t)));
+    else bg.hidden = true;
 
-    let rows = [], framed = false, chosen = null, layers = [], rowsByType = null, typeNow = null, coreRows = null;
+    let rows = [], framed = false, chosen = null, layers = [], rowsByType = null, typeNow = null, coreRows = null, last = null, shownType = null;
     // WQ2: the group's own sites in a source of their own, never clustered and drawn above everything else; the other sources' sites in
     // SRC (clustered on a phone)
     const SRC = "wqp-sites", OWN = "wqp-own";
-    ready.then(() => {
+
+    // WQ3 (the live walk: in WebKit, Safari's engine, the map went blank once its box changed size after its first draw: the review rig's
+    // whole-page picture makes the window taller for a moment, and a person may resize the window or zoom): the map can be made again in
+    // place (FP.mapKeep, in such a browser only, once its box has settled at a new size) with everything it showed: the same place and
+    // zoom, the water type's layers as switched, the area or sub-group with its mask, the sites in their sources and colours, the site
+    // chosen, Aerial | Topo. The card, the site's view and the Layers panel are the page's and stay as they are. Whatever waits for the
+    // map (whenReady) waits for the map in place when it is ready, so a change made while it is made again is not lost.
+    let map = null, isReady = false, waiters = [], camera = null, keep = null, gone = false, drawnAt = "";
+    const whenReady = () => (isReady ? Promise.resolve() : new Promise((res) => waiters.push(res)));
+    function build() {
+      isReady = false;
+      // (PH2: on a phone the credit's "i" sits bottom left by the scale, clear of the + that floats bottom right)
+      const m = map = new gl.Map({ container: canvas, style: FP.basemaps.style("aerial", { reliefOnAerial: false }), ...(camera ? { center: camera.center, zoom: camera.zoom } : { bounds: [[171.4, -43.6], [172.7, -42.7]] }), maxZoom: 18,
+        attributionControl: phoneMode ? false : { compact: true, customAttribution: FP.brand?.org_legal || "" } });
+      if (phoneMode) m.addControl(new gl.AttributionControl({ compact: true, customAttribution: FP.brand?.org_legal || "" }), "bottom-left");
+      if (!phoneMode) m.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");   // (a phone pinches)
+      m.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
+      if (phoneMode) FP.basemaps.quietCredit?.(m);
+      drawnAt = canvas.clientWidth + "x" + canvas.clientHeight;
+      keep?.made();
+      let started = false;
+      const begin = () => {
+        if (started || gone || m !== map) return;
+        started = true;
+        setup();
+        isReady = true;
+        const w = waiters; waiters = [];
+        for (const f of w) f();
+      };
+      m.once("load", begin);
+      const poll = () => { if (gone || m !== map || started) return; if (m.style?._loaded) begin(); else setTimeout(poll, 50); };
+      poll();
+      if (choices.length) useBase(base);
+    }
+    function rebuild() {
+      if (gone || !map) return;
+      try { camera = { center: map.getCenter(), zoom: map.getZoom() }; } catch { camera = null; }
+      const old = map;
+      try { old.remove(); } catch { /* already gone */ }
+      build();
+    }
+    // the map's own sources and layers, its click and hover, then (made again) what it showed
+    function setup() {
       for (const ic of M().ICONS) if (!map.hasImage(ic.icon)) map.addImage(ic.icon, iconImage(ic), { pixelRatio: 2 });
       map.addSource("wqp-mask", { type: "geojson", data: empty() });
       map.addSource("wqp-area", { type: "geojson", data: empty() });
@@ -640,14 +673,29 @@
         map.on("mouseleave", l, () => { map.getCanvas().style.cursor = ""; });
       }
       map.on("moveend", () => { for (const l of layers) if (l.on && l.def.kind === "ref") readRef(l); if (layers.some((l) => l.on && l.def.kind === "rivers")) readRivers(); });
+      // (made again: the area or the sub-group and its mask, the sites, and the water type's layers as they were switched)
+      outline();
       push();
-    });
+      // (layers still being set up for a new water type are shown by that set-up when it ends)
+      for (const l of layers) l.ids = [];
+      if (shownType && shownType === typeNow) for (const l of layers) if (!l.missing) show(l);
+    }
     const empty = () => ({ type: "FeatureCollection", features: [] });
+    // PH5: outside the place under the mask. WQ2 (the owner, 14 Nov 2026): a sub-group chosen, the outline, the mask and the fit
+    // follow that sub-group's area; all of the group, the group's
+    function outline() {
+      if (!last || !map.getSource?.("wqp-area")) return;
+      const b = last.data.base, sub = last.s.sub ? b.subs.find((x) => x.id === last.s.sub) : null;
+      const place = sub?.rings?.length ? sub.rings : b.area;
+      map.getSource("wqp-area").setData({ type: "FeatureCollection", features: place.length ? [{ type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: place } }] : [] });
+      map.getSource("wqp-mask")?.setData((place.length && FP.mapPalette?.outsideMask?.({ type: "MultiLineString", coordinates: place })) || empty());
+      map.getSource("wqp-subs")?.setData({ type: "FeatureCollection", features: b.subs.filter((x) => x.rings.length).map((x) => ({ type: "Feature", properties: { id: x.id }, geometry: { type: "MultiLineString", coordinates: x.rings } })) });
+    }
     // the plain ground and the outlines follow the theme (light or dark), and change with it
     // (after the frame, so the theme's tokens are the new ones; dark: the person's choice, else the device's)
     const paint = () => requestAnimationFrame(paintNow);
     function paintNow() {
-      if (!map.getLayer?.("wqp-area-line")) return;
+      if (gone || map._removed || !map.getLayer?.("wqp-area-line")) return;
       const theme = document.documentElement.dataset.theme, dark = theme === "dark" || (theme !== "light" && !!scheme?.matches);
       const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
       if (map.getLayer("bm-blank") && css("--map-background")) map.setPaintProperty("bm-blank", "background-color", css("--map-background"));
@@ -720,15 +768,16 @@
     }
     async function setType(type) {
       if (typeNow === type) return;
-      typeNow = type;
+      typeNow = type; shownType = null;
       for (const l of layers) hide(l);
       // (PH2: on a phone none is on until asked for: the plain map and the dots)
       layers = SUPPORT[type].map((def) => ({ def, on: st.layersOn[def.id] ?? (phoneMode ? false : def.on), ids: [], say: "" }));
-      await ready;
+      await whenReady();
       if (typeNow !== type) return;
       coreRows = coreRows || loadCore();
       const core = await coreRows.catch(() => []);
-      if (typeNow !== type) return;
+      await whenReady();
+      if (typeNow !== type || gone) return;
       for (const l of layers) {
         if (l.def.kind === "core") l.rows = core.filter((r) => r.key === l.def.key);
         if (l.def.kind === "theme") l.rows = core.filter((r) => r.style?.reference?.group === l.def.group);
@@ -736,6 +785,7 @@
       }
       drawPanel(type);
       for (const l of layers) show(l);
+      shownType = type;
     }
     // core layers: the register's rows (as maps-view.js reads them) and their tiles, signed for an hour from the one stored copy
     async function loadCore() {
@@ -748,9 +798,11 @@
       const byPath = new Map(list(urls).filter((u) => u.signedUrl).map((u) => [u.path, u.signedUrl]));
       return rows.filter((r) => byPath.has(r.tiles_path)).map((r) => ({ ...r, url: byPath.get(r.tiles_path) }));
     }
-    function hide(l) { for (const id of l.ids) if (map.getLayer?.(id)) map.setLayoutProperty(id, "visibility", "none"); }
+    function hide(l) { if (gone) return; for (const id of l.ids) if (map.getLayer?.(id)) map.setLayoutProperty(id, "visibility", "none"); }
     function under() { return map.getLayer("wqp-subs-line") ? "wqp-subs-line" : undefined; }
     async function show(l) {
+      await whenReady();   // (WQ3: never into a map being made again)
+      if (gone) return;
       if (!l.on) { hide(l); return; }
       if (l.ids.length) { for (const id of l.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible"); if (l.def.kind === "ref") readRef(l); if (l.def.kind === "rivers") readRivers(); return; }
       if (l.def.kind === "rivers") {
@@ -785,13 +837,17 @@
           });
         }
       }
+      // (WQ3: a layer already on the map from an earlier visit to this water type was left hidden by the switch away from it: Groundwater,
+      // Surface water, Groundwater again drew no allocation zones though they were ticked)
+      for (const id of l.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
     }
     // a reference layer by the box in view (reference_view_features: at most 1,000 features; over that, "zoom in")
     async function readRef(l) {
+      if (gone) return;
       if (!l.on || (l.def.minzoom && map.getZoom() < l.def.minzoom)) { l.say = l.def.note || ""; note(l); return; }
       const b = map.getBounds(), mine = (l.asked = (l.asked || 0) + 1);
       const { data, error } = await L.sb.rpc("reference_view_features", { source: l.def.source, x0: b.getWest(), y0: b.getSouth(), x1: b.getEast(), y1: b.getNorth(), max_features: 1000 });
-      if (mine !== l.asked) return;
+      if (mine !== l.asked || gone) return;   // (WQ3: nothing is asked of a map once the page has closed)
       const src = map.getSource("wqp-ref-" + l.def.id);
       if (error || !data) { l.say = "not available here"; note(l); src?.setData(empty()); return; }
       if (data.truncated) { l.say = "zoom in to see"; src?.setData(empty()); } else { l.say = data.total_in_box ? "" : "none in view"; src?.setData(data.features || empty()); }
@@ -800,41 +856,44 @@
     const note = (l) => { const n = panel.querySelector('input[data-layer="' + l.def.id + '"]')?.closest("label")?.querySelector(".wqp-layernote"); if (n) n.textContent = l.say || l.def.note || ""; };
     let riverAsk = 0;
     async function readRivers() {
+      if (gone) return;
       const b = map.getBounds(), want = FP.farmModel.riverBox([[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]], map.getZoom()), mine = ++riverAsk;
       const l = layers.find((x) => x.def.kind === "rivers");
       if (!want) { if (l) { l.say = "from zoom 10"; note(l); } map.getSource("wqp-rivers")?.setData(empty()); return; }
       const { data, error } = await L.sb.rpc("waterways_in_view", want);
-      if (mine !== riverAsk) return;
+      if (mine !== riverAsk || gone) return;
       if (l) { l.say = error ? "not available here" : ""; note(l); }
       map.getSource("wqp-rivers")?.setData(error ? empty() : FP.farmModel.riverFeatures(data));
     }
 
-    let lastKey = null, drawnAt = canvas.clientWidth + "x" + canvas.clientHeight;
+    build();
+    // (WQ3: in a WebKit browser, once the map's box settles at a new size, the map is made again in place; elsewhere it resizes as usual)
+    keep = FP.mapKeep?.watch?.(mapbox, rebuild) || null;
+    keep?.made();
+    let lastKey = null;
     return {
       side, card,
       async update(data, s) {
-        rows = data.shown;
-        await ready;
+        rows = data.shown; last = { data, s };
+        await whenReady();
+        if (gone) return;
         const b = data.base, sub = s.sub ? b.subs.find((x) => x.id === s.sub) : null;
-        // PH5: outside the place under the mask. WQ2 (the owner, 14 Nov 2026): a sub-group chosen, the outline, the mask and the fit
-        // follow that sub-group's area; all of the group, the group's
-        const place = sub?.rings?.length ? sub.rings : b.area;
-        map.getSource("wqp-area")?.setData({ type: "FeatureCollection", features: place.length ? [{ type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: place } }] : [] });
-        map.getSource("wqp-mask")?.setData((place.length && FP.mapPalette?.outsideMask?.({ type: "MultiLineString", coordinates: place })) || empty());
-        map.getSource("wqp-subs")?.setData({ type: "FeatureCollection", features: b.subs.filter((x) => x.rings.length).map((x) => ({ type: "Feature", properties: { id: x.id }, geometry: { type: "MultiLineString", coordinates: x.rings } })) });
+        outline();
         push(); paintNow();
         const key = (s.sub || "") + "|" + s.type;
         if (!framed || key !== lastKey) { frame(b, sub); framed = true; lastKey = key; }
         await setType(s.type);
+        if (gone) return;
         drawPanel(s.type);
-        // (only when the box really changed size: a resize after the first draw is what blanks the map in WebKit)
+        // (only when the box really changed size: a resize after the first draw is what blanks the map in WebKit, where FP.mapKeep
+        // then makes it again)
         const now = canvas.clientWidth + "x" + canvas.clientHeight;
         if (now !== drawnAt) { drawnAt = now; map.resize(); }
       },
       choose(id) { chosen = id; mark(); },
       // A site under a card or the site's view (node): the map eases so the site sits in the largest clear part of the map beside it.
       keepClear(lngLat, node) {
-        if (!lngLat || !node || node.hidden) return;
+        if (gone || !lngLat || !node || node.hidden) return;
         const c = canvas.getBoundingClientRect(), r = node.getBoundingClientRect(), p = map.project(lngLat), pad = 28;
         // (on a phone the chips along the map's top are no place for it either)
         const top = chips ? Math.max(0, chips.getBoundingClientRect().bottom - c.top + 4) : 0;
@@ -847,8 +906,8 @@
         const [x, y] = ways[0].to;
         map.panBy([p.x - x, p.y - y], { duration: root.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 300 });
       },
-      map,
-      destroy() { scheme?.removeEventListener?.("change", paint); themeWatch?.disconnect(); try { map.remove(); } catch { /* gone */ } },
+      get map() { return map; },
+      destroy() { gone = true; keep?.stop(); waiters = []; scheme?.removeEventListener?.("change", paint); themeWatch?.disconnect(); try { map.remove(); } catch { /* gone */ } },
     };
   }
   // SR1: a saved sampling round changes the group's results: the next visit reads them again

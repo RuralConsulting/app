@@ -452,12 +452,14 @@
   function focusMap(map, holder, { group = false, manifest = null, url = null, phone = false, palette = null, phoneModel = null } = {}) {
     if (!map) return;
     // (review of #540, 10: it stops listening once the layer is there, or after WAIT_MS if it never comes)
+    // (WQ3: and once the map is removed, leaving the page: a removed map has no style, so nothing is asked of it)
+    const alive = () => !map._removed;
     const when = (test, then) => {
-      try { if (test()) { then(); return; } } catch { return; }
+      try { if (alive() && test()) { then(); return; } } catch { return; }
       let timer = null;
-      const off = () => { clearTimeout(timer); map.off("styledata", h); map.off("idle", h); };
-      const h = () => { let ok = false; try { ok = !!test(); } catch { off(); return; } if (!ok) return; off(); then(); };
-      map.on("styledata", h); map.on("idle", h);
+      const off = () => { clearTimeout(timer); map.off("styledata", h); map.off("idle", h); map.off("remove", off); };
+      const h = () => { let ok = false; try { ok = alive() && !!test(); } catch { off(); return; } if (!ok) return; off(); then(); };
+      map.on("styledata", h); map.on("idle", h); map.once?.("remove", off);
       timer = setTimeout(off, WAIT_MS);
       timer?.unref?.();   // (in Node's tests, the wait never holds the process open)
     };

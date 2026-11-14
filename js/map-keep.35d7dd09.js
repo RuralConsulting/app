@@ -7,17 +7,18 @@
 // A page's map uses it so:
 //   const keep = FP.mapKeep.watch(box, () => rebuild({ center: map.getCenter(), zoom: map.getZoom() }));   // the box holding the map
 //   ... keep.made()   (after each map is made: the size it was made at)      keep.stop()   (when the page closes)
-// (The Water quality page could use it the same way: watch its .wqp-mapbox, and on a call remove its map and make it again with the
-// camera handed in; its layers and sites are drawn again by its own ready handler.)
+// Used by the group overview (CO1b) and the Water quality page (WQ3: it watches its .wqp-mapbox, removes its map and makes it again with
+// the camera kept; its own set-up then draws the area, the mask, the sites, the site chosen, the layers and Aerial | Topo again).
 // Not real Safari-tested: whether real Safari has the fault is still to be seen on a Mac or an iPad.
 (function (root) {
   const FP = (root.FP = root.FP || {});
   const DELAY = 250;   // (ms: a window dragged to a new size is rebuilt once, when it stops)
   // WebKit that is not Chromium (Chromium's user agent says AppleWebKit too). `?mapkeep=rebuild` makes any browser rebuild (tests).
+  // (WQ3: Chrome, Edge and Firefox on an iPhone or iPad (CriOS, EdgiOS, FxiOS) are WebKit too, as Apple requires, so they count)
   function affected(nav = root.navigator, loc = root.location) {
     try { if (/[?&]mapkeep=rebuild\b/.test(String(loc?.search || ""))) return true; } catch { /* no address */ }
     const ua = String(nav?.userAgent || "");
-    return /AppleWebKit\//.test(ua) && !/(Chrome|Chromium|CriOS|Edg|OPR|Android)\//.test(ua);
+    return /AppleWebKit\//.test(ua) && !/(Chrome|Chromium|Edg|OPR|Android)\//.test(ua);
   }
   // box: the element whose size the map follows; rebuild(): makes the map again (only ever called in an affected browser)
   function watch(box, rebuild, { delay = DELAY, isAffected = affected } = {}) {
