@@ -596,13 +596,26 @@
         // M1b: the membership and the group's fields are read beside the page (their failure is said in their own place)
         const member = MS() ? MS().readMember(sb, id).catch((e) => ({ failed: message(e) })) : Promise.resolve(null);
         const subs = MS()?.readSubs ? MS().readSubs(sb, id).catch((e) => ({ failed: message(e) })) : Promise.resolve(null);   // M2
+        const farmsOf = readMemberFarms(id);   // HV1
         const page = await one(sb.rpc("crm_business", { b: id }));
         if (!page) throw new Error("not found, or not yours to read");
         page.membership = await member;
         page.subs = await subs;
+        page.farms = await farmsOf;
         st.page = page;
       } catch (e) { st.page = { failed: message(e) }; }
       if (push) draw();
+    }
+    // HV1: the member's farms the coordinator may open (read only): its active associations, then those farms' names, as the
+    // signed-in person (row-level security decides: the group's facilitators, advisors and admins read them). Bounded; a failed
+    // read just offers no link.
+    async function readMemberFarms(b) {
+      try {
+        const a = await rows(sb.from("farm_group_associations").select("farm_id").eq("group_member_id", b).eq("status", "active").limit(M().MEMBER_FARMS_CAP));
+        const ids = [...new Set(a.map((r) => r.farm_id).filter(Boolean))];
+        if (!ids.length) return [];
+        return M().memberFarmLinks(a, await rows(sb.from("farms").select("id,name").in("id", ids).limit(M().MEMBER_FARMS_CAP)));
+      } catch { return []; }
     }
     function contactLines(d) {
       const out = [];
@@ -685,6 +698,8 @@
       box.append(el("section", { class: "crm-section" }, el("h4", {}, "Interactions (" + p.interactions_total + ")"),
         timeline(p.interactions || [], p.interactions_total)));
       const links = [];
+      // HV1: the member's farm, opened read only (its Home: map, files and plan, as the farm's own people see them)
+      for (const f of p.farms || []) links.push(el("a", { href: FP.href(f.href), "data-member-farm": f.id }, M().memberFarmText(f.name)));
       if (p.held_files) links.push(el("a", { href: FP.href(G().href(g, "documents")) }, M().plural(Number(p.held_files), "file", "files") + " held for this member, in Files"));
       if (FP.groupManageModel?.showsLink?.(group.role) !== false) links.push(el("a", { href: FP.href(G().href(g, "manage", "members")) }, "Farm links and map extent, in Manage → Members"));
       // RV1: open register questions that name this member

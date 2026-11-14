@@ -92,6 +92,10 @@
       '<section class="answer-panel answer-compact ops-panel" data-ops="layer-note" id="ln-editor" aria-live="polite" hidden></section>';
   }
 
+  // HV1: a group's coordinators also read the layers of their members' farms (migration 20261113074000). The picker keeps what it
+  // listed before: organisations' layers and the layers of farms the person is on (their farm_members rows).
+  const ownLayers = (layers, farmRoles) => { const mine = new Set((farmRoles || []).map((m) => m.farm_id)); return (layers || []).filter((l) => !l.farm_id || mine.has(l.farm_id)); };
+
   async function open() {
     const current = ++token, box = $("#ops-panels"), staff = FP.ops.isStaff();
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
@@ -123,7 +127,7 @@
       const orgName = new Map(orgs.map((o) => [o.id, o.name]));
       const roleOf = (list, key, id) => list.find((m) => m[key] === id)?.role;
       data = { sources, notes, roles: { staff, orgs: orgs.map((o) => ({ ...o, role: roleOf(orgRoles, "org_id", o.id) })), farms: farms.map((f) => ({ ...f, role: roleOf(farmRoles, "farm_id", f.id) })) },
-        layers: layers.map((l) => ({ ...l, owner_name: l.org_id ? orgName.get(l.org_id) || "Organisation layer" : "Farm layer" })) };
+        layers: ownLayers(layers, farmRoles).map((l) => ({ ...l, owner_name: l.org_id ? orgName.get(l.org_id) || "Organisation layer" : "Farm layer" })) };
       const offered = scopes(data);
       // Someone who may write no note (a viewer, a group member) is offered no editor: the page says so and stops.
       if (!offered.length) { box.innerHTML = '<section class="answer-panel answer-compact ops-panel" data-ops="layers" data-offered="none"><h2>Layer notes</h2><p class="answer-sentence" id="ln-none">Only a farm\'s editors and a group\'s advisors write layer notes.</p><p class="ops-line">You can read the advisor notes on a layer in its info panel on the map; there is nothing for you to write here.</p></section>'; return; }

@@ -30,12 +30,15 @@
     const longPeople = new URLSearchParams(root.location.search).get("people") === "long";
     // SR1: "?round=1" gives the demo group's own sampling dataset twelve registered sites with a field-sensor nitrate record, for entering a round
     const round = new URLSearchParams(root.location.search).get("round") === "1";
+    // HV1: "?memberfarm=1" (or "long", a long farm name) with "#/demo/multi": the second farm is a member farm the person reads as
+    // a coordinator of its group, not one of theirs (no farm_members row), so ".../farm-2" opens it read only
+    const memberFarm = new URLSearchParams(root.location.search).get("memberfarm");
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, round })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, round, memberFarm })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -167,7 +170,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, round = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, round = false, memberFarm = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -277,6 +280,11 @@
       data.map2 = { farm: { id: FARM2, name: second.name, region: second.region }, extent: polygon(172.62, -42.78, 172.64, -42.765), extent_ha: 220,
         titles: collection([]), land_units: collection([]), layers: [], reference: [] };
       multiGroups(data);
+      // HV1: the second farm a member's farm, read (as row-level security lets a group's coordinator read it) but not the person's own
+      if (memberFarm === "1" || memberFarm === "long") {
+        data.tables.farm_members = data.tables.farm_members.filter((m) => m.farm_id !== FARM2);
+        if (memberFarm === "long") second.name = data.map2.farm.name = "Upper Waiau River Flats and Hill Country Station — synthetic demo";
+      }
     }
     // Documents as F1e and B3 leave them: every one primary by default, and the walk notes filed with the plan by a
     // person (so the demo shows a supporting document folded under its main one). relates_to is read through the view.

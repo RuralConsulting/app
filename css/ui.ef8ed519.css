@@ -764,6 +764,9 @@ body:has(.add-button:not([hidden])) .events-actions button[data-action="add"] { 
   /* RF1: the back chevron a 44 x 44 target, the chevron as far from the screen's edge as from the place's mark */
   .space-bar > .space-back { width: 44px; height: 44px; min-width: 44px; margin-right: 0; border-radius: 50%; }
   .space-head .space-kind, .space-head .group-kind { display: none; }
+  /* HV1: but a member farm opened read only says so on a phone too: the small line under its one-line name */
+  /* (never cut short: on a narrow phone with large text it wraps, and the strip grows by a line) */
+  .space-head .space-kind.space-kind-readonly { display: block; margin-top: 0; white-space: normal; text-overflow: clip; }
   .space-head .group-logo { height: 30px; }
   .space-head .space-mark { width: 30px; height: 30px; }
   .space-title h1, #farm-space-header .space-title h1 { font-size: var(--text-body); -webkit-line-clamp: 1; }

@@ -788,5 +788,19 @@
       source: "the farm's own record", as_at: String(b.valid_from || "").slice(0, 10) || null, shown_as: null,
       features: { type: "FeatureCollection", features: [{ type: "Feature", geometry: b.geometry, properties: { name: "Farmed area", area_ha: b.area_ha ?? null } }] } };
   }
-  return { RIVER_SOURCES, behindRivers, farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, tooManyToDraw, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, canEdit, people };
+  // HV1 (the owner, 14 Nov 2026): a group's coordinators read the farms of the group's members (row-level security, migration
+  // 20261113074000), so the farms read gives a coordinator those too. The person's own places are the farms they are on
+  // (farm_members, their own rows); the rest are member farms, opened read only from the group and never listed as the person's.
+  // memberRows: the person's farm_members rows ({farm_id}), or null when they could not be read (then every farm is their own,
+  // as before HV1, so nobody loses a farm of theirs to a failed read).
+  function splitFarms(rows, memberRows) {
+    const all = list(rows);
+    if (!Array.isArray(memberRows)) return { own: all, member: [] };
+    const mine = new Set(memberRows.map((r) => r?.farm_id).filter(Boolean));
+    return { own: all.filter((f) => mine.has(f.id)), member: all.filter((f) => !mine.has(f.id)).map((f) => ({ ...f, readOnly: true })) };
+  }
+  // What the header says of a member farm opened read only: its kind line and the account menu's line.
+  const readOnlyKind = "Member farm · read only";
+  const readOnlyLine = "Read only: you see this member's farm as a coordinator of its group";
+  return { splitFarms, readOnlyKind, readOnlyLine, RIVER_SOURCES, behindRivers, farmedAreaLayer, flight, FLY_MS, easeInOut, maskFade, MASK_OPACITY, MASK_FADE_MS, farmMask, commandIntent, peek, undoWindow, UNDO_MS, ruleRef, isPhoneMap, foldAttribution, riverLayers, riverFeatures, riverBox, riverBoxCovers, riverMinOrder, riverPopup, RIVER_MIN_ZOOM, dimAround, framesPlace, PLACE_SHARE, labelsOnLine, views, otherViews, sheetOverlap, sheetPadding, framePadding, flightPadding, frameFix, docClass, docTier, docKind, docTitle, title, DOC_TIERS, DOC_TYPES, layerName, tooManyToDraw, pastConsent, consentPopup, isPlan, recordKind, recordLinks, jobHeading, entersToSubmit, initials, viewLabel, outputs, match, href, date, standingAnswers, audienceOf, placeFeatures, documents, summaryLine, portfolioLine, sourceLine, resolutionLine, labelsToShow, unitNames, roles, canManage, canEdit, people };
 });

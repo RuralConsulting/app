@@ -408,7 +408,22 @@
   // Whose contact details these are: a sub-group's People shows names and numbers only.
   const contactsNote = (parentName) => "Contact details are kept by " + (parentName || "the parent group") + ".";
 
-  return { DEFAULT_FILTERS, STATUS_TEXT, filterChips, removeFilter, clearFilters, toggleLabel, sortDirectory, lastShort, letterOf, initials, byName, withLetters, ROLES, canSee, canArchive, KINDS, KIND_TEXT, DIRECTIONS, DIRECTED, FOLLOW_UPS, FOLLOW_TEXT, fold, plural, splitList, dayKey, whenText, dateText, ago,
+  // HV1 (the owner, 14 Nov 2026): a member's farms, opened read only from its page. associations: the member's ACTIVE association
+  // rows ({farm_id}) as the coordinator reads them; farms: the farm rows ({id, name}) the database let them read. Only a farm in
+  // both is offered (a farm whose association ended, or that the person cannot read, never is), by name, each with its Home.
+  const MEMBER_FARMS_CAP = 20;
+  function memberFarmLinks(associations, farms) {
+    const linked = new Set((Array.isArray(associations) ? associations : []).map((a) => a?.farm_id).filter(Boolean));
+    const seen = new Set();
+    return (Array.isArray(farms) ? farms : [])
+      .filter((f) => f?.id && linked.has(f.id) && !seen.has(f.id) && seen.add(f.id))
+      .map((f) => ({ id: f.id, name: String(f.name || "").trim() || "Unnamed farm", href: "#/farm/" + f.id + "/home" }))
+      .sort((a, b) => a.name.localeCompare(b.name, "en-NZ"))
+      .slice(0, MEMBER_FARMS_CAP);
+  }
+  const memberFarmText = (name) => "Open " + name + " (read only)";
+
+  return { memberFarmLinks, memberFarmText, MEMBER_FARMS_CAP, DEFAULT_FILTERS, STATUS_TEXT, filterChips, removeFilter, clearFilters, toggleLabel, sortDirectory, lastShort, letterOf, initials, byName, withLetters, ROLES, canSee, canArchive, KINDS, KIND_TEXT, DIRECTIONS, DIRECTED, FOLLOW_UPS, FOLLOW_TEXT, fold, plural, splitList, dayKey, whenText, dateText, ago,
     followUp, topicsOf, searchDirectory, labels, searchPeople, whoWith, linkText, feedArgs, groupByDay, heading, loggedBy, toForm, toSave, PERSON_FIELDS, personForm, toPerson,
     detailsForm, toDetails, cell, toCsv, DIRECTORY_COLUMNS, FEED_COLUMNS, directoryCsv, feedCsv, fileName,
     isSubgroup, parentOf, canSeeTab, canWriteSubgroups, SUBGROUP_CAP, subgroupMapSize, subgroupIndex, inSubgroups, subgroupChips, addChoices, subgroupLabel, roster, rosterLine, contactsNote };

@@ -8,6 +8,12 @@
 (() => {
   const { $, $$, el, show, sb } = FP;
   let farms = [], allFarms = [], groups = [];
+  // HV1: the farms the person reads only as a coordinator of a group they belong to: opened read only (from the group's People),
+  // never among the person's own places; and the group last opened, which a member farm's back link returns to
+  let memberFarms = [], lastGroup = null;
+  // HV1: the farms read is bounded (every read of a large owner is): a coordinator also reads every member farm of their groups,
+  // and this is well above any group's size
+  const FARMS_CAP = 2000;
   let readyToRoute = false;
 
   function msg(id, text) { $(id).textContent = text || ""; }
@@ -57,11 +63,17 @@
     // are read at once; a link straight to one of the person's farms is followed as soon as the farms are known, so
     // the farm's own reads start before the group and staff reads finish. V2: the staff read goes on to the two-factor step, for
     // staff only; if that asks anything, nothing is routed until it is answered (a farm a link already opened is closed first).
-    const farmsRead = Promise.resolve(sb.from("farms").select("id, name, region, org_id").order("name")).then((r) => r, (e) => ({ error: e }));
+    const farmsRead = Promise.resolve(sb.from("farms").select("id, name, region, org_id").order("name").limit(FARMS_CAP)).then((r) => r, (e) => ({ error: e }));
+    // HV1: beside it, the person's own farm rows, which tell their farms from the member farms a coordinator also reads. If they
+    // can't be read, every farm read is taken as the person's own (as before HV1), so a coordinator's member farms would then show
+    // in their Places: chosen so that nobody ever loses a farm of their own to a failed read
+    // (bounded like the farms read)
+    const ownRead = Promise.resolve(sb.from("farm_members").select("farm_id").eq("user_id", user.id).limit(FARMS_CAP)).then((r) => (r?.error ? null : r?.data || []), () => null);
     const groupsRead = readGroups(user), staffRead = Promise.resolve(FP.ops.checkStaff(user)).catch(() => false).then((isStaff) => FP.twoFactor?.gate(isStaff, () => FP.farmSpace.close()));
-    const { data, error } = await farmsRead;
+    const [{ data, error }, ownRows] = await Promise.all([farmsRead, ownRead]);
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
-    allFarms = data; farms = data;
+    const split = FP.farmModel.splitFarms(data, ownRows);
+    allFarms = split.own; farms = split.own; memberFarms = split.member;
     FP.farmSpace.setPortfolio(farms, user);
     FP.ops.showLinks?.();   // the farm space's header exists now: its Operations link as the staff read says (or will)
     const early = FP.twoFactor?.asking() ? null : farmLink();
@@ -143,7 +155,7 @@
       const gate = FP.simpleView.gate(hash);
       // (only into the person's own farm or group: anyone else's address falls through to their farms below, and a person with
       // none gets no hashchange routing, so a redirect would leave them on the screen they were on)
-      if (gate.action === "go" && (gate.space === "farm" ? allFarms : groups).some((p) => p.id === gate.id)) { location.replace(FP.href(gate.href)); return; }
+      if (gate.action === "go" && (gate.space === "farm" ? [...allFarms, ...memberFarms] : groups).some((p) => p.id === gate.id)) { location.replace(FP.href(gate.href)); return; }
       if (gate.action === "hidden") { closeAll(); FP.simpleView.notAvailable(gate, { farms: allFarms, groups }); return; }
     }    // V8: the privacy and terms note, for everyone (a client reaches it through the simple view's CLIENT_PAGES)
     if (FP.privacy.isRoute(hash)) { closeAll(); FP.privacy.open(); return; }
@@ -152,7 +164,8 @@
     // J2c: where the bare address (and so sign-in) opens: one place, a coordinator's own group, a farmer's one farm, or Places
     // (home-model.js landing). Decided only here, once the groups and the staff flag are read, so Places never shows first.
     // (a link to one of the person's own farms is that farm, never the landing; any other address the router cannot open falls back to it)
-    const ownFarm = ((r) => !!r && allFarms.some((f) => f.id === r.farm))(FP.farmModel.match(hash));
+    // (HV1: a member farm's address, opened read only below, counts as one the router opens, so it never falls back to the landing)
+    const ownFarm = ((r) => !!r && (allFarms.some((f) => f.id === r.farm) || memberFarms.some((f) => f.id === r.farm)))(FP.farmModel.match(hash));
     const land = FP.homeModel.landing(hash, { farms: allFarms, groups, staff: FP.ops.isStaff(), staffKnown: !!FP.ops.staffKnown?.() });
     const toGroup = !!FP.groupModel.match(hash) || (land.to === "group" && !ownFarm);
     if (!toGroup) FP.routeTiming?.cancel("group");
@@ -185,15 +198,25 @@
     // PF1: People is the group's facilitators', advisors' and admins' only; decided here, with the group's role already read (this
     // runs only once the groups are known), so an address of People answers "not available" to anyone else and never to them
     if (group && groupRoute.view === "people" && !FP.peopleModel?.canSeeTab(group, groups)) { closeAll(); FP.simpleView.notAvailable({ space: "group", id: group.id }, { farms: allFarms, groups }); return; }
+    if (group) lastGroup = group;   // HV1: the group a member farm opened from it goes back to
     if (group) { FP.farmSpace.close(); markFiles(groupRoute.view); FP.groupSpace.open(group, groupRoute); return; }
     const landed = land.to === "group" && !ownFarm && FP.groupSpace.find(land.id);
-    if (landed) { const view = homeView("group"); FP.farmSpace.close(); markFiles(view); FP.groupSpace.open(landed, { group: landed.id, view }); return; }
+    if (landed) { const view = homeView("group"); lastGroup = landed; FP.farmSpace.close(); markFiles(view); FP.groupSpace.open(landed, { group: landed.id, view }); return; }
     FP.groupSpace.close();
     const route = FP.farmModel.match(hash);
     // the farm the address names, or the one the bare address lands on (one farm and no group, or a farmer's one farm in its group)
     const farm = (route && allFarms.find((f) => f.id === route.farm)) || (land.to === "farm" ? allFarms.find((f) => f.id === land.id) : null);
     if (farm) { const shown = route?.farm === farm.id ? route : { farm: farm.id, view: homeView("farm") }; markFiles(shown.view); FP.farmSpace.open(farm, shown); }
+    // HV1: a member's farm the person reads as a coordinator of its group, opened only by its address (People's link), read only,
+    // with a way back to the group they came from
+    else if (route && memberFarms.some((f) => f.id === route.farm)) openMemberFarm(memberFarms.find((f) => f.id === route.farm), route, hash, simple);
     else listFarms();
+  }
+  function openMemberFarm(member, route, hash, simple) {
+    const back = lastGroup ? { href: FP.groupModel.href(lastGroup.id, "people"), label: lastGroup.name } : null;
+    // (a client's bare address of the farm goes to its landing, as for their own farm)
+    const shown = simple && FP.simpleView.gate(hash).action !== "open" ? { ...route, view: homeView("farm") } : route;
+    markFiles(shown.view); FP.farmSpace.open({ ...member, back }, shown);
   }
 
   // LP1: Places, a map of every farm and group the person can see, with search and a folded list (home.js); "#/places" always

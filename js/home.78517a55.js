@@ -23,7 +23,8 @@
     const shapes = new Map();
     const put = (id, geom) => { const light = geom && H.lighten(geom); if (light) shapes.set(id, { ...light, pointZoom: H.pointZoom(light.bbox) }); };
     const farmIds = new Set(farms.map((f) => f.id)), groupIds = groups.map((g) => g.id);
-    const farmRead = farmIds.size ? rows(sb.from("farm_summaries").select("id,extent").limit(Math.min(farmIds.size, CAP.farms))) : [];
+    // (HV1: by id, since a group's coordinators also read their members' farms, which are not the person's own places)
+    const farmRead = farmIds.size ? rows(sb.from("farm_summaries").select("id,extent").in("id", [...farmIds].slice(0, CAP.farms)).limit(Math.min(farmIds.size, CAP.farms))) : [];
     const areaRead = (async () => {
       if (!groupIds.length) return [];
       const where = (q) => q.eq("kind", "area").is("valid_to", null).in("org_id", groupIds);

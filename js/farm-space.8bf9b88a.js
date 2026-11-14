@@ -95,7 +95,8 @@
       (e) => ({ counts: null, failed: !R.missing(e) }));
   function loadRest(sb, farm, user) {
     return Promise.all([
-      read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).single()),
+      // HV1: maybeSingle: a group's coordinator reading a member's farm has no role on it (null), and reads it all the same
+      read(sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).maybeSingle()),
       read(sb.from("org_members").select("role").eq("org_id", farm.org_id).eq("user_id", user.id).maybeSingle()),
       readDocuments(sb, farm),
       read(sb.from("authorisations").select("id,kind,title,consent_no,rule_ref,valid_from,valid_to,created_at").eq("farm_id", farm.id).order("title")),
@@ -106,9 +107,10 @@
     ]);
   }
   function assemble(sb, farm, user, maps, [member, org, documents, authorisations, obligations, today, checks, records, counts]) {
-    const advisor = ["owner", "admin", "edit"].includes(member.role) && ["admin", "advisor", "facilitator"].includes(org?.role);
+    const role = member?.role || null;
+    const advisor = ["owner", "admin", "edit"].includes(role) && ["admin", "advisor", "facilitator"].includes(org?.role);
     // Who the answers are curated for: the farm's own people read them as a farmer, an advisor as an advisor.
-    return { farm, user, role: member.role, orgRole: org?.role || null, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
+    return { farm, user, role, orgRole: org?.role || null, advisor, audience: advisor ? "advisor" : "farmer", maps, documents, authorisations, today, documentTiers: learnt.get(sb) || "none",
       obligations: obligations.error ? [] : obligations.data || [], obligationsError: !!obligations.error, checks, records, referenceCounts: counts.counts, referenceCountsFailed: counts.failed };
   }
   // Both halves, as one context (what the tests and a re-read use).
@@ -410,6 +412,8 @@
     $("#account-initials").textContent = M.initials(FP.demo?.active ? person : user.user_metadata?.display_name, user.email);
     const select = $("#farm-switch");
     select.replaceChildren(el("option", { value: "" }, "All farms"), ...portfolio.map((f) => el("option", { value: f.id }, f.name)));
+    // HV1: a member farm is not among the person's farms: the switcher still names it, marked read only, and cannot be chosen
+    if (farm.readOnly && !portfolio.some((f) => f.id === farm.id)) { const o = el("option", { value: farm.id }, farm.name + " (read only)"); o.disabled = true; select.append(o); }
     select.value = farm.id;
     $(".farm-switch-label").style.display = portfolio.length < 2 ? "none" : "";
     // The home view is the first tab, so from Ask, Create or Documents the way back is a tab, not a guess at the title.
@@ -420,11 +424,19 @@
     const navTabs = tabs.map(([key, label]) => ({ key, label, href: FP.href(M.href(farm.id, key)), icon: FP.icons?.forView(key) }));
     if (FP.spaceNav) FP.spaceNav.render($("#farm-actions"), navTabs, route.view);
     else $("#farm-actions").replaceChildren(...navTabs.map((t) => el("a", { href: t.href, "data-tab": t.key, ...(route.view === t.key ? { "aria-current": "page" } : {}) }, FP.icon(t.icon), el("span", {}, t.label))));
-    const roleLine = FP.spaceNav?.roleLine(context?.farm.id === farm.id ? context.role : null, "farm") || "", roleNode = $("#account-role");
+    // HV1: a member's farm opened by a coordinator of its group says so: "Member farm · read only" under its name, and the account
+    // menu's line; nothing on it offers a change (the person has no role on the farm, and the database lets them read only)
+    const roleLine = farm.readOnly ? M.readOnlyLine : FP.spaceNav?.roleLine(context?.farm.id === farm.id ? context.role : null, "farm") || "", roleNode = $("#account-role");
     if (roleNode) { roleNode.textContent = roleLine; roleNode.hidden = !roleLine; }
-    // UI1: where the person is and how to get back: every place, when they have more than this one
-    $("#space-home").hidden = !(FP.groupSpace?.hasPortfolio ? FP.groupSpace.hasPortfolio() : portfolio.length > 1);
-    $("#space-home").setAttribute("href", FP.href("#/places"));   // J2c: Places itself, never the bare address (which may land in a place)
+    const kind = $("#space-kind");
+    if (kind) { kind.textContent = farm.readOnly ? M.readOnlyKind : "Farm"; kind.classList.toggle("space-kind-readonly", !!farm.readOnly); }
+    // UI1: where the person is and how to get back: every place, when they have more than this one; a member farm, back to the
+    // group it was opened from (HV1)
+    const home = $("#space-home");
+    home.hidden = !farm.readOnly && !(FP.groupSpace?.hasPortfolio ? FP.groupSpace.hasPortfolio() : portfolio.length > 1);
+    home.setAttribute("href", FP.href(farm.readOnly && farm.back?.href ? farm.back.href : "#/places"));   // J2c: Places itself, never the bare address (which may land in a place)
+    const backLabel = home.querySelector(".space-back-label");
+    if (backLabel) backLabel.textContent = farm.readOnly && farm.back?.label ? farm.back.label : "All places";
     const letters = monogram(farm.name);   // (no letters at all: a neutral place glyph)
     $("#space-mark").replaceChildren(letters || FP.icon("places", 18));
     // UI1: Add, for what this person may add to this farm (add.js); the role comes with the farm's reads, or is read on its own
