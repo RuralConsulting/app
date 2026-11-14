@@ -49,7 +49,7 @@
 
   // ---- in the browser ----------------------------------------------------------------------------------------------------
   // at: the group stepped into on the map (PL2: one level at a time), or null for the top level
-  let list = [], shapes = new Map(), token = 0, chosen = null, bound = false, at = null, onMap = false;
+  let list = [], shapes = new Map(), token = 0, chosen = null, bound = false, at = null, onMap = false, going = null;
   const $ = (s) => root.FP.$(s), el = (...a) => root.FP.el(...a);
   const wide = () => root.innerWidth > 800;
   // The map's edges the panel (and the card, once one is open) cover, so a place is framed in what stays visible.
@@ -106,7 +106,22 @@
     if (!onMap) return Promise.resolve();
     const items = H.level(list, at).filter((p) => shapes.has(p.id)).map(mapItem);
     const ctx = g && shapes.has(g.id) ? mapItem(g) : null;
-    return root.FP.farmMap.home(items, (id) => choose(id), padding(), { context: ctx, frame: ctx?.bbox || null });
+    return root.FP.farmMap.home(items, (id) => goThere(id), padding(), { context: ctx, frame: ctx?.bbox || null });
+  }
+  // PH5 (the owner, 14 Nov 2026: "just zoom to it smoothly"): a place tapped on the map is marked, the map eases to it, and then it
+  // opens (its own space), with no card to approve first. MapLibre gives no click after a drag or a pinch, so neither opens anything.
+  // The list and search still choose a place and show its card, with Open for the keyboard.
+  async function goThere(id) {
+    const p = placeOf(id);
+    if (!p) return;
+    const mine = token;
+    if ((p.within || null) !== at) { at = p.within || null; await drawLevel(); if (mine !== token) return; }
+    chosen = p.id; going = p.id;
+    $("#home-card").hidden = true;
+    for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", String(b.dataset.homePlace === p.id));
+    const open = () => { if (going === p.id && mine === token && document.body.classList.contains("portfolio-active")) root.location.hash = root.FP.href(H.openHref(p)); };
+    const flying = root.FP.farmMap.homeGo?.(p.id, padding(), open);
+    if (!flying) open();
   }
   // Into a group (its places shown, the group's own mark gone), or back out to where it sits
   async function step(to) {
@@ -127,6 +142,7 @@
     const p = placeOf(id);
     if (!p) return;
     const mine = token;
+    going = null;
     if ((p.within || null) !== at) { at = p.within || null; await drawLevel(); if (mine !== token) return; }
     chosen = p.id;
     $("#home-card-name").textContent = p.name;
@@ -146,7 +162,7 @@
     if (focus) $("#home-card-open").focus();
   }
   function unchoose({ keepMap = false } = {}) {
-    chosen = null; $("#home-card").hidden = true;
+    chosen = null; going = null; $("#home-card").hidden = true;
     for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", "false");
     if (!keepMap) root.FP.farmMap.homeChoose?.(null, padding());
   }
@@ -196,7 +212,7 @@
     const mine = ++token, sb = root.FP.sb;
     bind();
     document.title = "Farms and groups | " + (root.FP.brand?.product || "");
-    chosen = null; at = null; onMap = false; $("#home-card").hidden = true; $("#home-search").value = ""; drawResults();
+    chosen = null; going = null; at = null; onMap = false; $("#home-card").hidden = true; $("#home-search").value = ""; drawResults();
     // wide screens open with the list showing; a phone keeps it folded under the search box
     $("#home-fold").open = wide();
     list = H.places(farms, groups); shapes = new Map();

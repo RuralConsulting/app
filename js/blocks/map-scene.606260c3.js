@@ -83,7 +83,8 @@
     maplibregl.setWorkerUrl("vendor/maplibre-gl-csp-worker.f950e7b1.js");
     map = new maplibregl.Map({
       // UI2b: an overview map is made on the plain ground (no aerial), a farm's own map on the aerial
-      container, style: FP.basemaps.style(startBase || "aerial"),
+      // (review of #540, 8: an overview, Places, draws no relief over the aerial; a farm's own map does, overviewMode switches it)
+      container, style: FP.basemaps.style(startBase || "aerial", { reliefOnAerial: !startBase }),
       bounds: [[166.3, -47.4], [178.6, -34.3]], maxZoom: 21,
       attributionControl: { compact: true, customAttribution: FP.brand.org_legal },
     });
@@ -161,7 +162,7 @@
   const baseNames = () => FP.basemaps?.names || [];
   // The backgrounds an overview offers: LINZ's, or (the demo, which fetches no tiles) the same two choices over the plain ground,
   // so the choice can be made and seen without a key
-  const choices = () => (baseNames().length >= 2 ? baseNames() : FP.demo?.active ? ["topolite", "aerial"] : []);
+  const choices = () => (baseNames().length >= 2 ? baseNames() : FP.demo?.active ? ["aerial", "topo"] : []);
   // base: the background drawn now ("ground" while none is); want: the one asked for, the only one the switch marks;
   // startBase: the background a map not made yet opens on
   let base = "aerial", want = null, startBase = null, asks = 0, farmBase = "aerial", quiet = null, quietOff = null, paletteHooks = [], bgControl = null;
@@ -203,7 +204,7 @@
     if (choices().length < 2) return;
     if (on && !bgControl) {
       bgControl = FP.el("div", { class: "maplibregl-ctrl map-bg-switch", role: "group", "aria-label": "Background" },
-        ...[["topolite", "Map"], ["aerial", "Aerial"]].filter(([k]) => choices().includes(k)).map(([k, label]) =>
+        ...[["aerial", "Aerial"], ["topo", "Topo"]].filter(([k]) => choices().includes(k)).map(([k, label]) =>
           FP.el("button", { type: "button", "data-base": k, onclick: () => { try { localStorage.setItem(OVERVIEW_BASE, k); } catch { /* kept for this visit */ } useBase(k); } }, label)));
       init().addControl({ onAdd: () => bgControl, onRemove: () => {} }, "top-right");
     }
@@ -211,7 +212,7 @@
     markBg();
   }
   // The background a scene opens on: an overview's (the plain map unless the person chose the aerial), or the farm's own
-  function overviewMode(on) { if (on) want = overviewBase(); showBg(on); useBase(on ? want : farmBase); }
+  function overviewMode(on) { if (on) want = overviewBase(); showBg(on); FP.basemaps.reliefOnAerial?.(init(), !on); useBase(on ? want : farmBase); }
 
   // ---- TIM1 (#410): the outline at once, and when it was first on screen -----------------------------------------------
   // styleAt: when this map's style finished loading (performance.now()); outlineAt: when the open scene's outline was first
@@ -268,6 +269,7 @@
     photo?.card.remove(); photo = null; photoSets.clear(); units = null; featurePopup?.remove(); featurePopup = null;
     if (declutter) { for (const ev of ["move", "resize"]) map.off(ev, declutter); declutter = null; }
     homeOff?.(); homeOff = null;   // LP1: the home map's own listeners and hover name
+    homeGoStop?.();   // PH5: a fly to a place still under way opens nothing once the map is cleared
     quietOff?.(); quietOff = null; quiet = null; paletteHooks = [];   // UI2: the overview's calm look and its hover
     if (offLine) { map.off("move", offLine); offLine = null; }
     for (const m of markers) m.remove();
@@ -997,6 +999,13 @@
     const contextData = () => ({ type: "FeatureCollection", features: context?.geometry ? [{ type: "Feature", geometry: context.geometry, properties: { line: look(context, false).line, casing: look(context, false).casing } }] : [] });
     source("home-shapes", data());
     source("home-context", contextData());
+    // PH5: inside a group stepped into, the map is about that group: outside its outer edge under the mask. None at the top level
+    // (several places), nor where the group has no area.
+    const ctxMask = context?.geometry && FP.phoneModel?.outlineFor && P.outsideMask ? P.outsideMask(FP.phoneModel.outlineFor(context.geometry, { key: context.id })) : null;
+    if (ctxMask) {
+      source("home-mask", ctxMask);
+      layer({ id: "home-mask", type: "fill", source: "home-mask", paint: { "fill-color": "#000000", "fill-opacity": P.MASK_OPACITY, "fill-antialias": false } });
+    }
     const none = ["in", ["get", "id"], ["literal", []]];
     // the group stepped into: its own outline only, thin, under its places
     layer({ id: "home-context", type: "line", source: "home-context", layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": 1.2, "line-opacity": 0.7 } });
@@ -1084,6 +1093,46 @@
     return true;
   }
 
+  // PH5: a place tapped on Places: marked, then the map eases to it (750 ms; at once with reduced motion) and `then` runs once it is
+  // there (home.js opens the place). False when the place has no shape to go to (home.js then opens it at once).
+  // Review of #540, 1: `then` belongs to one fly. Any touch or press anywhere on the page while it flies (the map: a drag, a pinch; the
+  // panel, a control: review of #540, round 3), or a wheel, cancels it, as does another tap (which flies on its own); `then` runs only
+  // when its fly ends uninterrupted.
+  const HOME_GO_MS = 750;
+  let homeGoStop = null;
+  function homeGo(id, padding, then) {
+    if (!map?.getLayer("home-chosen")) return false;
+    const item = id && homeItems.find((i) => i.id === id);
+    if (!item) return false;
+    homeGoStop?.();
+    const only = ["in", ["get", "id"], ["literal", [id]]];
+    map.setFilter("home-chosen", only); map.setFilter("home-chosen-fill", only);
+    homeChosen = id; declutter?.();
+    const m = map, doc = document;
+    let live = true, timer = null, last = null;
+    const stop = () => {
+      live = false; clearTimeout(timer); clearTimeout(last);
+      for (const ev of ["pointerdown", "touchstart", "mousedown", "wheel"]) doc.removeEventListener(ev, stop, true);
+      m.off("movestart", byPerson); m.off("moveend", ended);
+      if (homeGoStop === stop) homeGoStop = null;
+    };
+    const byPerson = (e) => { if (e?.originalEvent) stop(); };
+    // (force: the last word, a bounded time after the fly should have ended, so a map that never reports rest still opens the place)
+    const arrive = (force = false) => { if (!live || (!force && m.isMoving())) return; stop(); then?.(); };
+    const ended = (e) => { if (!e?.originalEvent) arrive(); };
+    homeGoStop = stop;
+    const ms = reduced() ? 0 : HOME_GO_MS;
+    m.fitBounds(item.bbox, { padding, duration: ms, maxZoom: 15, pitch: 0, essential: false });
+    // (listened for after the fly starts, so the end of a fly it stopped is not taken for its own)
+    for (const ev of ["pointerdown", "touchstart", "mousedown", "wheel"]) doc.addEventListener(ev, stop, true);
+    m.on("movestart", byPerson);
+    if (ms) m.on("moveend", ended);
+    // no fly (reduced motion, or already there): a moment for a touch; else a safety net, only when at rest and nothing cancelled it
+    timer = setTimeout(arrive, ms ? ms + 400 : 150);
+    last = setTimeout(() => arrive(true), ms + 2000);
+    return true;
+  }
+
   const area = (b) => (b[1][0] - b[0][0]) * (b[1][1] - b[0][1]);
   function bbox(geom) {
     let w = 180, s = 90, e = -180, n = -90;
@@ -1118,7 +1167,11 @@
       // E4: the farm mask (farmModel.farmMask): the world outside the boundary, dimmed once the flight lands (revealMask).
       // Under every layer this farm draws, so the boundary, the farm's layers and the reference layers around it (DM1: the
       // farm is a lens, never a clip) stay bright and clickable over the dimmed aerial; it is never a click target itself.
-      const mask = FP.farmModel.farmMask(data.extent);
+      // PH5: a group's area is often its sub-groups' areas side by side; cut from the world one by one their shared borders show as
+      // thin dark seams, so a group's mask is cut along its outer edge (phone-model.js outlineFor, map-palette.js outsideMask)
+      const mask = quiet && FP.phoneModel?.outlineFor && FP.mapPalette?.outsideMask
+        ? FP.mapPalette.outsideMask(FP.phoneModel.outlineFor(data.extent, { key: "scene-" + (data.group?.id || farmId || "") }))?.features?.[0]?.geometry || FP.farmModel.farmMask(data.extent)
+        : FP.farmModel.farmMask(data.extent);
       if (mask) {
         source("farm-mask", { type: "Feature", geometry: mask, properties: {} });
         layer({ id: "farm-mask", type: "fill", source: "farm-mask", paint: { "fill-color": "#000000", "fill-opacity": 0,
@@ -1451,7 +1504,7 @@
     // PERF3b: a group's deferred layer drawn for the map in view
     layerData, view, onMoveEnd,
     // LP1: the home map of every place the person can see, and the one chosen on it
-    home, homeChoose,
+    home, homeChoose, homeGo,
     // LK2: looks that came after the scene was drawn, applied to it; LK4: a second context fill drawn as outline and hatch
     restyle, setStacked,
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.

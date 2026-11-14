@@ -191,13 +191,15 @@ li.rec-row { cursor: default; }
 .pa-shut:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
 /* the sub-groups' names: small, quiet, over the map; the smaller ones wait for room (phone-model keepLabels) */
 .pa-labels { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
-.pa-label { position: absolute; left: 0; top: 0; max-width: 140px; min-height: 28px; padding: 3px 9px; border: 0; border-radius: var(--radius-pill); pointer-events: auto;
-  background: var(--material); color: var(--ink); font: 500 var(--text-small)/1.2 var(--f-ui); text-align: center; white-space: normal;
-  box-shadow: var(--shadow-1); cursor: pointer; -webkit-tap-highlight-color: var(--clear); }
-.pa-label::after { content: ""; position: absolute; inset: -8px -2px; }   /* a 44 px tap target */
+/* PH5 (the owner, 14 Nov 2026: the names were large, and the base map's town names showed under them): a small quiet name on an
+   opaque soft pill (nothing of the map shows through it), no shadow, no button look; a tap zooms there (phone-area.js goTo) */
+.pa-label { position: absolute; left: 0; top: 0; max-width: 128px; min-height: 22px; padding: 2px 8px; border: 0; border-radius: var(--radius-pill); pointer-events: auto;
+  background: var(--panel); color: var(--ink); font: 500 var(--text-small)/1.2 var(--f-ui); letter-spacing: 0; text-align: center; white-space: normal;
+  box-shadow: 0 0 0 0.5px var(--rule-soft); cursor: pointer; -webkit-tap-highlight-color: var(--clear); }
+.pa-label::after { content: ""; position: absolute; inset: -11px -4px; }   /* a 44 px tap target round a 22 px name */
 .pa-label[hidden] { display: none; }
-.pa-label-only { cursor: default; pointer-events: none; color: var(--ink-2); }   /* a sub-group the person is not in: its name only */
-.pa-label-only::after { content: none; }
+.pa-label-only { color: var(--ink-2); }   /* a sub-group the person is not in: a tap only zooms to it */
+.pa-label.pa-going { box-shadow: inset 0 0 0 1.5px var(--ink); }
 .pa-label:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 /* Home's search at the top of the sheet: one quiet field, 44 px; while searching, its results take the sheet (Near you steps aside) */
 .pa-sheet .ph-compact:not([hidden]) { display: block; max-width: none; margin: 0 0 14px; padding: 0; gap: 0; }

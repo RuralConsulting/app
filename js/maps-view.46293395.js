@@ -102,13 +102,30 @@
     // again when its media changes, so it applies only once the page's style sheets list it (checked every 16 ms, 4 s at most).
     phone, chrome,
     // PH2: a group's map's sub-groups in the soft neutral set (map-palette.js), and the names of the person's sub-groups to know them by
-    calm: (manifest, owner) => {
+    calm: async (manifest, owner, url) => {
       const group = !!(owner?.org && !owner.farm), css = typeof getComputedStyle === "function" ? getComputedStyle(document.documentElement) : null;
       let bm = null; try { bm = localStorage.getItem(BASEMAP_KEY); } catch {}
-      const names = (FP.groupSpace?.groups?.() || []).filter((g) => g.parent_org_id === owner?.org).map((g) => String(g.name || "").trim().toLowerCase());
-      return api.calmManifest(manifest, { group, palette: FP.mapPalette, names, onDark: (bm || (phone() && group ? "map" : "aerial")) === "aerial",
+      // the group's sub-groups ({ id, name }): as Home reads them (subgroup_counts, for any member), else the person's own
+      const mine = (FP.groupSpace?.groups?.() || []).filter((g) => g.parent_org_id === owner?.org).map((g) => ({ id: g.id, name: g.name }));
+      let subs = mine;
+      if (group && FP.sb?.rpc) {
+        try { const { data, error } = await FP.sb.rpc("subgroup_counts", { parent_org: owner.org }); if (!error && Array.isArray(data) && data.length) subs = data.map((r) => ({ id: r.subgroup_id, name: r.subgroup_name })).filter((s) => s.id && s.name).slice(0, 40); } catch { /* the person's own */ }
+      }
+      const names = subs.map((s) => String(s.name || "").trim().toLowerCase());
+      // PH5: the sub-groups' colours from the layer's own shapes (its file, read once here; the viewer's read of it is then the browser's
+      // copy), each category matched to its sub-group first (review of #540, 2)
+      const L = group && Array.isArray(manifest?.layers) ? manifest.layers.find((x) => api.subgroupLayer(x, names, subs)) : null;
+      let colours = null;
+      if (L && url && L.features) { try { const r = await fetch(url(L.features)); if (r.ok) colours = api.subgroupColoursOf(L, await r.json(), FP.mapPalette, subs); } catch { /* without the shapes */ } }
+      if (L && !colours) colours = api.subgroupColoursOf(L, null, FP.mapPalette, subs);
+      return api.calmManifest(manifest, { group, palette: FP.mapPalette, names, subs, onDark: (bm || "aerial") === "aerial", colours,
         hues: FP.mapPalette && css ? FP.mapPalette.hues((k) => css.getPropertyValue(k)) : null });
     },
+    // PH5: a map about one place. A group's (or sub-group's) map: the viewer's white-and-black dashed boundary is hidden (the owner: no
+    // dotted lines at overview scale) and everything outside the area is under the 35% mask, cut along the area's outer edge; a farm's
+    // map keeps its boundary and gets the mask only when its own package has none. On a phone a published map's own text labels start
+    // off (one tap away, Labels in Layers). viewer.js is not edited: its layers are switched from here once it has added them.
+    focus: (map, holder, { group = false, manifest = null, url = null } = {}) => api.focusMap(map, holder, { group, manifest, url, phone: phone(), palette: FP.mapPalette, phoneModel: FP.phoneModel }),
     styles: (on) => {
       const link = document.querySelector("link[data-viewer-styles]");
       if (!link) return null;
@@ -140,7 +157,7 @@
     const tiles = (set, ext, extra = "") => [`${LINZ}/${set}/WebMercatorQuad/{z}/{x}/{y}.${ext}?api=${encodeURIComponent(key || "")}${extra}`];
     return {
       basemaps: { aerial: { label: "Aerial", tiles: tiles("aerial", "webp"), attribution: ATTRIBUTION, maxzoom: 22 },
-        map: { label: "Map", tiles: tiles("topo-raster", "webp"), attribution: ATTRIBUTION, maxzoom: 18 } },
+        map: { label: "Topo", tiles: tiles("topo-raster", "webp"), attribution: ATTRIBUTION, maxzoom: 18 } },
       terrain: { tiles: tiles("elevation", "png", "&pipeline=terrain-rgb"), encoding: "mapbox", attribution: ATTRIBUTION },
     };
   }
@@ -296,14 +313,17 @@
       try { await env.styles(true); } catch {}
       if (s !== shown) return;
       const holder = el("div", { class: "maps-viewer" });
+      // (a legend swatch drawn here is an SVG data: image, passed as it is; every other file is a signed link)
+      const url = (rel) => (typeof rel === "string" && rel.startsWith("data:image/svg+xml,") ? rel : read.urls[rel] || "");
+      const group = !!(s.opts.owner?.org && !s.opts.owner.farm);
+      let manifest = read.manifest;
+      try { if (env.calm) manifest = await env.calm(read.manifest, s.opts.owner, url); } catch { manifest = read.manifest; }
+      if (s !== shown) return;
       try {
         s.host.replaceChildren(holder);
-        const group = !!(s.opts.owner?.org && !s.opts.owner.farm);
-        const manifest = env.calm ? env.calm(read.manifest, s.opts.owner) : read.manifest;
         s.map = env.mount(holder, {
           manifest: { ...manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
-          // (a legend swatch drawn here is an SVG data: image, passed as it is; every other file is a signed link)
-          url: (rel) => (typeof rel === "string" && rel.startsWith("data:image/svg+xml,") ? rel : read.urls[rel] || ""),
+          url,
           ...(group && env.phone?.() ? { phoneGroup: true } : {}),
           ...(read.shared.length ? { shared: read.shared } : {}),
           referenceLayers: startOn(read.referenceLayers, s.opts.owner),
@@ -312,6 +332,7 @@
         });
         if (at) s.map.jumpTo(at);
         try { env.chrome?.(s.map, holder, { group, publishedAt: s.chosen.published_at, areaHa: read.manifest?.area_ha }); } catch {}
+        try { env.focus?.(s.map, holder, { group, manifest: read.manifest, url }); } catch {}
       } catch { say(s, UNAVAILABLE, tryAgain(s)); return; }
       try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq, read.manifest?.bounds || null) : null; } catch { s.overlay = null; }
       s.renewAt = env.now() + RENEW_MS;
@@ -369,36 +390,153 @@
   const meta = ({ publishedAt = null, areaHa = null } = {}) => [publishedAt ? "Updated " + day(publishedAt) : "", areaWords(areaHa)].filter(Boolean).join(" · ");
   // The layer on a group's map that is its sub-groups: a categorised area layer drawn by the web map whose title says so, or whose
   // categories are mostly the group's own sub-groups' names (`names`, lower case).
-  function subgroupLayer(L, names = []) {
+  // (subs: the group's sub-groups, { id, name }: a category matched to one counts, review of #540, 2)
+  function subgroupLayer(L, names = [], subs = null) {
     if (!L?.vector || L.geometry !== "polygon" || L.classes?.kind !== "categories") return false;
     if (/\b(sub-?groups?|catchment groups?)\b/i.test(String(L.title || ""))) return true;
-    const labels = (L.legend || []).map((g) => String(g?.label || "").trim().toLowerCase()).filter(Boolean);
-    return labels.length >= 2 && labels.filter((x) => names.includes(x)).length * 2 >= labels.length;
+    const labels = (L.legend || []).map((g) => String(g?.label || "").trim()).filter(Boolean);
+    const matched = subs?.length ? matchSubgroups(labels, subs) : null;
+    return labels.length >= 2 && labels.filter((x) => names.includes(x.toLowerCase()) || matched?.get(x)).length * 2 >= labels.length;
   }
   // The owner (13 Nov 2026): sub-groups in a neutral, soft, easy-to-tell-apart set, thin outlines, gentle translucent fills, never
   // brand colours. The same seven soft hues the Places map and a group's overview give groups (map-palette.js), one per sub-group in
   // turn, each with map-palette's outline for the background it opens on; its legend swatches drawn to match (an SVG, which the app's
   // content policy allows as a data: image). Every other layer, and every farm's map, is drawn as published.
-  function calmLayer(L, palette, { onDark = false, hues = null } = {}) {
-    const set = hues || palette.DEFAULT_HUES;
+  // PH5 (the owner, 14 Nov 2026: "make the group colours more bold and therefore reduce need for clear outside line"): each sub-group
+  // a clear fill from the set that tells neighbours apart (map-palette.js subgroupColours, by its name: `colours`, name -> hue, the
+  // same colours Home gives them), at an opacity that reads on the aerial, with a hairline of the same hue and no dashes.
+  function calmLayer(L, palette, { onDark = true, hues = null, colours = null } = {}) {
+    const set = palette.SUBGROUP_HUES || hues || palette.DEFAULT_HUES;
     const keys = [...new Set(L.vector.layers.flatMap((v) => Object.keys(v.by || {})))];
-    const lookOf = (k) => palette.look(set[(k === "*" ? 0 : Number(k) || 0) % set.length], { onDark });
+    // a class's name: its legend label, by its place in the legend (the plugin numbers the categories in legend order)
+    const nameOf = (k) => String(L.legend?.[k === "*" ? 0 : Number(k) || 0]?.label || "").trim();
+    const hueOf = (k) => (colours && colours.get?.(nameOf(k))) || set[(k === "*" ? 0 : Number(k) || 0) % set.length];
+    const lookOf = (k) => (palette.subgroupLook ? palette.subgroupLook(hueOf(k), { onDark }) : { ...palette.look(hueOf(k), { onDark }), fillOpacity: 0.5, lineWidth: 0.75, lineOpacity: 0.9 });
     const by = (f) => Object.fromEntries(keys.map((k) => [k, f(lookOf(k), k)]));
     const swatch = (lk) => "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect x="1.5" y="1.5" width="17" height="17" rx="2" fill="' +
-      lk.fill + '" fill-opacity="0.35" stroke="' + lk.line + '" stroke-width="1.5"/></svg>');
+      lk.fill + '" fill-opacity="' + lk.fillOpacity + '" stroke="' + lk.line + '" stroke-width="1"/></svg>');
     return { ...L, calm: true,
-      vector: { ...L.vector, layers: [{ type: "fill", by: by((lk) => ({ color: lk.fill, opacity: 0.16 })) }, { type: "line", by: by((lk) => ({ color: lk.line, opacity: 1, width: 1.2 })) }] },
+      vector: { ...L.vector, layers: [{ type: "fill", by: by((lk) => ({ color: lk.fill, opacity: lk.fillOpacity })) }, { type: "line", by: by((lk) => ({ color: lk.line, opacity: lk.lineOpacity ?? 0.9, width: lk.lineWidth })) }] },
       legend: (L.legend || []).map((g, i) => ({ ...g, icon: swatch(lookOf(keys.includes(String(i)) ? String(i) : keys[0] || "0")) })) };
   }
-  function calmManifest(manifest, { group = false, palette = null, names = [], onDark = false, hues = null } = {}) {
+  function calmManifest(manifest, { group = false, palette = null, names = [], subs = null, onDark = true, hues = null, colours = null } = {}) {
     if (!group || !palette || !Array.isArray(manifest?.layers)) return manifest;
     let changed = false;
-    const layers = manifest.layers.map((L) => (subgroupLayer(L, names) ? ((changed = true), calmLayer(L, palette, { onDark, hues })) : L));
+    const layers = manifest.layers.map((L) => (subgroupLayer(L, names, subs) ? ((changed = true), calmLayer(L, palette, { onDark, hues, colours })) : L));
     return changed ? { ...manifest, layers } : manifest;
+  }
+  // PH5: what the app does to the viewer's map once it is up (env.focus): the viewer's own layers are only switched or added to, never
+  // changed in viewer.js. `when` waits for the viewer to have added its layers (it does so as its style loads).
+  const BASE_LAYER = /^(bg|bm-.*|hillshade)$/, WAIT_MS = 20000;
+  function focusMap(map, holder, { group = false, manifest = null, url = null, phone = false, palette = null, phoneModel = null } = {}) {
+    if (!map) return;
+    // (review of #540, 10: it stops listening once the layer is there, or after WAIT_MS if it never comes)
+    const when = (test, then) => {
+      try { if (test()) { then(); return; } } catch { return; }
+      let timer = null;
+      const off = () => { clearTimeout(timer); map.off("styledata", h); map.off("idle", h); };
+      const h = () => { let ok = false; try { ok = !!test(); } catch { off(); return; } if (!ok) return; off(); then(); };
+      map.on("styledata", h); map.on("idle", h);
+      timer = setTimeout(off, WAIT_MS);
+      timer?.unref?.();   // (in Node's tests, the wait never holds the process open)
+    };
+    // a group's map: no dashed boundary round the area (the mask shows where it ends)
+    if (group) when(() => map.getLayer("boundary"), () => { for (const id of ["boundary", "boundary-halo"]) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none"); });
+    // the mask: outside the area's outer edge, under everything the map draws over its background. Review of #540, 4: exactly one
+    // mask: a package that shades the outside itself (its "Shade outside", the viewer's own mask) keeps its own, and this is not added
+    if (!manifest?.mask && manifest?.boundary && url && palette?.outsideMask && phoneModel?.outlineFor && typeof fetch === "function") {
+      fetch(url(manifest.boundary)).then((r) => (r.ok ? r.json() : null)).then((fc) => {
+        const polys = (fc?.features || (fc?.geometry ? [fc] : [])).flatMap((f) => { const g = f.geometry || f; return g?.type === "Polygon" ? [g.coordinates] : g?.type === "MultiPolygon" ? g.coordinates : []; });
+        if (!polys.length) return;
+        const mask = palette.outsideMask(phoneModel.outlineFor({ type: "MultiPolygon", coordinates: polys }, { key: "map-" + manifest.boundary }));
+        if (!mask) return;
+        when(() => map.getLayer("boundary-halo"), () => {
+          if (map.getSource("ph-mask")) return;
+          map.addSource("ph-mask", { type: "geojson", data: mask });
+          const above = (map.getStyle().layers || []).find((l) => !BASE_LAYER.test(l.id));
+          map.addLayer({ id: "ph-mask", type: "fill", source: "ph-mask", paint: { "fill-color": "#000000", "fill-opacity": palette.MASK_OPACITY ?? 0.35, "fill-antialias": false } }, above?.id);
+        });
+      }).catch(() => { /* the map stays as it is */ });
+    }
+    // a group's map on a phone: the published map's own text labels start off at the overview (the viewer's Labels switch, in Layers).
+    // Review of #540, 3: a farm's own map keeps its labels as published.
+    if (phone && group) {
+      let tries = 0;
+      const off = () => {
+        const sw = holder?.querySelector?.("#rv-l-labels");
+        if (!sw) { if (++tries < 40) setTimeout(off, 100); return; }
+        if (sw.checked) { sw.checked = false; sw.dispatchEvent(new Event("change", { bubbles: true })); }
+      };
+      off();
+    }
+  }
+  // PH5: the sub-groups' colours for a group's map, from its sub-groups layer's own shapes (so neighbours differ, and each sub-group
+  // has the colour Home gives it): Map name -> hue, or null. features: the layer's FeatureCollection (each feature's class `_cls`).
+  // Review of #540, 2: a published map names its sub-groups its own way ("Whitcombe Landcare Group", "Otuwharekai Ashburton Lakes")
+  // where the platform has "Whitcombe" and "Ashburton Lakes". Each category is matched to the group's own sub-group before colouring:
+  // the same name ignoring case; else the one sub-group all of whose words are in the category's name (or all the category's words in
+  // the sub-group's), the one with the most words where several are; else, where both have shapes, the sub-group whose area's box
+  // overlaps the category's the most (at least half of the smaller). Map label -> sub-group ({ id, name }), or null when none.
+  const words = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+  const boxOf = (g) => { let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity; const walk = (c) => (typeof c?.[0] === "number" ? ([w, s, e, n] = [Math.min(w, c[0]), Math.min(s, c[1]), Math.max(e, c[0]), Math.max(n, c[1])]) : (c || []).forEach(walk)); walk(g?.coordinates); return Number.isFinite(w) ? [w, s, e, n] : null; };
+  function matchSubgroups(labels, subs, { shapes = null } = {}) {
+    const out = new Map(), list = (subs || []).filter((s) => s && s.name);
+    for (const label of labels || []) {
+      const lw = words(label), low = String(label).trim().toLowerCase();
+      let hit = list.find((s) => String(s.name).trim().toLowerCase() === low) || null;
+      if (!hit) {
+        const within = list.filter((s) => { const sw = words(s.name); return sw.length && (sw.every((w) => lw.includes(w)) || lw.every((w) => sw.includes(w))); });
+        const most = Math.max(0, ...within.map((s) => words(s.name).length));
+        const best = within.filter((s) => words(s.name).length === most);
+        if (best.length === 1) hit = best[0];
+      }
+      if (!hit && shapes?.label?.get(label)) {
+        const a = boxOf(shapes.label.get(label)), size = (b) => (b[2] - b[0]) * (b[3] - b[1]);
+        let top = 0;
+        for (const s of list) {
+          const b = shapes.sub?.get(s.id) ? boxOf(shapes.sub.get(s.id)) : null;
+          if (!a || !b) continue;
+          const ov = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+          const share = ov / Math.max(1e-12, Math.min(size(a), size(b)));
+          if (share >= 0.5 && share > top) { top = share; hit = s; }
+        }
+      }
+      out.set(label, hit);
+    }
+    return out;
+  }
+  // The colours for a group's map: Map category label -> hue. Each category is first matched to its sub-group (matchSubgroups), and
+  // the group's every sub-group is coloured by its id, with the category's shapes where it has them: the same set and keys Home
+  // colours, so a sub-group has the same colour on both. subs: the group's sub-groups ({ id, name }); with none, by the labels alone.
+  function subgroupColoursOf(L, features, palette, subs = []) {
+    if (!L || !palette?.subgroupColours) return null;
+    const byLabel = new Map();
+    for (const f of features?.features || []) {
+      const label = String(L.legend?.[Number(f.properties?._cls) || 0]?.label || f.properties?.name || "").trim(), g = f.geometry;
+      if (!label || !g) continue;
+      const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+      byLabel.set(label, [...(byLabel.get(label) || []), ...polys]);
+    }
+    const labels = [...new Set([...(L.legend || []).map((g) => String(g?.label || "").trim()).filter(Boolean), ...byLabel.keys()])];
+    const geom = (label) => (byLabel.get(label)?.length ? { type: "MultiPolygon", coordinates: byLabel.get(label) } : null);
+    const match = matchSubgroups(labels, subs);
+    const items = new Map();   // key -> { key, name, geometry }
+    for (const s of subs || []) if (s?.id && s.name) items.set(String(s.id), { key: String(s.id), name: s.name, geometry: null });
+    for (const label of labels) {
+      const s = match.get(label), k = s ? String(s.id) : "label:" + label;
+      const it = items.get(k) || { key: k, name: s ? s.name : label, geometry: null };
+      const g = geom(label);
+      if (g) it.geometry = it.geometry ? { type: "MultiPolygon", coordinates: [...it.geometry.coordinates, ...g.coordinates] } : g;
+      items.set(k, it);
+    }
+    const byName = palette.subgroupColours([...items.values()]);
+    return new Map(labels.map((label) => { const s = match.get(label); return [label, byName.get(s ? s.name : label)]; }));
   }
   // The background and reference layers a group's map opens with on a phone: the plain map, roads and waterways off, unless the person
   // has chosen otherwise on this device (the viewer remembers their own choices; these are set only for the start and taken away)
-  const PHONE_START = { "rv-basemap": "map", "rv-ref-ww": "0", "rv-ref-rd": "0" };
+  // PH5: the background is the viewer's own default, the aerial (the owner: the plain map loads slow on a phone and looks busy); the
+  // person's own choice in the viewer's Layers is still remembered by the viewer
+  const PHONE_START = { "rv-ref-ww": "0", "rv-ref-rd": "0" };
 
   // CTX2: where the viewer remembers a context layer's switch on this device (its contextDefs: "rv-ctx-" and the key as it cleans it)
   const ctxStore = (key) => { const k = String(key || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 80); return k ? "rv-ctx-" + k : null; };
@@ -420,6 +558,6 @@
     try { return start(); }
     finally { for (const [k, v] of seeded) try { if (store.getItem(k) === v) store.removeItem(k); } catch {} }
   }
-  return { create, backgrounds, filesByPath, ctxStore, startOn, seedStartOn, areaWords, meta, subgroupLayer, calmLayer, calmManifest, PHONE_START,
+  return { create, backgrounds, filesByPath, ctxStore, startOn, seedStartOn, areaWords, meta, subgroupLayer, calmLayer, calmManifest, subgroupColoursOf, matchSubgroups, focusMap, PHONE_START,
     BUCKET, MAX_MAPS, MAX_REFERENCE, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
 });

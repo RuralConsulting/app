@@ -148,6 +148,14 @@
   .maps-viewer .maplibregl-ctrl-top-right button { width: 44px; height: 44px; }
   .maps-viewer .rv-3d button { line-height: 44px; }
   .maps-viewer.ph-more-open .ph-more-btn { background: var(--fill); }
+  /* PH5 (the owner's iPhone, 14 Nov 2026: Locate and More were black squares, the icon off-centre): the same round ink buttons as
+     Home's Locate (capture.css .pa-locate), the icon in the middle */
+  .maps-viewer .maplibregl-ctrl-top-right > :is(.ph-locate, .ph-more) { background: none; border: 0; border-radius: 50%; box-shadow: none; overflow: visible; }
+  .maps-viewer .maplibregl-ctrl-top-right :is(.ph-locate-btn, .ph-more-btn) { display: grid; place-items: center; box-sizing: border-box; width: 44px; height: 44px; margin: 0; padding: 0;
+    border: 1px solid var(--rule); border-radius: 50%; background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); line-height: 0; }
+  .maps-viewer .maplibregl-ctrl-top-right :is(.ph-locate-btn, .ph-more-btn) > .icon { display: block; margin: 0; }
+  .maps-viewer .maplibregl-ctrl-top-right .ph-locate-btn[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .maps-viewer.ph-more-open .maplibregl-ctrl-top-right .ph-more-btn { background: var(--fill); }
   /* the scale and the credit: bottom left, above the map's sheet, side by side */
   .maps-viewer .maplibregl-ctrl-bottom-right { right: auto; left: 0; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px)); display: flex; align-items: flex-end; gap: 8px; padding: 0 0 8px 10px; }
   .maps-viewer .maplibregl-ctrl-bottom-right > .maplibregl-ctrl { margin: 0; }

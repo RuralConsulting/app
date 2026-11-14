@@ -294,23 +294,45 @@
       const logo = FP.groupModel?.groupLogo?.(sub);
       return el("span", { class: "ov-badge", style: "--ring: " + hueOf(sub.id), "aria-hidden": "true" }, logo ? el("img", { src: logo.src, alt: "" }) : FP.icons?.monogram(sub.name) || "");
     }
-    const hueOf = (id) => (P ? P.look(P.hues(css)[P.hueIndex(id)], { sub: true, onDark: onDark() }).line : "currentColor");
+    const hueOf = (id) => (id !== group.id && P?.subgroupColours && subColour(id) ? subColour(id) : P ? P.look(P.hues(css)[P.hueIndex(id)], { sub: true, onDark: onDark() }).line : "currentColor");
 
     // ---- the map ---------------------------------------------------------------------------------------------------------
     const gl = root.maplibregl;
     let map = null, base = null, markers = [], hover = null, popup = null, framedKey = null;
-    const choices = () => { const n = FP.basemaps?.names || []; return n.length >= 2 ? n : FP.demo?.active ? ["topolite", "aerial"] : []; };
+    const choices = () => { const n = FP.basemaps?.names || []; return n.length >= 2 ? n : FP.demo?.active ? ["aerial", "topo"] : []; };
     const onDark = () => (base === "aerial" && (FP.basemaps?.names || []).includes("aerial")) || darkTheme();
     const show = { subs: true, sites: false };   // the water quality sites are off on the overview, on in the Layers panel
     const themes = { list: null, layersOn: new Set(), added: new Set() };
+    // PH5: the sub-groups told apart by fill (map-palette.js subgroupColours: the same colours as Home on a phone and the Maps tab), a
+    // hairline of the same hue, no casing; the group's own edge quiet, as the mask shows it
+    let colourKey = null, colours = new Map();
+    const subColour = (id) => {
+      const key = [...A.keys()].join() + "|" + subs.map((s) => s.id).join();
+      // (every sub-group, with an area or not, keyed by its id, as Home and the Maps tab colour them)
+      if (key !== colourKey && P?.subgroupColours) {
+        colourKey = key;
+        const list = subs.length ? subs.map((s) => ({ key: s.id, name: s.name, geometry: A.get(s.id)?.shape.geometry || null }))
+          : [...A].filter(([k]) => k !== group.id).map(([k, a]) => ({ key: k, name: subName(k) || k, geometry: a.shape.geometry }));
+        colours = P.subgroupColours(list);
+      }
+      return colours.get(subName(id) || id) || null;
+    };
     function areaData() {
       const sc = filter.sub ? [filter.sub] : null, f = [];
       for (const [id, a] of A) {
         const own = id === group.id, hue = P ? P.hues(css)[P.hueIndex(id)] : "#888888", look = P ? P.look(hue, { sub: !own, onDark: onDark() }) : { line: hue, casing: "#ffffff", lineWidth: 1.2 };
-        f.push({ type: "Feature", geometry: a.shape.geometry, properties: { id, own, name: own ? group.name : subName(id), line: look.line, fill: look.fill || hue, casing: look.casing,
-          lw: own ? 1.6 : 1.2, fo: own ? 0 : 0.07, dim: sc && !sc.includes(id) && !own ? 1 : 0 } });
+        const sub = !own && P?.subgroupLook ? P.subgroupLook(subColour(id) || hue, { onDark: onDark() }) : null;
+        f.push({ type: "Feature", geometry: a.shape.geometry, properties: { id, own, name: own ? group.name : subName(id), line: sub ? sub.line : onDark() ? "#ffffff" : look.line, fill: sub ? sub.fill : look.fill || hue, casing: look.casing,
+          lw: own ? 1 : sub ? sub.lineWidth : 1.2, lo: own ? 0.7 : 0.9, fo: own ? 0 : sub ? sub.fillOpacity : 0.07, dim: sc && !sc.includes(id) && !own ? 1 : 0 } });
       }
       return { type: "FeatureCollection", features: f };
+    }
+    // PH5: the outside of the group under the mask (its own area's outer edge; else all its sub-groups' together)
+    function maskData() {
+      const own = A.get(group.id), geoms = own ? [own.shape.geometry] : [...A.values()].map((a) => a.shape.geometry);
+      const polys = geoms.flatMap((g) => (g?.type === "Polygon" ? [g.coordinates] : g?.type === "MultiPolygon" ? g.coordinates : []));
+      if (!polys.length || !FP.phoneModel?.outlineFor || !P?.outsideMask) return { type: "FeatureCollection", features: [] };
+      return P.outsideMask(FP.phoneModel.outlineFor({ type: "MultiPolygon", coordinates: polys }, { key: "ov-" + group.id })) || { type: "FeatureCollection", features: [] };
     }
     function siteData() {
       const sel = scope().filter((s) => s.lngLat && s.current);   // N2c's useful sites
@@ -325,7 +347,7 @@
       if (map.getLayer("bm-blank")) map.setPaintProperty("bm-blank", "background-color", css("--map-background") || "#e4e6e2");
       if (map.getLayer("ov-veil")) {
         map.setPaintProperty("ov-veil", "background-color", css("--map-background") || "#e4e6e2");
-        map.setPaintProperty("ov-veil", "background-opacity", base === "aerial" ? 0 : (FP.basemaps?.names || []).includes("topolite") ? 0.35 : 0);
+        map.setPaintProperty("ov-veil", "background-opacity", base === "aerial" ? 0 : 0);
       }
       map.getSource("ov-areas")?.setData(areaData());
       for (const m of markers) m.node.style.setProperty("--ring", hueOf(m.id));
@@ -334,6 +356,7 @@
     function drawAreas() {
       if (!map?.getSource("ov-areas")) return;
       map.getSource("ov-areas").setData(areaData());
+      map.getSource("ov-mask")?.setData(maskData());
       for (const id of ["ov-area-fill", "ov-area-casing", "ov-area-line", "ov-area-hi", "ov-area-hiline"]) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", show.subs ? "visible" : "none");
       for (const m of markers) m.marker.remove();
       markers = [];
@@ -401,7 +424,7 @@
       base = k; markBg();
       const names = FP.basemaps?.names || [];
       if (map && names.includes(k)) { try { await FP.basemaps.pick(map, k); } catch { if (k !== "aerial") { try { await FP.basemaps.pick(map, "aerial"); base = "aerial"; markBg(); } catch { /* the plain ground */ } } } }
-      if (map) { const first = ["ov-area-fill"].find((l) => map.getLayer(l)); if (first && map.getLayer("ov-veil")) map.moveLayer("ov-veil", first); }
+      if (map) { const first = ["ov-mask", "ov-area-fill"].find((l) => map.getLayer(l)); if (first && map.getLayer("ov-veil")) map.moveLayer("ov-veil", first); }
       paint();
     }
     function markBg() { for (const b of bgBox.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.base === base)); }
@@ -416,7 +439,7 @@
       const start = P ? P.startBackground(store.get(BASE_KEY), choices()) : "aerial";
       base = start;
       try {
-        map = me.map = new gl.Map({ container: mapHost, style: FP.basemaps.style(start === "aerial" ? "aerial" : "topolite"), bounds: CANTERBURY, maxZoom: 18,
+        map = me.map = new gl.Map({ container: mapHost, style: FP.basemaps.style(start, { reliefOnAerial: false }), bounds: CANTERBURY, maxZoom: 18,
           dragRotate: false, pitchWithRotate: false, attributionControl: { compact: true, ...(FP.brand?.org_legal ? { customAttribution: FP.brand.org_legal } : {}) } });
       } catch { mapNote.textContent = "The map couldn't open here."; mapNote.hidden = false; return; }
       map.touchZoomRotate?.disableRotation?.();
@@ -425,12 +448,15 @@
       const ready = () => {
         if (!live() || !map || map.getSource("ov-areas")) return;
         map.addLayer({ id: "ov-veil", type: "background", paint: { "background-color": css("--map-background") || "#e4e6e2", "background-opacity": 0 } });
+        map.addSource("ov-mask", { type: "geojson", data: maskData() });
         map.addSource("ov-areas", { type: "geojson", data: areaData() });
         map.addSource("ov-sites", { type: "geojson", data: siteData() });
-        map.addLayer({ id: "ov-area-fill", type: "fill", source: "ov-areas", paint: { "fill-color": ["get", "fill"], "fill-opacity": ["case", ["==", ["get", "dim"], 1], 0.02, ["get", "fo"]] } });
+        map.addLayer({ id: "ov-mask", type: "fill", source: "ov-mask", paint: { "fill-color": "#000000", "fill-opacity": P?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
+        map.addLayer({ id: "ov-area-fill", type: "fill", source: "ov-areas", paint: { "fill-color": ["get", "fill"], "fill-opacity": ["case", ["==", ["get", "dim"], 1], 0.08, ["get", "fo"]] } });
         map.addLayer({ id: "ov-area-hi", type: "fill", source: "ov-areas", filter: ["==", ["get", "id"], ""], paint: { "fill-color": ["get", "fill"], "fill-opacity": 0.2 } });
-        map.addLayer({ id: "ov-area-casing", type: "line", source: "ov-areas", layout: { "line-join": "round" }, paint: { "line-color": ["get", "casing"], "line-width": ["+", ["get", "lw"], 2], "line-opacity": ["case", ["==", ["get", "dim"], 1], 0.3, 1] } });
-        map.addLayer({ id: "ov-area-line", type: "line", source: "ov-areas", layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": ["get", "lw"], "line-opacity": ["case", ["==", ["get", "dim"], 1], 0.35, 1] } });
+        // PH5: no casing round the sub-groups (the owner: no dotted or dashed lines at overview scale); kept, empty, for the switches below
+        map.addLayer({ id: "ov-area-casing", type: "line", source: "ov-areas", filter: ["==", ["get", "id"], ""], layout: { "line-join": "round" }, paint: { "line-color": ["get", "casing"], "line-width": ["+", ["get", "lw"], 2] } });
+        map.addLayer({ id: "ov-area-line", type: "line", source: "ov-areas", layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": ["get", "lw"], "line-opacity": ["case", ["==", ["get", "dim"], 1], 0.35, ["get", "lo"]] } });
         map.addLayer({ id: "ov-area-hiline", type: "line", source: "ov-areas", filter: ["==", ["get", "id"], ""], layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": 2.6 } });
         map.addLayer({ id: "ov-site-hi", type: "circle", source: "ov-sites", filter: ["==", ["get", "id"], -1], paint: { "circle-radius": 10, "circle-color": "rgba(0,0,0,0)", "circle-stroke-width": 2, "circle-stroke-color": css("--ink") || "#1d1d1f" } });
         map.addLayer({ id: "ov-sites", type: "circle", source: "ov-sites", paint: {
@@ -476,7 +502,7 @@
     // ---- the Layers panel ------------------------------------------------------------------------------------------------
     function drawLayers() {
       const ch = choices();
-      bgBox.replaceChildren(...(ch.length >= 2 ? [["topolite", "Map"], ["aerial", "Aerial"]].filter(([k]) => ch.includes(k)).map(([k, t]) => el("button", { type: "button", "data-base": k, id: "ov-base-" + k,
+      bgBox.replaceChildren(...(ch.length >= 2 ? [["aerial", "Aerial"], ["topo", "Topo"]].filter(([k]) => ch.includes(k)).map(([k, t]) => el("button", { type: "button", "data-base": k, id: "ov-base-" + k,
         "aria-pressed": String(base === k), onclick: () => { store.set(BASE_KEY, k); useBase(k); } }, t)) : []));
       bgBox.hidden = ch.length < 2;
       const box = (id, label, on, change, extra = {}) => el("label", { class: "ov-check" }, el("input", { type: "checkbox", id, ...(on ? { checked: true } : {}), ...extra, onchange: (e) => change(e.target.checked) }), el("span", {}, label));

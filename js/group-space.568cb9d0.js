@@ -179,8 +179,14 @@
       // PH2: on a phone Search is a button in the bar: Home's own search (place-home.js, compact) in a sheet that takes the screen
       { search: FP.placeHome ? (opener) => searchSheet(opener, group, tabs) : null });
     const back = $("#group-back");
-    back.hidden = !(FP.groupSpace.hasPortfolio?.());
-    back.setAttribute("href", FP.href("#/places"));   // J2c: Places itself, never the bare address (which may land in a place)
+    // PH5: in a sub-group the back leads up to its parent's Home (a tap on the parent's map goes down into it), where the person may
+    // open the parent; otherwise to Places, for someone with more than one place
+    const parent = group.parent_org_id ? find(group.parent_org_id) : null;
+    back.hidden = !parent && !(FP.groupSpace.hasPortfolio?.());
+    back.setAttribute("href", parent ? FP.href(G().href(parent.id, "home")) : FP.href("#/places"));   // J2c: Places itself, never the bare address (which may land in a place)
+    const backLabel = back.querySelector(".space-back-label");
+    if (backLabel) backLabel.textContent = parent ? parent.name : "All places";
+    back.setAttribute("aria-label", parent ? "Back to " + parent.name : "All places");
     if (FP.icon && !back.querySelector("svg")) back.prepend(FP.icon("back", 20));
     // UI1: Add, for what this person may add to this group (add.js)
     FP.add?.mount($("#group-add-slot"), "group");

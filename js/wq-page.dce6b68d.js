@@ -484,28 +484,37 @@
     if (!protocol && root.pmtiles?.Protocol) { try { gl.addProtocol("pmtiles", new root.pmtiles.Protocol().tile); } catch { /* already there */ } protocol = true; }
     try { gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js"); } catch { /* set already */ }
     // (PH2: on a phone the credit's "i" sits bottom left by the scale, clear of the + that floats bottom right)
-    const map = new gl.Map({ container: canvas, style: FP.basemaps.style("aerial"), bounds: [[171.4, -43.6], [172.7, -42.7]], maxZoom: 18,
+    const map = new gl.Map({ container: canvas, style: FP.basemaps.style("aerial", { reliefOnAerial: false }), bounds: [[171.4, -43.6], [172.7, -42.7]], maxZoom: 18,
       attributionControl: phoneMode ? false : { compact: true, customAttribution: FP.brand?.org_legal || "" } });
     if (phoneMode) map.addControl(new gl.AttributionControl({ compact: true, customAttribution: FP.brand?.org_legal || "" }), "bottom-left");
     if (!phoneMode) map.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");   // (a phone pinches)
     map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
     if (phoneMode) FP.basemaps.quietCredit?.(map);
     const ready = new Promise((res) => { map.once("load", res); const poll = () => (map.style?._loaded ? res() : setTimeout(poll, 50)); poll(); });
-    // the plain map first, the aerial one tap away (the person's choice is not kept: an overview opens on the plain map)
-    const choices = (FP.basemaps.names || []).length >= 2 ? ["topolite", "aerial"] : FP.demo?.active ? ["topolite", "aerial"] : [];
-    let base = "topolite";
+    // PH5: the aerial first, the plain map one tap away; the person's choice on an overview map on this device is kept (map-scene.js's key)
+    const choices = (FP.basemaps.names || []).length >= 2 ? ["aerial", "topo"] : FP.demo?.active ? ["aerial", "topo"] : [];
+    const BASE_KEY = "fp-overview-basemap";
+    let stored = null; try { stored = root.localStorage.getItem(BASE_KEY); } catch { /* private mode */ }
+    const start = FP.mapPalette?.startBackground ? FP.mapPalette.startBackground(stored, choices) : "aerial";
+    let base = start;
     const markBg = () => { for (const b of bg.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.base === base)); };
     const useBase = async (k) => { base = k; markBg(); await ready; if (!(FP.basemaps.names || []).includes(k)) return; if (k !== "aerial") FP.basemaps.ground(map); try { await FP.basemaps.pick(map, k); } catch { /* the plain ground stays */ } };
-    if (choices.length) { fill(bg, ...[["topolite", "Map"], ["aerial", "Aerial"]].map(([k, t]) => el("button", { type: "button", "data-base": k, onclick: () => useBase(k) }, t))); useBase("topolite"); } else bg.hidden = true;
+    if (choices.length) {
+      fill(bg, ...[["aerial", "Aerial"], ["topo", "Topo"]].map(([k, t]) => el("button", { type: "button", "data-base": k, onclick: () => { try { root.localStorage.setItem(BASE_KEY, k); } catch { /* kept for this visit */ } useBase(k); } }, t)));
+      useBase(start);
+    } else bg.hidden = true;
 
     let rows = [], framed = false, chosen = null, layers = [], rowsByType = null, typeNow = null, coreRows = null;
     const SRC = "wqp-sites";
     ready.then(() => {
       for (const ic of M().ICONS) if (!map.hasImage(ic.icon)) map.addImage(ic.icon, iconImage(ic), { pixelRatio: 2 });
+      map.addSource("wqp-mask", { type: "geojson", data: empty() });
       map.addSource("wqp-area", { type: "geojson", data: empty() });
       map.addSource("wqp-subs", { type: "geojson", data: empty() });
       map.addSource(SRC, { type: "geojson", data: empty() });
-      map.addLayer({ id: "wqp-subs-line", type: "line", source: "wqp-subs", paint: { "line-color": "#5f6670", "line-width": 1, "line-dasharray": [3, 2], "line-opacity": 0.8 } });
+      map.addLayer({ id: "wqp-mask", type: "fill", source: "wqp-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
+      // PH5: no dashes at overview scale: the sub-groups' edges a plain hairline
+      map.addLayer({ id: "wqp-subs-line", type: "line", source: "wqp-subs", paint: { "line-color": "#5f6670", "line-width": 0.75, "line-opacity": 0.8 } });
       map.addLayer({ id: "wqp-area-line", type: "line", source: "wqp-area", paint: { "line-color": "#2f3542", "line-width": 1.5, "line-opacity": 0.85 } });
       map.addLayer({ id: "wqp-chosen", type: "circle", source: SRC, filter: ["==", ["id"], -1], paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#1d1d1f", "circle-stroke-width": 2.5 } });
       map.addLayer({ id: "wqp-sites", type: "symbol", source: SRC, layout: { "icon-image": ["get", "icon"], "icon-allow-overlap": true, "icon-ignore-placement": true,
@@ -669,6 +678,8 @@
         await ready;
         const b = data.base, sub = s.sub ? b.subs.find((x) => x.id === s.sub) : null;
         map.getSource("wqp-area")?.setData({ type: "FeatureCollection", features: b.area.length ? [{ type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: b.area } }] : [] });
+        // PH5: outside the group's area under the mask
+        map.getSource("wqp-mask")?.setData((b.area.length && FP.mapPalette?.outsideMask?.({ type: "MultiLineString", coordinates: b.area })) || empty());
         map.getSource("wqp-subs")?.setData({ type: "FeatureCollection", features: b.subs.filter((x) => x.rings.length).map((x) => ({ type: "Feature", properties: { id: x.id }, geometry: { type: "MultiLineString", coordinates: x.rings } })) });
         push(); paintNow();
         const key = (s.sub || "") + "|" + s.type;

@@ -15,6 +15,7 @@
   const P = () => FP.phoneModel;
   const el = (...a) => FP.el(...a);
   const NZ = [[166.3, -47.4], [178.6, -34.3]];
+  const BASE_KEY = "fp-overview-basemap";   // the overviews' background, remembered on this device (map-scene.js, group-overview.js)
   let shown = null;
 
   const phone = () => !!root.matchMedia?.(P().PHONE).matches;
@@ -31,11 +32,12 @@
   // opts: { group: { id, name }, sb }. Returns the Home element; the map is made once it is on the page.
   // PH2 (the owner, 13 Nov 2026: "For the Home Screen the rest is the map just showing the overview view of the group… maybe just a
   // label in the centre of where each subgroup is to quickly navigate to them if you want to (but not forced to)"): Home on a phone is
-  // only the map: the group's outer outline, one small name at the centre of each sub-group (a tap offers to open it), Locate me and
-  // the +. Search is the bar's (space-nav.js). "Near you" is a small sheet that comes up only once Locate me is tapped, and closes.
+  // only the map: the group's outer outline, one small name at the centre of each sub-group, Locate me and the +. PH5 (the owner,
+  // 14 Nov 2026): the aerial first, everything outside the area darkened (map-palette.js MASK_OPACITY), each sub-group a clear fill,
+  // and a tap on a name or a fill zooms there and opens it (goTo). Search is the bar's (space-nav.js). "Near you" is a small sheet that comes up only once Locate me is tapped, and closes.
   function view({ group, sb = FP.sb }) {
     close();
-    const me = { alive: true, map: null, overlay: null, stop: null, wq: null, sites: null, rows: null, located: null, centre: null, timer: null, open: false, labels: [] };
+    const me = { place: group.id, alive: true, map: null, overlay: null, stop: null, wq: null, sites: null, rows: null, located: null, centre: null, timer: null, open: false, labels: [] };
     shown = me;
     const live = () => me.alive && shown === me;
     const mapBox = el("div", { class: "pa-map", id: "pa-map", role: "region", "aria-label": "Map of " + group.name });
@@ -108,7 +110,60 @@
     }
     locate.addEventListener("click", () => find(true));
 
-    // ---- the sub-groups' names, one at the centre of each (a tap offers to open it; never forced) -------------------------------
+    // ---- PH5: a tap goes there (the owner, 14 Nov 2026: "Don't have it have to approve opening a group once you click on it on the
+    // map, just zoom to it smoothly") ---------------------------------------------------------------------------------------------
+    // A sub-group's name or its fill, tapped: the map eases to it (about 750 ms; at once where the person asks for less motion), and
+    // then the person is in it (its own Home, its own mask) when they may open it; one they may not open is only zoomed to, its name
+    // showing. MapLibre gives no click after a drag or a pinch, so neither ever navigates. The header's back leads up again.
+    const FLY_MS = 750, LAST_MS = 2000, PRESSES = ["pointerdown", "touchstart", "mousedown", "wheel"];
+    const reduced = () => !!root.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Review of #540, 1: the open belongs to one fly. Any touch or press the person makes anywhere on the screen while it flies (the map:
+    // a drag, a pinch; Locate, the +, the bar or any control: review of #540, round 3), or a wheel, cancels it, and so does another tap
+    // (which flies on its own); the place opens only when its fly ends uninterrupted. Returns the cancel (also me.cancelGo).
+    function goTo(s) {
+      const map = me.map, x = me.subs?.get(s.id);
+      if (!map || !x || !live()) return null;
+      me.cancelGo?.();
+      const fly = { s, live: true };
+      me.going = s.id;
+      const doc = root.document;
+      const stop = () => {
+        fly.live = false;
+        if (me.going === s.id) me.going = null;
+        for (const ev of PRESSES) doc?.removeEventListener(ev, cancel, true);
+        map.off("movestart", byPerson); map.off("moveend", ended);
+        root.clearTimeout(fly.timer); root.clearTimeout(fly.last);
+        for (const l of me.labels) if (l.id === s.id) l.node.classList.remove("pa-going");
+        if (me.cancelGo === stop) me.cancelGo = null;
+      };
+      const cancel = () => { if (fly.live) stop(); };
+      const byPerson = (e) => { if (e?.originalEvent) cancel(); };
+      // (force: the last word, a bounded time after the fly should have ended: a map that never reports rest, say with its tiles failing,
+      // still takes the person there; a move of theirs has cancelled it before then)
+      const open = (force = false) => {
+        if (!fly.live || !live() || me.going !== s.id || (!force && map.isMoving?.())) return;
+        const go = s.member;
+        stop();
+        if (go) root.location.hash = FP.href(FP.groupModel.href(s.id, "home"));
+      };
+      const ended = (e) => { if (!e?.originalEvent) open(); };
+      me.cancelGo = stop;
+      for (const l of me.labels) l.node.classList.toggle("pa-going", l.id === s.id);
+      const ms = reduced() ? 0 : FLY_MS;
+      map.fitBounds(x.bbox, { padding: { top: 72, bottom: 84, left: 28, right: 28 }, maxZoom: 14, duration: ms, essential: false });
+      // (listened for after the fly starts, so the end of a fly it stopped is not taken for its own)
+      for (const ev of PRESSES) doc?.addEventListener(ev, cancel, true);
+      map.on("movestart", byPerson);
+      if (ms) map.on("moveend", ended);
+      // with no fly (reduced motion, or already there) the open waits a moment for a touch; otherwise it is a safety net once the fly
+      // should have ended, and opens only if the map is at rest and nothing cancelled it
+      fly.timer = root.setTimeout(open, ms ? ms + 400 : 150);
+      fly.last = root.setTimeout(() => open(true), ms + LAST_MS);
+      return stop;
+    }
+    me.goTo = goTo;
+
+    // ---- the sub-groups' names, one at the centre of each (a tap goes there) -----------------------------------------------------
     // Drawn over the map; where two would touch, or one would sit on a control, the smaller sub-group's name waits until zoomed in.
     function placeLabels() {
       const map = me.map;
@@ -133,18 +188,33 @@
       const shapes = await Promise.resolve(FP.home?.readShapes?.(sb, [], subs)).catch(() => null);
       if (!live() || !shapes) return;
       const layer = el("div", { class: "pa-labels", "aria-label": "Sub-groups" });
-      me.labels = subs.filter((s) => shapes.get(s.id)?.geometry).map((s) => {
+      const drawn = subs.filter((s) => shapes.get(s.id)?.geometry);
+      // PH5: each sub-group's own fill, in the set that tells neighbours apart (map-palette.js subgroupColours), the same on every map
+      // (every sub-group, with an area or not, keyed by its id: the same set and keys the Maps tab colours, review of #540, 2)
+      const colours = FP.mapPalette?.subgroupColours?.(subs.map((s) => ({ key: s.id, name: s.name, geometry: shapes.get(s.id)?.geometry || null }))) || new Map();
+      me.subs = new Map(drawn.map((s) => [s.id, { ...s, bbox: shapes.get(s.id).bbox }]));
+      const look = (c) => FP.mapPalette?.subgroupLook?.(c, { onDark: me.onDark }) || { fill: c, fillOpacity: 0.5, line: c, lineWidth: 0.75, lineOpacity: 0.9 };
+      me.map.getSource("pa-subs")?.setData({ type: "FeatureCollection", features: drawn.map((s) => {
+        const lk = look(colours.get(s.name) || "#3a86ff");
+        return { type: "Feature", geometry: shapes.get(s.id).geometry, properties: { id: s.id, fill: lk.fill, fo: lk.fillOpacity, line: lk.line } };
+      }) });
+      me.labels = drawn.map((s) => {
         const shape = shapes.get(s.id), at = P().labelPoint(shape.geometry);
-        // review of #538, 1: only a sub-group the person is in may be opened from here (as the computer's overview links them); another's
-        // name is shown and nothing more (not a button)
-        const node = s.member ? el("button", { type: "button", class: "pa-label", "data-sub": s.id, title: s.name, "aria-label": s.name + " (sub-group)" }, s.name)
-          : el("span", { class: "pa-label pa-label-only", "data-sub": s.id }, s.name);
-        if (s.member) node.addEventListener("click", () => FP.sheet?.menu(node, s.name, [{ label: "Open " + s.name, icon: "places", href: FP.href(FP.groupModel.href(s.id, "home")) }], "Sub-group of " + group.name));
+        // review of #538, 1, and PH5: a tap on any name zooms to its sub-group; only one the person is in is then opened (as the computer's
+        // overview links them); another's is zoomed to and its name shown, nothing more
+        const node = el("button", { type: "button", class: "pa-label" + (s.member ? "" : " pa-label-only"), "data-sub": s.id, "data-open": String(!!s.member), title: s.name,
+          "aria-label": s.member ? "Open " + s.name + " (sub-group)" : "Zoom to " + s.name + " (sub-group)" }, s.name);
+        node.addEventListener("click", () => goTo(s));
         layer.append(node);
         return { id: s.id, node, at, size: (shape.bbox[1][0] - shape.bbox[0][0]) * (shape.bbox[1][1] - shape.bbox[0][1]) };
       }).filter((x) => x.at).sort((a, b) => b.size - a.size);
       stage.append(layer);
       placeLabels();
+      // a tap on a sub-group's fill goes there too (the smallest under the finger, where two overlap)
+      me.map.on("click", "pa-subs-fill", (e) => {
+        const hit = (e.features || []).map((f) => me.subs.get(f.properties.id)).filter(Boolean).sort((a, b) => (a.bbox[1][0] - a.bbox[0][0]) * (a.bbox[1][1] - a.bbox[0][1]) - (b.bbox[1][0] - b.bbox[0][0]) * (b.bbox[1][1] - b.bbox[0][1]))[0];
+        if (hit) goTo(hit);
+      });
       // (once a frame at most while the map moves)
       let queued = false;
       me.map.on("move", () => { if (queued) return; queued = true; root.requestAnimationFrame(() => { queued = false; if (live()) placeLabels(); }); });
@@ -189,26 +259,38 @@
       if (!gl) { mapBox.replaceChildren(el("p", { class: "pa-quiet" }, "The map couldn't open here.")); return; }
       try {
         gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js");
-        const plain = FP.mapPalette?.startBackground?.(null, FP.basemaps.names) || "aerial";
+        // PH5: the aerial, unless the person chose the plain map on an overview on this phone (map-scene.js's own key)
+        let stored = null; try { stored = root.localStorage.getItem(BASE_KEY); } catch { /* private mode */ }
+        // (the demo has no tiles: its two choices stand over the plain ground, as on the other overviews)
+        const choices = FP.basemaps.names.length >= 2 ? FP.basemaps.names : FP.demo?.active ? ["aerial", "topo"] : [];
+        const start = me.base = FP.mapPalette?.startBackground?.(stored, choices) || "aerial";
+        me.onDark = start === "aerial" ? !FP.basemaps.missingKey || /dark/.test(getComputedStyle(root.document.documentElement).colorScheme || "") : false;
         // PH2: the credit is the small "i" in the bottom left (its terms need it within reach; tapping it shows it), never a dark box
         // across the map under the +, which sits bottom right above the list
-        const map = me.map = new gl.Map({ container: mapBox, style: FP.basemaps.style(plain), bounds: NZ, attributionControl: false, pitchWithRotate: false, dragRotate: false });
+        const map = me.map = new gl.Map({ container: mapBox, style: FP.basemaps.style(start, { reliefOnAerial: false }), bounds: NZ, attributionControl: false, pitchWithRotate: false, dragRotate: false });
         map.addControl(new gl.AttributionControl({ compact: true }), "bottom-left");
         FP.basemaps.quietCredit?.(map);
         map.touchZoomRotate?.disableRotation?.();
         map.on("load", async () => {
           if (!live()) return;
-          if (plain !== "aerial") FP.basemaps.pick(map, plain).catch(() => {});
+          if (start !== "aerial") FP.basemaps.pick(map, start).catch(() => {});
           // the group's own soft hue, as Places draws it (map-palette.js); PH2: one thin line, the group's outer edge only (the owner:
-          // "show the group first"), over the faintest fill
+          // "show the group first"), over the faintest fill. PH5: everything outside the area under the mask, so the line is quiet
           const cs = getComputedStyle(root.document.documentElement), css = (k) => cs.getPropertyValue(k);
           const hue = FP.mapPalette ? FP.mapPalette.hues(css)[FP.mapPalette.hueIndex(group.parent_org_id || group.id)] : "#5f9bd8";
-          const look = FP.mapPalette?.look(hue, { onDark: plain === "aerial" }) || { line: hue };
+          const look = FP.mapPalette?.look(hue, { onDark: me.onDark }) || { line: hue };
           const none = { type: "FeatureCollection", features: [] };
+          map.addSource("pa-mask", { type: "geojson", data: none });
           map.addSource("pa-area", { type: "geojson", data: none });
+          map.addSource("pa-subs", { type: "geojson", data: none });
           map.addSource("pa-edge", { type: "geojson", data: none });
+          // (the mask first: under the area, the sub-groups, the outline and the person's dot; the names and controls are over the map)
+          map.addLayer({ id: "pa-mask", type: "fill", source: "pa-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
           map.addLayer({ id: "pa-area-fill", type: "fill", source: "pa-area", paint: { "fill-color": hue, "fill-opacity": 0.06, "fill-antialias": false } });   // (no seams where the areas meet)
-          map.addLayer({ id: "pa-area-line", type: "line", source: "pa-edge", layout: { "line-join": "round" }, paint: { "line-color": look.line, "line-width": 1.25 } });
+          // PH5: the sub-groups told apart by fill, a hairline of the same hue between neighbours, no dashed casing
+          map.addLayer({ id: "pa-subs-fill", type: "fill", source: "pa-subs", paint: { "fill-color": ["get", "fill"], "fill-opacity": ["get", "fo"] } });
+          map.addLayer({ id: "pa-subs-line", type: "line", source: "pa-subs", layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": FP.mapPalette?.SUBGROUP_LINE ?? 0.75, "line-opacity": 0.9 } });
+          map.addLayer({ id: "pa-area-line", type: "line", source: "pa-edge", layout: { "line-join": "round" }, paint: { "line-color": me.onDark ? "#ffffff" : look.line, "line-width": 1, "line-opacity": 0.7 } });
           map.addSource("pa-me", { type: "geojson", data: meData(me.located) });
           map.addLayer({ id: "pa-me-ring", type: "fill", source: "pa-me", filter: ["==", ["get", "kind"], "ring"], paint: { "fill-color": "#2f7de1", "fill-opacity": 0.14 } });
           map.addLayer({ id: "pa-me-dot", type: "circle", source: "pa-me", filter: ["==", ["get", "kind"], "dot"], paint: { "circle-radius": 7, "circle-color": "#2f7de1", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5 } });
@@ -225,6 +307,9 @@
               if (!live()) return;
               const edge = P().outlineFor(shape.geometry, { store, key: group.id });
               if (edge && live() && map.getSource("pa-edge")) map.getSource("pa-edge").setData({ type: "Feature", properties: {}, geometry: edge });
+              // PH5: the mask from the same kept outline (worked out once per outline: map-palette.js outsideMask)
+              const mask = edge && FP.mapPalette?.outsideMask?.(edge);
+              if (mask && live() && map.getSource("pa-mask")) map.getSource("pa-mask").setData(mask);
             };
             if (P().outlineHeld(shape.geometry, { store, key: group.id })) drawEdge();
             else if (root.requestIdleCallback) root.requestIdleCallback(drawEdge, { timeout: 600 }); else root.setTimeout(drawEdge, 50);
@@ -254,10 +339,11 @@
     shown = null;
     if (!me) return;
     me.alive = false;
+    try { me.cancelGo?.(); } catch { /* gone */ }
     try { me.stop?.(); } catch { /* gone */ }
     try { me.overlay?.remove(); } catch { /* gone */ }
     try { me.map?.remove(); } catch { /* gone */ }
   }
 
-  FP.phoneArea = { view, close, phone, debug: () => shown?.map || null };
+  FP.phoneArea = { view, close, phone, debug: () => shown?.map || null, base: () => shown?.base || null, place: () => shown?.place || null };
 })(window);
