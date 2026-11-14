@@ -28,12 +28,14 @@
     const titles = new URLSearchParams(root.location.search).get("titles") === "1";
     // PH3: "?people=long" adds forty more invented people to the group's People, so its contact list has letter headings and the A to Z jump
     const longPeople = new URLSearchParams(root.location.search).get("people") === "long";
+    // SR1: "?round=1" gives the demo group's own sampling dataset twelve registered sites with a field-sensor nitrate record, for entering a round
+    const round = new URLSearchParams(root.location.search).get("round") === "1";
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, round })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -75,6 +77,7 @@
       // ON3b: ".../manage" and its tabs are the group's manage space
       if (suffix === "/maps") return "#/group/" + GROUP + "/maps" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // V4
       if (suffix === "/records") return "#/group/" + GROUP + "/records" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // CAP1
+      if (suffix === "/water/round") return "#/group/" + GROUP + "/water/round" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // SR1
       return /^(?:\/(?:home|documents|events|water|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
@@ -163,7 +166,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, round = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -249,6 +252,7 @@
     data.groupSitesNone = groupSites === "none";
     data.groupMapNone = groupMap === "none";
     data.wqPage = group && (wqPage === "sub" || wqPage === "parent") ? wqPage : null;   // WQV1
+    data.roundDemo = !!(group && round);   // SR1
     if (simple === "client" || simple === "unreadable") {
       data.tables.profiles = [{ user_id: USER, is_staff: false }];
       for (const m of data.groupTables?.org_members || []) m.role = "member";
@@ -1830,6 +1834,7 @@
   function wqOf(d) {
     if (!d.wq) { const w = wqDemo(d.map.extent); d.wq = d.wqEmpty ? { ...w, sites: [], series: {} } : w; }
     if (d.wqPage && !d.wq.page) PAGE().extend(d.wq, GROUP);   // WQV1: the MCCC-like demo
+    if (!d.wq.rounds) roundExtend(d.wq, d.roundDemo);   // SR1
     return d.wq;
   }
   // WQV1: the Water quality page's reads (demo-wq-page.js): its two functions always; with the MCCC-like demo, what row-level security
@@ -1849,13 +1854,96 @@
     if (name === "group_wq_sites") return [args.g === GROUP ? wq.sites.filter((s) => !s.owner_farm_id && !s.niwa && PAGE().readable(wq, v, s.site_id)).map(({ niwa, depth_m, ...s }) => s) : []];
     return [args.parent_org === GROUP ? PAGE().subgroups(v) : []];
   }
+  // ---- SR1: the group's sampling rounds, in memory, as public.sampling_round_save and public.sampling_rounds behave -----------------
+  // "?round=1": ten more of the group's own sites (HDLG-G3 to G12), each with a monthly field-sensor nitrate-N record from Jan 2025.
+  const ROUND_SITES = [["HDLG-G3", "Ford Stream above the confluence (synthetic)", 172.03, -42.996, 2.8], ["HDLG-G4", "Mill Drain at Bridge Road (synthetic)", 172.05, -43.03, 4.6],
+    ["HDLG-G5", "Spring Creek headwater (synthetic)", 171.99, -42.975, 1.1], ["HDLG-G6", "Spring Creek at the woolshed (synthetic)", 172.0, -42.985, 1.9],
+    ["HDLG-G7", "Tributary at the boundary fence (synthetic)", 171.975, -43.0, 3.4], ["HDLG-G8", "Lagoon inlet (synthetic)", 172.09, -43.035, 0.6],
+    ["HDLG-G9", "Pump shed bore (synthetic)", 172.06, -43.005, 7.2, "groundwater"], ["HDLG-G10", "Terrace Road drain (synthetic)", 172.08, -43.015, 5.1],
+    ["HDLG-G11", "Ford Stream at the gorge road (synthetic)", 172.02, -43.02, 2.2], ["HDLG-G12", "Old ford culvert (synthetic)", 172.065, -43.045, 3.9]];
+  function roundExtend(wq, more) {
+    wq.rounds = [];
+    if (!more) return;
+    const W = typeof module === "object" && module.exports ? require("./wq-model.js") : globalThis.FP.wqModel;
+    ROUND_SITES.forEach(([ext, name, lng, lat, base, type], k) => {
+      const id = 9203 + k, [x, y] = W.lngLatToNztm(lng, lat);
+      wq.sites.push({ site_id: id, external_id: ext, name, site_type: type || "stream", distance_m: 0, geom: { type: "Point", coordinates: [Math.round(x * 100) / 100, Math.round(y * 100) / 100] },
+        source_key: "demo-hdlg-wq", owner_farm_id: null, owner_org_id: GROUP });
+      const rows = [];
+      for (let i = 0; i < 20; i++) {
+        const y0 = 2025 + Math.floor(i / 12), m0 = i % 12, v = Number(Math.max(0.05, base * (1 + 0.3 * Math.sin(i * 0.9 + k))).toPrecision(2));
+        rows.push({ sampled_at: new Date(Date.UTC(y0, m0, 11, 11, 0, 0)).toISOString(), value: v, qualifier: null, value_text: String(v), unit: "mg/L", sample_id: ext + "-" + (i + 1), series: "",
+          replicate_no: 1, datetime_flag: "date_only", source_key: "demo-hdlg-wq", superseded_at: null, aggregate: "", n_values: null, method: "field sensor", lab: "", source_parameter: "nitrate-n" });
+      }
+      wq.series[id + "|nitrate-n"] = rows;
+      wq.sites[wq.sites.length - 1].last_sampled = rows[rows.length - 1].sampled_at;
+    });
+  }
+  const isCoordinator = (d) => ["facilitator", "advisor", "admin"].includes(d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role);
+  const groupOwnSites = (d) => wqOf(d).sites.filter((s) => s.owner_org_id === GROUP).map((s) => ({ id: s.site_id, external_id: s.external_id, name: s.name, site_type: s.site_type,
+    source_key: s.source_key, geom: s.geom, farm_id: null, org_id: GROUP }));
+  function roundSave(d, a) {
+    const R = typeof module === "object" && module.exports ? require("./wq-round-model.js") : globalThis.FP.wqRoundModel;
+    const refuse = (message, code = "22023") => [null, { code, message }];
+    if (!isCoordinator(d) || a.p_dataset !== "demo-hdlg-wq") return refuse("You can enter a round only into the own dataset of a group you coordinate", "42501");
+    const wq = wqOf(d), m = R.measure(a.p_parameter), sites = groupOwnSites(d);
+    if (!m) return refuse("Choose a water quality measure");
+    const lab = a.p_method === "laboratory" ? String(a.p_lab || "").trim() : "", checkLab = a.p_method === "laboratory" ? "" : String(a.p_check_lab || "").trim();
+    if (a.p_method === "laboratory" && !lab) return refuse("Name the laboratory");
+    if (!a.p_sampled_on || a.p_sampled_on > String(d.asAt).slice(0, 10)) return refuse("The round's date must be a day from 1990 to today");
+    const entries = [], rows = [];
+    for (const [i, e] of (a.p_entries || []).entries()) {
+      if (!sites.some((s) => s.id === e.site_id)) return refuse("Row " + (i + 1) + ": that site is not one of this dataset's");
+      const v = R.parseValue(e.value), c = R.parseValue(e.check);
+      if (v.error || c.error) return refuse("Row " + (i + 1) + ": not a number");
+      if (e.not_sampled && (!v.empty || !c.empty)) return refuse("Row " + (i + 1) + ": a site marked not sampled has no value");
+      if (!c.empty && !checkLab) return refuse("Name the laboratory the checks went to");
+      if (v.empty && c.empty && !e.not_sampled && !e.note) continue;
+      entries.push({ site_id: e.site_id, value: v.text ?? null, check: c.text ?? null, not_sampled: !!e.not_sampled, note: e.note || null });
+      if (!v.empty) rows.push({ site: e.site_id, lab, method: a.p_method === "field-sensor" ? "field sensor" : a.p_method === "test-strip" ? "test strip" : "laboratory", ...v });
+      if (!c.empty) rows.push({ site: e.site_id, lab: checkLab, method: "laboratory", ...c });
+    }
+    entries.sort((x, y) => x.site_id - y.site_id);
+    if (!rows.length) return refuse("Enter at least one value");
+    const old = wq.rounds.find((r) => r.id === a.p_round);
+    if (old && (old.sampled_on !== a.p_sampled_on || old.parameter !== a.p_parameter || old.method !== a.p_method)) return refuse("A saved round's date, measure and method stay as they are");
+    if (old && JSON.stringify(old.entries) === JSON.stringify(entries) && old.lab === lab && old.check_lab === checkLab) return [{ round_id: old.id, revision: old.revision, unchanged: true, added: 0, changed: 0, superseded: 0, summary_refreshed: true, counts: old.counts }];
+    if (old && a.p_expected_revision !== old.revision) return refuse("This round was changed since you opened it (it is now at revision " + old.revision + ")", "40001");
+    if (!old && wq.rounds.some((r) => r.sampled_on === a.p_sampled_on && r.parameter === a.p_parameter && r.method === a.p_method)) return refuse("A round of this measure on that day is already saved: open it to correct it", "23505");
+    if (!wq.params[a.p_parameter]) wq.params = { ...wq.params, [a.p_parameter]: [m.long, m.unit] };
+    const at = new Date(Date.parse(a.p_sampled_on + "T00:00:00+13:00")).toISOString(), sample = "round:" + a.p_round, now = new Date().toISOString();
+    let added = 0, changed = 0, superseded = 0;
+    const mine = Object.entries(wq.series).flatMap(([k, list]) => list.filter((r) => r.sample_id === sample).map((r) => ({ r, site: Number(k.split("|")[0]) })));
+    for (const w of rows) {
+      const hit = mine.find((x) => x.site === w.site && x.r.lab === w.lab);
+      if (hit) { if (hit.r.value_text !== w.text || hit.r.method !== w.method || hit.r.superseded_at) { Object.assign(hit.r, { value: w.value, qualifier: w.qualifier, value_text: w.text, method: w.method, superseded_at: null }); changed++; } continue; }
+      const k = w.site + "|" + a.p_parameter;
+      (wq.series[k] = wq.series[k] || []).push({ sampled_at: at, value: w.value, qualifier: w.qualifier, value_text: w.text, unit: m.unit, sample_id: sample, series: "", replicate_no: 1,
+        datetime_flag: "date_only", source_key: "demo-hdlg-wq", superseded_at: null, aggregate: "", n_values: null, method: w.method, lab: w.lab, source_parameter: a.p_parameter });
+      wq.series[k].sort((x, y) => x.sampled_at.localeCompare(y.sampled_at));
+      added++;
+    }
+    for (const x of mine) if (!x.r.superseded_at && !rows.some((w) => w.site === x.site && w.lab === x.r.lab)) { x.r.superseded_at = now; superseded++; }
+    for (const s of wq.sites.filter((x) => x.owner_org_id === GROUP)) {
+      const all = Object.entries(wq.series).filter(([k]) => k.startsWith(s.site_id + "|")).flatMap(([, list]) => list.filter((r) => !r.superseded_at));
+      s.last_sampled = all.length ? all.map((r) => r.sampled_at).sort().pop() : null;
+    }
+    const counts = { values: entries.filter((e) => e.value).length, not_sampled: entries.filter((e) => e.not_sampled).length, lab_checks: entries.filter((e) => e.check).length, sites: sites.length };
+    if (old) Object.assign(old, { lab, check_lab: checkLab, note: a.p_note || null, entries, counts, revision: old.revision + 1, updated_by: USER, updated_at: now });
+    else wq.rounds.unshift({ id: a.p_round, org_id: GROUP, dataset_key: "demo-hdlg-wq", sampled_on: a.p_sampled_on, parameter: a.p_parameter, method: a.p_method, lab, check_lab: checkLab,
+      note: a.p_note || null, entries, counts, revision: 1, created_by: USER, created_at: now, updated_by: USER, updated_at: now });
+    wq.rounds.sort((x, y) => y.sampled_on.localeCompare(x.sampled_on));
+    return [{ round_id: a.p_round, revision: old ? old.revision : 1, unchanged: false, added, changed, superseded, summary_refreshed: true, counts }];
+  }
   function wqPageRows(d, table) {
     // (the overview demo's sites: each family's record, as public.site_record_summary)
     if (table === "site_record_summary" && d.overview) return d.overview.sites.flatMap((x) => Object.keys(x.families).map((family) => ({ site_id: x.site_id, family, n: x.times.length,
       first_sampled: x.times[0] || null, last_sampled: x.times[x.times.length - 1] || null })));
     if (table === "measurements") return PAGE()?.measurements(wqOf(d), d.wqPage) || [];
     if (table === "places" && d.wqPage) return PAGE().places(wqOf(d), d.wqPage, GROUP);
-    if (table === "monitoring_sites") return [...demoMonitoringSites(d), ...(d.wqPage ? PAGE().niwaSites(wqOf(d)) : [])];
+    if (table === "monitoring_sites") return [...demoMonitoringSites(d), ...(d.wqPage ? PAGE().niwaSites(wqOf(d)) : []), ...(d.groupTables ? groupOwnSites(d) : [])];   // SR1: the group's own sites
+    if (table === "measurement_sources" && d.groupTables) return [{ key: "demo-hdlg-wq", site_source_key: "demo-hdlg-wq", name: WQ_SOURCES["demo-hdlg-wq"].name, org_id: GROUP, farm_id: null, kind: "water-quality", visibility: "farm" }];   // SR1
+    if (table === "sampling_rounds") return isCoordinator(d) ? wqOf(d).rounds : [];   // SR1: the group's coordinators only
     if (table === "site_record_summary") return demoRecordSummary(d).filter((r) => !d.wqPage || PAGE().readable(wqOf(d), d.wqPage, r.site_id));
     return undefined;
   }
@@ -2130,6 +2218,7 @@
         if (name === "farm_map") return result(args.f === FARM ? d.map : args.f === FARM2 ? d.map2 : null);
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
         if (name === "capture_save") return offlineNow() ? LOST() : result(...captureSave(d, args?.c));   // CAP1
+        if (name === "sampling_round_save") return offlineNow() ? LOST() : result(...roundSave(d, args || {}));   // SR1
         if (name === "capture_tag_suggestions") return offlineNow() ? LOST() : result(captureTagSuggestions(d, args?.o));   // CAP1
         if (/^group_event_(notes|attendee_notes|set_notes|attendee_set_note)$/.test(name)) return result(...eventNotesRpc(d, name, args || {}));   // NP1
         // NP1b, as public.farm_working_notes_allowed: RCL staff on the farm (the demo person when staff); a client: no

@@ -204,6 +204,7 @@
     if (route.view !== "home") { FP.placeHome?.close(); FP.groupOverview?.close(); FP.phoneArea?.close(); }
     if (route.view !== "records") FP.records?.close();   // CAP1
     if (route.view !== "water") FP.wqPage?.close();   // WQV1: its map and charts go with the page
+    if (route.view !== "water") FP.wqRound?.close();   // SR1: a round being typed is kept as a draft in the browser
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
     if (route.view === "manage" && (lastView !== "manage" || ctx?.group.id !== group.id)) FP.groupManage?.forget(group.id);
     // DEC1b: leaving Manage removes its decision cards' small maps (each a WebGL context and the engine's listeners)
@@ -254,7 +255,9 @@
       document.title = group.name + " · " + G().viewLabel("water") + " | " + (FP.brand?.product || "");
       const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
       if (current !== token) return;
-      panel.replaceChildren(FP.wqPage.view(group, { sb: FP.sb, today: FP.demo?.active ? today : null, groups }));
+      // SR1: `/water/round[?item=<round>]`: a coordinator enters a sampling round, or reopens one to correct it (wq-round.js)
+      if (route.tab === "round" && FP.wqRound) { FP.wqPage?.close(); panel.replaceChildren(FP.wqRound.view(group, { sb: FP.sb, today, roundId: route.item || null })); }
+      else { FP.wqRound?.close(); panel.replaceChildren(FP.wqPage.view(group, { sb: FP.sb, today: FP.demo?.active ? today : null, groups })); }
       panel.scrollTop = 0;
       return;
     }

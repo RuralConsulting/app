@@ -176,7 +176,10 @@
     const viewBar = el("div", { class: "wqp-viewbar" }, viewSeg.node, download);
     const mapPane = el("div", { class: "wqp-pane wqp-mappane" }), chartPane = el("div", { class: "wqp-pane wqp-chartpane", hidden: true }), tablePane = el("div", { class: "wqp-pane wqp-tablepane", hidden: true });
     const credit = el("p", { class: "wqp-credit" });
-    const desk = el("div", { class: "wqp-desk" }, el("header", { class: "wqp-head" }, title, sources), filters, figures, notes, viewBar, mapPane, chartPane, tablePane, credit);
+    // SR1: for the group's coordinators, "Enter a round" and the latest rounds (wq-round.js), under the page's name
+    const rounds = FP.wqRound?.entry(group, { sb }) || null;
+    let phoneRounds = null;
+    const desk = el("div", { class: "wqp-desk" }, el("header", { class: "wqp-head" }, title, sources), rounds, filters, figures, notes, viewBar, mapPane, chartPane, tablePane, credit);
     const phoneBox = el("div", { class: "wqp-phonebox" });
     root_.append(status, desk, phoneBox);
 
@@ -421,6 +424,7 @@
       fill(phoneBox, el("h1", { class: "wqp-phonetitle visually-hidden" }, "Water quality"), choose,
         el("p", { class: "wqp-sentence" }, M().sentence(h, st.measure, st.type)), M().bar(h).length ? miniBar(M().bar(h)) : null, mapHost,
         el("p", { class: "wqp-phonelead" }, fmt(h.sites) + (h.sites === 1 ? " site" : " sites") + (h.latest ? " · latest " + W().date(h.latest) : "")),
+        (phoneRounds = phoneRounds || FP.wqRound?.entry(group, { sb, compact: true }) || null),
         el("p", { class: "wqp-credit" }, creditLine(data.shown)));
       mapUi?.destroy(); mapUi = null;
       // a dot tapped opens its site in the sites' sheet, with its chart
@@ -704,5 +708,7 @@
     return svg;
   }
 
-  FP.wqPage = { view, summary, miniBar, href, loader, close: () => live?.destroy() };
+  // SR1: a saved sampling round changes the group's results: the next visit reads them again
+  const forget = (groupId) => loaders.delete(groupId);
+  FP.wqPage = { view, summary, miniBar, href, loader, forget, close: () => live?.destroy() };
 })(typeof window === "undefined" ? globalThis : window);

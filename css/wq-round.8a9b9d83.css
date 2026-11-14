@@ -1,0 +1,161 @@
+/* SR1: entering a water sampling round (js/wq-round.js) and the Water quality page's "Sampling rounds" part. The owner's look: calm, plain
+   rows and hairlines, one outline round a set, ink controls, no box round each field; the round's heading in the light form rows
+   (form-rows.js); the table dense but readable on a computer, a list of rows on a phone (one site per row, its value on the right).
+   Tokens only; colour only for a message that needs it. */
+#screen-group[data-view="water"] .wqr { max-width: 1120px; margin: 0 auto; color: var(--ink); }
+.wqr-head { display: grid; gap: var(--s-1); margin: 0 0 var(--s-4); }
+.wqr-head h1 { margin: 0; font: 700 var(--text-title)/1.15 var(--f-display); letter-spacing: -.02em; }
+.wqr-head h1:focus { outline: none; }
+.wqr-back { display: inline-flex; align-items: center; gap: 4px; justify-self: start; min-height: 32px; color: var(--ink-2); text-decoration: none; font-size: var(--text-small); }
+.wqr-back:hover { color: var(--ink); }
+.wqr-status:empty { display: none; }
+.wqr-status { margin: 0 0 var(--s-3); color: var(--ink-2); }
+.wqr-quiet { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.wqr-error { color: var(--ink); }
+.wqr-link { padding: 0; border: 0; background: none; color: var(--ink); font: 500 var(--text-body)/1.3 var(--f-ui); text-decoration: underline; text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px; cursor: pointer; min-height: var(--tap); display: inline-flex; align-items: center; }
+.wqr-link:hover { text-decoration-color: var(--ink); }
+.wqr-body { display: grid; gap: var(--s-5); }
+
+/* the heading: the form rows, half the width on a computer */
+.wqr-headset { max-width: 600px; gap: var(--s-2); }
+.wqr-headset .fs-set { background: var(--panel); }
+.wqr-fixed { padding: 12px 0; color: var(--ink); }
+.wqr-dup:empty { display: none; }
+.wqr-dup { margin: 0; font-size: var(--text-small); color: var(--ink); }
+.wqr-help p + p { margin-top: 2px; }
+.wqr-help p { margin: 0; color: var(--ink-2); font-size: var(--text-small); max-width: 72ch; }
+.wqr-help b { color: var(--ink); font-weight: 600; }
+
+/* the table: one outline, hairlines between rows, the boxes a soft fill (no border) that the focus rings in ink */
+.wqr-tablewrap { border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); overflow: hidden; }
+.wqr-table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+.wqr-table thead th { padding: var(--s-2) var(--s-3); text-align: left; font-weight: 500; color: var(--ink-2); border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.wqr-table thead th small { display: block; font-weight: 400; color: var(--ink-3); }
+.wqr-table tbody th, .wqr-table tbody td { padding: 6px var(--s-3); border-top: 1px solid var(--rule-soft); vertical-align: middle; text-align: left; }
+.wqr-table tbody tr:first-child > * { border-top: 0; }
+.wqr-table tbody th { font-weight: 400; min-width: 15rem; }
+.wqr-site { display: block; font-weight: 500; color: var(--ink); font-size: var(--text-body); line-height: 1.3; }
+.wqr-table tbody th small { display: block; color: var(--ink-3); }
+.wqr-last { display: block; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wqr-last small { display: block; color: var(--ink-3); }
+.wqr-none { color: var(--ink-3); }
+.wqr-c-val, .wqr-c-check { width: 8.5rem; }
+.wqr-c-ns { width: 8rem; white-space: nowrap; }
+.wqr-c-note { width: 20%; }
+.wqr-in { width: 100%; min-height: 36px; box-sizing: border-box; margin: 0; padding: 0 var(--s-2); border: 0; border-radius: 0; background: none; box-shadow: inset 0 -2px 0 var(--ink-3);
+  color: var(--ink); font: 500 var(--text-body)/1 var(--f-ui); font-variant-numeric: tabular-nums; }
+/* the optional check: a quiet line under the box, so the column of readings leads */
+.wqr-in-check { background: none; box-shadow: inset 0 -1px 0 var(--rule); border-radius: 0; }
+.wqr-in-check:hover { background: var(--fill); }
+.wqr-in-note { font-weight: 400; font-size: var(--text-small); background: none; box-shadow: inset 0 -1px 0 var(--rule-soft); }
+.wqr-in-note:hover, .wqr-in-note:focus { background: var(--fill); }
+.wqr-in::placeholder { color: var(--ink-3); }
+.wqr-in:hover { background: var(--fill); }
+.wqr-in:focus { outline: 2px solid var(--ink); outline-offset: 0; }
+.wqr-in[aria-invalid="true"] { outline: 2px solid var(--danger); outline-offset: 0; }
+.wqr-c-ns label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); cursor: pointer; min-height: 36px; }
+.wqr-ns { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+.wqr-msg { margin: 0; font-size: var(--text-small); line-height: 1.35; }
+.wqr-table tbody tr.wqr-msgrow > td { border-top: 0; padding: 0 var(--s-3) 8px; }
+.wqr-table tbody tr.wqr-msgrow[hidden] { display: none; }
+.wqr-msg:empty { display: none; }
+.wqr-msg.wqr-bad { color: var(--danger); font-weight: 500; }
+.wqr-msg.wqr-warn { color: var(--ink); }
+.wqr-msg.wqr-warn::before { content: "Check: "; font-weight: 600; }
+
+/* the foot: the counts on the left, the actions on the right; it stays in view while the table scrolls */
+.wqr-foot { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-4);
+  padding: var(--s-3) 0; background: var(--wash); border-top: 1px solid var(--rule-soft); }
+.wqr-foot-words { display: grid; gap: 2px; min-width: 0; }
+.wqr-counts { margin: 0; font-weight: 500; }
+.wqr-kept { color: var(--ink-3); font-size: var(--text-small); }
+.wqr-sheetmsg:empty { display: none; }
+.wqr-sheetmsg p { margin: 0; color: var(--danger); font-weight: 500; font-size: var(--text-small); }
+.wqr-foot-actions { display: flex; align-items: center; gap: var(--s-4); margin-left: auto; }
+.group-panel button.primary.wqr-primary { min-height: var(--tap); padding: 0 var(--s-5); border-radius: var(--radius-pill); }
+
+/* review and the saved round: the figures as plain rows in one outline */
+.wqr-lead { margin: 0; color: var(--ink-2); }
+.wqr-figs { margin: 0; padding: 0 var(--s-4); border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); max-width: 600px; }
+.wqr-fig { display: grid; grid-template-columns: minmax(8rem, 40%) minmax(0, 1fr); gap: var(--s-3); padding: 12px 0; }
+.wqr-fig + .wqr-fig { border-top: 1px solid var(--rule-soft); }
+.wqr-fig dt { color: var(--ink-2); }
+.wqr-fig dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.wqr-body h2 { margin: 0 0 var(--s-2); font: 600 var(--text-body)/1.3 var(--f-ui); }
+.wqr-list { list-style: none; margin: 0; padding: 0 var(--s-4); border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); max-width: 600px; }
+.wqr-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s-3); padding: 10px 0; }
+.wqr-list li + li { border-top: 1px solid var(--rule-soft); }
+.wqr-list li b { font-weight: 500; }
+.wqr-list li > span { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.wqr-list li small { grid-column: 1 / -1; color: var(--ink-3); }
+.wqr-reportbox { max-width: 600px; }
+.wqr-reporthead { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.wqr-reporthead > span { display: inline-flex; align-items: center; gap: var(--s-3); }
+.wqr-reporthead h2 { margin: 0; }
+.wqr-quietbtn { min-height: 32px; padding: 0 var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-pill); background: none; color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; }
+.wqr-quietbtn:hover { background: var(--fill); }
+.wqr-report { margin: var(--s-2) 0 0; padding: var(--s-3) var(--s-4); border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); color: var(--ink);
+  font: 400 var(--text-small)/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* the Water quality page's part: "Sampling rounds" for the group's coordinators */
+.wqr-entry { margin: 0 0 var(--s-4); padding: 0 var(--s-4); border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); max-width: 720px; }
+.wqr-entry[hidden] { display: none; }
+.wqr-entry-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0; }
+.wqr-entry-head h2 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.wqr-go { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 var(--s-4) 0 var(--s-3); border-radius: var(--radius-pill); background: var(--ink); color: var(--panel);
+  text-decoration: none; font: 600 var(--text-small)/1 var(--f-ui); }
+.wqr-go:hover { opacity: .88; }
+.wqr-entry > .wqr-quiet { padding: 0 0 var(--s-3); }
+.wqr-rounds { list-style: none; margin: 0; padding: 0; }
+.wqr-rounds li { border-top: 1px solid var(--rule-soft); }
+.wqr-rounds a { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); min-height: 44px; padding: 10px 0; color: var(--ink); text-decoration: none; flex-wrap: wrap; }
+.wqr-rounds a:hover .wqr-r-title { text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; }
+.wqr-r-title { font-weight: 500; }
+.wqr-rounds small { color: var(--ink-2); font-size: var(--text-small); }
+.wqp-phonebox .wqr-entry { margin: var(--s-4) 0 var(--s-2); }
+
+/* a phone: the table is a list of rows, one site per row, its value on the right; the check, the tick and the note on a quiet line under it */
+@media (max-width: 800px) {
+  #screen-group[data-view="water"] .wqr { padding-bottom: 96px; }
+  .wqr-headset { max-width: none; }
+  .wqr-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .wqr-table, .wqr-table tbody { display: block; }
+  .wqr-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) 7.5rem; grid-template-areas: "site val" "last val" "more more"; column-gap: var(--s-3);
+    padding: 10px var(--s-3); border-top: 1px solid var(--rule-soft); }
+  .wqr-table tbody tr:first-child { border-top: 0; }
+  .wqr-table tbody tr.wqr-msgrow { display: block; padding: 0 var(--s-3) 8px; border-top: 0; }
+  .wqr-table tbody tr.wqr-msgrow[hidden] { display: none; }
+  .wqr-table tbody tr.wqr-msgrow > td { padding: 0; }
+  .wqr-table tbody th, .wqr-table tbody td { display: block; padding: 0; border: 0; width: auto; min-width: 0; }
+  .wqr-table tbody th { grid-area: site; }
+  .wqr-table tbody .wqr-c-last { grid-area: last; }
+  .wqr-table tbody .wqr-c-last .wqr-last { display: inline; font-size: var(--text-small); }
+  .wqr-table tbody .wqr-c-last .wqr-last small { display: inline; margin-left: 6px; }
+  .wqr-table tbody .wqr-c-val { grid-area: val; align-self: center; }
+  .wqr-table tbody .wqr-c-val .wqr-in { min-height: var(--tap); text-align: right; }
+  .wqr-table tbody tr > .wqr-c-check, .wqr-table tbody tr > .wqr-c-ns, .wqr-table tbody tr > .wqr-c-note { grid-row: 3; }
+  .wqr-table tbody tr { grid-template-rows: auto auto auto; }
+  .wqr-table tbody tr::after { content: none; }
+  .wqr-table tbody .wqr-c-check, .wqr-table tbody .wqr-c-ns, .wqr-table tbody .wqr-c-note { margin-top: 6px; }
+  .wqr-table tbody tr { grid-template-columns: minmax(0, 1fr) 7.5rem; }
+  .wqr-table tbody tr > .wqr-c-ns { grid-column: 1; justify-self: start; }
+  .wqr-table tbody tr > .wqr-c-check { grid-column: 2; }
+  .wqr-table tbody tr > .wqr-c-note { grid-column: 1 / -1; grid-row: 4; margin-top: 2px; }
+  .wqr-table tbody .wqr-c-check .wqr-in { min-height: 36px; font-size: var(--text-small); text-align: right; }
+  .wqr-table tbody .wqr-c-check .wqr-in::placeholder { font-weight: 400; }
+  .wqr-c-ns label { min-height: 36px; font-size: var(--text-small); }
+  .wqr-in-note { min-height: 32px; padding: 0; }
+  .wqr-help { display: none; }
+  .wqr-foot { bottom: 72px; padding: var(--s-2) 0; }
+  /* a round is a sheet of its own: the + steps aside while it is open, so it never sits on Review or Save (as PH4's forms cover it) */
+  body:has(#screen-group[data-view="water"] .wqr) .add-button { display: none; }
+  .wqr-foot-actions { gap: var(--s-3); }
+  .wqr-figs, .wqr-list, .wqr-reportbox, .wqr-entry { max-width: none; }
+  .wqr-list li { grid-template-columns: minmax(0, 1fr); }
+  .wqr-list li > span { text-align: left; }
+}
+/* a computer has the unit and "Lab check" in the table's heading: no placeholder in every box */
+@media (min-width: 801px) { .wqr-c-val .wqr-in::placeholder, .wqr-c-check .wqr-in::placeholder { opacity: 0; } }
+/* (the panel's own bottom padding would leave a strip under the sticky foot: the foot reaches the panel's edge) */
+@media (min-width: 801px) { .wqr-foot { bottom: calc(-1 * var(--s-6)); padding-bottom: calc(var(--s-3) + var(--s-6)); margin-bottom: calc(-1 * var(--s-6)); } }
