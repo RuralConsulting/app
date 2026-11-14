@@ -49,9 +49,30 @@
     const more = (on) => { holder.classList.toggle("ph-more-open", on); button.setAttribute("aria-expanded", String(on)); };
     button.addEventListener("click", () => more(!holder.classList.contains("ph-more-open")));
     // a tool that takes over the map (3D, measure, print, compare) closes the list; zoom keeps it open for another tap
-    holder.addEventListener("click", (e) => { if (e.target.closest?.(".rv-3d button, .rv-tools button")) more(false); });
+    holder.addEventListener("click", (e) => { if (e.target.closest?.(".rv-3d button, .rv-tools button, .ph-fit button")) more(false); });   // (RF1: Whole area too)
     try { map.addControl({ onAdd: () => box, onRemove: () => box.remove() }, "top-right"); } catch {}
     try { map.addControl({ onAdd: () => locateControl(map), onRemove: () => {} }, "top-right"); } catch {}
+    // RF1 (the owner's phone, 14 Nov 2026: the title wrapped beside Layers, and "Whole area", the Water quality chip and Layers split
+    // one job across two places): on a phone what the map shows is chosen in one row top left, Layers first (it opens the map's own
+    // sheet, whose own Layers button steps aside so the title has the row), then Water quality and Sites (wq-sites.js places them
+    // after it); "Whole area" joins the tools under More. Nothing is removed. maps.css shows each only at a phone's width.
+    const sheetBtn = holder.querySelector(".rv-layers-btn");
+    if (sheetBtn && !holder.querySelector(".ph-layers")) {
+      const chip = el("button", { type: "button", class: "ph-layers", "aria-expanded": sheetBtn.getAttribute("aria-expanded") || "false", "aria-label": "Layers and legend" },
+        FP.icon ? FP.icon("layers", 16) : null, el("span", {}, "Layers"));
+      chip.addEventListener("click", () => sheetBtn.click());
+      if (typeof MutationObserver !== "undefined") new MutationObserver(() => chip.setAttribute("aria-expanded", sheetBtn.getAttribute("aria-expanded") || "false")).observe(sheetBtn, { attributes: true, attributeFilter: ["aria-expanded"] });
+      holder.append(chip);
+    }
+    const fitBtn = holder.querySelector(".rv-fit");
+    if (fitBtn && !fitBtn.closest(".ph-fit")) {
+      const fitBox = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group ph-fit" }), home = fitBtn.parentElement;
+      // (on a computer it stays where the viewer put it; on a phone it is a tool under More)
+      const place = () => { if (phone()) { if (fitBtn.parentElement !== fitBox) fitBox.append(fitBtn); } else if (fitBtn.parentElement !== home && home?.isConnected) home.append(fitBtn); };
+      try { map.addControl({ onAdd: () => fitBox, onRemove: () => fitBox.remove() }, "top-right"); } catch {}
+      place();
+      root.matchMedia?.("(max-width: 720px)")?.addEventListener?.("change", place);
+    }
   }
   // review of #538, 4: Locate me on a phone's map is the app's own, as on Home (the viewer's is MapLibre's, which a permission query
   // saying "denied" turns off for good and which says nothing when refused): the phone is asked from the tap itself, the real answer

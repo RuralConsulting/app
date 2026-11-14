@@ -126,11 +126,18 @@
     const phone = () => !!root.matchMedia?.("(max-width: 720px)").matches;
     function place() {
       if (gone) return;
-      // PH2: on a phone the chip sits top left, under "Whole area" (the right-hand side is the map's one cluster of controls)
+      // PH2: on a phone the chip sits top left (the right-hand side is the map's one cluster of controls). RF1: in one row after the
+      // map's Layers chip (maps-view.js), so what the map shows is chosen in one place; on a phone too narrow for the row, on the line
+      // under it. (Where there is no Layers chip, Home's map: top left, as before.)
       if (phone()) {
-        const h = holder.getBoundingClientRect(), fit = holder.querySelector(".rv-fit")?.getBoundingClientRect();
-        control.style.right = "auto"; control.style.left = "12px";
-        control.style.top = (fit && fit.height ? Math.round(fit.bottom - h.top + 10) : 12) + "px";
+        const h = holder.getBoundingClientRect(), layers = holder.querySelector(".ph-layers"), lr = layers?.getClientRects().length ? layers.getBoundingClientRect() : null;
+        const fit = holder.querySelector(".rv-fit")?.getBoundingClientRect();
+        control.style.right = "auto";
+        if (!lr) { control.style.left = "12px"; control.style.top = (fit && fit.height && !holder.querySelector(".ph-fit") ? Math.round(fit.bottom - h.top + 10) : 12) + "px"; return; }
+        const cluster = holder.querySelector(".maplibregl-ctrl-top-right")?.getBoundingClientRect(), edge = (cluster && cluster.width ? cluster.left : h.right) - h.left - 8;
+        const left = Math.round(lr.right - h.left + 8), width = control.getBoundingClientRect().width || 0;
+        if (left + width <= edge) { control.style.left = left + "px"; control.style.top = Math.round(lr.top - h.top + (lr.height - (control.getBoundingClientRect().height || lr.height)) / 2) + "px"; }
+        else { control.style.left = Math.round(lr.left - h.left) + "px"; control.style.top = Math.round(lr.bottom - h.top + 8) + "px"; }
         return;
       }
       control.style.left = "";
@@ -146,7 +153,7 @@
     const changes = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => { observe(); place(); });
     function observe() {
       if (!watch) return;
-      watch.disconnect(); watch.observe(holder);
+      watch.disconnect(); watch.observe(holder); watch.observe(control);   // (RF1: Sites appearing can move the chip to the next line)
       for (const n of holder.querySelectorAll(".maplibregl-ctrl-top-right, .maplibregl-ctrl-top-right > *, .rv-fit")) watch.observe(n);
     }
     observe();

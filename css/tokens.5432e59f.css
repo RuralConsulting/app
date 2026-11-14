@@ -89,6 +89,8 @@
   --shadow: var(--shadow-2);
   --backdrop: rgba(0, 0, 0, .32);
   --backdrop-strong: rgba(0, 0, 0, .62);   /* CAP1: under the + ring, so its labels never read as the page behind */
+  --map-scale-ground: color-mix(in srgb, var(--panel) 70%, transparent);   /* RF1: the map's scale, quiet: the map shows through */
+  --ring-dim: rgba(0, 0, 0, .45);   /* RF1: under the + menu, over the map and its names (the owner: about 45% black, light and dark alike) */
 
   --clear: transparent;
   --map-label: #ffffff; --map-halo: #151a14;

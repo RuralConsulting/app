@@ -444,7 +444,7 @@
     media?.addEventListener?.("change", onMedia);
     root_.classList.toggle("wqp-is-phone", phone);
     draw();
-    const api = { node: root_, destroy() { gone = true; token++; chart?.destroy(); siteChart?.destroy(); mapUi?.destroy(); mapUi = null; media?.removeEventListener?.("change", onMedia); if (live === api) live = null; }, state: st };
+    const api = { node: root_, map: () => mapUi?.map || null, destroy() { gone = true; token++; chart?.destroy(); siteChart?.destroy(); mapUi?.destroy(); mapUi = null; media?.removeEventListener?.("change", onMedia); if (live === api) live = null; }, state: st };
     root_.wqp = api;
     live = api;
     return root_;
@@ -480,8 +480,15 @@
     // (its Sites)
     const layersBtn = phoneMode ? el("button", { type: "button", class: "wqp-mapchip wqp-layersbtn", id: "wqp-layers", "aria-haspopup": "dialog",
       onclick: () => FP.sheet?.open({ opener: layersBtn, title: "Layers and legend", className: "wqp-layersheet", body: () => panel }) }, FP.icon ? FP.icon("layers", 16) : null, el("span", {}, "Layers")) : null;
-    const chips = phoneMode ? el("div", { class: "wqp-mapchips" }, ...extra, layersBtn) : null;
-    // (review of #538, 5: on a phone Map | Aerial is the last chip in the same row, which wraps on a narrow phone, so none sits on another)
+    // RF1 (the owner's phone, 14 Nov 2026: coloured dots with no key in view read as a grade): on a phone, whenever LAWA's trend colours
+    // are on the map, "Key" sits beside Layers and opens the key alone, one tap away (keyBtn.hidden follows the sites shown: push())
+    const keyBox = el("div", { class: "wqp-keybox" });
+    const keyBtn = phoneMode ? el("button", { type: "button", class: "wqp-mapchip wqp-keybtn", id: "wqp-key", "aria-haspopup": "dialog", hidden: true,
+      onclick: () => FP.sheet?.open({ opener: keyBtn, title: "Key", className: "wqp-keysheet", body: () => keyBox }) }, el("span", {}, "Key")) : null;
+    const chips = phoneMode ? el("div", { class: "wqp-mapchips" }, ...extra, layersBtn, keyBtn) : null;
+    // (review of #538, 5: on a phone Map | Aerial is the last chip in the same row, which wraps on a narrow phone, so none sits on another;
+    // RF1: the chips are words only on a phone, so Sites, Layers, Key and Aerial | Topo fit one row at 390 px. Not bottom right: the +
+    // floats there over a scrolled page)
     if (chips) chips.append(bg);
     fill(host, phoneMode ? null : panel, el("div", { class: "wqp-mapbox" }, canvas, ...(chips ? [chips] : [bg])), phoneMode ? null : side);
     if (!gl?.Map) { fill(canvas, el("p", { class: "wqp-empty" }, "The map can't be shown in this browser.")); return { side, update() {}, choose() {}, destroy() {} }; }
@@ -515,18 +522,44 @@
       map.addSource("wqp-mask", { type: "geojson", data: empty() });
       map.addSource("wqp-area", { type: "geojson", data: empty() });
       map.addSource("wqp-subs", { type: "geojson", data: empty() });
-      map.addSource(SRC, { type: "geojson", data: empty() });
+      // RF1: on a phone, sites that would sit on one another at this zoom are one quiet mark with their count (MapLibre's own
+      // clustering of the GeoJSON source); a tap on it eases in to its sites. A computer keeps every site (its key is always beside the map).
+      map.addSource(SRC, { type: "geojson", data: empty(), ...(phoneMode ? { cluster: true, clusterRadius: M().CLUSTER.radius, clusterMaxZoom: M().CLUSTER.maxZoom } : {}) });
       map.addLayer({ id: "wqp-mask", type: "fill", source: "wqp-mask", paint: { "fill-color": "#000000", "fill-opacity": FP.mapPalette?.MASK_OPACITY ?? 0.35, "fill-antialias": false } });
       // PH5: no dashes at overview scale: the sub-groups' edges a plain hairline
       map.addLayer({ id: "wqp-subs-line", type: "line", source: "wqp-subs", paint: { "line-color": "#5f6670", "line-width": 0.75, "line-opacity": 0.8 } });
       map.addLayer({ id: "wqp-area-line", type: "line", source: "wqp-area", paint: { "line-color": "#2f3542", "line-width": 1.5, "line-opacity": 0.85 } });
-      map.addLayer({ id: "wqp-chosen", type: "circle", source: SRC, filter: ["==", ["id"], -1], paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#1d1d1f", "circle-stroke-width": 2.5 } });
-      map.addLayer({ id: "wqp-sites", type: "symbol", source: SRC, layout: { "icon-image": ["get", "icon"], "icon-allow-overlap": true, "icon-ignore-placement": true,
+      const single = ["!", ["has", "point_count"]];
+      map.addLayer({ id: "wqp-chosen", type: "circle", source: SRC, filter: ["all", single, ["==", ["get", "site"], -1]], paint: { "circle-radius": 13, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#1d1d1f", "circle-stroke-width": 2.5 } });
+      // RF1: every site a 44 px target on a phone, however small its dot looks: an unseen circle of 22 px round each (the nearest wins)
+      if (phoneMode) map.addLayer({ id: "wqp-hit", type: "circle", source: SRC, filter: single, paint: { "circle-radius": M().CLUSTER.hit, "circle-color": "rgba(0,0,0,0)" } });
+      map.addLayer({ id: "wqp-sites", type: "symbol", source: SRC, filter: single, layout: { "icon-image": ["get", "icon"], "icon-allow-overlap": true, "icon-ignore-placement": true,
         "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 0.8, 13, 1.1], "symbol-sort-key": ["get", "order"] } });
+      if (phoneMode) {
+        // the cluster: a dark ink circle, a thin light edge and the number, no colour that could read as a state; drawn as a picture per
+        // count (made when first asked for), so it needs no map font
+        map.addLayer({ id: "wqp-clusters", type: "symbol", source: SRC, filter: ["has", "point_count"],
+          layout: { "icon-image": ["concat", "wqp-n-", ["to-string", ["get", "point_count"]]], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        map.on("styleimagemissing", (e) => { const n = /^wqp-n-(\d+)$/.exec(e.id || "")?.[1]; if (n && !map.hasImage(e.id)) map.addImage(e.id, countImage(Number(n)), { pixelRatio: 2 }); });
+        map.on("click", "wqp-clusters", async (e) => {
+          const f = e.features?.[0], id = f?.properties?.cluster_id;
+          if (id == null) return;
+          let zoom = null;
+          try { zoom = await map.getSource(SRC).getClusterExpansionZoom(id); } catch { zoom = map.getZoom() + 2; }
+          map.easeTo({ center: f.geometry.coordinates, zoom: Math.min(zoom + 0.25, 18), duration: root.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 450 });
+        });
+      }
       paint();
-      map.on("click", "wqp-sites", (e) => { const f = e.features?.[0]; if (f) onSite(Number(f.id)); });
-      map.on("mouseenter", "wqp-sites", () => { map.getCanvas().style.cursor = "pointer"; });
-      map.on("mouseleave", "wqp-sites", () => { map.getCanvas().style.cursor = ""; });
+      const hitLayer = phoneMode ? "wqp-hit" : "wqp-sites";
+      map.on("click", hitLayer, (e) => {
+        // (two near targets overlap: the site nearest the finger)
+        const pick = M().nearestSite((e.features || []).map((f) => ({ id: Number(f.properties.site), at: map.project(f.geometry.coordinates) })), e.point);
+        if (pick != null) onSite(pick);
+      });
+      for (const l of [hitLayer, ...(phoneMode ? ["wqp-clusters"] : [])]) {
+        map.on("mouseenter", l, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", l, () => { map.getCanvas().style.cursor = ""; });
+      }
       map.on("moveend", () => { for (const l of layers) if (l.on && l.def.kind === "ref") readRef(l); if (layers.some((l) => l.on && l.def.kind === "rivers")) readRivers(); });
       push();
     });
@@ -560,9 +593,23 @@
       if (!map.getSource?.(SRC)) return;
       map.getSource(SRC).setData({ type: "FeatureCollection", features: rows.filter((r) => r.lngLat).map((r) => {
         const s = M().symbol(r);
-        return { type: "Feature", id: r.id, geometry: { type: "Point", coordinates: r.lngLat }, properties: { icon: s.icon, name: r.name, order: (r.own ? 2 : 0) + (r.held ? 0 : 1) } };
+        return { type: "Feature", id: r.id, geometry: { type: "Point", coordinates: r.lngLat }, properties: { site: r.id, icon: s.icon, name: r.name, order: (r.own ? 2 : 0) + (r.held ? 0 : 1) } };
       }) });
-      map.setFilter("wqp-chosen", ["==", ["id"], chosen ?? -1]);
+      mark();
+      if (keyBtn) keyBtn.hidden = !M().trendsShown(rows);
+    }
+    // (the site's id is a property: a clustered source keeps properties, not every feature's own id)
+    const mark = () => { if (map.getLayer?.("wqp-chosen")) map.setFilter("wqp-chosen", ["all", ["!", ["has", "point_count"]], ["==", ["get", "site"], chosen ?? -1]]); };
+    // A cluster's mark: a dark ink circle with a thin light edge and the count in white (48 px drawn, 24 px shown); larger for 100 and more
+    function countImage(n) {
+      const words = n > 999 ? "999+" : String(n), size = words.length > 2 ? 64 : 52, c = document.createElement("canvas"); c.width = c.height = size;
+      const g = c.getContext("2d"), mid = size / 2;
+      g.beginPath(); g.arc(mid, mid, mid - 3, 0, Math.PI * 2); g.fillStyle = M().CLUSTER.ink; g.fill(); g.lineWidth = 2.5; g.strokeStyle = M().CLUSTER.edge; g.stroke();
+      g.fillStyle = "#ffffff"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.font = "600 " + (words.length > 2 ? 20 : 22) + "px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+      g.fillText(words, mid, mid + 1);
+      const d = g.getImageData(0, 0, size, size);
+      return { width: size, height: size, data: new Uint8Array(d.data.buffer) };
     }
     function frame(b, sub) {
       const pts = [...(sub?.rings?.length ? sub.rings.flat() : b.area.flat()), ...(b.area.length ? [] : rows.map((r) => r.lngLat).filter(Boolean))];
@@ -582,6 +629,10 @@
         el("h2", { class: "wqp-h" }, "Legend"),
         el("ul", { class: "wqp-legend" }, ...legendItems.map((x) => el("li", {}, swatch(x), el("span", {}, x.label)))),
         el("p", { class: "wqp-hint" }, type === "groundwater" ? "Groundwater sites are not graded: the river bands do not apply to wells." : "Colour is LAWA's published 10-year trend of the chosen measure; LAWA reports river sites only."));
+      // RF1: the phone's Key sheet: the same key and its sentence, and what a numbered mark is
+      if (phoneMode) fill(keyBox, el("ul", { class: "wqp-legend" }, ...legendItems.map((x) => el("li", {}, swatch(x), el("span", {}, x.label))),
+        el("li", {}, clusterSwatch(), el("span", {}, M().CLUSTER_WORDS))),
+        el("p", { class: "wqp-hint" }, type === "groundwater" ? "Groundwater sites are not graded: the river bands do not apply to wells." : M().TREND_NOT_GRADE));
     }
     async function setType(type) {
       if (typeNow === type) return;
@@ -692,7 +743,8 @@
         drawPanel(s.type);
         map.resize();
       },
-      choose(id) { chosen = id; if (map.getLayer?.("wqp-chosen")) map.setFilter("wqp-chosen", ["==", ["id"], id ?? -1]); },
+      choose(id) { chosen = id; mark(); },
+      map,
       destroy() { scheme?.removeEventListener?.("change", paint); themeWatch?.disconnect(); try { map.remove(); } catch { /* gone */ } },
     };
   }
@@ -707,8 +759,20 @@
     else add("circle", { cx: 12, cy: 12, r, fill: colour, stroke: "#ffffff", "stroke-width": 1.5, opacity: op });
     return svg;
   }
+  // RF1: the cluster's mark in the key: a dark circle with a number
+  function clusterSwatch() {
+    const NS = "http://www.w3.org/2000/svg", svg = document.createElementNS(NS, "svg");
+    for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: 22, height: 22, "aria-hidden": "true", class: "wqp-swatch" })) svg.setAttribute(k, String(v));
+    const c = document.createElementNS(NS, "circle");
+    for (const [k, v] of Object.entries({ cx: 12, cy: 12, r: 10.5, fill: M().CLUSTER.ink, stroke: M().CLUSTER.edge, "stroke-width": 1.25 })) c.setAttribute(k, String(v));
+    const t = document.createElementNS(NS, "text");
+    for (const [k, v] of Object.entries({ x: 12, y: 16, "text-anchor": "middle", fill: "#ffffff", "font-size": 11, "font-weight": 600 })) t.setAttribute(k, String(v));
+    t.textContent = "3";
+    svg.append(c, t);
+    return svg;
+  }
 
   // SR1: a saved sampling round changes the group's results: the next visit reads them again
   const forget = (groupId) => loaders.delete(groupId);
-  FP.wqPage = { view, summary, miniBar, href, loader, forget, close: () => live?.destroy() };
+  FP.wqPage = { view, summary, miniBar, href, loader, forget, close: () => live?.destroy(), debugMap: () => live?.map?.() || null };
 })(typeof window === "undefined" ? globalThis : window);

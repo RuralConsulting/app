@@ -180,7 +180,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .maplibregl-ctrl-group, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact { background: var(--panel); color: var(--ink); }
 .maplibregl-ctrl-attrib a { color: inherit; }
 .maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: var(--map-icon-filter); }
-.maplibregl-ctrl-scale { background: var(--panel); color: var(--ink); border-color: var(--ink-2); font: var(--text-small) var(--f-ui); }
+/* RF1: the scale is quiet on every map: a hairline, the smallest of the app's four type sizes in a light weight and quiet ink, a soft
+   see-through ground */
+.maplibregl-ctrl-scale { background: var(--map-scale-ground); color: var(--ink-2); border: 1px solid var(--ink-3); border-top: 0;
+  padding: 0 4px; font: 400 var(--text-small)/1.3 var(--f-ui); }
 .terrain-toggle { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: var(--text-body); cursor: pointer; }
 .terrain-toggle[hidden] { display: none; }
 /* LN1: a layer's advisor note in its info panel, folded, read-only */

@@ -12,7 +12,7 @@
 // line then says "requested by you, <date>" and links to the Onboarding checklist, where the plan stands as "An advisor reads this
 // plan in" with who asked and when (ON1; PL11's confirm reads it in and marks the request). Nothing is imported from here.
 // Data: { documents: [documents rows + relates_to], canEdit?, canAdd?, notice?, offer?: [{ id, title }], readInHref?, requests?: [open
-// plan_import_requests rows], userId?, title? }. render is pure; mounted wires search, upload and moves to ctx.store
+// plan_import_requests rows], userId?, title?, place? (the farm's or group's name, for an empty explorer's one sentence: RF1) }. render is pure; mounted wires search, upload and moves to ctx.store
 // ({ add(item) -> id, move(id, change), changed(), requestReadIn(id), supersede(id, by), download(doc) -> { url, name } }) when the host has one.
 // V5 (files that work): each file says its type and issue date, and "Superseded" where it is; a superseded file stays readable, in its
 // own fold (status superseded, tier not archive); the Download button saves a file under its original name (downloadName); data.canSupersede
@@ -294,7 +294,8 @@
   // st: { folder, sort } (the person's place, kept by the live part); the files of a route's ?item= open in their folder.
   function explorerBody(data, o, st = {}) {
     const d = data || {}, f = folders(d.documents, { shared: d.shared, sort: st.sort });
-    if (!f.folders.length) return '<p class="fx-none">' + (list(d.documents).length ? "Every file here is archived; search to find one." : "No files yet.") + "</p>";
+    // (RF1: an empty Files names its place in its one sentence, where the list would start; the + is how to add one)
+    if (!f.folders.length) return '<p class="fx-none">' + (list(d.documents).length ? "Every file here is archived; search to find one." : text(d.place) ? "No files have been added to " + esc(text(d.place)) + " yet." : "No files yet.") + "</p>";
     // a short list needs no folders: up to FLAT_MAX files (or one folder's worth) are listed straight away, newest first
     const all = f.folders.flatMap((x) => x.items);
     if (f.folders.length === 1 || all.length <= FLAT_MAX) {

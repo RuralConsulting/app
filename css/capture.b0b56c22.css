@@ -4,17 +4,17 @@
 
 /* ---- the add menu: a list rising from the + (PH1, after the owner's guide of 13 Nov 2026) -------------------------------------------
    Plain rows of words with a small leading icon, no box around each option; one thin rounded outline around the set; a hairline between
-   groups; ink only. Each row is a 44 px target. Take a photo is first, its icon in a filled ink circle (the primary row). */
+   groups; ink only. Each row is a 44 px target. Take a photo is first. RF1 (the owner's phone, 14 Nov 2026): every row the same plain
+   pattern, the photo's icon no longer in a filled circle; the map behind dimmed (--ring-dim, about 45% black) under the menu and over the
+   map and its names, so nothing reads through at the menu's edge; a tap on the dim closes the menu. */
 .ring { position: fixed; inset: 0; z-index: 35; }
-.ring-backdrop { position: absolute; inset: 0; background: var(--backdrop-strong); animation: fp-fade var(--dur-2) var(--ease); }
+.ring-backdrop { position: absolute; inset: 0; background: var(--ring-dim); animation: fp-fade var(--dur-2) var(--ease); }
 .ring-list { position: fixed; box-sizing: border-box; padding: 6px 0; border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); color: var(--ink);
   box-shadow: var(--shadow-2); animation: ring-in var(--dur-2) var(--ease) both; }
 .ring-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; margin: 0; padding: 0 18px; border: 0; background: none; color: var(--ink);
   font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; cursor: pointer; box-sizing: border-box; -webkit-tap-highlight-color: var(--clear); }
 .ring-dot { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; color: var(--ink); }
 .ring-word { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ring-primary .ring-word { font-weight: 500; }
-.ring-primary .ring-dot { background: var(--ink); color: var(--panel); }
 .ring-sep { height: 1px; margin: 4px 18px; background: var(--rule-soft); }
 .ring .ring-item:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; border-radius: var(--radius-s); }
 @media (hover: hover) { .ring-item:hover { background: var(--fill); } }
@@ -180,6 +180,11 @@ li.rec-row { cursor: default; }
 .pa-locate.pa-busy .icon { animation: pa-pulse 1s ease-in-out infinite; }
 @keyframes pa-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .pa-locate.pa-busy .icon { animation: none; opacity: .5; } }
+/* RF1: Aerial | Topo under Locate, in the same top-right cluster (upright, as on Places); each choice 34 px to see, 44 px to tap */
+.pa-bg { position: absolute; z-index: 5; top: 66px; right: 12px; flex-direction: column; width: 62px; box-sizing: border-box; }
+.pa-bg[hidden] { display: none; }
+.pa-stage .pa-bg button { position: relative; width: 100% !important; min-height: 34px; padding: 0 6px !important; }
+.pa-stage .pa-bg button::after { content: ""; position: absolute; inset: -5px 0; }
 .pa-sheet { flex: none; max-height: 46%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 24px 16px; background: var(--panel); border-top: 1px solid var(--rule-soft);
   border-radius: var(--radius-l) var(--radius-l) 0 0; margin-top: -12px; position: relative; z-index: 4; box-sizing: border-box; }
 .pa:has(.wqs-open) .pa-sheet { display: none; }
@@ -193,10 +198,13 @@ li.rec-row { cursor: default; }
 .pa-labels { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
 /* PH5 (the owner, 14 Nov 2026: the names were large, and the base map's town names showed under them): a small quiet name on an
    opaque soft pill (nothing of the map shows through it), no shadow, no button look; a tap zooms there (phone-area.js goTo) */
-.pa-label { position: absolute; left: 0; top: 0; max-width: 128px; min-height: 22px; padding: 2px 8px; border: 0; border-radius: var(--radius-pill); pointer-events: auto;
-  background: var(--panel); color: var(--ink); font: 500 var(--text-small)/1.2 var(--f-ui); letter-spacing: 0; text-align: center; white-space: normal;
-  box-shadow: 0 0 0 0.5px var(--rule-soft); cursor: pointer; -webkit-tap-highlight-color: var(--clear); }
-.pa-label::after { content: ""; position: absolute; inset: -11px -4px; }   /* a 44 px tap target round a 22 px name */
+/* RF1 (the owner's phone, 14 Nov 2026: a narrow sub-group was hidden under its own name): smaller and tighter, the app's smallest type
+   size (13 px: the four-size scale, tokens.css) on a tight line in a tight pill, with the same 44 px tap target round it (an unseen
+   area, not a bigger name) */
+.pa-label { position: absolute; left: 0; top: 0; max-width: 132px; min-height: 18px; padding: 1px 6px; border: 0; border-radius: var(--radius-pill); pointer-events: auto;
+  background: var(--panel); color: var(--ink); font: 500 var(--text-small)/1.1 var(--f-ui); letter-spacing: 0; text-align: center; white-space: normal;
+  box-shadow: 0 0 0 0.5px var(--rule-soft); cursor: pointer; -webkit-tap-highlight-color: var(--clear); box-sizing: border-box; }
+.pa-label::after { content: ""; position: absolute; inset: min(0px, calc((100% - 44px) / 2)) min(-4px, calc((100% - 44px) / 2)); }   /* at least 44 x 44 */
 .pa-label[hidden] { display: none; }
 .pa-label-only { color: var(--ink-2); }   /* a sub-group the person is not in: a tap only zooms to it */
 .pa-label.pa-going { box-shadow: inset 0 0 0 1.5px var(--ink); }

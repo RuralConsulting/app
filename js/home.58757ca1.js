@@ -134,6 +134,8 @@
     $("#home-results").replaceChildren(...found.map((p) => item(p, "search")));
     $("#home-results").hidden = !found.length;
     $("#home-none").textContent = q.trim() && !found.length ? "No farm or group matches “" + q.trim() + "”." : "";
+    const clear = $("#home-clear");
+    if (clear) clear.hidden = !(q.trim() && !found.length);
     $("#home-fold").hidden = !!q.trim();   // while searching, the matches stand in for the list
   }
   // A place chosen (on the map, in the list or in search): marked and framed on the map, and its card shown.
@@ -170,6 +172,15 @@
     if (bound) return;
     bound = true;
     $("#home-search").addEventListener("input", drawResults);
+    $("#home-clear")?.addEventListener("click", () => { $("#home-search").value = ""; drawResults(); $("#home-search").focus(); });
+    // RF1: on a phone the Places card spans the map's width and the map's controls (Locate, Aerial | Topo) stand below it, never
+    // beside it: the card's bottom edge, kept as --portfolio-bottom on the map, however the card grows (search, the list opened)
+    const panel = $("#portfolio"), map = $("#map");
+    if (panel && map && typeof ResizeObserver !== "undefined") {
+      const keep = () => { const p = panel.getBoundingClientRect(), m = map.getBoundingClientRect(); map.style.setProperty("--portfolio-bottom", (panel.hidden || !p.height ? 0 : Math.max(0, Math.round(p.bottom - m.top))) + "px"); };
+      new ResizeObserver(keep).observe(panel);
+      root.addEventListener("resize", keep);
+    }
     $("#home-search").addEventListener("keydown", (e) => {
       const first = $("#home-results").querySelector("button");
       if (e.key === "Enter" && first) { e.preventDefault(); first.click(); }

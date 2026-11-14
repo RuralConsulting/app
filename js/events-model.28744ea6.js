@@ -95,6 +95,14 @@
     const all = [...(events || [])];
     return { upcoming: all.filter((e) => !over(e)).sort(byStart), past: all.filter(over).sort((a, b) => byStart(b, a)) };
   }
+  // RF1: the one sentence where the list would start when there is nothing to list, naming the place: no events at all (tab null), or
+  // none coming up, or none past
+  function emptyWords(place, tab = null) {
+    const name = String(place || "").trim() || "this group";
+    if (tab === "past") return "No past events in " + name + ".";
+    if (tab === "upcoming") return "Nothing is coming up in " + name + ".";
+    return "No events have been added to " + name + " yet.";
+  }
 
   // ---- topics ---------------------------------------------------------------------------------------------------------------------
   // Trimmed, empty dropped, one of each ignoring case (the first spelling kept): as the database's guard keeps them. A semicolon
@@ -351,7 +359,7 @@
   const fileName = (group, what, from, to, ext) => [String(group || "group").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "group",
     what, from || "start", to || "end"].join("-") + "." + ext;
 
-  return { TZ, MAX_IMPORT, MAX_TOPICS, nz, nzInstant, dayKey, timeKey, addDays, midnight, dateText, clock, span, whenText, isCancelled, monthGrid, shiftMonth, lists,
+  return { TZ, MAX_IMPORT, MAX_TOPICS, nz, nzInstant, dayKey, timeKey, addDays, midnight, dateText, clock, span, whenText, isCancelled, monthGrid, shiftMonth, lists, emptyWords,
     cleanTopics, topicSuggestions, toRow, toForm, EVENT_COLUMNS, ATTENDANCE_COLUMNS, toCsv, parseCsv, eventCsvRow, inRange, eventsCsv, attendanceCsv, template,
     readDate, readTime, importPreview, ACTION_TEXT, icsText, fold, ics, fileName, DAYS, MONTHS, ATTENDEE_KIND };
 });

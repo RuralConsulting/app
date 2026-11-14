@@ -82,7 +82,11 @@
     }
     function draw() {
       const body = st.screen === "event" ? eventScreen() : st.screen === "form" ? formScreen() : st.screen === "export" ? exportScreen() : st.screen === "import" ? importScreen() : calendarScreen();
-      wrap.replaceChildren(el("h2", {}, "Events"), ...(st.notice ? [el("p", { class: "events-notice", role: "status" }, st.notice)] : []), body);
+      // RF1: the calendar's controls (List | Month, "…") share the heading's row, so the events start higher on a phone
+      const head = el("div", { class: "events-head" }, el("h2", {}, "Events"));
+      const acts = st.screen === "calendar" ? body.querySelector?.(":scope > .events-actions") : null;
+      if (acts) head.append(acts);
+      wrap.replaceChildren(head, ...(st.notice ? [el("p", { class: "events-notice", role: "status" }, st.notice)] : []), body);
       st.notice = null;
     }
     const go = (screen, extra = {}) => { Object.assign(st, { screen }, extra); draw(); wrap.scrollIntoView?.({ block: "start" }); };
@@ -102,8 +106,10 @@
       box.append(actions);
       if (st.failed) { box.append(el("p", { role: "alert", class: "events-failed" }, "Couldn't read the group's events just now: " + st.failed)); return box; }
       if (st.truncated) box.append(el("p", { class: "group-fine" }, "The group has " + st.total.toLocaleString("en-NZ") + " events; the earliest " + CAP.toLocaleString("en-NZ") + " are shown."));
+      // RF1: a group with no events says so once, in one sentence naming it, where the list would start (no Upcoming and Past tabs
+      // with nothing in either); the month grid keeps its days and says it once under them
+      if (!st.events.length) { if (st.mode === "month") box.append(monthNode()); box.append(el("p", { class: "events-empty" }, M().emptyWords(group.name))); return box; }
       box.append(st.mode === "month" ? monthNode() : listNode());
-      if (!st.events.length) box.append(el("p", { class: "events-empty" }, "No events yet."));
       return box;
     }
     function chip(ev) {
@@ -143,7 +149,7 @@
       const tabs = el("div", { class: "events-tabs", role: "tablist" }, ...[["upcoming", "Upcoming", l.upcoming.length], ["past", "Past", l.past.length]].map(([k, label, n]) =>
         el("button", { type: "button", role: "tab", "aria-selected": String(st.tab === k), onclick: () => { st.tab = k; draw(); } }, label + " (" + n + ")")));
       const shown = st.tab === "past" ? l.past : l.upcoming;
-      if (!shown.length) return el("div", { class: "events-list-wrap" }, tabs, el("p", { class: "events-empty-tab" }, st.tab === "past" ? "No past events." : "Nothing coming up."));
+      if (!shown.length) return el("div", { class: "events-list-wrap" }, tabs, el("p", { class: "events-empty-tab" }, M().emptyWords(group.name, st.tab)));
       // UI2: an agenda: the events under their month, with a slim strip of the months along the top to jump to one
       const months = [];
       for (const ev of shown) { const key = M().span(ev).first.slice(0, 7); if (!months.length || months[months.length - 1].key !== key) months.push({ key, events: [] }); months[months.length - 1].events.push(ev); }

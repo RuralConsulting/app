@@ -1260,7 +1260,7 @@
     const wrap = el("section", { class: "documents-view", "data-view": "documents" }, sentence, onboarding, list);
     host.append(wrap);
     const farm = context.farm.id, handles = [];
-    const data = () => ({ documents: context.documents, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.simpleView?.on() ? null : FP.href(M.href(farm, "onboarding")),
+    const data = () => ({ documents: context.documents, place: context.farm.name, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.simpleView?.on() ? null : FP.href(M.href(farm, "onboarding")),
       requests: context.planRequests || [], userId: user?.id || null });
     handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => { const sentenceData = M.documents(context, FP.documentsBlock.arrange(context.documents)); return FP.simpleView?.on() ? { ...sentenceData, title: "Files" } : sentenceData; }, level: 2, href: FP.href }));
     // PH3: folders, then files; drawn with no files too, so the screen says so in one sentence

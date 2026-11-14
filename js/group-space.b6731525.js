@@ -918,7 +918,7 @@
       download: (doc) => Files.downloadLink(FP.sb, doc),
       async changed(message) { data.documents = await groupDocuments(FP.sb, data.group.id); notice = message || null; handle?.refresh(); notice = null; },
     };
-    handle = FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: { explorer: true } }, { read: () => ({ documents: data.documents, shared: shared(), canEdit: editable, canAdd: editable, canSupersede: editable && !!FP.ops?.isStaff?.(), notice }), level: 3, nested: true, href: FP.href, store });
+    handle = FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: { explorer: true } }, { read: () => ({ documents: data.documents, shared: shared(), place: data.group.name, canEdit: editable, canAdd: editable, canSupersede: editable && !!FP.ops?.isStaff?.(), notice }), level: 3, nested: true, href: FP.href, store });
     notice = null;
     wrap.addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");

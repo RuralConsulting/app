@@ -173,10 +173,19 @@
   .wqp-phonebox .wqp-sentence { margin-bottom: var(--s-2); }
   .wqp-phonebox .wqp-phonelead { margin: var(--s-2) 0 0; color: var(--ink-3); font-size: var(--text-small); }
   .wqp-mapchips { position: absolute; z-index: 3; top: var(--s-3); left: var(--s-3); right: var(--s-3); display: flex; flex-wrap: wrap; gap: 8px; }
+  /* RF1: one row: Sites, Layers, Key in words, then Aerial | Topo at its end (each choice 32 px to see, 44 px to tap) */
   .wqp-mapchips .wqp-bgswitch { position: static; margin-left: auto; }
+  .wqp-phonemap .wqp-bgswitch button { min-height: 32px; }
+  .wqp-mapchips .wqp-mapchip { padding: 0 10px; }
+  .wqp-mapchips .wqp-mapchip > .icon { display: none; }
   .wqp-mapchip { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-radius: var(--radius-pill);
     background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); font: 600 var(--text-small)/1 var(--f-ui); cursor: pointer; }
   .wqp-mapchip::after { content: ""; position: absolute; inset: -5px 0; }
+  .wqp-mapchip[hidden] { display: none; }
   .wqp-layersheet .wqp-layers { display: block; padding: 0 var(--s-4); }
+  /* RF1: the Key, one tap from the map whenever trend colours show: the key's rows and its one sentence */
+  .wqp-keysheet .wqp-keybox { padding: 0 var(--s-4) var(--s-3); }
+  .wqp-keysheet .wqp-legend { list-style: none; margin: 0 0 var(--s-2); padding: 0; }
+  .wqp-keysheet .wqp-legend li { min-height: 32px; font-size: var(--text-body); }
   .wqp-sitesheet .wqp-phonelist { padding: 0 var(--s-4); }
 }

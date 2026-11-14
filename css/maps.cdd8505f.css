@@ -122,7 +122,7 @@
    is open). Top left: "Whole area" (or "Whole property"), and the Water quality chip under it. Bottom left, above the sheet: the scale
    and the credit's "i". Bottom right, above the sheet: the + alone (add.js). The map's own sheet: its title row and Layers; open, it
    leaves the cluster clear and the +, the chip and the scale step aside. Every control a 44 px target. viewer.js is not edited. */
-.ph-more, .ph-locate { display: none; }
+.ph-more, .ph-locate, .ph-layers, .ph-fit { display: none; }
 .ph-locate-btn, .ph-more-btn { display: grid; place-items: center; color: var(--ink); }
 .ph-locate-btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--ink); }
 .ph-locate-btn.ph-busy .icon { animation: pa-pulse 1s ease-in-out infinite; }
@@ -161,14 +161,26 @@
   .maps-viewer .maplibregl-ctrl-bottom-right > .maplibregl-ctrl { margin: 0; }
   .maps-viewer .maplibregl-ctrl-attrib.maplibregl-compact-show { max-width: calc(100vw - 110px); }
   .maps-viewer:is(.rv-panel-open, .wqs-open) :is(.maplibregl-ctrl-bottom-right, .wqs-ctrl) { display: none; }
-  /* "Whole area" and the chip: 34 px to look at, 44 px to tap */
-  .maps-viewer .rv-fit { min-height: 34px; }
-  .maps-viewer .rv-fit::after, .maps-viewer .wqs-toggle::after, .maps-viewer .wqs-list-btn::after { content: ""; position: absolute; inset: -5px 0; }
+  /* the chips: 34 px to look at, 44 px to tap */
+  .maps-viewer .wqs-toggle::after, .maps-viewer .wqs-list-btn::after, .maps-viewer .ph-layers::after { content: ""; position: absolute; inset: -5px 0; }
   .maps-viewer .wqs-toggle, .maps-viewer .wqs-list-btn { position: relative; }
-  /* the sheet: the title and Layers; the group's name and the Rural Consulting mark are the header's, not repeated here */
+  /* RF1: what the map shows, chosen in one row top left: Layers (the map's own sheet), then Water quality and Sites (wq-sites.js
+     places them after it, or on the line under it on a narrow phone). The sheet's own Layers button steps aside, so its title has the
+     row to itself, on one line. "Whole area" is a tool under More (the cluster's third column, with Locate and More). */
+  .maps-viewer .ph-layers { position: absolute; z-index: 6; top: 10px; left: 12px; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px;
+    border: 0; border-radius: 4px; box-shadow: var(--map-pin-shadow); background: var(--panel); color: var(--ink); font: 600 var(--text-small) var(--f-ui); white-space: nowrap; cursor: pointer; }
+  .maps-viewer .ph-layers[aria-expanded="true"] { box-shadow: inset 0 0 0 1.5px var(--ink), var(--map-pin-shadow); }
+  .maps-viewer:is(.wqs-open, .ph-more-open, .rv-measuring, .rv-comparing) .ph-layers { display: none; }
+  .maps-viewer .rv-titlebar .rv-layers-btn { display: none; }
+  .maps-viewer .rv-titlebar > div:first-child { flex: 1; }
+  .maps-viewer .ph-fit { display: none; grid-column: 1 / -1; grid-row: 5; justify-self: end; }
+  .maps-viewer.ph-more-open .maplibregl-ctrl-top-right > .ph-fit { display: block; background: none; border: 0; border-radius: var(--radius-pill); box-shadow: none; overflow: visible; }
+  .maps-viewer .maplibregl-ctrl-top-right .ph-fit .rv-fit { position: static; display: inline-flex; align-items: center; box-sizing: border-box; width: auto; height: 44px; margin: 0; padding: 0 16px;
+    border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); font: 600 var(--text-small)/1 var(--f-ui); white-space: nowrap; }
+  /* the sheet: the title on one line; the group's name and the Rural Consulting mark are the header's, not repeated here */
   .maps-viewer .rv-kicker, .maps-viewer .rv-org .rv-brand { display: none; }
   .maps-viewer .rv-org:not(:has(.rv-back)) { display: none; }
-  .maps-viewer .rv-title { font-size: var(--text-heading); }
+  .maps-viewer .rv-title { font-size: var(--text-body); font-weight: 600; line-height: 1.3; margin: 4px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .maps-viewer .rv-panel { max-height: calc(100% - 124px); }
   /* measuring or comparing (a tool from More, which closes): the tool's bar sits low, above the sheet, in place of the scale and credit,
      and the tools stay up top so the same button ends it; the + steps aside meanwhile (add.js) */

@@ -20,7 +20,7 @@
 
   // Opens the menu for `button` (the round +). Returns false, drawing nothing, when it cannot fit here (the caller opens the list).
   // PH1: a list rising from the +: one thin outline around the set, plain rows (a small leading icon, then the words), Take a photo
-  // first and the primary row (its icon in a filled ink circle), a hairline between groups; read and moved through top to bottom.
+  // first (marked ring-primary, and drawn as every other row: RF1), a hairline between groups; read and moved through top to bottom.
   function open({ button, ctx, available, more }) {
     close(false);
     const slots = M().ring(available, M().readPrefs(storage(), user()));
@@ -38,7 +38,7 @@
       const label = FP.phoneModel.rowWords(a);
       const b = el("button", { type: "button", role: "menuitem", class: "ring-item" + (primary ? " ring-primary" : ""), id: "ring-" + (a ? a.id : s.kind), "data-ring": a ? a.id : s.kind,
         "aria-label": a ? label + (a.hint ? ": " + a.hint : "") : "More: everything you can add here", tabindex: i ? "-1" : "0" },
-        el("span", { class: "ring-dot", "aria-hidden": "true" }, FP.icon(a ? a.icon : "more", primary ? 18 : 20)), el("span", { class: "ring-word", "aria-hidden": "true" }, label));
+        el("span", { class: "ring-dot", "aria-hidden": "true" }, FP.icon(a ? a.icon : "more", 20)), el("span", { class: "ring-word", "aria-hidden": "true" }, label));
       b.addEventListener("click", () => choose(s));
       return b;
     });

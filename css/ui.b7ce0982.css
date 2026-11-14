@@ -462,11 +462,19 @@ body.simple-files .group-documents { margin: 0 auto; }
 /* UI2d: on a phone the Places panel spans the map up to the column of map controls on the right, and covered the Map half of the
    switch. There the switch stands upright in that column (Map above Aerial) and the panel leaves room for it (10 px margin, the
    62 px switch, 8 px clear). A computer, and the group's Overview map (no panel over it), keep the switch as it is. */
+/* RF1 (the owner's phone, 14 Nov 2026: the card ran to within a few pixels of the controls): the card spans the map's width, and the
+   map's controls stand in their column below it (home.js keeps --portfolio-bottom at the card's bottom edge), clear of it however it grows */
 @media (max-width: 800px) {
-  body.portfolio-active #portfolio { right: 80px; }
+  body.portfolio-active #portfolio { right: 8px; }
+  body.portfolio-active #map .maplibregl-ctrl-top-right { top: calc(var(--portfolio-bottom, 0px) + 2px); }
   body.portfolio-active #map .map-bg-switch { flex-direction: column; width: 62px; }
   body.portfolio-active #map .map-bg-switch button { width: 100% !important; min-height: 34px; padding: 0 6px !important; }
+  /* "All places (n)": a 44 px row */
+  #portfolio .home-fold summary { min-height: var(--tap); padding: 12px 2px; line-height: 20px; box-sizing: border-box; }
+  #portfolio .home-fold { margin-top: 2px; }
+  #portfolio .home-clear { min-height: var(--tap); padding: 0 2px; }
 }
+.home-clear[hidden] { display: none; }
 /* PL2: one mark per place on the Places map: a group's round marker (its logo, else its initials, ringed in its soft hue) or a farm's
    small ink dot, its name beside it. The whole mark is the tap target (at least 44 px tall) and opens that place, never one under it. */
 .home-label { display: flex; align-items: center; min-height: var(--tap, 44px); cursor: pointer; }
@@ -620,6 +628,17 @@ body.simple-files .group-documents { margin: 0 auto; }
   .events-actions > button.primary[data-action="add"] span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .group-panel .events-actions button.primary[data-action="add"] { width: var(--tap); padding: 0; justify-content: center; }
   .events-actions .more-button { margin-left: 0; }
+  /* RF1: the stacked controls tighter, so the events start higher: the heading, List | Month with "…", then the tabs (a list only) */
+  .group-events .events-head { display: flex; align-items: center; gap: var(--s-3); margin: 0 0 var(--s-2); }
+  .group-events .events-head > h2 { flex: 1; min-width: 0; margin: 0; }
+  .group-events .events-head .events-actions { flex: none; margin: 0; }
+  .group-events .events-head .events-toggle { flex: none; width: auto; overflow: visible; }
+  .group-events .events-head .events-toggle button { position: relative; padding: 0 var(--s-3); }
+  .group-events .events-head .events-toggle button::after { content: ""; position: absolute; inset: -6px 0; }   /* 32 px to see, 44 px to tap */
+  .group-events .events-tabs { margin-bottom: 2px; }
+  .group-events .events-tabs button { padding-top: 4px; padding-bottom: 4px; }
+  .group-events .events-agenda-month:first-of-type .events-month-head { margin-top: var(--s-1); }
+  .group-events .events-empty, .group-events .events-empty-tab { margin: var(--s-2) 0 0; }
 }
 
 /* ---- Files: a small icon for the kind, the title, issuer and date in quiet text, under a heading per kind -------------- */
@@ -741,7 +760,9 @@ body:has(.add-button:not([hidden])) .events-actions button[data-action="add"] { 
   /* the + just above the bar, at the right, a fixed gap from it */
   .add-button { bottom: calc(var(--tabbar-h) + 10px + var(--add-lift)); }
   /* the header: one thin strip */
-  .space-bar { min-height: 48px; padding: 2px var(--s-3) 2px var(--s-1); gap: var(--s-2); }
+  .space-bar { min-height: 48px; padding: 2px var(--s-3) 2px var(--s-2); gap: var(--s-2); }
+  /* RF1: the back chevron a 44 x 44 target, the chevron as far from the screen's edge as from the place's mark */
+  .space-bar > .space-back { width: 44px; height: 44px; min-width: 44px; margin-right: 0; border-radius: 50%; }
   .space-head .space-kind, .space-head .group-kind { display: none; }
   .space-head .group-logo { height: 30px; }
   .space-head .space-mark { width: 30px; height: 30px; }

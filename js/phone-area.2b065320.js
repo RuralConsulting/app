@@ -42,7 +42,9 @@
     const live = () => me.alive && shown === me;
     const mapBox = el("div", { class: "pa-map", id: "pa-map", role: "region", "aria-label": "Map of " + group.name });
     const locate = el("button", { type: "button", class: "pa-locate", id: "pa-locate", "aria-label": "Locate me", title: "Locate me" }, FP.icon("locate", 22));
-    const stage = el("div", { class: "pa-stage" }, mapBox, locate);
+    // RF1 (PRODUCT.md: LINZ's topo one tap away on every map): Aerial | Topo in the same top-right cluster, under Locate
+    const bg = el("div", { class: "pa-bg map-bg-switch", id: "pa-bg", role: "group", "aria-label": "Background", hidden: true });
+    const stage = el("div", { class: "pa-stage" }, mapBox, locate, bg);
     const line = el("p", { class: "pa-line", id: "pa-line" });
     const say = el("div", { class: "pa-say", id: "pa-say", role: "status", "aria-live": "polite" });
     const set = el("ul", { class: "pa-set", id: "pa-near", "aria-label": "Near you" });
@@ -169,7 +171,7 @@
       const map = me.map;
       if (!map || !me.labels.length) return;
       const h = stage.getBoundingClientRect();
-      const blockers = [locate, ...stage.querySelectorAll(".maplibregl-ctrl-bottom-left > *, .maplibregl-ctrl-bottom-right > *"), ...root.document.querySelectorAll(".add-button:not([hidden])")]
+      const blockers = [locate, bg, ...stage.querySelectorAll(".maplibregl-ctrl-bottom-left > *, .maplibregl-ctrl-bottom-right > *"), ...root.document.querySelectorAll(".add-button:not([hidden])")]
         .filter((n) => n.getClientRects().length).map((n) => { const r = n.getBoundingClientRect(); return { l: r.left - h.left - 4, t: r.top - h.top - 4, r: r.right - h.left + 4, b: r.bottom - h.top + 4 }; });
       const boxes = me.labels.map((x) => {
         if (!x.w && x.node.offsetWidth) { x.w = x.node.offsetWidth; x.h = x.node.offsetHeight; }   // measured while it shows
@@ -194,10 +196,12 @@
       const colours = FP.mapPalette?.subgroupColours?.(subs.map((s) => ({ key: s.id, name: s.name, geometry: shapes.get(s.id)?.geometry || null }))) || new Map();
       me.subs = new Map(drawn.map((s) => [s.id, { ...s, bbox: shapes.get(s.id).bbox }]));
       const look = (c) => FP.mapPalette?.subgroupLook?.(c, { onDark: me.onDark }) || { fill: c, fillOpacity: 0.5, line: c, lineWidth: 0.75, lineOpacity: 0.9 };
-      me.map.getSource("pa-subs")?.setData({ type: "FeatureCollection", features: drawn.map((s) => {
+      // (drawn again when the background changes: the fills are for a dark or a light ground)
+      me.paintSubs = () => me.map?.getSource("pa-subs")?.setData({ type: "FeatureCollection", features: drawn.map((s) => {
         const lk = look(colours.get(s.name) || "#3a86ff");
         return { type: "Feature", geometry: shapes.get(s.id).geometry, properties: { id: s.id, fill: lk.fill, fo: lk.fillOpacity, line: lk.line } };
       }) });
+      me.paintSubs();
       me.labels = drawn.map((s) => {
         const shape = shapes.get(s.id), at = P().labelPoint(shape.geometry);
         // review of #538, 1, and PH5: a tap on any name zooms to its sub-group; only one the person is in is then opened (as the computer's
@@ -264,13 +268,31 @@
         // (the demo has no tiles: its two choices stand over the plain ground, as on the other overviews)
         const choices = FP.basemaps.names.length >= 2 ? FP.basemaps.names : FP.demo?.active ? ["aerial", "topo"] : [];
         const start = me.base = FP.mapPalette?.startBackground?.(stored, choices) || "aerial";
-        me.onDark = start === "aerial" ? !FP.basemaps.missingKey || /dark/.test(getComputedStyle(root.document.documentElement).colorScheme || "") : false;
+        const darkGround = (k) => (k === "aerial" ? !FP.basemaps.missingKey || /dark/.test(getComputedStyle(root.document.documentElement).colorScheme || "") : false);
+        me.onDark = darkGround(start);
         // PH2: the credit is the small "i" in the bottom left (its terms need it within reach; tapping it shows it), never a dark box
         // across the map under the +, which sits bottom right above the list
         const map = me.map = new gl.Map({ container: mapBox, style: FP.basemaps.style(start, { reliefOnAerial: false }), bounds: NZ, attributionControl: false, pitchWithRotate: false, dragRotate: false });
         map.addControl(new gl.AttributionControl({ compact: true }), "bottom-left");
         FP.basemaps.quietCredit?.(map);
         map.touchZoomRotate?.disableRotation?.();
+        // RF1: Aerial | Topo, one tap away. (PH5: Home reads the overviews' remembered background and never writes it: the choice here
+        // is for this visit; the one kept is made on Places or the Water quality page)
+        if (choices.length >= 2) {
+          const mark = () => { for (const b of bg.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.base === me.base)); };
+          const use = async (k) => {
+            if (!live() || k === me.base) return;
+            me.base = k; mark();
+            me.onDark = darkGround(k);
+            if (map.getLayer("pa-area-line")) map.setPaintProperty("pa-area-line", "line-color", me.onDark ? "#ffffff" : me.edgeLine || "#5f6670");
+            me.paintSubs?.();
+            if (!FP.basemaps.names.includes(k)) return;   // (the demo: the plain ground stands for both)
+            if (k !== "aerial") FP.basemaps.ground?.(map);
+            try { await FP.basemaps.pick(map, k); } catch { /* the plain ground stays */ }
+          };
+          bg.replaceChildren(...[["aerial", "Aerial"], ["topo", "Topo"]].filter(([k]) => choices.includes(k)).map(([k, t]) => el("button", { type: "button", "data-base": k, onclick: () => use(k) }, t)));
+          bg.hidden = false; mark();
+        }
         map.on("load", async () => {
           if (!live()) return;
           if (start !== "aerial") FP.basemaps.pick(map, start).catch(() => {});
@@ -278,7 +300,8 @@
           // "show the group first"), over the faintest fill. PH5: everything outside the area under the mask, so the line is quiet
           const cs = getComputedStyle(root.document.documentElement), css = (k) => cs.getPropertyValue(k);
           const hue = FP.mapPalette ? FP.mapPalette.hues(css)[FP.mapPalette.hueIndex(group.parent_org_id || group.id)] : "#5f9bd8";
-          const look = FP.mapPalette?.look(hue, { onDark: me.onDark }) || { line: hue };
+          const look = FP.mapPalette?.look(hue, { onDark: false }) || { line: hue };
+          me.edgeLine = look.line;
           const none = { type: "FeatureCollection", features: [] };
           map.addSource("pa-mask", { type: "geojson", data: none });
           map.addSource("pa-area", { type: "geojson", data: none });

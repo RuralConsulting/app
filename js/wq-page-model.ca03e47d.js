@@ -224,6 +224,24 @@
     return { shape, cls, ring: !!row.own, faded: !!row.held, icon: ["wq", shape, cls, row.own ? "own" : "pub", row.held ? "faded" : "full"].join("-") };
   }
   const ICONS = (() => { const out = []; for (const shape of ["circle", "square"]) for (const cls of [...CLASSES.map(([k]) => k), "none"]) for (const own of [true, false]) for (const held of [true, false]) out.push({ shape, cls, ring: own, faded: held, icon: ["wq", shape, cls, own ? "own" : "pub", held ? "faded" : "full"].join("-") }); return out; })();
+  // RF1: on a phone, sites closer than `radius` px at the zoom shown are one cluster mark (MapLibre's clustering) until `maxZoom`; the
+  // mark is a dark ink circle with a thin light edge and the count, never a colour that reads as a state. Each site is a 44 px target
+  // (`hit` px round it). Trend colours on the map are LAWA's 10-year trend, never a grade, and the key says so.
+  const CLUSTER = { radius: 26, maxZoom: 14, hit: 22, ink: "#1d1d1f", edge: "rgba(255,255,255,0.9)" };
+  const CLUSTER_WORDS = "Several sites close together: tap to zoom in";
+  const TREND_NOT_GRADE = "Colour is LAWA's published 10-year trend of the chosen measure (getting better, worse, or no clear trend), not a grade of the water. LAWA reports river sites only.";
+  // Whether any site drawn (one with a place) is coloured by a LAWA trend
+  const trendsShown = (rows) => list(rows).some((r) => r && r.lngLat && r.trend !== "none" && !!CLASS_COLOURS[r.trend]);
+  // The site nearest a tap among the targets under it ([{ id, at: {x, y} }], point {x, y}); null when none
+  function nearestSite(targets, point) {
+    let best = null, d = Infinity;
+    for (const t of list(targets)) {
+      if (!t || !Number.isFinite(t.id) || !t.at) continue;
+      const dd = Math.hypot(t.at.x - point.x, t.at.y - point.y);
+      if (dd < d) { d = dd; best = t.id; }
+    }
+    return best;
+  }
   // The legend, the same on the map, beside the chart and under the table.
   function legend({ type = "surface", own = true, held = false } = {}) {
     const shape = type === "groundwater" ? "square" : "circle";
@@ -334,6 +352,6 @@
 
   return { TYPES, TYPE_WORDS, viewOf, methodKind, METHOD_WORDS, hollow, MEASURES, FIRST, measure, measuresFor, keyName, PERIODS, periodFrom, periodWords,
     sites, depthText, tagsOf, keyLine, KEY_RULE, needsType, inRings, rings, near, filterSites, pickFigure, rowsFor, shownRows, hiddenCount, CLASSES, CLASS_COLOURS, classOf, headline, sentence, basis, bar,
-    symbol, ICONS, legend, COLUMNS, sortRows, medianText, latestText, methodsText, CSV_COLUMNS, csv, fileName, MAX_TICKED, defaultTicks, tick, tickList,
+    symbol, ICONS, legend, CLUSTER, CLUSTER_WORDS, TREND_NOT_GRADE, trendsShown, nearestSite, COLUMNS, sortRows, medianText, latestText, methodsText, CSV_COLUMNS, csv, fileName, MAX_TICKED, defaultTicks, tick, tickList,
     points, chartData, siteChartData, MIN_YEAR_SITES, medianByYear, medianChart, sourcesLine, fieldNote, NOT_SHARED, HELD_WORDS, whenText };
 });
