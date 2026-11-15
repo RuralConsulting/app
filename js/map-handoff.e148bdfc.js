@@ -67,13 +67,42 @@
     return Math.round(MIN_MS + (MAX_MS - MIN_MS) * Math.min(1, score / 3));
   }
   // A paint value scaled by k (0 to 1): a number times k, an expression wrapped in ["*", k, ...] (data-driven opacities can't use
-  // MapLibre's own transitions, so fades set the scale frame by frame)
+  // MapLibre's own transitions, so fades set the scale frame by frame).
+  // TR1b: an opacity that changes with zoom (a top-level "interpolate" or "step" on ["zoom"], as the core layers published from QGIS
+  // have) can't be wrapped: MapLibre allows ["zoom"] only as the input of a top-level curve and refuses the whole value. Its stops'
+  // outputs are scaled instead (a number times k, an expression wrapped), and a legacy zoom function's { stops } likewise. A shape not
+  // understood (["zoom"] anywhere else, a legacy data function) is given back whole: the layer is shown at once, never stuck part-faded.
+  const isZoom = (x) => Array.isArray(x) && x.length === 1 && x[0] === "zoom";
+  const usesZoom = (x) => Array.isArray(x) && (isZoom(x) || x.some(usesZoom));
+  const times = (v, kk) => Math.round(v * kk * 1000) / 1000;
+  function scaledCurve(full, kk) {
+    // ["interpolate", how, ["zoom"], z0, v0, z1, v1, ...]: outputs at 4, 6, ...; ["step", ["zoom"], v0, z1, v1, ...]: outputs at 2, 4, ...
+    const first = full[0] === "interpolate" && isZoom(full[2]) && full.length >= 5 && full.length % 2 === 1 ? 4
+      : full[0] === "step" && isZoom(full[1]) && full.length >= 3 && full.length % 2 === 1 ? 2 : -1;
+    if (first < 0) return null;
+    const out = full.slice();
+    for (let i = first; i < out.length; i += 2) {
+      const v = out[i];
+      if (typeof v === "number") out[i] = times(v, kk);
+      else if (Array.isArray(v) && !usesZoom(v)) out[i] = ["*", kk, v];
+      else return null;
+    }
+    return out;
+  }
   function scaled(full, k) {
-    const kk = Math.round(Math.max(0, Math.min(1, k)) * 1000) / 1000;
+    const kk = Math.round(Math.max(0, Math.min(1, Number(k) || 0)) * 1000) / 1000;
     if (full == null) return kk;
-    if (typeof full === "number") return Math.round(full * kk * 1000) / 1000;
+    if (typeof full === "number") return times(full, kk);
     if (kk === 1) return full;
-    return ["*", kk, full];
+    if (Array.isArray(full)) {
+      if (!usesZoom(full)) return ["*", kk, full];
+      return scaledCurve(full, kk) || full;
+    }
+    if (typeof full === "object" && full.property == null && Array.isArray(full.stops) && full.stops.length && (full.type == null || full.type === "exponential" || full.type === "interval")
+      && full.stops.every((s) => Array.isArray(s) && s.length === 2 && typeof s[0] === "number" && typeof s[1] === "number")) {
+      return { ...full, stops: full.stops.map(([z, v]) => [z, times(v, kk)]) };
+    }
+    return full;
   }
   // a calm in-and-out curve
   const curve = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -367,14 +396,24 @@
     return m.get(k);
   }
   // a layer at k of its own opacity (0 hidden, 1 as drawn)
+  // (TR1b: a value the map refuses all the same (it says so in an error event and keeps the old one) is not asked again: that layer's
+  // property is set to its own full value, at once, from then on, so it is never left part-faded)
+  const whole = new WeakMap();
   function setLevel(map, id, k) {
     if (!alive(map) || !map.getLayer?.(id)) return;
-    for (const p of propsOf(map, id)) { try { map.setPaintProperty(id, p, scaled(full(map, id, p), k)); } catch { /* a property this layer refuses */ } }
+    const w = per(whole, map);
+    for (const p of propsOf(map, id)) {
+      const f = full(map, id, p), v = w.has(id + "|" + p) ? f : scaled(f, k);
+      try {
+        map.setPaintProperty(id, p, v);
+        if (v !== f && JSON.stringify(map.getPaintProperty(id, p) ?? null) !== JSON.stringify(v ?? null)) { w.set(id + "|" + p, true); map.setPaintProperty(id, p, f); }
+      } catch { /* a property this layer refuses */ }
+    }
     per(levels, map).set(id, k);
   }
   const level = (map, id) => (map ? per(levels, map).get(id) ?? 1 : 1);
   // the layer's own opacity changed by its page (a new look): kept as its full value from here
-  function forget(map, ids) { const m = per(fulls, map); for (const id of [].concat(ids)) for (const k of [...m.keys()]) if (k.startsWith(id + "|")) m.delete(k); }
+  function forget(map, ids) { for (const m of [per(fulls, map), per(whole, map)]) for (const id of [].concat(ids)) for (const k of [...m.keys()]) if (k.startsWith(id + "|")) m.delete(k); }
   // ids faded from their level now (or `from`) to `to` over ms; a newer fade of the same layer takes over from where this one is
   function fade(map, ids, { to = 1, from = null, ms = FADE_MS } = {}) {
     const list = [].concat(ids).filter((id) => alive(map) && map.getLayer?.(id));
