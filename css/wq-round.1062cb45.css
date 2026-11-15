@@ -27,7 +27,8 @@
 .wqr-help p { margin: 0; color: var(--ink-2); font-size: var(--text-small); max-width: 72ch; }
 .wqr-help b { color: var(--ink); font-weight: 600; }
 .wqr-help p.wqr-help-phone { display: none; }
-@media (max-width: 800px) { .wqr-help p.wqr-help-phone { display: block; } }
+@media (max-width: 800px), (pointer: coarse) { .wqr-help p.wqr-help-phone { display: block; } .wqr-help p:not(.wqr-help-phone, .wqr-help-twice) { display: none; } }
+/* (RF2 review: the warning not to import the same round again shows on a phone and a touch screen too) */
 
 /* the table: one outline, hairlines between rows, the boxes a soft fill (no border) that the focus rings in ink */
 .wqr-tablewrap { border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); overflow: hidden; }
@@ -152,7 +153,7 @@
   .wqr-ns { width: 20px; height: 20px; }
   .wqr-in-note { min-height: var(--tap); padding: 0; }
   .wqr-back { min-height: var(--tap); }
-  .wqr-help p:not(.wqr-help-phone) { display: none; }
+  .wqr-help p:not(.wqr-help-phone, .wqr-help-twice) { display: none; }
   /* the foot: the count over the two actions, Clear at the left and Review at the right, apart; its wash runs down behind the bar, so no
      row shows between the two */
   .wqr-foot { bottom: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: var(--s-2) 0 calc(var(--tabbar-h, 56px) + var(--s-2)); }
@@ -177,14 +178,23 @@
 
 /* SR1b review: the helper just above a phone's keyboard while a result is typed: "<", ">" and Next site, 44 px each, in one floating
    outline (wq-round.js places it). Quiet buttons, so Review stays the screen's one filled button; a sign that is on shows in ink. A computer
-   types "<" itself: no helper there. */
+   types "<" itself: no helper there. RF2: a phone held sideways is wider than 800 px, so the helper (and the help's phone lines) follow
+   a touch screen at any width too: (pointer: coarse), with wq-round.js's own test the same. */
 .wqr-kbar { display: none; }
-@media (max-width: 800px) {
-  .wqr-foot .wqr-discard { white-space: nowrap; }
+@media (max-width: 800px) { .wqr-foot .wqr-discard { white-space: nowrap; } }
+@media (max-width: 800px), (pointer: coarse) {
   .wqr-kbar:not([hidden]) { position: fixed; z-index: 9; left: var(--s-4); right: var(--s-4); top: 0; display: flex; align-items: center; gap: var(--s-2); padding: 4px;
     border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--panel); box-shadow: var(--shadow-2); }
   .wqr-kbar button { min-height: var(--tap); min-width: var(--tap); margin: 0; padding: 0 var(--s-3); border: 0; border-radius: var(--radius-pill); background: var(--fill);
     color: var(--ink); font: 600 var(--text-body)/1 var(--f-ui); cursor: pointer; touch-action: manipulation; }
   .wqr-kbar .wqr-kb-sign[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
   .wqr-kbar .wqr-kb-next { margin-left: auto; padding: 0 var(--s-4); white-space: nowrap; }
+}
+/* RF2 review: a touch screen at a computer's width (a phone held sideways, a tablet), where the page scrolls inside its panel: the helper
+   sits in the table's foot, between the count and Clear / Review (wq-round.js moves it there), with no outline of its own, so it covers
+   neither the foot nor a row; only where a keyboard hides the foot does it float, just above the keyboard at the right, no wider than its
+   buttons. */
+@media (min-width: 801px) and (pointer: coarse) {
+  .wqr-kbar:not([hidden]) { left: auto; right: var(--s-4); max-width: calc(100vw - 2 * var(--s-4)); }
+  .wqr-foot > .wqr-kbar:not([hidden]) { position: static; flex: none; margin: 0 0 0 auto; padding: 0; border: 0; background: none; box-shadow: none; }
 }

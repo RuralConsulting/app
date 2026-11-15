@@ -469,6 +469,13 @@ body.simple-files .group-documents { margin: 0 auto; }
   body.portfolio-active #map .maplibregl-ctrl-top-right { top: calc(var(--portfolio-bottom, 0px) + 2px); }
   body.portfolio-active #map .map-bg-switch { flex-direction: column; width: 62px; }
   body.portfolio-active #map .map-bg-switch button { width: 100% !important; min-height: 34px; padding: 0 6px !important; }
+  /* RF2: 34 px to see, 44 px to tap: Aerial reaches 8 px up, Topo 10 px down, and they meet in the gap between them; Locate above
+     (MapLibre's 30 px button) reaches 11 px up (1 px short of the card) and 5 px down and 7 px each side: 44 px, and the two reaches meet without crossing */
+  body.portfolio-active #map .map-bg-switch button { position: relative; }
+  body.portfolio-active #map .map-bg-switch button::after { content: ""; position: absolute; inset: -8px 0 -2px; }
+  body.portfolio-active #map .map-bg-switch button:last-child::after { inset: 0 0 -10px; }
+  body.portfolio-active #map .maplibregl-ctrl-geolocate { position: relative; }
+  body.portfolio-active #map .maplibregl-ctrl-geolocate::after { content: ""; position: absolute; inset: -11px -7px -5px; }
   /* "All places (n)": a 44 px row */
   #portfolio .home-fold summary { min-height: var(--tap); padding: 12px 2px; line-height: 20px; box-sizing: border-box; }
   #portfolio .home-fold { margin-top: 2px; }
@@ -518,6 +525,9 @@ body.simple-files .group-documents { margin: 0 auto; }
 .home-subs { list-style: none; margin: 0 0 4px; padding: 0; display: grid; gap: 2px; }
 .home-subs[hidden] { display: none; }
 .home-item.sub button { padding-left: 30px; }
+/* RF2 (the review walk: on a computer's Places a place listed inside another overlapped the row above by 2 px, in smaller grey text):
+   an indented row is a row like the others; app.css's subtitle `.sub` (a page's quiet second line) must not reach it */
+.home-item.sub { margin: 0; color: inherit; font-size: inherit; }
 .home-swatch, .home-item:not([data-kind="farm"]) .home-swatch { background: var(--swatch, var(--map-group)); border: 0; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--swatch-edge); }
 .home-item[data-kind="farm"] .home-swatch { border-radius: 50%; box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--ink-3); width: 10px; height: 10px; }
 
@@ -913,12 +923,13 @@ body.cap-open .add-button { opacity: 0; pointer-events: none; }
 .fs-sheet .fs-wrap .fs-input { flex: 1 1 10em; }
 .fs-sheet .fs-when { display: flex; gap: var(--s-2); flex: 1; min-width: 0; }
 .fs-sheet .fs-when .fs-input { flex: 1 1 0; }
-.fs-sheet .fs-quick { display: inline-flex; flex-wrap: wrap; gap: 0 2px; flex: none; max-width: 100%; margin: 4px 0; }
+.fs-sheet .fs-quick { display: inline-flex; flex-wrap: wrap; gap: 12px 2px; flex: none; max-width: 100%; margin: 4px 0; }
 .fs-sheet .fs-row:has(.fs-quick) > .fs-value { flex-wrap: wrap; row-gap: 8px; padding: 6px 0; }
 .fs-sheet .fs-row:has(.fs-quick) > .fs-value > .fs-input { flex: 1 1 4em; }
 .fs-sheet .fs-quick-word { position: relative; min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: var(--radius-s); background: none; color: var(--ink-2);
   font: 400 var(--text-small)/1 var(--f-ui); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; cursor: pointer; white-space: nowrap; }
 .fs-sheet .fs-quick-word::after { content: ""; position: absolute; inset: -6px 0; }
+.fs-sheet .fs-quick-word { min-width: 44px; }   /* RF2: a short word ("Call") is a 44 px target across as well */
 .fs-sheet .fs-quick-word[aria-pressed="true"] { color: var(--ink); font-weight: 600; text-decoration-color: var(--ink); }
 .fs-sheet .fs-quick-row { min-height: 48px; }
 .fs-sheet .fs-results { display: grid; margin: 0 var(--s-4) 0 0; }

@@ -106,13 +106,25 @@
     // SR1b: the row being typed in stays in what shows: below the page's header, above the sheet's foot, the bar and the phone's keyboard
     // (the visual viewport). Moving down, the page moves only as far as the row needs, so the row before stays in view where there is
     // room; a row taller than what shows puts the site's name first. Nothing moves when the row already shows.
+    // RF2: what moves is what scrolls. On a phone that is the page; on a computer's layout (a phone held sideways, a tablet) the page scrolls
+    // inside its panel, so the row's nearest scrolling box is moved, and what shows is also inside that box.
+    function scrollerOf(n) {
+      const d = root.document;
+      for (let e = n.parentElement; e && e !== d.body && e !== d.documentElement; e = e.parentElement) {
+        if (/^(auto|scroll|overlay)$/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 1) return e;
+      }
+      return null;
+    }
     function reveal(n) {
       const row = n?.closest?.("tr");
       if (!row || !row.isConnected) return;
+      placeKbar?.();
       const d = root.document, vv = root.visualViewport;
       const top0 = vv ? vv.offsetTop : 0, bottom0 = vv ? vv.offsetTop + vv.height : root.innerHeight, mid = (top0 + bottom0) / 2;
       const pinned = (x) => /^(fixed|sticky)$/.test(getComputedStyle(x).position);
+      const scroller = scrollerOf(row);
       let top = top0, floor = bottom0;
+      if (scroller) { const s = scroller.getBoundingClientRect(); top = Math.max(top, s.top); floor = Math.min(floor, s.bottom); }
       for (const h of d.querySelectorAll(".space-head, .group-head, .demo-banner")) {
         const r = h.getBoundingClientRect();
         if (r.height && pinned(h) && r.top <= top + 1 && r.bottom > top && r.bottom < mid) top = r.bottom;
@@ -126,7 +138,7 @@
       let dy = 0;
       if (r.bottom > floor - pad) dy = r.bottom - floor + pad;
       if (r.top - dy < top + pad) dy = r.top - top - pad;
-      if (Math.abs(dy) >= 1) root.scrollBy({ top: dy, behavior: "instant" });
+      if (Math.abs(dy) >= 1) { (scroller || root).scrollBy({ top: dy, behavior: "instant" }); placeKbar?.(); }
     }
     // the keyboard coming up (the visual viewport shrinking) keeps the box being typed in in view
     let placeKbar = null;   // the sheet's helper above the keyboard (drawSheet sets it): placed again when the visual viewport moves
@@ -335,7 +347,7 @@
       const lt = signBtn("<", "Below the detection limit (<)"), gt = signBtn(">", "Above the reporting limit (>)");
       const nextBtn = el("button", { type: "button", class: "wqr-kb-next" }, "Next site");
       const kbar = el("div", { class: "wqr-kbar", hidden: true, role: "group", "aria-label": "Typing a result" }, lt, gt, nextBtn);
-      const isPhone = () => !!root.matchMedia?.("(max-width: 800px)").matches;
+      const isPhone = () => !!root.matchMedia?.("(max-width: 800px), (pointer: coarse)").matches;   // (RF2: a touch screen at any width: a phone held sideways is wider than 800 px)
       let kbFor = null;   // the box the helper serves
       const setAttr = (n, a, v) => { if (n.getAttribute(a) !== v) n.setAttribute(a, v); };
       const setText = (n, v) => { if (n.textContent !== v) n.textContent = v; };
@@ -345,11 +357,43 @@
         setAttr(lt, "aria-pressed", String(sign === "<" || sign === "≤")); setAttr(gt, "aria-pressed", String(sign === ">" || sign === "≥"));
         setText(nextBtn, nextOpen(Number(kbFor.dataset.row)) == null ? "Done" : "Next site");
       };
+      // RF2 second review: at a computer's width the page scrolls inside its panel, which is the window's full height, so a keyboard
+      // covers the panel's bottom and the last sites could never be scrolled up above it. While the helper shows, the sheet ends with room
+      // as tall as the part of the panel the keyboard covers (none without a keyboard, and none on a phone, where the window scrolls).
+      // (RF2 third review: with no height it is taken out of the layout, so the sheet's grid gives it no row gap either)
+      const room = el("div", { class: "wqr-kbroom", "aria-hidden": "true" });
+      room.hidden = true;
+      const setRoom = (h) => {
+        const v = h > 1 ? Math.round(h) + "px" : "";
+        if (room.style.height !== v) room.style.height = v;
+        if (room.hidden !== !v) room.hidden = !v;
+      };
+      const panelOf = () => {
+        for (let e = body.parentElement; e && e !== root.document.body && e !== root.document.documentElement; e = e.parentElement) {
+          if (/^(auto|scroll|overlay)$/.test(getComputedStyle(e).overflowY)) return e;
+        }
+        return null;
+      };
       placeKbar = () => {
-        if (kbar.hidden || !kbar.isConnected) return;
+        if (kbar.hidden || !kbar.isConnected) { setRoom(0); return; }
         const vv = root.visualViewport, bottom = vv ? vv.offsetTop + vv.height : root.innerHeight, mid = bottom / 2;
+        const panel = root.matchMedia?.("(max-width: 800px)").matches ? null : panelOf();
+        setRoom(panel ? panel.getBoundingClientRect().bottom - bottom : 0);
+        // RF2: a touch screen wider than 800 px has the computer's layout: the helper sits in the table's foot, between the count and its
+        // actions, so it covers neither the foot nor a row; where a keyboard hides the foot it floats just above the keyboard instead, as
+        // on a phone, no wider than its buttons. Moved only when its place changes, so a page at rest stays at rest.
+        const foot = body.querySelector(".wqr-foot");
+        if (foot && !root.matchMedia?.("(max-width: 800px)").matches) {
+          // (in the foot only where the foot's buttons are wholly above the keyboard: a foot half under it floats the helper instead)
+          const f = foot.getBoundingClientRect(), a = foot.querySelector(".wqr-foot-actions")?.getBoundingClientRect() || f;
+          if (f.height && a.bottom <= bottom + 0.5) {
+            if (kbar.parentNode !== foot) foot.insertBefore(kbar, foot.querySelector(".wqr-foot-actions"));
+            return;
+          }
+        }
+        if (kbar.parentNode !== body) body.appendChild(kbar);
         let floor = bottom;
-        for (const c of [body.querySelector(".wqr-foot"), ...root.document.querySelectorAll(".space-tabs")]) {
+        for (const c of [foot, ...root.document.querySelectorAll(".space-tabs")]) {
           if (!c) continue;
           const r = c.getBoundingClientRect();
           if (r.height && r.top > mid && r.top < floor) floor = r.top;
@@ -362,7 +406,7 @@
         if (kbar.hidden) kbar.hidden = false;
         syncKbar(); placeKbar();
       };
-      const hideKbar = () => { kbFor = null; if (!kbar.hidden) kbar.hidden = true; };
+      const hideKbar = () => { kbFor = null; if (!kbar.hidden) kbar.hidden = true; setRoom(0); };
       table.addEventListener("focusin", (e) => {
         const t = e.target, col = t?.dataset?.col;
         if (!isPhone() || (col !== "value" && col !== "check")) { hideKbar(); return; }
@@ -396,14 +440,14 @@
       fill(body,
         headset,
         el("div", { class: "wqr-help" }, el("p", {}, "Type each site's result. ", el("b", {}, "Tab"), " or ", el("b", {}, "Enter"), " moves down the column; paste a column from a spreadsheet into the first box to fill it down. Write a result below the detection limit like ", el("b", {}, "<0.05"), "."),
-          el("p", {}, "A round entered here is the group's record of it: don't also import the same readings from a spreadsheet, or each would count twice."),
+          el("p", { class: "wqr-help-twice" }, "A round entered here is the group's record of it: don't also import the same readings from a spreadsheet, or each would count twice."),
           // (SR1b: a phone has no Tab key and seldom a spreadsheet: its own two lines, true on an iPhone and on Android)
           el("p", { class: "wqr-help-phone" }, "Tap a site's box and type its result. ", el("b", {}, "Next site"), ", just above the keyboard, moves down to the next one; ",
             el("b", {}, "<"), " beside it marks a result below the detection limit."),
           el("p", { class: "wqr-help-phone" }, "What you type is kept on this device until the round is saved.")),
         el("div", { class: "wqr-tablewrap" }, table),
         el("div", { class: "wqr-foot" }, el("div", { class: "wqr-foot-words" }, counts, kept, sheetMsg), el("div", { class: "wqr-foot-actions" }, discard, reviewBtn)),
-        kbar);
+        room, kbar);
       for (const t of ["input", "change", "focusin"]) for (const part of [table, headset]) part.addEventListener(t, disarm);
       let shown = false;
       function recheck(only = null) {

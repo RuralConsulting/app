@@ -16,9 +16,14 @@
   // not open (People, for a group's plain members) is simply not there: its button is not replaced by another. A computer keeps the
   // space's own order and its five (DESKTOP_MAX).
   const PHONE_BAR = ["home", "maps", "people", "documents"];
+  // RF2 (the owner, 16 Nov 2026, "Events as the fifth button"): for someone who may not open People (a plain member) Events takes
+  // People's place, so they too have five: Home, Maps, Events, Files and More; Events is then not repeated in More, where Search is first.
   const PHONE_ORDER = [...PHONE_BAR, "events"];
+  const PHONE_BAR_NO_PEOPLE = ["home", "maps", "events", "documents"];
+  const phoneBarFor = (tabs) => (tabs.some((t) => t.key === "people") ? PHONE_BAR : PHONE_BAR_NO_PEOPLE);
   function phoneOrder(tabs) {
-    const rank = (t) => { const i = PHONE_ORDER.indexOf(t.key); return i < 0 ? PHONE_ORDER.length : i; };
+    const order = [...phoneBarFor(tabs), "events"];
+    const rank = (t) => { const i = order.indexOf(t.key); return i < 0 ? order.length : i; };
     return tabs.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
   }
   const norm = (t) => (Array.isArray(t) ? { key: t[0], label: t[1] } : { ...t });
@@ -29,8 +34,9 @@
   function arrange(tabs, max = PHONE_MAX, { phone = false } = {}) {
     let all = (Array.isArray(tabs) ? tabs : []).map(norm).filter((t) => t.key);
     if (phone) {
+      const bar = phoneBarFor(all);
       all = phoneOrder(all);
-      const shown = all.filter((t) => PHONE_BAR.includes(t.key)).slice(0, Math.max(0, max - 1));
+      const shown = all.filter((t) => bar.includes(t.key)).slice(0, Math.max(0, max - 1));
       return { shown, more: all.filter((t) => !shown.includes(t)) };
     }
     if (all.length <= max) return { shown: all, more: [] };
@@ -79,7 +85,12 @@
     const rows = moreRows(arranged.more, { search: !!opts.search && phone });
     if (rows.length) {
       const hidden = arranged.more.map((t) => byKey.get(t.key)), dot = hidden.some((t) => t.badge?.());
-      const more = el("button", { type: "button", class: "group-tab nav-more", "data-tab": "more", "aria-haspopup": "dialog", "aria-expanded": "false", ...(cur === "more" ? { "aria-current": "page" } : {}) },
+      // RF2 (the owner's walk: on a computer the bar marked "More" over a screen that reads like Home, the staff's Working map): More
+      // always reads "More", so the other sections are found under it; it is marked only when the section shown is one of those it holds
+      // (currentOf: never on Home's overview or a section in the bar), and on a computer its accessible name then says which one
+      const now = !phone && cur === "more" ? byKey.get(view) : null;
+      const more = el("button", { type: "button", class: "group-tab nav-more", "data-tab": "more", "aria-haspopup": "dialog", "aria-expanded": "false",
+        ...(cur === "more" ? { "aria-current": "page" } : {}), ...(now ? { "aria-label": "More: " + now.label } : {}) },
         FP.icon("more"), el("span", {}, "More"), dot ? el("span", { class: "nav-dot", "aria-label": "Something to look at" }) : null);
       more.addEventListener("click", () => FP.sheet.menu(more, "More", rows.map((r) => {
         if (r.search) return { label: "Search", icon: "search", action: "search", run: () => opts.search(more) };
@@ -94,5 +105,5 @@
   const refresh = (nav) => { const a = nav && drawn.get(nav); if (a && nav.isConnected) render(nav, a.tabs, a.view, a.opts); };
   if (root.matchMedia && root.document) root.matchMedia("(max-width: 800px)").addEventListener?.("change", () => { for (const nav of drawn.keys()) refresh(nav); });
 
-  return { PHONE_MAX, DESKTOP_MAX, PHONE_BAR, PHONE_ORDER, phoneOrder, arrange, moreRows, currentOf, roleLine, headerLines, render, refresh };
+  return { PHONE_MAX, DESKTOP_MAX, PHONE_BAR, PHONE_BAR_NO_PEOPLE, PHONE_ORDER, phoneOrder, arrange, moreRows, currentOf, roleLine, headerLines, render, refresh };
 });

@@ -180,6 +180,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .maplibregl-ctrl-group, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact { background: var(--panel); color: var(--ink); }
 .maplibregl-ctrl-attrib a { color: inherit; }
 .maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: var(--map-icon-filter); }
+/* RF2: the credit's "i" (MapLibre's own 24 px button) is a 44 px target on a phone or any touch screen: an unseen area round it, more
+   above than below, where a sheet's handle reaches up to it */
+@media (max-width: 800px), (pointer: coarse) {
+  .maplibregl-ctrl-attrib-button::after { content: ""; position: absolute; inset: -14px -10px -6px; }
+}
 /* RF1: the scale is quiet on every map: a hairline, the smallest of the app's four type sizes in a light weight and quiet ink, a soft
    see-through ground */
 .maplibregl-ctrl-scale { background: var(--map-scale-ground); color: var(--ink-2); border: 1px solid var(--ink-3); border-top: 0;

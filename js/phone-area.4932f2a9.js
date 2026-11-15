@@ -143,9 +143,11 @@
       }
       // the map's names follow the sheet
       function afterMove() { root.requestAnimationFrame?.(() => live() && placeLabels()); for (const ms of [450, 900]) root.setTimeout?.(() => live() && placeLabels(), ms); }
-      function settleAt(next, { animate = true } = {}) {
+      // (from: where a drag let go, read while the finger held it; held: a drag left it at half while searching, RF2)
+      function settleAt(next, { animate = true, from: fromAt = null, held = false } = {}) {
         clearTimeout(settleTimer);
-        const from = node.getBoundingClientRect().height;
+        node.classList.toggle("pa-held", held);
+        const from = fromAt ?? node.getBoundingClientRect().height;
         if (state === "peek" && !node.classList.contains("pa-dragging")) measurePeek();
         state = next;
         node.dataset.state = next;
@@ -170,10 +172,17 @@
       // ---- the drag (on the handle, or on the one line) ----
       // (the finger is followed over the whole page once it is down: it soon leaves the handle; nothing is captured, so a plain tap on the
       // line's row is still a tap on it)
+      // RF2 (the review of HM1: while searching, a slow drag jumped on its first 6 px and sprang back on release): while the search's
+      // results take the sheet (CSS: the full height), the drag reaches the full height and starts from it; on release the height is
+      // read before the drag's class comes off (that class is what lets the full-height rule give way to the finger), and the sheet
+      // settles at the nearest of closed, half and full. Held at half while searching, it says so (pa-held), so the full-height rule
+      // leaves it there until it is next moved.
       const doc = root.document;
+      const searching = () => !!node.querySelector(".ph-compact.searching");
       const down = (e) => {
         if (e.button > 0 || node.hidden) return;
-        drag = { y: e.clientY, h: node.getBoundingClientRect().height, t: performance.now(), id: e.pointerId, moved: false, peek: state === "peek" ? measurePeek() : peekH || 80, half: measureHalf() };
+        const full = searching() ? Math.round((node.offsetParent || node.parentElement)?.getBoundingClientRect().height - 8) || null : null;
+        drag = { y: e.clientY, h: node.getBoundingClientRect().height, t: performance.now(), id: e.pointerId, moved: false, peek: state === "peek" ? measurePeek() : peekH || 80, half: measureHalf(), full };
         doc.addEventListener("pointermove", move, { passive: false });
         doc.addEventListener("pointerup", up);
         doc.addEventListener("pointercancel", up);
@@ -188,7 +197,10 @@
           node.classList.remove("pa-moving"); node.classList.add("pa-dragging");
           ensureSearch(); body.hidden = false;
         }
-        const h = Math.max(drag.peek, Math.min(drag.half + 24, drag.h + dy));
+        const h = Math.max(drag.peek, Math.min(drag.full > drag.half ? drag.full : drag.half + 24, drag.h + dy));
+        // (RF2: where the finger has been in the last moment, so a flick is told from a slow drag that was held before it was let go)
+        const now = performance.now();
+        drag.trail = (drag.trail || []).filter((p) => now - p.t <= 120).concat({ y: e.clientY, t: now });
         node.style.height = h + "px";
         lineBox.hidden = h > drag.peek + 24;   // (the one line gives way to the rest as it comes up)
         setVar();
@@ -199,9 +211,18 @@
         const d = drag; drag = null;
         doc.removeEventListener("pointermove", move); doc.removeEventListener("pointerup", up); doc.removeEventListener("pointercancel", up);
         if (!d.moved) return;
+        const h = node.getBoundingClientRect().height;   // (read while it is the finger's)
+        // a flick: the speed over the last moment of the drag (a drag held still before it is let go is not one)
+        const now = performance.now(), recent = (d.trail || []).filter((p) => now - p.t <= 120);
+        const fast = recent.length ? (recent[0].y - e.clientY) / Math.max(16, now - recent[0].t) : 0;
+        const stops = d.full > d.half ? [["peek", d.peek], ["half", d.half], ["full", d.full]] : [["peek", d.peek], ["half", d.half]];
+        let at = stops.reduce((a, b) => (Math.abs(b[1] - h) < Math.abs(a[1] - h) ? b : a))[0];
+        if (Math.abs(fast) > 0.6) at = fast > 0 ? (stops.find(([, x]) => x > h + 1)?.[0] || stops[stops.length - 1][0]) : ([...stops].reverse().find(([, x]) => x < h - 1)?.[0] || "peek");
+        const held = at === "half" && stops.length === 3;
+        node.classList.toggle("pa-held", held);
+        if (at === "full") node.classList.add("pa-moving");   // (the full-height rule takes over from where it was let go, and eases there)
         node.classList.remove("pa-dragging");
-        const h = node.getBoundingClientRect().height, fast = (d.y - e.clientY) / Math.max(1, performance.now() - d.t);
-        settleAt(Math.abs(fast) > 0.6 ? (fast > 0 ? "half" : "peek") : h > (d.peek + d.half) / 2 ? "half" : "peek");
+        settleAt(at === "peek" ? "peek" : "half", { from: h, held });
         setTimeout(() => { dragged = false; }, 0);
       };
       for (const target of [grip, lineBox]) target.addEventListener("pointerdown", down);

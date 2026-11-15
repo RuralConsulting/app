@@ -117,6 +117,7 @@
 /* N2c: the switch for older and sparse sites, beside the list's header */
 .wqs-switch { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
 .wqs-held { margin-top: 8px; }
+.wqs-pagelink a { display: inline-flex; align-items: center; min-height: 44px; }   /* RF2: "Open the Water quality page", a 44 px target */
 .wqs-held > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: var(--text-small); }
 
 /* ---- PH2: one layout rule for a phone map screen (the viewer's own breakpoint, 720 px) -----------------------------------------------
@@ -189,6 +190,30 @@
   .maps-viewer .rv-toolbar { top: auto; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px) + 10px); left: 10px; right: 10px; transform: none; max-width: none; }
   .maps-viewer:is(.rv-measuring, .rv-comparing) .maplibregl-ctrl-top-right > .rv-tools { display: block; }
   .maps-viewer:is(.rv-measuring, .rv-comparing) :is(.maplibregl-ctrl-bottom-right, .wqs-ctrl) { display: none; }
+  /* RF2: every control in the Layers sheet a 44 px target, the sheet looking as it did. A section's heading and a layer's row are
+     44 px tall (40 and about 42 before: the row's own 6 px margins became part of its label, the whole row a switch); the grab
+     handle is a 44 px button with the bar drawn inside it, laid over the head's top so the sheet's peek is unchanged; Aerial, Topo
+     and None are 44 px buttons with the 30 px pill drawn inside them; "All maps", "More" and another map's choice likewise. */
+  .maps-viewer button.rv-group { min-height: 44px; padding-top: 4px; padding-bottom: 0; }
+  .maps-viewer .rv-layer { padding-top: 0; padding-bottom: 2px; }
+  .maps-viewer .rv-layer-row label { align-self: stretch; min-height: 44px; }
+  .maps-viewer .rv-opacity input { min-height: 44px; margin: 0; }
+  .maps-viewer .rv-toggle-panel { position: relative; z-index: 1; flex: none; width: 96px; height: 44px; margin: 0 auto -31px; background: none; border-radius: 0; }
+  .maps-viewer .rv-toggle-panel::before { content: ""; position: absolute; left: 28px; right: 28px; top: 8px; height: 5px; border-radius: 3px; background: var(--rule); }
+  .maps-viewer .rv-toggle-panel:focus-visible { outline-offset: -4px; }
+  .maps-viewer .rv-foot { padding-top: 3px; padding-bottom: 5px; }
+  .maps-viewer .rv-foot .rv-seg { border: 0; border-radius: 0; overflow: visible; }
+  .maps-viewer .rv-foot .rv-seg button { position: relative; z-index: 0; min-height: 44px; padding: 0 12px; background: none; color: var(--ink-2); }
+  .maps-viewer .rv-foot .rv-seg button::before { content: ""; position: absolute; z-index: -1; inset: 7px 0; border: 1px solid var(--rule); border-left-width: 0; }
+  .maps-viewer .rv-foot .rv-seg button:first-child::before { border-left-width: 1px; border-radius: 999px 0 0 999px; }
+  .maps-viewer .rv-foot .rv-seg button:last-child::before { border-radius: 0 999px 999px 0; }
+  .maps-viewer .rv-foot .rv-seg button[aria-pressed="true"] { background: none; color: var(--accent-ink); }
+  .maps-viewer .rv-foot .rv-seg button[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); }
+  .maps-viewer .rv-foot .rv-seg button:focus-visible { outline: none; }
+  .maps-viewer .rv-foot .rv-seg button:focus-visible::before { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .maps-viewer .rv-org .rv-back { min-height: 44px; margin: -12px 0; }
+  .maps-viewer .rv-desc .rv-link { min-height: 44px; padding: 0; }
+  .maps-viewer .rv-mapsel select { min-height: 44px; }
 }
 /* the water quality dots: small far out, a little larger close in, the chosen one clear (wq-sites.js sets the zoom band) */
 .wqs-pin { padding: 6px; }

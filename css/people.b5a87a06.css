@@ -337,3 +337,12 @@
 .group-people .sg-list .crm-avatar { grid-row: 1 / span 2; }
 .group-people .sg-list .crm-row > * > :not(.crm-avatar) { grid-column: 2; }
 .group-people .sg-list .sg-remove { margin: 0 14px 6px 66px; min-height: 44px; }
+/* RF2 (the review walk's small targets on a member's page, phone): every link and quiet button there a 44 px target. The words keep
+   their size; the rows they sit in get the room (a link's 32 px became 44, the back and a sub-group's × at least 44 wide). */
+@media (max-width: 800px) {
+  .group-people button.link, .ms-actions button.link { min-height: 44px; min-width: 44px; }
+  .group-people button.link.crm-back { min-width: 44px; }
+  .group-people .sg-chip .sg-remove { min-width: 44px; min-height: 44px; }
+  .group-people .sg-chip a.sg-name, .group-people .crm-quiet > a { display: inline-flex; align-items: center; min-height: 44px; }
+  .group-people :is(.mf-inline input, .mf-inline select, .mf-field select, .mf-field input:not([type="checkbox"])) { min-height: 44px; }
+}

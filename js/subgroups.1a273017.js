@@ -33,7 +33,7 @@
       draw();
     }
     function link(c) {
-      const href = c.member && FP.href ? FP.href(G().href(c.id)) : null;
+      const href = c.member && FP.href ? FP.href(G().href(c.id, "home")) : null;   // (RF2: a place opens on its Home, J2; the bare address is staff's Working map)
       return href ? el("a", { href, class: "sg-name" }, c.name) : el("span", { class: "sg-name" }, c.name);
     }
     function draw() {

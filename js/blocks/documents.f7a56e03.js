@@ -434,22 +434,36 @@
   }
   // Primaries first, so a file can sit under a main document added in the same batch.
   const saveOrder = (choices) => [...choices].sort((a, b) => (a.tier !== "primary") - (b.tier !== "primary"));
-  function moveHtml(doc, data) {
+  // RF2 (the review walk, triage item 5: a guide's menu listed "With MCCC logo, transparent background", "With MCCC logo, white
+  // background"... and read as if the guide came in logo versions): the menu says what its choices are about ("Where it sits") and
+  // offers the other main files only one step on, after "With another main file…", under the question "Put it with which main file?",
+  // each by its own title. The file it sits with now, if any, stays in the first list, ticked. Staff's "Superseded by" the same way:
+  // "Superseded by another file…", then "Which file replaces it?". Nothing is taken away: every choice the menu made before is still
+  // there, one step on at most, and each sends the same update. pick: false (the first list), "with" or "by" (the step on).
+  function moveHtml(doc, data, { pick = false } = {}) {
     const docs = list(data?.documents), a = arrange(docs), here = placeOf(doc, docs.some((x) => x.relates_to === doc.id)).tier;
     const others = [...a.primaries, ...a.more].filter((p) => p.doc.id !== doc.id);
     const opt = (attrs, label, current) => '<li><button type="button" ' + attrs + (current ? ' aria-current="true"' : "") + ">" + esc(label) + "</button></li>";
-    return '<ul class="doc-menu" data-doc-menu="' + esc(doc.id) + '">' + opt('data-doc-set="primary"', "Main file", here === "primary") +
-      others.map((p) => opt('data-doc-set="supporting" data-doc-under="' + esc(p.doc.id) + '"', "With " + M.docTitle(p.doc), here === "supporting" && doc.relates_to === p.doc.id)).join("") +
+    const head = (words) => '<li class="doc-menu-head" aria-hidden="true">' + esc(words) + "</li>";
+    const under = (p, label) => opt('data-doc-set="supporting" data-doc-under="' + esc(p.doc.id) + '"', label, here === "supporting" && doc.relates_to === p.doc.id);
+    const ask = pick === "by" ? "Which file replaces it?" : "Put it with which main file?";
+    const open = '<ul class="doc-menu" data-doc-menu="' + esc(doc.id) + '" aria-label="' + esc(pick ? ask : "Where " + M.docTitle(doc) + " sits") + '">';
+    if (pick === "by") return open + opt("data-doc-with-back", "Back") + head(ask) + others.map((p) => opt('data-doc-supersede="' + esc(p.doc.id) + '"', M.docTitle(p.doc))).join("") + "</ul>";
+    if (pick) return open + opt("data-doc-with-back", "Back") + head(ask) + others.map((p) => under(p, M.docTitle(p.doc))).join("") + "</ul>";
+    const now = others.find((p) => here === "supporting" && doc.relates_to === p.doc.id);
+    const rest = others.filter((p) => p !== now);
+    return open + head("Where it sits") + opt('data-doc-set="primary"', "Main file", here === "primary") +
+      (now ? under(now, "With " + M.docTitle(now.doc)) : "") + (rest.length ? opt("data-doc-with", now ? "With another main file…" : "With a main file…") : "") +
       opt('data-doc-set="archive"', "Archive", here === "archive") + (data?.canSupersede ? supersedeOptions(doc, others, opt) : "") + "</ul>";
   }
   // PH3: an editor's "•••" in the explorer: Download first (one control per row instead of two), then where the file sits, as before.
-  function explorerMenuHtml(doc, data) {
-    const get = canDownload(doc) ? '<li><button type="button" data-download-document="' + esc(doc.id) + '">Download</button></li>' : "";
-    return moveHtml(doc, data).replace(/^(<ul class="doc-menu)(" data-doc-menu="[^"]*">)/, "$1 fx-menu$2" + get);
+  function explorerMenuHtml(doc, data, { pick = false } = {}) {
+    const get = canDownload(doc) && !pick ? '<li><button type="button" data-download-document="' + esc(doc.id) + '">Download</button></li>' : "";
+    return moveHtml(doc, data, { pick }).replace(/^(<ul class="doc-menu)(" data-doc-menu="[^"]*" aria-label="[^"]*">)/, "$1 fx-menu$2" + get);
   }
   // V5: staff only (the database refuses anyone else). A superseded file can be brought back; a current one names the issue that replaces it.
   const supersedeOptions = (doc, others, opt) => isSuperseded(doc) ? opt('data-doc-supersede=""', "Not superseded")
-    : others.map((p) => opt('data-doc-supersede="' + esc(p.doc.id) + '"', "Superseded by " + M.docTitle(p.doc))).join("");
+    : others.length ? opt('data-doc-with="by"', "Superseded by another file…") : "";
   // The update a menu choice sends: a primary or an archived document sits under nothing (F1e's constraint).
   const change = (tier, under) => ({ tier, relates_to: tier === "supporting" ? under || null : null });
 
@@ -611,6 +625,18 @@
         if (fx) toggle.closest(".fx-file").querySelector(".fx-row").insertAdjacentHTML("afterend", explorerMenuHtml(doc, d));
         else toggle.closest(".doc").querySelector(".doc-head").insertAdjacentHTML("afterend", moveHtml(doc, d));
         toggle.setAttribute("aria-expanded", "true");
+        return;
+      }
+      // RF2: "With a main file…" turns the menu to the other main files, and Back turns it back; the focus goes to its first choice
+      const step = e.target.closest("[data-doc-with], [data-doc-with-back]");   // (RF2: also staff's "Superseded by another file…")
+      if (step) {
+        const menu = step.closest(".doc-menu"), doc = list(d.documents).find((x) => String(x.id) === menu.dataset.docMenu);
+        if (!doc) return;
+        const pick = step.hasAttribute("data-doc-with") ? (step.dataset.docWith === "by" ? "by" : "with") : false;
+        menu.insertAdjacentHTML("afterend", fx ? explorerMenuHtml(doc, d, { pick }) : moveHtml(doc, d, { pick }));
+        const next = menu.nextElementSibling;
+        menu.remove();
+        (pick ? next.querySelector("[data-doc-set], [data-doc-supersede]") : next.querySelector("[data-doc-with]") || next.querySelector("button"))?.focus();
         return;
       }
       const set = e.target.closest("[data-doc-set]"), mark = e.target.closest("[data-doc-supersede]");
