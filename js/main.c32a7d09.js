@@ -15,6 +15,8 @@
   // and this is well above any group's size
   const FARMS_CAP = 2000;
   let readyToRoute = false;
+  // PERF3d: each start (and each sign-out) is a new run; an answer that arrives for an older run is dropped, never drawn or kept
+  let run = 0;
 
   function msg(id, text) { $(id).textContent = text || ""; }
 
@@ -26,6 +28,7 @@
 
   async function start() {
     readyToRoute = false;
+    const mine = ++run, stale = () => mine !== run;
     // Arriving from an emailed link: take the sign-in it carries, clear it from the address bar, and (for an
     // invitation) ask for a password before anything else.
     const link = FP.demo?.active ? null : FP.auth.fromLink(location.hash);
@@ -48,29 +51,31 @@
     }
     // V8: the privacy and terms note is open to everyone, signed in or not
     if (!user) { if (FP.privacy.isRoute(location.hash)) { FP.privacy.open(); return; } show("screen-signin"); $("#email").focus(); return; }
+    // PERF3d: everything the start needs to know about the person is asked at once, as soon as the session is known (before, four
+    // waves one after another). Only the asking moves: the answers are taken in the same order as before, each gate first, and
+    // nothing read is drawn, kept or acted on until the gates before it have passed (startupReads, below; the reasoning per gate
+    // is there). A start that stops at a gate, or is overtaken by a sign-out or another start, drops what it read.
+    const reads = startupReads(user);
     if (!FP.demo?.active) {
-      try { if (await FP.auth.needsPassword()) { welcome(user); return; } }
-      catch (e) { show("screen-signin"); msg("#signin-msg", e.message); return; }
+      try { const needs = await reads.password; if (stale()) return; if (needs) { welcome(user); return; } }
+      catch (e) { if (stale()) return; show("screen-signin"); msg("#signin-msg", e.message); return; }
     }
     // V8: the note, once, before anything else, for each version a person has not yet acknowledged (staff too). Never keeps
     // anyone out: a note or record that can't be read or written lets them in and asks again next time (privacy.js).
-    await FP.privacy.gate(user);
+    await FP.privacy.gate(user, reads.privacy);
+    if (stale()) return;
     for (const w of $$(".who")) w.textContent = FP.demo?.active ? "Demo advisor · fixture data" : `Signed in as ${user.email}`;
     // UI1: the account menus' round buttons carry the person's initials
     for (const i of $$(".account-initials")) i.textContent = FP.demo?.active ? "D" : FP.accountMenu.initials(user);
     $("#pw-email").value = user.email;
-    // PERF1b: the farms, the person's memberships (then their organisations, only if there are any) and the staff flag
-    // are read at once; a link straight to one of the person's farms is followed as soon as the farms are known, so
-    // the farm's own reads start before the group and staff reads finish. V2: the staff read goes on to the two-factor step, for
-    // staff only; if that asks anything, nothing is routed until it is answered (a farm a link already opened is closed first).
-    const farmsRead = Promise.resolve(sb.from("farms").select("id, name, region, org_id").order("name").limit(FARMS_CAP)).then((r) => r, (e) => ({ error: e }));
-    // HV1: beside it, the person's own farm rows, which tell their farms from the member farms a coordinator also reads. If they
-    // can't be read, every farm read is taken as the person's own (as before HV1), so a coordinator's member farms would then show
-    // in their Places: chosen so that nobody ever loses a farm of their own to a failed read
-    // (bounded like the farms read)
-    const ownRead = Promise.resolve(sb.from("farm_members").select("farm_id").eq("user_id", user.id).limit(FARMS_CAP)).then((r) => (r?.error ? null : r?.data || []), () => null);
-    const groupsRead = readGroups(user), staffRead = Promise.resolve(FP.ops.checkStaff(user)).catch(() => false).then((isStaff) => FP.twoFactor?.gate(isStaff, () => FP.farmSpace.close()));
-    const [{ data, error }, ownRows] = await Promise.all([farmsRead, ownRead]);
+    // PERF1b: a link straight to one of the person's farms is followed as soon as the farms are known, so the farm's own reads
+    // start before the group and staff answers are taken. V2: the staff flag goes on to the two-factor step, for staff only, and
+    // only now, after the note (the step may enrol an authenticator); if it asks anything, nothing is routed until it is answered
+    // (a farm a link already opened is closed first).
+    const groupsRead = reads.groups, staffRead = Promise.resolve(FP.ops.checkStaff(user, reads.staff)).catch(() => false)
+      .then((isStaff) => (stale() ? false : FP.twoFactor?.gate(isStaff, () => FP.farmSpace.close())));
+    const [{ data, error }, ownRows] = await Promise.all([reads.farms, reads.own]);
+    if (stale()) return;
     if (error) { show("screen-farms"); msg("#farms-msg", error.message); return; }
     const split = FP.farmModel.splitFarms(data, ownRows);
     allFarms = split.own; farms = split.own; memberFarms = split.member;
@@ -79,15 +84,18 @@
     const early = FP.twoFactor?.asking() ? null : farmLink();
     // V6: a link the simple view would not open as it stands waits for the staff flag (a staff sign-in is never sent away from
     // it); a link to a client's own Files or Maps opens at once, and is drawn again below if the person turns out to be staff.
-    if (early && FP.simpleView.on() && FP.simpleView.gate(routed()).action !== "open") await staffRead;
+    if (early && FP.simpleView.on() && FP.simpleView.gate(routed()).action !== "open") { await staffRead; if (stale()) return; }
     const earlySimple = FP.simpleView.on();
     if (early) { readyToRoute = true; route(); }
-    groups = await groupsRead;
+    const read = await groupsRead;
+    if (stale()) return;
+    groups = read;
     FP.groupSpace.setGroups(groups, user);
     FP.placeHome?.setPlaces({ farms: allFarms, groups });   // J2: the places Home's search may lead to
     FP.groupSpace.hasPortfolio = () => farms.length + groups.length > 1;
     FP.captures?.signedIn(user, groups);   // CAP1: remembers the person's groups for an offline start, and sends what waits
     const asked = await staffRead;
+    if (stale()) return;
     readyToRoute = true;
     if (early !== location.hash || asked) route();   // the farm already open stays as it is; anything else is routed now
     else if (earlySimple !== FP.simpleView.on()) route();   // V6: opened as the simple view, and the person turned out to be staff
@@ -117,18 +125,50 @@
     return r && allFarms.some((f) => f.id === r.farm) ? location.hash : null;
   }
 
-  // The catchment groups the person belongs to (S5). A failure here leaves the farms as they were.
+  // PERF3d: the start-up reads, all asked at once. Each is a read the person makes anyway, of their own rows under their own
+  // row-level rights, with the same columns and limits as before; none writes. Asking early breaches no gate, because each gate
+  // is about what is SHOWN or DONE, not about what the database lets this session read, and start() takes the answers in order:
+  //  - Setting a password (an invitation or recovery link): the link's session already reads exactly these rows (the database
+  //    has no rule that waits for the password); the gate makes sure the person chooses one before using the app. While it is
+  //    asked, nothing read here is drawn or kept: start() stops at the welcome screen and a new start (after the password is
+  //    set) reads afresh.
+  //  - The privacy note: it says how the person's data is handled and never keeps anyone out; the reads below fetch only the
+  //    person's own memberships and flag into their own browser. Nothing is drawn, remembered on the phone (the offline places)
+  //    or sent (waiting captures) until I understand; the acknowledgement itself is written only then, as before.
+  //  - Two-factor (staff): only the staff flag is read early. The step itself (which may enrol an authenticator) still starts
+  //    after the note, and publishing is closed by the database to any session without the code, as before.
+  // Each falls back exactly as it did when it was asked later; only the password check can fail, and start() says so as before.
+  function startupReads(user) {
+    const demo = !!FP.demo?.active;
+    const password = demo ? null : FP.auth.needsPassword();
+    password?.catch(() => {});   // (taken by start(); a start that stops before it never leaves it unhandled)
+    return {
+      password,
+      privacy: FP.privacy.check(user),   // the note's file, then this person's row for its version
+      // the farms (bounded: a coordinator also reads every member farm of their groups)
+      farms: Promise.resolve(sb.from("farms").select("id, name, region, org_id").order("name").limit(FARMS_CAP)).then((r) => r, (e) => ({ error: e })),
+      // HV1: beside it, the person's own farm rows, which tell their farms from the member farms a coordinator also reads. If they
+      // can't be read, every farm read is taken as the person's own (as before HV1), so a coordinator's member farms would then show
+      // in their Places: chosen so that nobody ever loses a farm of their own to a failed read
+      // (bounded like the farms read)
+      own: Promise.resolve(sb.from("farm_members").select("farm_id").eq("user_id", user.id).limit(FARMS_CAP)).then((r) => (r?.error ? null : r?.data || []), () => null),
+      groups: readGroups(user),
+      staff: FP.ops.readStaff(user),   // the staff flag's read alone: nothing is set or shown from it until checkStaff takes it
+    };
+  }
+
+  // The catchment groups the person belongs to (S5), each with its organisation in the same read (PERF3d: PostgREST's embedded
+  // select; the organisation comes under organisations' own policy, so it is exactly the row the second read used to fetch, and
+  // tests/db/startup_groups_embed.test.sql checks the two agree). A failure here leaves the farms as they were.
   async function readGroups(user) {
     try {
-      const { data: mine, error } = await sb.from("org_members").select("org_id, role").eq("user_id", user.id);
-      if (error || !mine?.length) return [];
       // LP1: with each group's parent (SG1's parent_org_id), so the home page puts sub-groups under their parent; a database
       // without the column is read as before
-      const read = (columns) => sb.from("organisations").select(columns).in("id", mine.map((m) => m.org_id));
-      let { data: orgs, error: e2 } = await read("id, name, slug, kind, parent_org_id");
-      if (e2) ({ data: orgs, error: e2 } = await read("id, name, slug, kind"));
-      if (e2) return [];
-      return (orgs || []).filter((o) => o.kind === "catchment_group").map((o) => ({ ...o, role: mine.find((m) => m.org_id === o.id)?.role || null }))
+      const read = (columns) => sb.from("org_members").select(columns).eq("user_id", user.id);
+      let { data: mine, error } = await read("org_id, role, organisations(id, name, slug, kind, parent_org_id)");
+      if (error) ({ data: mine, error } = await read("org_id, role, organisations(id, name, slug, kind)"));
+      if (error || !mine?.length) return [];
+      return mine.filter((m) => m.organisations && m.organisations.kind === "catchment_group").map((m) => ({ ...m.organisations, role: m.role || null }))
         .sort((a, b) => a.name.localeCompare(b.name));
     } catch { return []; }
   }
@@ -296,7 +336,8 @@
     else if (FP.privacy.isRoute(routed())) FP.privacy.open();
     else if (!$("#screen-privacy").hidden) start();
   });
-  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.routeTiming?.cancel(); FP.farmSpace.close(); show("screen-signin"); } });
+  // (PERF3d: a sign-out ends the run, so whatever its start-up reads bring back afterwards is dropped)
+  sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") { readyToRoute = false; FP.routeTiming?.cancel(); run++; FP.farmSpace.close(); show("screen-signin"); } });
 
   // installable app: cache the app's own files (never farm data or sign-in) for fast, flaky-coverage starts (SI1: boot.js
   // registers sw.js once the page is up and quiet, never ahead of the first screen)

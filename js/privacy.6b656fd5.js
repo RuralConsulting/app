@@ -86,12 +86,20 @@
     draw(await load());
   }
 
+  // PERF3d: whether to ask, found out without drawing anything (the note's file, then this person's own row for its version),
+  // so main.js can ask it with the other start-up reads. -> { ask, note }. Never rejects.
+  function check(user) {
+    const FP = root.FP;
+    if (FP.demo?.active) return Promise.resolve({ ask: false, note: null });   // invented data and no sign-in: nothing to record
+    return load().then(async (n) => ({ ask: await shouldAsk(FP.sb, user, n), note: n })).catch(() => ({ ask: false, note: null }));
+  }
   // After sign-in: resolves true once the person has said I understand, false when nothing was asked. Never rejects.
-  async function gate(user) {
+  // (pending: check(user), already asked; without it the question is asked now)
+  async function gate(user, pending) {
     const FP = root.FP;
     if (FP.demo?.active) return false;   // invented data and no sign-in: nothing to record
-    const n = await load();
-    if (!(await shouldAsk(FP.sb, user, n))) return false;
+    const { ask, note: n } = await (pending || check(user));
+    if (!ask) return false;
     asking = true;
     draw(n);
     FP.$("#privacy-ok").hidden = false; FP.$("#privacy-back").hidden = true; FP.$("#privacy-print").hidden = true; FP.$("#privacy-msg").textContent = "";
@@ -109,5 +117,5 @@
   }
 
   if (typeof document !== "undefined") document.addEventListener("click", (e) => { if (e.target.closest?.("#privacy-print")) root.print(); });
-  return { FILE, TABLE, ROUTE, parse, acknowledged, record, shouldAsk, load, open, gate, links, asking: () => asking, isRoute: (hash) => hash === ROUTE };
+  return { FILE, TABLE, ROUTE, parse, acknowledged, record, shouldAsk, load, check, open, gate, links, asking: () => asking, isRoute: (hash) => hash === ROUTE };
 });

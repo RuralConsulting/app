@@ -2287,11 +2287,12 @@
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
     function query(table) {
-      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false, span = null, counting = false;
+      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false, span = null, counting = false, withOrg = false;
       const q = {
         // M2b (#522 review): select(columns, { count: "exact", head: true }) gives the count as the API does (a head read: the count and no
         // rows), so a count-first read (people.js counted) never falls back to its cap and says "Only the first 2,000 are listed"
-        select(_columns, options) { if (options?.count) counting = { head: !!options.head }; return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
+        // PERF3d: org_members with "organisations(...)" embeds each membership's organisation, as PostgREST does (null if none)
+        select(columns, options) { if (options?.count) counting = { head: !!options.head }; withOrg = table === "org_members" && /\borganisations\(/.test(columns || ""); return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
         order(key, options) { orders.push([key, options?.ascending !== false]); return q; }, limit() { return q; },
         // ON3b: `is(key, null)` and `range(from, to)` (inclusive), as PostgREST pages a long read
         is(key, val) { filters.push([key, { is: val }]); return q; }, range(from, to) { span = [from, to]; return q; },
@@ -2350,6 +2351,7 @@
         // N2b: as the real API, at most 1000 rows a request (the stand-in for site_record_summary keeps the cap, so a reader that trusts a
         // full page is caught by a test)
         if (table === "site_record_summary" || table === "measurements") selected = selected.slice(0, 1000);
+        if (withOrg) { const orgs = [...(d.tables.organisations || []), ...(d.groupTables?.organisations || [])]; selected = selected.map((m) => ({ ...m, organisations: orgs.find((o) => o.id === m.org_id) || null })); }
         if (counting) return { ...result(counting.head ? null : selected), count: total };
         if (singular && selected.length !== 1) return maybe && !selected.length ? result(null) : error("Demo row not found");
         return result(singular ? selected[0] : selected);
