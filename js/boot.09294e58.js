@@ -116,14 +116,19 @@
     root.classList.toggle("nv-keep", !!line && !!FP.mapKeep?.affected?.());
     if (banner || line) root.style.setProperty("--demo-banner-height", b + l + "px"); else root.style.removeProperty("--demo-banner-height");
   }
-  // its look (css/new-version.css) is loaded the first time it is needed, so the sign-in page carries none of it
+  // its look (css/new-version.css) is loaded when first needed; on a failed load no line, tried again later (app/README.md)
+  let nvCss = 0, nvRetry = 0;
+  const calm = (f) => { const c = FP.mapHandoff?.settled?.(); if (c) c.then(f); else f(); };
   function showLine(reload) {
     let line = document.querySelector(".nv-line");
     if (line) { line.hidden = false; reserveTop(); return; }
-    if (!document.querySelector("link[data-nv]")) {
+    if (nvCss < 2) {
+      if (nvCss) return;
+      nvCss = 1;
       const css = document.createElement("link");
-      css.rel = "stylesheet"; css.href = "css/new-version.541cf0f9.css"; css.setAttribute("data-nv", "");
-      css.onload = css.onerror = () => showLine(reload);
+      css.rel = "stylesheet"; css.href = "css/new-version.541cf0f9.css";
+      css.onload = () => { nvCss = 2; calm(() => showLine(reload)); };
+      css.onerror = () => { css.remove(); nvCss = 0; nvRetry = 1; };
       document.head.append(css);
       return;
     }
@@ -136,25 +141,27 @@
     again.textContent = "Reload";
     again.onclick = () => reload();
     close.append(x);
-    close.onclick = () => { line.hidden = true; reserveTop(); };
+    close.onclick = () => { line.hidden = true; calm(reserveTop); };
     line.append(words, again, close);
     document.body.append(line);
     setTimeout(() => { words.textContent = "A new version is ready."; reserveTop(); }, 50);
     reserveTop();
-    if (window.ResizeObserver) new ResizeObserver(reserveTop).observe(line);
+    if (window.ResizeObserver) new ResizeObserver(() => line.hidden || reserveTop()).observe(line);
   }
   function watch(reg, sw, { now = () => Date.now(), reload = () => location.reload(), doc = document } = {}) {
     let checked = now(), had = !!sw?.controller;
-    const done = { checks: 0, shown: 0 };
+    const done = { checks: 0, shown: 0 }, show = () => whenParsed(() => calm(() => showLine(reload)));
     doc.addEventListener("visibilitychange", () => {
-      if (doc.visibilityState !== "visible" || now() - checked < CHECK_EVERY) return;
+      if (doc.visibilityState !== "visible") return;
+      if (nvRetry) { nvRetry = 0; show(); }
+      if (now() - checked < CHECK_EVERY) return;
       checked = now();
       done.checks++;
       try { Promise.resolve(reg?.update?.()).catch(() => {}); } catch { /* next open */ }
     });
     sw?.addEventListener?.("controllerchange", () => {
       // (never in the middle of a move from map to map (TR1): the boxes the picture handed over lies on would move under it)
-      if (had) { done.shown++; whenParsed(() => { const go = () => showLine(reload), calm = FP.mapHandoff?.settled?.(); if (calm) calm.then(go); else go(); }); }
+      if (had) { done.shown++; show(); }
       had = true;
     });
     return done;
