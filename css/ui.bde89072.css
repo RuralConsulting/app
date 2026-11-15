@@ -3,7 +3,7 @@
    loading. Tokens only (tokens.css); docs/DESIGN.md has the rules. Phone first; a computer from 801 px. */
 :root { --tabbar-h: 0px; --add-lift: 0px; }
 
-/* ---- base ------------------------------------------------------------------------------------------------------------------- */
+/* ---- base ---- */
 body { font-family: var(--f-ui); background: var(--wash); color: var(--ink); -webkit-font-smoothing: antialiased; }
 a { color: var(--accent-text); text-underline-offset: 3px; text-decoration-thickness: 1px; }
 ::selection { background: var(--accent-soft); }
@@ -19,7 +19,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .group-status { color: var(--ink-2); }
 @keyframes fp-spin { to { transform: rotate(360deg); } }
 
-/* ---- buttons and fields ------------------------------------------------------------------------------------------------------ */
+/* ---- buttons and fields ---- */
 /* Primary: the accent, one per view. Secondary: a quiet fill. Link: words in the accent. */
 .card button[type="submit"], .group-panel button.primary, .privacy-ok, .home-card-open, .capture-form button[type=submit], .token-value button, .token-list .tk-revoke-yes {
   min-height: var(--tap); padding: 0 var(--s-5); border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink);
@@ -86,7 +86,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   html { scroll-padding-top: calc(var(--demo-banner-height, 0px) + 72px); }   /* a view scrolled to its top is not under the sticky header */
 }
 
-/* ---- the account menu ------------------------------------------------------------------------------------------------------ */
+/* ---- the account menu ---- */
 .account-open, #farm-space-header .account-open { flex: none; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
   background: var(--fill); color: var(--ink-2); font: 600 var(--text-small)/1 var(--f-ui); cursor: pointer; box-shadow: none; transition: background var(--dur-1) var(--ease); }
 .account-open:hover { background: var(--fill-hover); }
@@ -165,7 +165,7 @@ body.demo-mode .account-menu .password-link { display: none; }
   .space-head .command-bar, #farm-space-header .command-bar { flex-grow: 0; }
 }
 
-/* ---- Add ------------------------------------------------------------------------------------------------------------------------ */
+/* ---- Add ---- */
 .add-slot { display: contents; }
 .add-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 var(--s-4) 0 var(--s-3); border: 0; border-radius: var(--radius-pill);
   background: var(--accent); color: var(--accent-ink); font: 600 var(--text-small)/1 var(--f-ui); cursor: pointer; box-shadow: var(--shadow-1);
@@ -277,7 +277,7 @@ body.demo-mode .account-menu .password-link { display: none; }
 .drawer-heading button, #farm-space-header .drawer-heading button { min-height: var(--tap); padding: 0 var(--s-4); border: 0; border-radius: var(--radius-pill); background: var(--fill); color: var(--ink); font-weight: 600; }
 .drawer-heading button:hover { background: var(--fill-hover); }
 
-/* ---- Events ------------------------------------------------------------------------------------------------------------------ */
+/* ---- Events ---- */
 .events-toggle { padding: 3px; gap: 2px; border: 0; border-radius: var(--radius-pill); background: var(--fill); }
 .events-toggle button { min-height: 32px; padding: 0 var(--s-4); border-radius: var(--radius-pill); background: none; color: var(--ink-2); font-size: var(--text-small); font-weight: 500; }
 .events-toggle button + button { border-left: 0; }

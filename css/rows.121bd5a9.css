@@ -1,0 +1,122 @@
+/* DN1 (15 Nov 2026, the owner, of a marketplace app's list: "Note the text and symbol size and spacing. I like that it's not large and
+   fits a lot while not being cluttered"; and of People: "Reduce the blank space in the contacts page"). A phone's lists, sheets and
+   menus on ONE scale (tokens.css "DN1"): a row is 16 px regular text with at most one 13 px quiet line, 8 px above and below, never
+   under 48 px (so every row stays a 44 px target); a small icon (20 px), avatar (32 px) or thumbnail (40 px) at the left; one hairline
+   between rows, from where the text starts to the edge; no box, card or shadow round a list; a count in a quiet pill; a small chevron.
+   Phone widths only (800 px and narrower; People's own list from 760 px, its breakpoint). Each part of the scale is one rule naming the
+   lists it serves, so a list joins by being named here. Loaded after ui.css (a template of its own), never by the sign-in page. */
+@media (max-width: 800px) {
+  /* ---- no box round a list ---------------------------------------------------------------------------------------------- */
+  :is(.fx-list, .projects .pj-list, .projects .pj-set, .events-list, .rec-list, .pa-peek .pa-set, .group-people .crm-people, .group-people .sg-list) {
+    margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; gap: 0; }
+  .fx-list { --row-inset: calc(var(--row-icon) + var(--row-gap)); }
+  .events-list { --row-inset: calc(var(--row-date) + var(--row-gap)); }
+  .rec-list { --row-inset: calc(var(--row-thumb) + var(--row-gap)); }
+  .pa-peek .pa-set { --row-inset: calc(var(--row-icon) + var(--row-gap)); }
+  .pa-peek .pa-subs { --row-inset: calc(var(--row-dot) + var(--row-gap)); }
+  :is(.group-people .crm-people, .group-people .sg-list) { --row-inset: calc(var(--row-avatar) + var(--row-gap)); }
+  .fp-sheet:not(.fs-list) .add-list { --row-inset: calc(var(--row-icon) + var(--row-gap)); }
+  .home-list { --row-inset: var(--s-2); }
+
+  /* ---- one hairline between rows, from where the text starts to the edge (a list's old dividers give way to it) ---------- */
+  :is(.fx-list, .projects .pj-list, .projects .pj-set, .events-list, .rec-list, .pa-peek .pa-set:not(.pa-subs), .pa-peek .pa-subs-list, .group-people .crm-people, .group-people .sg-list,
+    .group-people .crm-table .crm-list, .fp-sheet:not(.fs-list) .add-list, .home-list) > * { position: relative; border-top: 0; border-bottom: 0; }
+  :is(.fx-list, .projects .pj-list, .projects .pj-set, .events-list, .rec-list, .pa-peek .pa-set:not(.pa-subs), .pa-peek .pa-subs-list, .group-people .crm-people, .group-people .sg-list,
+    .group-people .crm-table .crm-list, .fp-sheet:not(.fs-list) .add-list, .home-list) > * + :not(.crm-letter, [hidden])::before {
+    content: ""; position: absolute; z-index: 1; top: 0; left: var(--row-inset, 0); right: 0; height: 1px; background: var(--row-rule); pointer-events: none; }
+  .group-people .crm-table .crm-list > .crm-letter:first-child + *::before { display: none; }
+  .rec-list { border-top: 0; border-bottom: 0; }
+  .projects .pj-set > * + *:not([hidden]) { border-top: 0; }
+
+  /* ---- the rows: at least 48 px, 8 px above and below, the text regular ----------------------------------------------------- */
+  :is(.fx-row, .documents-block.fx button.fx-folder, .projects .pj-row, .rec-row, .group-people .crm-people .crm-person,
+    .group-people .sg-list > .crm-row > :is(button, .sg-row), .fp-sheet:not(.fs-list) .add-item) {
+    min-height: var(--row-min); padding: var(--row-pad) 0; column-gap: var(--row-gap); border-radius: 0; line-height: var(--row-lh); }
+  .events-item > button { min-height: var(--row-min); padding: var(--row-pad) 0; column-gap: var(--row-gap); border: 0; border-radius: 0; background: none; box-shadow: none;
+    grid-template-columns: var(--row-date) minmax(0, 1fr); align-items: center; line-height: var(--row-lh); }
+  .events-item > button:is(:hover, :focus-visible) { box-shadow: none; }
+  :is(.documents-block.fx .fx-name, .projects .pj-text b, .rec-text b, .events-item-text > b, .group-people .crm-c-name b, .group-people .crm-person .crm-row-main b,
+    .fp-sheet:not(.fs-list) .add-item-text b, .home-item b) { font-weight: var(--row-weight); }
+  :is(.fx-line, .fx-count, .projects .pj-text small, .projects .pj-side, .rec-text small, .rec-date, .events-item-text small, .pa-text small, .pa-far, .crm-c-member, .crm-c-contact, .crm-c-last,
+    .fp-sheet:not(.fs-list) .add-item-text small, .home-item small) { font-size: var(--text-small); color: var(--ink-3); }
+
+  /* ---- symbols: icons 20 px, avatars 32 px, thumbnails 40 px, chevrons 14 px, a count in a quiet pill ----------------------- */
+  :is(.fx-icon, .pa-peek .pa-dot) { width: var(--row-icon); height: var(--row-icon); }
+  :is(.fx-icon, .pa-peek .pa-dot) svg { width: var(--row-icon); height: var(--row-icon); }
+  .rec-row { grid-template-columns: var(--row-thumb) 1fr auto; }
+  .rec-thumb { width: var(--row-thumb); height: var(--row-thumb); }
+  :is(.group-people .crm-people .crm-person, .group-people .sg-list > .crm-row > :is(button, .sg-row)) { grid-template-columns: var(--row-avatar) minmax(0, 1fr); }
+  .group-people :is(.crm-people, .sg-list) .crm-avatar { width: var(--row-avatar); height: var(--row-avatar); }
+  .group-people :is(.crm-people, .sg-list) .crm-avatar-org { border-radius: var(--radius-s); }
+  .group-people .crm-link-actions { padding: 0 0 6px var(--row-inset); }
+  .group-people .sg-list .sg-remove { margin: 0 0 6px var(--row-inset); }
+  :is(.projects .pj-link, .pa-peek .pa-chev) svg { width: var(--row-chev); height: var(--row-chev); }
+  .projects .pj-list > li > .pj-link { grid-template-columns: minmax(0, 1fr) auto var(--row-chev); }
+  .documents-block.fx .fx-count { padding: 1px var(--s-2); border-radius: var(--radius-pill); background: var(--fill); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  /* a folder opens: a small chevron at its right edge (unless the row draws its own) */
+  .documents-block.fx button.fx-folder:not(:has(.fx-chevron))::after { content: ""; flex: none; width: var(--row-chev); height: var(--row-chev); background: var(--ink-3);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat; }
+  /* a file's "•••" or download arrow stays its own 44 px target at the row's right edge */
+  .fx-row { padding-right: 0; }
+  .documents-block.fx :is(.fx-more, .fx-get) { margin-right: calc(-1 * var(--s-3)); }
+  :is(.fx-file .doc-requested, .documents-block.fx .fx-menu, .documents-block.fx .doc-msg) { margin-left: var(--row-inset); }
+
+  /* Events: the day as a small plain date, no tile */
+  .events-date { padding: 0; background: none; border-radius: 0; }
+  .events-date b { font-size: var(--text-heading); font-weight: 600; line-height: 1.1; }
+  .events-date small { font-size: var(--text-small); }
+  .events-item-text { gap: 1px; }
+
+  /* the peek: its sets as plain rows, at the heights HM1 gave them (already this scale's 44 to 52 px); "Sub-groups" a quiet heading at
+     the text's edge */
+  .pa-peek .pa-set .pa-row { padding-left: 0; padding-right: 0; column-gap: var(--row-gap); }
+  .pa-peek .pa-subs h3 { padding: var(--s-2) 0 2px; }
+  .pa-peek .pa-set { margin-bottom: var(--s-2); }
+
+  /* Places: the list's rows as the others (its panel is the map's, unchanged) */
+  .home-item button { padding-top: 6px; padding-bottom: 6px; }
+
+  /* ---- sheets (sheet.js: More, the "…" menus, Filter, Jump to): one compact line on top, the title and its small line at the
+     left, Done at the right; then plain rows. A choice's list (PH4's .fs-list) keeps its own look. ---------------------------- */
+  .fp-sheet:not(.fs-list) .add-head { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; min-height: var(--tap);
+    padding: 0 calc(var(--s-4) + var(--sheet-done)) var(--s-1) var(--s-4); }
+  .fp-sheet:not(.fs-list) .add-head h2 { font: 600 var(--text-body)/1.25 var(--f-ui); }
+  .fp-sheet:not(.fs-list) .add-cancel { position: absolute; top: var(--s-5); right: var(--s-2); width: auto; min-width: var(--sheet-done); margin: 0; padding: 0 var(--s-3);
+    border: 0; box-shadow: none; background: none; color: var(--ink); font: 600 var(--text-body)/1 var(--f-ui); }
+  .fp-sheet:not(.fs-list) .add-panel { padding-bottom: calc(var(--s-2) + env(safe-area-inset-bottom, 0px)); }
+  .fp-sheet:not(.fs-list) .add-list { padding: 0 var(--s-4); gap: 0; }
+  .fp-sheet:not(.fs-list) .add-item-icon { width: var(--row-icon); height: var(--row-icon); border-radius: 0; background: none; color: var(--ink-2); }
+  .fp-sheet:not(.fs-list) .fp-menu-item[aria-current] .add-item-icon { background: none; color: var(--ink); }
+  .fp-sheet:not(.fs-list) .fp-menu-item[aria-current] .add-item-text b { font-weight: 600; }
+}
+
+/* ---- People on a phone: the contact list as the reference. The name has the row's width; the member number, the contact and the last
+   contact share the quiet line (the last contact only when there is one: "None yet" says nothing), which wraps rather than squeeze the
+   contact under about six letters (a small phone, large text: the last contact goes to a line of its own); a 32 px avatar; a letter costs
+   no height; the title, search and views closer together. The rows run to the edge: the list ends clear of the round + (the panel's own
+   space below it), as the other lists do, so no row keeps a gutter for it. ------------------------------------------------------------ */
+@media (max-width: 760px) {
+  .group-people .crm-titlebar { margin-bottom: var(--s-2); }
+  .group-people .crm-directory > .crm-views { margin: 0; }
+  .group-people .crm-views-toggle { min-height: var(--tap); }
+  .group-people .crm-table .crm-list { --row-inset: calc(var(--row-avatar) + var(--row-gap)); grid-template-columns: minmax(0, 1fr); margin-top: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
+  .group-people .crm-table .crm-row > button, .group-people .crm-table.mf-table .crm-row > button { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0; row-gap: 0;
+    min-height: var(--row-min); padding: var(--row-pad) 0 var(--row-pad) var(--row-inset); border: 0; }
+  body:has(.add-button:not([hidden])) .group-people .crm-table .crm-row > button { padding-right: 0; }
+  .group-people .crm-table .crm-c-name { flex: 1 0 100%; }
+  .group-people .crm-table .crm-c-member { flex: none; }
+  .group-people .crm-table .crm-c-contact { flex: 1 1 var(--row-contact); min-width: var(--row-contact); }   /* (the dot and about six letters at least) */
+  .group-people .crm-table-people .crm-c-contact { flex-basis: 100%; }
+  .group-people .crm-table .crm-c-name .crm-avatar { left: 0; width: var(--row-avatar); height: var(--row-avatar); }
+  .group-people .crm-table .crm-c-name .crm-avatar-org { border-radius: var(--radius-s); }
+  .group-people .crm-table .crm-c-last { flex: none; margin-left: auto; padding-left: var(--s-3); }
+  .group-people .crm-table .crm-c-last.crm-none { display: none; }
+  /* the dot goes with the contact, never left alone after the member number (the type is a computer's column; a phone hides it) */
+  .group-people .crm-table .crm-c-member::after, .group-people .crm-table.mf-table .crm-c-member::after { content: none; }
+  .group-people .crm-table .crm-c-member ~ .crm-c-contact::before { content: "\00b7"; margin: 0 6px; }
+  /* a letter costs nothing on a phone: each avatar carries its initials, and the letters stay as the A to Z jump's places and for a
+     screen reader (1 px tall less 1 px below, its text at no size: a focusable place the browser does not scroll again when focused) */
+  .group-people .crm-letter, .group-people .crm-list > .crm-letter:not(:first-child) { height: 1px; margin-bottom: -1px; padding: 0; border: 0; font-size: 0; color: var(--clear); }
+  .group-people .crm-table .crm-row > button { line-height: var(--row-lh); }
+}

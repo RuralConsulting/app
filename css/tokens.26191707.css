@@ -56,6 +56,9 @@
   --radius-s: 8px; --radius: 12px; --radius-l: 16px; --radius-pill: 999px;
   /* controls: 44 px targets for every button and field */
   --tap: 44px;
+  /* DN1: a phone's list rows (rows.css) */
+  --row-min: 48px; --row-pad: 8px; --row-gap: 12px; --row-weight: 400; --row-lh: 1.3; --row-rule: var(--rule); --row-icon: 20px; --row-dot: 12px; --row-avatar: 32px;
+  --row-thumb: 40px; --row-date: 40px; --row-chev: 14px; --row-contact: 7em; --sheet-done: 64px;
   /* motion: short and soft; none when the person asks for reduced motion (app.css) */
   --ease: cubic-bezier(.2, .8, .2, 1); --dur-1: .14s; --dur-2: .24s;
 

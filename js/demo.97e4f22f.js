@@ -28,6 +28,8 @@
     const titles = new URLSearchParams(root.location.search).get("titles") === "1";
     // PH3: "?people=long" adds forty more invented people to the group's People, so its contact list has letter headings and the A to Z jump
     const longPeople = new URLSearchParams(root.location.search).get("people") === "long";
+    // DN1: "?members=long" adds twenty more invented members, so the Members list is long enough for its letters (as a real group's is)
+    const longMembers = new URLSearchParams(root.location.search).get("members") === "long";
     // SR1: "?round=1" gives the demo group's own sampling dataset twelve registered sites with a field-sensor nitrate record, for entering a round
     const round = new URLSearchParams(root.location.search).get("round") === "1";
     // PJ1: "?projects=1" gives the demo group an example project (and a proposed one), with who takes part, what is due, a funder and
@@ -41,7 +43,7 @@
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, round, projects, memberFarm })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, round, projects, memberFarm })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -178,7 +180,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, round = false, projects = false, memberFarm = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, round = false, projects = false, memberFarm = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -252,6 +254,9 @@
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
     if (group) groupDemo(data, queue, longPeople);
+    if (group && longMembers) data.groupTables.group_members.push(...["Juliett", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango", "Uniform",
+      "Victor", "Whiskey", "Xray", "Yankee", "Zulu", "Amber", "Birch", "Cedar"].map((w, i) => ({ id: "de000000-0000-4000-8000-0000000003" + String(20 + i), org_id: GROUP,
+      member_number: String(10 + i), business_name: w + " Invented Ltd", ended_at: null, created_at: "2026-06-01T00:00:00Z" })));
     if (group && (overview === "full" || overview === "empty" || overview === "sub")) overviewDemo(data, overview);   // MC1, CO1
     if (group && titles) titleQuestionsDemo(data);   // LT1
     if (group && projects) projectsDemo(data);   // PJ1

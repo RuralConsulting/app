@@ -510,7 +510,7 @@
           // (no contact recorded: nothing, rather than a line saying so). Its column on a computer is set in people.css (second to
           // last), never inline: a phone places it by its grid area.
           r.primary_name || r.people_count ? el("span", { class: "crm-c-contact" }, r.primary_name || M().plural(r.people_count, "person", "people")) : null,
-          el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), last)));
+          el("span", { class: "crm-c-last" + (r.last_interaction_at ? "" : " crm-none") }, el("span", { class: "visually-hidden" }, "Last contact "), last)));
     }
     // M1b: the directory as it is shown (search, PE1's and SG2's filters, then membership type and fields; sorted)
     // PH3: by name unless a column was chosen, as a phone's contacts are (letters first, macrons and case ignored)
@@ -531,7 +531,7 @@
         el("button", { type: "button", "data-person": c.person_id, onclick: () => openPerson(c.person_id) },
           el("span", { class: "crm-c-name" }, avatar(c.display_name), el("b", {}, c.display_name), c.archived_at ? el("span", { class: "crm-badge" }, "Archived") : null),
           el("span", { class: "crm-c-contact" }, MM().contactLine(c) || "No organisation recorded"),
-          el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), M().lastShort(c.last_interaction_at, today()))));
+          el("span", { class: "crm-c-last" + (c.last_interaction_at ? "" : " crm-none") }, el("span", { class: "visually-hidden" }, "Last contact "), M().lastShort(c.last_interaction_at, today()))));
     }
     // M1b: a set-returning read a page at a time (the API returns at most 1,000 rows a request), each read ordered by the database,
     // until a short page; a failed page fails the whole read, never a silent part of it. (A client without range(): one read.)
@@ -586,7 +586,7 @@
         el("button", { type: "button", "data-person": p.person_id, onclick: () => openPerson(p.person_id) },
           el("span", { class: "crm-c-name" }, avatar(p.display_name), el("b", {}, p.display_name), p.archived_at ? el("span", { class: "crm-badge" }, "Archived") : null),
           el("span", { class: "crm-c-contact" }, [p.job_title, (p.businesses || []).map((b) => b.business_name + (b.relationship ? " (" + b.relationship + ")" : "")).join(", ") || "No member"].filter(Boolean).join(" · ")),
-          el("span", { class: "crm-c-last" }, el("span", { class: "visually-hidden" }, "Last contact "), M().lastShort(p.last_interaction_at, today()))));
+          el("span", { class: "crm-c-last" + (p.last_interaction_at ? "" : " crm-none") }, el("span", { class: "visually-hidden" }, "Last contact "), M().lastShort(p.last_interaction_at, today()))));
     }
 
     // ---- a business ------------------------------------------------------------------------------------------------------------------
