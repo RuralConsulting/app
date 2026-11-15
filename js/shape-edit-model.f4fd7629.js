@@ -183,6 +183,35 @@
     };
   }
 
+  // ---- the handle under the pointer (CI5) -----------------------------------------------------------------------------------
+  // A tap or press is measured against the shape as it is now, never against what the map last drew: the map draws a change a
+  // frame or more later (its sources are set in a worker), and the editor hides the handles while a corner is held, so the drawn
+  // handles can be missing, or carry a corner's old number, at the moment of a click. Sizes as drawn (shape-editor.js addLayers):
+  // a corner's circle 7 px with a 2 px edge (9 px when picked), a "+" 5 px with a 1.5 px edge. A "+" under the pointer wins over
+  // a corner for a tap, as before; a press (the start of a drag) asks with prefer: "corner", so where an edge is short and its +
+  // overlaps its corners a press still drags the corner, as before (review of #585). point: [x, y] in the map's pixels;
+  // project(lngLat) -> [x, y]; box: [w, s, e, n] round the pointer in lng/lat, so only the corners near it are measured (a shape
+  // of 10,000 corners is not projected whole on every move).
+  const HANDLE_PX = { corner: 9, picked: 11, middle: 6.5 };
+  function handleAt(shape, point, project, { box = null, picked = null, prefer = "middle" } = {}) {
+    const near = (c) => ok(c) && (!box || (c[0] >= box[0] && c[0] <= box[2] && c[1] >= box[1] && c[1] <= box[3]));
+    const dist = (c) => { const q = project(c); return Math.hypot(q[0] - point[0], q[1] - point[1]); };
+    const isPicked = (w) => !!picked && picked[0] === w[0] && picked[1] === w[1] && picked[2] === w[2];
+    let middle = null, corner = null;
+    list(shape).forEach((poly, p) => list(poly).forEach((ring, r) => {
+      const n = list(ring).length;
+      for (let v = 0; v < n; v++) {
+        const a = ring[v], b = ring[(v + 1) % n], w = [p, r, v];
+        if (near(a)) { const d = dist(a); if (d <= (isPicked(w) ? HANDLE_PX.picked : HANDLE_PX.corner) && (!corner || d < corner.d)) corner = { kind: "corner", where: w, d }; }
+        if (!ok(a) || !ok(b)) continue;
+        const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        if (near(m)) { const d = dist(m); if (d <= HANDLE_PX.middle && (!middle || d < middle.d)) middle = { kind: "middle", where: w, d }; }
+      }
+    }));
+    const got = prefer === "corner" ? corner || middle : middle || corner;
+    return got ? { kind: got.kind, where: got.where } : null;
+  }
+
   // ---- snapping -------------------------------------------------------------------------------------------------------------
   // The snap targets: every corner and edge of the features given, by kind (neighbour, parcel, waterway, boundary), in a
   // grid by degrees so a pointer move looks only at what is near it. A dragged corner snaps to the nearest target corner
@@ -382,5 +411,5 @@
   }
 
   return { SNAP_PX, MAX_CORNERS, HISTORY, READ_MAX, PHONE_MAX, PARCELS, WHY, isPhone, editsSpace, offer, pickTarget, refusal, corners, createEditor,
-    snapIndex, snap, snapLine, linesOf, bboxOf, pad, createSession };
+    HANDLE_PX, handleAt, snapIndex, snap, snapLine, linesOf, bboxOf, pad, createSession };
 });

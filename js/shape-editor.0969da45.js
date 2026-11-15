@@ -88,23 +88,31 @@
     } else { setData("se-vertices", NONE); setData("se-middles", NONE); }
     setData("se-snap", ed.snapped ? { type: "Feature", geometry: { type: "Point", coordinates: ed.snapped.lngLat }, properties: {} } : NONE);
   }
-  const hit = (e, layers) => ed.map.queryRenderedFeatures(e.point, { layers: layers.filter((id) => ed.map.getLayer(id)) });
-  const whereOf = (f) => [f.properties.p, f.properties.r, f.properties.v];
+  // CI5: the corner or + under the pointer, from the editor's shape as it is now (M().handleAt), not from what the map last
+  // drew: the handles are hidden while a corner is held and redrawn a frame or more after each change, so asking the drawn
+  // map cleared the selection on an ordinary click (press, a moment, release) and took a corner by its old number just after a +.
+  // prefer: "middle" for a tap (a + wins, as before), "corner" for a press (a corner under the pointer is dragged, even where a
+  // short edge's + overlaps it)
+  function handleUnder(e, prefer = "middle") {
+    const map = ed.map, p = e.point, t = M().HANDLE_PX.picked + 1;
+    const cs = [[p.x - t, p.y - t], [p.x + t, p.y - t], [p.x + t, p.y + t], [p.x - t, p.y + t]].map((c) => map.unproject(c));
+    const box = [Math.min(...cs.map((c) => c.lng)), Math.min(...cs.map((c) => c.lat)), Math.max(...cs.map((c) => c.lng)), Math.max(...cs.map((c) => c.lat))];
+    return M().handleAt(ed.editor.shape, [p.x, p.y], (c) => { const q = map.project(c); return [q.x, q.y]; }, { box, picked: ed.editor.picked, prefer });
+  }
   const editingNow = () => ed && ed.session.state.status === "editing";
   function onTap(e) {
     if (!editingNow() || ed.dragging) return;
-    const m = hit(e, ["se-middles"])[0];
-    if (m) { ed.editor.insert(whereOf(m)); say(""); refresh(); return; }
-    const v = hit(e, ["se-vertices"])[0];
-    ed.editor.pick(v ? whereOf(v) : null);
+    const h = handleUnder(e);
+    if (h?.kind === "middle") { ed.editor.insert(h.where); say(""); refresh(); return; }
+    ed.editor.pick(h ? h.where : null);
     refresh();
   }
   function startDrag(e) {
-    if (!editingNow()) return;
-    const v = hit(e, ["se-vertices"])[0];
-    if (!v || (e.originalEvent?.touches && e.originalEvent.touches.length > 1)) return;
+    if (!editingNow() || ed.dragging) return;
+    const h = handleUnder(e, "corner");
+    if (h?.kind !== "corner" || (e.originalEvent?.touches && e.originalEvent.touches.length > 1)) return;
     e.preventDefault();
-    ed.dragging = whereOf(v); ed.editor.begin(ed.dragging);
+    ed.dragging = h.where; ed.editor.begin(ed.dragging);
     ed.map.dragPan.disable(); ed.map.getCanvas().style.cursor = "grabbing";
     handlesShown(false);
   }
@@ -142,7 +150,8 @@
     ed.snapped = null;
     refresh();
   }
-  const hover = (e) => { if (ed && !ed.dragging && editingNow()) ed.map.getCanvas().style.cursor = hit(e, ["se-vertices", "se-middles"]).length ? "pointer" : ""; };
+  // the pointer hand wherever a tap or a press does something (a + to tap, a corner to press and drag, or both where they overlap)
+  const hover = (e) => { if (ed && !ed.dragging && editingNow()) ed.map.getCanvas().style.cursor = handleUnder(e) ? "pointer" : ""; };
 
   // ---- the panel -----------------------------------------------------------------------------------------------------------
   let said = "";
@@ -271,7 +280,7 @@
     document.body.classList.add("shape-editor-active");
     addLayers(map);
     surface.capture?.(onTap);
-    map.on("mousedown", "se-vertices", startDrag);
+    map.on("mousedown", startDrag);
     map.on("mousemove", moveDrag); map.on("mouseup", endDrag); map.on("mousemove", hover);
     map.once("remove", close);
     refresh();
@@ -286,7 +295,7 @@
     ed = null; said = "";
     document.removeEventListener("keydown", onKey, true);
     try {
-      map.off("mousedown", "se-vertices", startDrag);
+      map.off("mousedown", startDrag);
       map.off("mousemove", moveDrag); map.off("mouseup", endDrag); map.off("mousemove", hover); map.off("remove", close);
       map.dragPan.enable(); map.getCanvas().style.cursor = "";
       removeLayers(map);
