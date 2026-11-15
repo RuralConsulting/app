@@ -374,7 +374,12 @@
     // choosing a sub-group (in the list or on the map): the tiles and the map follow it; a second click on it (or its row's Open) goes
     // into it; "All sub-groups" clears it (the owner, 14 Nov 2026: on a computer the first click filters, the second opens; a phone
     // goes straight in, PH5)
-    const open = (id) => { if (subs.some((s) => s.id === id && s.member)) root.location.hash = hrefOf(id); };
+    const open = (id) => {
+      if (!subs.some((s) => s.id === id && s.member)) return;
+      const a = A.get(id);   // TR1: its outline handed to the overview it opens on (map-handoff.js)
+      if (a?.shape) FP.mapHandoff?.entering({ id, kind: "subgroup", geometry: a.shape.geometry, bbox: a.shape.bbox });
+      root.location.hash = hrefOf(id);
+    };
     function select(id) {
       const sub = id ? subs.find((s) => s.id === id && s.member) : null;
       if (id && !sub) return;
@@ -512,8 +517,11 @@
       for (const [id, a] of A) {
         const own = id === group.id, hue = P ? P.hues(css)[P.hueIndex(id)] : "#888888", look = P ? P.look(hue, { sub: !own, onDark: onDark() }) : { line: hue, casing: "#ffffff", lineWidth: 1.2 };
         const sub = !own && P?.subgroupLook ? P.subgroupLook(subColour(id) || hue, { onDark: onDark() }) : null;
-        f.push({ type: "Feature", geometry: a.shape.geometry, properties: { id, own, name: own ? group.name : subName(id), line: sub ? sub.line : onDark() ? "#ffffff" : look.line, fill: sub ? sub.fill : look.fill || hue, casing: look.casing,
-          lw: own ? 1 : sub ? sub.lineWidth : 1.2, lo: own ? 0.7 : 0.9, fo: own ? 0 : sub ? sub.fillOpacity : 0.07, dim: sc && !sc.includes(id) && !own ? 1 : 0 } });
+        // TR1: the group's own edge drawn as Places draws the group (its hue's line; a sub-group's in its parent's hue, lighter), the same
+        // as on its Home on a phone, so the move from Places reads as zooming into the same thing (it was a thin white line)
+        const ownLook = own && P ? P.look(P.hues(css)[P.hueIndex(group.parent_org_id || group.id)], { sub: !!group.parent_org_id, onDark: onDark() }) : null;
+        f.push({ type: "Feature", geometry: a.shape.geometry, properties: { id, own, name: own ? group.name : subName(id), line: sub ? sub.line : ownLook ? ownLook.line : onDark() ? "#ffffff" : look.line, fill: sub ? sub.fill : look.fill || hue, casing: look.casing,
+          lw: own ? ownLook?.lineWidth ?? 1 : sub ? sub.lineWidth : 1.2, lo: own ? (ownLook ? 1 : 0.7) : 0.9, fo: own ? 0 : sub ? sub.fillOpacity : 0.07, dim: sc && !sc.includes(id) && !own ? 1 : 0 } });
       }
       return { type: "FeatureCollection", features: f };
     }
@@ -598,7 +606,7 @@
     }
     function highlight(id) {
       if (!live()) return;
-      if (map?.getLayer("ov-area-hi")) for (const l of ["ov-area-hi", "ov-area-hiline"]) map.setFilter(l, ["==", ["get", "id"], id || ""]);
+      if (map?.style && map.getLayer("ov-area-hi")) for (const l of ["ov-area-hi", "ov-area-hiline"]) map.setFilter(l, ["==", ["get", "id"], id || ""]);
       for (const m of markers) m.node.classList.toggle("hi", m.id === id);
       for (const r of listBox.querySelectorAll("[data-row]")) r.classList.toggle("hi", r.dataset.row === id);
     }
@@ -638,6 +646,7 @@
     function shapesIn() {
       if (!map?.getSource("ov-areas") || !areasKnown) return;
       drawAreas(); drawSites();
+      if (me.handoff && !me.arrived && !keepCamera) { arriveFrom(me.handoff); return; }   // TR1: arriving from another map
       if (keepCamera) { map.jumpTo(keepCamera); keepCamera = null; } else frame(true);   // (made again: where it was)
       if (!A.size) { reveal(); return; }
       // WQ3 (CI: "Cannot read properties of null (reading 'off')"): this map is held in `m`; the 1.5 s timer and the map's events can
@@ -656,11 +665,29 @@
       me.offs.push(() => clearTimeout(timer));
       check();
     }
+    // TR1: the shapes are in, on a map that took a hand-over: the picture fades once this map has drawn under it, then ONE ease to the
+    // group's frame while the darkening, the sub-groups' fills and their marks fade in (map-handoff.js). Later arrivals (sites) never
+    // move it.
+    const ARRIVING = ["ov-mask", "ov-area-fill", "ov-area-line", "ov-area-casing"];
+    async function arriveFrom(h) {
+      me.arrived = true;
+      const Hd = FP.mapHandoff, m = map;
+      framedKey = (filter.sub || "all") + "|" + A.size + "|" + (A.size ? "" : all.length);
+      for (const id of ARRIVING) Hd.setLevel(m, id, 0);
+      for (const x of markers) x.node.classList.add("tr-in");
+      reveal();
+      await h.reveal(m);
+      if (!live() || m !== map) return;
+      Hd.fade(m, ARRIVING, { to: 1, ms: 500 });
+      // (the areas may land well after the picture has gone: a map the person has moved meanwhile stays where they put it)
+      if (h.mayMove(m)) await Hd.ease(m, frameOf());
+    }
     async function useBase(k) {
       base = k; markBg();
       const names = FP.basemaps?.names || [];
       const m = map;
-      if (m && names.includes(k)) { try { await FP.basemaps.pick(m, k); } catch { if (k !== "aerial" && live() && map === m) { try { await FP.basemaps.pick(m, "aerial"); base = "aerial"; markBg(); } catch { /* the plain ground */ } } } }
+      // TR1: Aerial | Topo cross-faded (basemaps.js swap); WQ3: the same map throughout, or nothing more is done to it
+      if (m && names.includes(k)) { try { await (FP.basemaps.swap || FP.basemaps.pick)(m, k); } catch { if (k !== "aerial" && live() && map === m) { try { await FP.basemaps.pick(m, "aerial"); base = "aerial"; markBg(); } catch { /* the plain ground */ } } } }
       if (!live() || map !== m) return;   // (the page closed, or the map was made again: its own ready step does this)
       if (map) { const first = ["ov-mask", "ov-area-fill"].find((l) => map.getLayer(l)); if (first && map.getLayer("ov-veil")) map.moveLayer("ov-veil", first); }
       paint();
@@ -692,16 +719,25 @@
         return;
       }
       try { gl.setWorkerUrl?.("vendor/maplibre-gl-csp-worker.f950e7b1.js"); } catch { /* set already */ }
-      const start = base || (P ? P.startBackground(store.get(BASE_KEY), choices()) : "aerial");
+      // TR1: a hand-over not yet taken (the map is made before the first frame's check), and its background
+      if (me.handoff === undefined) { me.handoff = FP.mapHandoff?.take({ box: mapHost, id: group.id }) || null; if (me.handoff) { me.handoff.cover(); mapWait.hidden = true; } }
+      const h = !me.arrived && !keepCamera ? me.handoff : null;
+      h?.refit();
+      const start = base || (h?.base && choices().includes(h.base) ? h.base : null) || (P ? P.startBackground(store.get(BASE_KEY), choices()) : "aerial");
       base = start;
       // CO1b: opened on the group (its areas when they are read, else the frame kept from the last visit), never the whole region while
       // the group's shapes are on their way (the map is hidden behind "Loading map…" until then when no frame is kept); made again, where
-      // it was
-      const first = frameOf(), at = keepCamera ? { center: keepCamera.center, zoom: keepCamera.zoom } : { bounds: first.bounds, fitBoundsOptions: { padding: first.padding, maxZoom: first.maxZoom } };
+      // it was. TR1: arriving from another map, where that map was (under its picture)
+      const first = frameOf(), at = keepCamera ? { center: keepCamera.center, zoom: keepCamera.zoom } : h ? { center: h.camera.center, zoom: h.camera.zoom }
+        : { bounds: first.bounds, fitBoundsOptions: { padding: first.padding, maxZoom: first.maxZoom } };
       try {
         map = me.map = new gl.Map({ container: mapHost, style: FP.basemaps.style(start, { reliefOnAerial: false }), ...at, maxZoom: 18,
           dragRotate: false, pitchWithRotate: false, attributionControl: { compact: true, ...(FP.brand?.org_legal ? { customAttribution: FP.brand.org_legal } : {}) } });
       } catch { map = me.map = null; cannotOpen(); return; }
+      me.unhand?.(); me.unhand = FP.mapHandoff?.register(map, { kind: "overview", base: () => base, marks: () => mapHost.querySelectorAll(".ov-mark:not([hidden])") }) || null;
+      h?.raise();   // (the picture stays over the map made under it)
+      h?.watch(map);   // (and goes once this map has drawn, whatever the areas' read is doing)
+      if (h) reveal();   // (the map shows under the picture; "Loading map…" is not needed)
       me.keep?.made();
       map.touchZoomRotate?.disableRotation?.();
       map.addControl(new gl.NavigationControl({ showCompass: false }), "bottom-right");
@@ -851,8 +887,27 @@
       ++token;   // (trends still being asked for the old selection are dropped)
       if (!live()) return;
       startTrends();
-      drawList(); drawCards(); drawAreas(); drawSites(); drawLegend(); drawNote(); frame(false, smooth);
+      drawList(); drawCards();
+      if (smooth) redim(drawAreas); else drawAreas();
+      drawSites(); drawLegend(); drawNote(); frame(false, smooth);
       loadCards();
+    }
+    // TR1: a sub-group chosen (or All): the others' dimming moves by fading, never a jump: the old dimming fades back to full, the new
+    // selection is drawn, and its dimming fades in, while the camera eases to it (frame). At once where the device asks for less motion.
+    const dimAt = (k) => {
+      if (!live() || !map?.style || !map.getLayer("ov-area-fill")) return;   // (the page left mid-fade: nothing asked of its removed map)
+      const mix = (dimmed, full) => (k >= 1 ? dimmed : ["+", ["*", k, dimmed], ["*", 1 - k, full]]);
+      map.setPaintProperty("ov-area-fill", "fill-opacity", ["case", ["==", ["get", "dim"], 1], mix(0.08, ["get", "fo"]), ["get", "fo"]]);
+      map.setPaintProperty("ov-area-line", "line-opacity", ["case", ["==", ["get", "dim"], 1], mix(0.35, ["get", "lo"]), ["get", "lo"]]);
+    };
+    let dimRun = 0;
+    async function redim(change) {
+      const Hd = FP.mapHandoff, mine = ++dimRun;
+      if (!Hd?.tween || !map?.getLayer("ov-area-fill")) { change(); return; }
+      await Hd.tween(140, (k) => { if (mine === dimRun) dimAt(1 - k); });
+      if (mine !== dimRun || !live()) return;
+      change();
+      await Hd.tween(260, (k) => { if (mine === dimRun) dimAt(k); });
     }
 
     // ---- the trends: asked site by site, the band filled in as they come -------------------------------------------------------
@@ -922,12 +977,28 @@
 
     drawLayers(); drawCards();
     me.wrap = wrap;
+    // TR1: arriving from another map (Places, a sub-group's overview, Maps): its picture covers this map's box from the first frame the
+    // page is drawn (no "Loading map…" between two maps); the map is made under it, at the camera that keeps the ground where it was
+    // (map-handoff.js), and moves on once its shapes are in (arriveFrom)
+    // (as soon as the overview is on the page, in the same task that put it there; else at the next frame)
+    const takeHandoff = () => {
+      if (!live() || me.handoff !== undefined || !mapHost.isConnected) return;
+      me.handoff = FP.mapHandoff?.take({ box: mapHost, id: group.id }) || null;
+      if (me.handoff) {
+        me.handoff.cover(); mapWait.hidden = true;
+        // (the picture gone before the map is made, its reads still on their way: "Loading map…" again)
+        me.handoff.gone.then(() => { if (live() && !map) mapWait.hidden = false; });
+      }
+    };
+    (root.queueMicrotask || ((f) => Promise.resolve().then(f)))(takeHandoff);
+    (root.requestAnimationFrame || ((f) => setTimeout(f, 0)))(takeHandoff);
     return wrap;
   }
 
   function close() {
     if (!shown) return;
     const s = shown; shown = null; s.alive = false;
+    try { s.handoff?.drop(); s.unhand?.(); } catch { /* already gone */ }   // TR1
     for (const off of s.offs) { try { off(); } catch { /* already gone */ } }
     s.sizeWatch?.disconnect();
     try { s.map?.remove(); } catch { /* already gone */ }

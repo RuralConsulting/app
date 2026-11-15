@@ -304,6 +304,7 @@
       env.clearTimer(s.timer); s.timer = null; s.renewAt = Infinity;
       try { s.overlay?.remove(); } catch {}
       s.overlay = null;
+      try { s.unhand?.(); } catch {}
       try { s.map?.remove(); } catch {}
       s.map = null;
       env.styles(false);
@@ -327,7 +328,7 @@
       let read = null;
       try { read = await readPackage(s.chosen); } catch {}
       if (s !== shown) return;
-      if (!read) { say(s, renewing ? RAN_OUT : UNAVAILABLE, tryAgain(s)); return; }
+      if (!read) { s.handoff?.drop(); say(s, renewing ? RAN_OUT : UNAVAILABLE, tryAgain(s)); return; }
       const m = s.map, at = m && { center: m.getCenter(), zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch() };
       dropMap(s);
       // the viewer's stylesheet on, and read, before the map is made (env.styles), so the map starts at its holder's full size
@@ -352,14 +353,31 @@
           ...env.backgrounds(),
         });
         if (at) s.map.jumpTo(at);
+        else arriveFrom(s);   // TR1
         try { env.chrome?.(s.map, holder, { group, publishedAt: s.chosen.published_at, areaHa: read.manifest?.area_ha }); } catch {}
         try { env.focus?.(s.map, holder, { group, manifest: read.manifest, url }); } catch {}
-      } catch { say(s, UNAVAILABLE, tryAgain(s)); return; }
+        // TR1: this map hands over when the address changes (the viewer's background: its own remembered choice)
+        s.unhand = globalThis.FP?.mapHandoff?.register?.(s.map, { kind: "maps", base: () => { try { const b = globalThis.localStorage?.getItem("rv-basemap"); return b === "map" ? "topo" : b || "aerial"; } catch { return null; } } }) || null;
+      } catch { s.handoff?.drop(); say(s, UNAVAILABLE, tryAgain(s)); return; }
       try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq, read.manifest?.bounds || null) : null; } catch { s.overlay = null; }
       s.renewAt = env.now() + RENEW_MS;
       s.timer = env.setTimer(wake, RENEW_MS);
     }
 
+    // TR1: arriving from another map (the place's Home, Water quality, Places): the viewer's map opens where that map was, under its
+    // picture (taken as Maps opened, so no "Loading the map…" shows between two maps), and once it has drawn there the picture fades and
+    // the map eases once to the frame the viewer opened on (map-handoff.js). The viewer (viewer.js) is not changed: its map is moved from
+    // here, before its first frame.
+    function arriveFrom(s) {
+      const h = s.handoff, H = globalThis.FP?.mapHandoff, m = s.map;
+      if (!h || s.arrived || !H || !m?.getContainer) return;
+      s.arrived = true;
+      let target = null;
+      try { target = { center: m.getCenter().toArray(), zoom: m.getZoom() }; m.jumpTo(h.cameraFor(m.getContainer())); } catch { h.drop(); return; }
+      h.refit?.();
+      h.watch?.(m);
+      h.reveal(m).then(() => { if (s === shown && s.map === m && (!h.mayMove || h.mayMove(m))) H.ease(m, target); });
+    }
     // Renew the links once they are due, when the map is being looked at (a timer does not run in a sleeping tab).
     function wake() {
       const s = shown;
@@ -375,16 +393,19 @@
       close();
       // MC1: opts.waterQuality opens the map with its water quality sites panel on (the overview's "Open water quality")
       const s = shown = { host, opts, map: null, timer: null, renewAt: Infinity, chosen: null, several: false, overlay: null, wq: opts.waterQuality ? { on: true } : {} };
+      // TR1: the map just left hands over (its picture over this box from the start; arriveFrom); a list or a message drops it
+      s.handoff = globalThis.FP?.mapHandoff?.take?.({ box: host, id: opts.owner?.org || opts.owner?.farm || null }) || null;
+      s.handoff?.cover({ inside: false });
       say(s, "Loading maps…");
       let maps;
       try { maps = await listMaps(opts.owner); }
-      catch { if (s === shown) say(s, "Couldn't load the maps just now.", tryAgain(s)); return; }
+      catch { if (s === shown) { s.handoff?.drop(); say(s, "Couldn't load the maps just now.", tryAgain(s)); } return; }
       if (s !== shown) return;
-      if (!maps.length) { say(s, NONE, el("p", { class: "maps-hint" }, NONE_HINT)); return; }   // UI1: and what happens next
+      if (!maps.length) { s.handoff?.drop(); say(s, NONE, el("p", { class: "maps-hint" }, NONE_HINT)); return; }   // UI1: and what happens next
       s.several = maps.length > 1;
       s.chosen = opts.item ? maps.find((m) => m.id === opts.item) : maps.length === 1 ? maps[0] : null;
-      if (opts.item && !s.chosen) { say(s, UNAVAILABLE, el("a", { href: opts.href(null) }, "All maps")); return; }
-      if (!s.chosen) { list(s, maps); return; }
+      if (opts.item && !s.chosen) { s.handoff?.drop(); say(s, UNAVAILABLE, el("a", { href: opts.href(null) }, "All maps")); return; }
+      if (!s.chosen) { s.handoff?.drop(); list(s, maps); return; }
       await draw(s);
     }
 
@@ -392,6 +413,7 @@
       const s = shown;
       if (!s) return;
       shown = null;
+      s.handoff?.drop();   // TR1
       dropMap(s);
       s.host.replaceChildren();
     }

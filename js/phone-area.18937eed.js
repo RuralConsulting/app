@@ -52,7 +52,7 @@
   // sheet's search and which rows it may show (HM1); opts.today: "YYYY-MM-DD"
   function view({ group, sb = FP.sb, home = null, today = null }) {
     close();
-    const me = { place: group.id, alive: true, map: null, overlay: null, stop: null, wq: null, sites: null, rows: null, located: null, centre: null, timer: null, open: false, labels: [] };
+    const me = { place: group.id, alive: true, map: null, overlay: null, stop: null, wq: null, sites: null, rows: null, located: null, centre: null, timer: null, open: false, labels: [], handoff: undefined };
     shown = me;
     const live = () => me.alive && shown === me;
     const mapBox = el("div", { class: "pa-map", id: "pa-map", role: "region", "aria-label": "Map of " + group.name });
@@ -428,6 +428,7 @@
       // still takes the person there; a move of theirs has cancelled it before then)
       const open = (force = false) => {
         if (!fly.live || !live() || me.going !== s.id || (!force && map.isMoving?.())) return;
+        if (s.member) handOn(s);   // TR1
         const go = s.member;
         stop();
         if (go) root.location.hash = FP.href(FP.groupModel.href(s.id, "home"));
@@ -448,6 +449,12 @@
       return stop;
     }
     me.goTo = goTo;
+    // TR1: the sub-group about to be opened, handed to the map it opens on (its outline, so that map frames it at once and the move
+    // carries on from here: map-handoff.js)
+    function handOn(s) {
+      const x = me.subs?.get(s.id);
+      if (x?.geometry) FP.mapHandoff?.entering({ id: s.id, kind: "subgroup", geometry: x.geometry, bbox: x.bbox });
+    }
 
     // ---- the sub-groups' names, one at the centre of each (a tap goes there) -----------------------------------------------------
     // Drawn over the map; where two would touch, or one would sit on a control, the smaller sub-group's name waits until zoomed in.
@@ -471,6 +478,8 @@
     }
     async function drawLabels() {
       const subs = await subgroupsRead;
+      // (TR1: none to draw: their layers back as drawn, for a later look)
+      if (live() && !subs.length) for (const id of ["pa-subs-fill", "pa-subs-line"]) FP.mapHandoff?.setLevel(me.map, id, 1);
       if (!live() || !subs.length) return;
       const shapes = await subShapesRead;
       // PH5: each sub-group's own fill, in the set that tells neighbours apart (map-palette.js subgroupColours), the same on every map
@@ -479,7 +488,7 @@
       if (!live() || !shapes) { if (live()) peek.subs(); return; }
       const layer = el("div", { class: "pa-labels", "aria-label": "Sub-groups" });
       const drawn = subs.filter((s) => shapes.get(s.id)?.geometry);
-      me.subs = new Map(drawn.map((s) => [s.id, { ...s, bbox: shapes.get(s.id).bbox }]));
+      me.subs = new Map(drawn.map((s) => [s.id, { ...s, bbox: shapes.get(s.id).bbox, geometry: shapes.get(s.id).geometry }]));
       peek.subs();   // HM1: the sheet's sub-groups, with their colours and somewhere to zoom to
       const look = (c) => FP.mapPalette?.subgroupLook?.(c, { onDark: me.onDark }) || { fill: c, fillOpacity: 0.5, line: c, lineWidth: 0.75, lineOpacity: 0.9 };
       // (drawn again when the background changes: the fills are for a dark or a light ground)
@@ -488,6 +497,9 @@
         return { type: "Feature", geometry: shapes.get(s.id).geometry, properties: { id: s.id, fill: lk.fill, fo: lk.fillOpacity, line: lk.line } };
       }) });
       me.paintSubs();
+      // TR1: the fills and their names fade in as they come (never a pop, and never a move of the camera)
+      FP.mapHandoff?.fade(me.map, ["pa-subs-fill", "pa-subs-line"], { from: 0, to: 1, ms: 400 });
+      layer.classList.add("tr-in");
       me.labels = drawn.map((s) => {
         const shape = shapes.get(s.id), at = P().labelPoint(shape.geometry);
         // review of #538, 1, and PH5: a tap on any name zooms to its sub-group; only one the person is in is then opened (as the computer's
@@ -542,6 +554,26 @@
     sites.then((s) => { me.sites = s; draw(); }, () => { me.sites = false; draw(); });
     draw();
 
+    // ---- TR1: arriving from another map (map-handoff.js) ---------------------------------------------------------------------------
+    // The picture handed over covers this map until it has drawn at the same camera; then it fades away (the other map's own symbols
+    // with it), and this map eases ONCE to its frame while the place's own fill and darkening fade in. The sheet's and the names' reads
+    // start as that move begins (the frame is known then: #552's order, after the map has loaded and been framed, is kept). A touch
+    // during the move takes it over (MapLibre stops the ease); nothing moves the camera afterwards.
+    async function arrive(h, map, box, framed) {
+      await h.reveal(map);
+      if (!live()) return;
+      // (the area's read may land well after the picture has gone: a map the person has moved meanwhile stays where they put it)
+      const going = box && !me.located && h.mayMove(map) ? FP.mapHandoff.ease(map, { bounds: box, padding: pad(), maxZoom: 14 }) : null;
+      const from = me.fillFrom ?? 0.06, AREA_FILL = 0.06;
+      FP.mapHandoff.tween(700, (k) => { if (live() && map.getLayer("pa-area-fill")) map.setPaintProperty("pa-area-fill", "fill-opacity", from + (AREA_FILL - from) * k); });
+      framed();
+      await going;
+      if (!live()) return;
+      const c = map.getCenter();
+      me.centre = { lat: c.lat, lon: c.lng };
+      draw();
+    }
+
     function makeMap() {
       if (!live() || !wrap.isConnected) return;
       const gl = root.maplibregl;
@@ -552,12 +584,20 @@
         let stored = null; try { stored = root.localStorage.getItem(BASE_KEY); } catch { /* private mode */ }
         // (the demo has no tiles: its two choices stand over the plain ground, as on the other overviews)
         const choices = FP.basemaps.names.length >= 2 ? FP.basemaps.names : FP.demo?.active ? ["aerial", "topo"] : [];
-        const start = me.base = FP.mapPalette?.startBackground?.(stored, choices) || "aerial";
+        // TR1: the map just left hands over its camera and its picture (map-handoff.js): this map opens where that one was, under the
+        // picture, and moves on from there; its background too, so the ground does not change under the move (not remembered here)
+        takeHandoff();
+        const h = me.handoff?.refit() || null;
+        const start = me.base = (h?.base && choices.includes(h.base) ? h.base : null) || FP.mapPalette?.startBackground?.(stored, choices) || "aerial";
         const darkGround = (k) => (k === "aerial" ? !FP.basemaps.missingKey || /dark/.test(getComputedStyle(root.document.documentElement).colorScheme || "") : false);
         me.onDark = darkGround(start);
         // PH2: the credit is the small "i" in the bottom left (its terms need it within reach; tapping it shows it), never a dark box
         // across the map under the +, which sits bottom right above the list
-        const map = me.map = new gl.Map({ container: mapBox, style: FP.basemaps.style(start, { reliefOnAerial: false }), bounds: NZ, attributionControl: false, pitchWithRotate: false, dragRotate: false });
+        const at = h ? { center: h.camera.center, zoom: h.camera.zoom } : { bounds: NZ };
+        const map = me.map = new gl.Map({ container: mapBox, style: FP.basemaps.style(start, { reliefOnAerial: false }), ...at, attributionControl: false, pitchWithRotate: false, dragRotate: false });
+        me.unhand = FP.mapHandoff?.register(map, { kind: "phone-home", base: () => me.base, marks: () => stage.querySelectorAll(".pa-label:not([hidden])") }) || null;
+        h?.raise();   // (the picture stays over the map made under it)
+        h?.watch(map);   // (and goes once this map has drawn, whatever the area's read is doing)
         map.addControl(new gl.AttributionControl({ compact: true }), "bottom-left");
         FP.basemaps.quietCredit?.(map);
         map.touchZoomRotate?.disableRotation?.();
@@ -569,11 +609,11 @@
             if (!live() || k === me.base) return;
             me.base = k; mark();
             me.onDark = darkGround(k);
-            if (map.getLayer("pa-area-line")) map.setPaintProperty("pa-area-line", "line-color", me.onDark ? "#ffffff" : me.edgeLine || "#5f6670");
+            me.paintEdge?.();
             me.paintSubs?.();
             if (!FP.basemaps.names.includes(k)) return;   // (the demo: the plain ground stands for both)
-            if (k !== "aerial") FP.basemaps.ground?.(map);
-            try { await FP.basemaps.pick(map, k); } catch { /* the plain ground stays */ }
+            // TR1: the two backgrounds cross-faded (basemaps.js swap), never the plain ground between them
+            try { await (FP.basemaps.swap || FP.basemaps.pick)(map, k); } catch { /* the plain ground stays */ }
           };
           bg.replaceChildren(...[["aerial", "Aerial"], ["topo", "Topo"]].filter(([k]) => choices.includes(k)).map(([k, t]) => el("button", { type: "button", "data-base": k, onclick: () => use(k) }, t)));
           bg.hidden = false; mark();
@@ -585,8 +625,15 @@
           // "show the group first"), over the faintest fill. PH5: everything outside the area under the mask, so the line is quiet
           const cs = getComputedStyle(root.document.documentElement), css = (k) => cs.getPropertyValue(k);
           const hue = FP.mapPalette ? FP.mapPalette.hues(css)[FP.mapPalette.hueIndex(group.parent_org_id || group.id)] : "#5f9bd8";
-          const look = FP.mapPalette?.look(hue, { onDark: false }) || { line: hue };
-          me.edgeLine = look.line;
+          // TR1: the group's edge drawn exactly as Places draws the group (its hue's line over a faint casing, map-palette.js look), so
+          // the move from Places reads as zooming into the same thing; a sub-group as Places draws a sub-group
+          const edgeLook = () => FP.mapPalette?.look(hue, { sub: !!group.parent_org_id, onDark: me.onDark }) || { line: hue, casing: "rgba(0, 0, 0, 0.38)", lineWidth: 1.5 };
+          const look = edgeLook();
+          me.paintEdge = () => {
+            const lk = edgeLook();
+            if (map.getLayer("pa-area-line")) map.setPaintProperty("pa-area-line", "line-color", lk.line);
+            if (map.getLayer("pa-area-casing")) map.setPaintProperty("pa-area-casing", "line-color", lk.casing);
+          };
           const none = { type: "FeatureCollection", features: [] };
           map.addSource("pa-mask", { type: "geojson", data: none });
           map.addSource("pa-area", { type: "geojson", data: none });
@@ -598,15 +645,24 @@
           // PH5: the sub-groups told apart by fill, a hairline of the same hue between neighbours, no dashed casing
           map.addLayer({ id: "pa-subs-fill", type: "fill", source: "pa-subs", paint: { "fill-color": ["get", "fill"], "fill-opacity": ["get", "fo"] } });
           map.addLayer({ id: "pa-subs-line", type: "line", source: "pa-subs", layout: { "line-join": "round" }, paint: { "line-color": ["get", "line"], "line-width": FP.mapPalette?.SUBGROUP_LINE ?? 0.75, "line-opacity": 0.9 } });
-          map.addLayer({ id: "pa-area-line", type: "line", source: "pa-edge", layout: { "line-join": "round" }, paint: { "line-color": me.onDark ? "#ffffff" : look.line, "line-width": 1, "line-opacity": 0.7 } });
+          map.addLayer({ id: "pa-area-casing", type: "line", source: "pa-edge", layout: { "line-join": "round" }, paint: { "line-color": look.casing, "line-width": look.lineWidth + 2 } });
+          map.addLayer({ id: "pa-area-line", type: "line", source: "pa-edge", layout: { "line-join": "round" }, paint: { "line-color": look.line, "line-width": look.lineWidth } });
+          // TR1: arriving from another map, what this map adds comes in by fading (the outline is already in the picture handed over)
+          if (h) for (const id of ["pa-mask", "pa-subs-fill", "pa-subs-line"]) FP.mapHandoff.setLevel(map, id, 0);
+          // (and the place's own fill starts as Places fills it, then thins to Home's faint one as the sub-groups' fills come: arrive)
+          if (h) { me.fillFrom = look.fillOpacity ?? 0.2; map.setPaintProperty("pa-area-fill", "fill-opacity", me.fillFrom); }
           map.addSource("pa-me", { type: "geojson", data: meData(me.located) });
           map.addLayer({ id: "pa-me-ring", type: "fill", source: "pa-me", filter: ["==", ["get", "kind"], "ring"], paint: { "fill-color": "#2f7de1", "fill-opacity": 0.14 } });
           map.addLayer({ id: "pa-me-dot", type: "circle", source: "pa-me", filter: ["==", ["get", "kind"], "dot"], paint: { "circle-radius": 7, "circle-color": "#2f7de1", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5 } });
-          const shape = await area;
+          // TR1: the outline handed over with the tap (the same read of the same area, made by the map just left) frames the map at once;
+          // this Home's own read of it still runs (for the sheet's facts) and is otherwise not waited for
+          const shape = h?.place?.geometry && h.place.bbox ? { geometry: h.place.geometry, bbox: h.place.bbox } : await area;
           if (!live()) return;
           let box = null;
           if (shape?.geometry) {
             map.getSource("pa-area").setData({ type: "Feature", properties: {}, geometry: shape.geometry });
+            // (arriving: its rings at once, as the map left drew them, until the outer edge below is worked out)
+            if (h) map.getSource("pa-edge").setData({ type: "Feature", properties: {}, geometry: shape.geometry });
             box = shape.bbox;
             // review of #538, 9: the outline after the map is drawn, never before; worked out once per group and area (phone-model
             // outlineFor: kept in memory and on this phone, by a hash of the area), so a Home opened again draws it at once
@@ -617,7 +673,12 @@
               if (edge && live() && map.getSource("pa-edge")) map.getSource("pa-edge").setData({ type: "Feature", properties: {}, geometry: edge });
               // PH5: the mask from the same kept outline (worked out once per outline: map-palette.js outsideMask)
               const mask = edge && FP.mapPalette?.outsideMask?.(edge);
-              if (mask && live() && map.getSource("pa-mask")) map.getSource("pa-mask").setData(mask);
+              if (mask && live() && map.getSource("pa-mask")) {
+                map.getSource("pa-mask").setData(mask);
+                // TR1: the darkening outside comes in by fading (during the move, when arriving from another map), never a pop
+                // (arriving: once the picture has gone, so the darkening is part of the move, not built up under the fading picture)
+                Promise.resolve(h?.reveal(map)).then(() => { if (live()) FP.mapHandoff?.fade(map, "pa-mask", { from: 0, to: 1, ms: h ? 600 : 350 }); });
+              }
             };
             if (P().outlineHeld(shape.geometry, { store, key: group.id })) drawEdge();
             else if (root.requestIdleCallback) root.requestIdleCallback(drawEdge, { timeout: 600 }); else root.setTimeout(drawEdge, 50);
@@ -628,19 +689,33 @@
             if (pts.length) box = [[Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1]))], [Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))]];
           }
           if (!live()) return;
+          // TR1: arriving from another map, one ease from where it was (arrive); otherwise framed at once, as before
+          if (h) { arrive(h, map, box, framed); return; }
           if (box && !me.located) map.fitBounds(box, { padding: pad(), maxZoom: 14, duration: 0 });
-          const c = map.getCenter();
-          me.centre = { lat: c.lat, lon: c.lng };
-          draw();
-          me.loaded = true;
-          afterMap();   // the sub-groups' names and Home's sheet, now the area is drawn
-          labels();     // (the reads may have started already, from the timer)
+          framed();
+          function framed() {
+            const c = map.getCenter();
+            me.centre = { lat: c.lat, lon: c.lng };
+            draw();
+            me.loaded = true;
+            afterMap();   // the sub-groups' names and Home's sheet, now the area is drawn
+            labels();     // (the reads may have started already, from the timer)
+          }
         });
       } catch { mapBox.replaceChildren(el("p", { class: "pa-quiet" }, "The map couldn't open here.")); afterMap(); }
       // (a map whose style never loads, its tiles failing on a poor connection, still gets its sheet, in time)
       me.latest = root.setTimeout?.(() => afterMap(), FP.phoneArea.latestMs ?? AFTER_MAP_LATEST);   // (latestMs: the browser walk's shorter wait)
     }
-    root.requestAnimationFrame?.(() => root.requestAnimationFrame(() => { peek.setVar(); makeMap(); }));
+    // TR1: the picture of the map just left is laid over this map's box before the first frame of this screen is drawn (the map itself is
+    // made a frame later, under it), so no frame shows an empty map
+    function takeHandoff() {
+      if (me.handoff !== undefined || !live() || !mapBox.isConnected) return;
+      me.handoff = FP.mapHandoff?.take({ box: mapBox, id: group.id }) || null;
+      me.handoff?.cover();
+    }
+    // (as soon as this Home is on the page, in the same task that put it there: no frame is drawn before it)
+    (root.queueMicrotask || ((f) => Promise.resolve().then(f)))(takeHandoff);
+    root.requestAnimationFrame?.(() => { takeHandoff(); root.requestAnimationFrame(() => { peek.setVar(); makeMap(); }); });
     // (a phone turned, or the browser's bars coming and going: the sheet's half way is worked out again)
     me.onResize = () => { if (!live()) return; if (peek.state() === "half") peek.open("half", { animate: false }); peek.setVar(); };
     root.addEventListener("resize", me.onResize);
@@ -659,6 +734,7 @@
     try { me.cancelGo?.(); } catch { /* gone */ }
     try { me.stop?.(); } catch { /* gone */ }
     try { me.overlay?.remove(); } catch { /* gone */ }
+    try { me.handoff?.drop(); me.unhand?.(); } catch { /* gone */ }   // TR1
     try { me.map?.remove(); } catch { /* gone */ }
   }
 

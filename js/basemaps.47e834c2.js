@@ -136,6 +136,35 @@ FP.basemaps = (() => {
     if (!reliefWanted(map) && map.getLayer?.("bm-hillshade-raster") && !map.getTerrain?.()) map.setLayoutProperty("bm-hillshade-raster", "visibility", RASTER.includes(which) ? "none" : "visible");
     for (const [name, o] of merged) for (const id of o.layers) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", name === which ? "visible" : "none");
   }
+  // TR1 (the owner, 16 Nov 2026: "if the symbology changes we need it to change smoothly not jump"): Aerial | Topo cross-faded. The
+  // background chosen is shown with the one showing still there, and the old one goes only once the new one's tiles are in view (at
+  // most 2.5 s): the topo (drawn above the aerial) fades in over it; going back, the aerial is shown under the topo and the topo fades
+  // away. No moment of plain ground between them (which ground() then pick() gave). At once where the device asks for less motion.
+  async function swap(map, which) {
+    const H = FP.mapHandoff, other = which === "aerial" ? "topo" : which === "topo" ? "aerial" : null;
+    const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!other || !H?.fade || still || map._removed || !map.style || !map.getLayer?.("bm-aerial") || !map.getLayer?.("bm-topo") || map.getLayoutProperty("bm-" + other, "visibility") === "none") {
+      if (other !== null && map.getLayer?.("bm-" + which)) { H?.setLevel?.(map, "bm-aerial", 1); H?.setLevel?.(map, "bm-topo", 1); }
+      return pick(map, which);
+    }
+    const st = stateOf(map), mine = ++st.token;
+    const upper = "bm-topo", incoming = "bm-" + which;
+    if (which === "topo") H.setLevel(map, upper, 0); else H.setLevel(map, upper, 1);
+    map.setLayoutProperty(incoming, "visibility", "visible");
+    await new Promise((res) => {
+      let done = false;
+      const finish = () => { if (done) return; done = true; clearTimeout(t); try { map.off("idle", finish); } catch { /* removed */ } res(); };
+      const t = setTimeout(finish, 2500);
+      map.once("render", () => map.on("idle", finish));
+      map.triggerRepaint?.();
+    });
+    if (mine !== st.token || map._removed || !map.style) return;   // (WQ3: the map was removed meanwhile: nothing more is done to it)
+    await H.fade(map, upper, { to: which === "topo" ? 1 : 0, ms: 300 });
+    if (mine !== st.token || map._removed || !map.style) return;
+    const done = pick(map, which);   // (synchronous for a raster: the old one hidden before its opacity is put back)
+    H.setLevel(map, upper, 1);
+    return done;
+  }
   // PH2: on a narrow map MapLibre opens its compact credit expanded, a dark box across the bottom of the map (the owner's phone, under
   // the +). It starts folded to its small "i" instead, once, when it first has something to say; a tap on the "i" still opens it, as
   // the licences ask the credit to be within reach. A person's own tap is never undone.
@@ -151,5 +180,5 @@ FP.basemaps = (() => {
     };
     map.on("styledata", tick); map.on("sourcedata", tick); setTimeout(tick, 0);
   }
-  return { style, pick, ground, setTerrain, reliefOnAerial, terrainDefault, names, labels, missingKey: !key, exaggeration: EXAGGERATION, quietCredit };
+  return { style, pick, swap, ground, setTerrain, reliefOnAerial, terrainDefault, names, labels, missingKey: !key, exaggeration: EXAGGERATION, quietCredit };
 })();

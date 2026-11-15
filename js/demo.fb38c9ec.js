@@ -86,6 +86,10 @@
       if (suffix === "/projects") return "#/group/" + GROUP + "/projects" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // PJ1
       if (suffix === "/home" && /[?&]item=[0-9a-f-]{36}/.test(hash)) return "#/group/" + GROUP + "/home" + /[?&]item=[0-9a-f-]{36}/.exec(hash)[0].replace("&", "?");   // CO1b
       if (suffix === "/water/round") return "#/group/" + GROUP + "/water/round" + (/[?&]item=[0-9a-f-]{36}/.exec(hash)?.[0].replace("&", "?") || "");   // SR1
+      // TR1: a sub-group's own space ("#/demo/group/sub/<id>/home"), for the smooth-move walk (tr1-transitions.cjs), which points the
+      // demo's links to a sub-group here for its own visit; no other page links to it
+      const sub = /^\/sub\/([0-9a-f-]{36})(\/(?:home|maps|water))?$/.exec(suffix);
+      if (sub) return "#/group/" + sub[1] + (sub[2] || "");
       return /^(?:\/(?:home|documents|events|water|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");

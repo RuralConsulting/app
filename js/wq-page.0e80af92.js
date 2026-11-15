@@ -154,6 +154,8 @@
       includeField: false, sort: { key: "own", dir: "asc" }, chartMode: "sites", layersOn: {}, whose: { ...M().WHOSE_DEFAULT }, carded: null, about: false };
     const L = loader(sb, group.id);
     let token = 0, data = null, gone = false, phone = isPhone(), mapUi = null, chart = null, siteChart = null;
+    // TR1 (review of #565, round three): the loading line has been painted (seen in a frame callback, so it was drawn in that frame)
+    let loadingPainted = false;
     const root_ = el("section", { class: "wqp", "aria-labelledby": "wqp-title", "data-type": st.type, "data-view": st.view });
     const status = el("p", { class: "wqp-status", role: "status", "aria-live": "polite" });
 
@@ -240,7 +242,10 @@
       const t = ++token;
       root_.dataset.type = st.type;
       typeSeg.mark(); drawMeasures();
-      if (!keep) status.textContent = "Loading the water quality sites…";
+      if (!keep) {
+        status.textContent = "Loading the water quality sites…";
+        root.requestAnimationFrame?.(() => { if (/^Loading/.test(status.textContent)) loadingPainted = true; });
+      }
       try { data = await rowsOf(L, st, now); }
       catch (e) {
         if (t !== token || gone) return;
@@ -309,7 +314,7 @@
     // ---- the map -----------------------------------------------------------------------------------------------------------------
     // WQ2: a click on a site says what it is in a small card on the map; its Open shows the whole site beside the map
     function drawMap() {
-      if (!mapUi) mapUi = makeMap(mapPane, { L, group, st, onSite: (id) => { if (st.chosen != null && id != null) { st.chosen = null; drawSite(); } st.carded = id; drawCard(() => { st.chosen = st.carded; st.carded = null; drawCard(); drawSite(); }); }, phoneMode: false });
+      if (!mapUi) mapUi = makeMap(mapPane, { L, group, st, onSite: (id) => { if (st.chosen != null && id != null) { st.chosen = null; drawSite(); } st.carded = id; drawCard(() => { st.chosen = st.carded; st.carded = null; drawCard(); drawSite(); }); }, phoneMode: false, loadingShown: () => loadingPainted });
       mapUi.update(data, st);
       drawCard(() => { st.chosen = st.carded; st.carded = null; drawCard(); drawSite(); });
       drawSite();
@@ -498,7 +503,7 @@
       mapUi?.destroy(); mapUi = null;
       // a dot tapped says what it is in a small card; its Open opens the site in the sites' sheet, with its chart
       const open = (id) => { st.carded = null; drawCard(open); sitesSheet(sitesBtn, rows, id); };
-      mapUi = makeMap(mapHost, { L, group, st, onSite: (id) => { st.carded = id; drawCard(open); }, phoneMode: true, extra: [sitesBtn] });
+      mapUi = makeMap(mapHost, { L, group, st, onSite: (id) => { st.carded = id; drawCard(open); }, phoneMode: true, extra: [sitesBtn], loadingShown: () => loadingPainted });
       mapUi.update(data, st);
       drawCard(open);
     }
@@ -541,7 +546,7 @@
     ],
   };
   let protocol = false;
-  function makeMap(host, { L, group, st, onSite, phoneMode, extra = [] }) {
+  function makeMap(host, { L, group, st, onSite, phoneMode, extra = [], loadingShown = () => false }) {
     const gl = root.maplibregl;
     const side = el("aside", { class: "wqp-site", hidden: true, "aria-label": "The site chosen" });
     const panel = el("aside", { class: "wqp-layers", "aria-label": "Layers" });
@@ -569,9 +574,28 @@
     const BASE_KEY = "fp-overview-basemap";
     let stored = null; try { stored = root.localStorage.getItem(BASE_KEY); } catch { /* private mode */ }
     const start = FP.mapPalette?.startBackground ? FP.mapPalette.startBackground(stored, choices) : "aerial";
-    let base = start;
+    // TR1: arriving from another map (the group's Home, its Maps): the first map opens where that one was, under its picture, which goes
+    // once the map has drawn (map-handoff.js); then one ease to its frame (arriveFrom). Taken once: a map made again (WQ3) never takes it.
+    const handoff = FP.mapHandoff?.take({ box: canvas, id: group.id }) || null;
+    // (review of #565, round two: the sites read can take seconds on a phone; once the page's loading line has shown, more than
+    // WAIT_MAP_MS after the address changed, the picture of the screen left is not brought back: the map opens at its camera only.
+    // Round three: the same once the loading line has been painted at all, however quickly the read then lands; the picture is laid
+    // only when the map is made before the loading line was ever drawn, as with the sites already read in this visit)
+    if (handoff && !handoff.late && !loadingShown()) handoff.cover();
+    let arrived = !handoff, unhand = null;
+    let base = handoff?.base && choices.includes(handoff.base) ? handoff.base : start;   // TR1: the background handed over, for this visit
     const markBg = () => { for (const b of bg.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.base === base)); };
-    const useBase = async (k) => { base = k; markBg(); await whenReady(); if (gone || !(FP.basemaps.names || []).includes(k)) return; if (k !== "aerial") FP.basemaps.ground(map); try { await FP.basemaps.pick(map, k); } catch { /* the plain ground stays */ } };
+    // TR1: a background chosen cross-fades (basemaps.js swap: it gives up if the map is removed); a map just made is given its
+    // background at once, as before. WQ3: always the map in place (whenReady), never one removed.
+    let based = null;   // (the map that has had its background: a map just made, as in build, is given its own at once)
+    const useBase = async (k) => {
+      base = k; markBg(); await whenReady();
+      if (gone || !(FP.basemaps.names || []).includes(k)) return;
+      const m = map, fade = based === m && !!FP.basemaps.swap;
+      based = m;
+      if (!fade && k !== "aerial") FP.basemaps.ground(m);
+      try { await (fade ? FP.basemaps.swap : FP.basemaps.pick)(m, k); } catch { /* the plain ground stays */ }
+    };
     if (choices.length) fill(bg, ...[["aerial", "Aerial"], ["topo", "Topo"]].map(([k, t]) => el("button", { type: "button", "data-base": k, onclick: () => { try { root.localStorage.setItem(BASE_KEY, k); } catch { /* kept for this visit */ } useBase(k); } }, t)));
     else bg.hidden = true;
 
@@ -591,8 +615,13 @@
     function build() {
       isReady = false;
       // (PH2: on a phone the credit's "i" sits bottom left by the scale, clear of the + that floats bottom right)
+      const handed = !camera && handoff && !arrived ? handoff.camera : null;   // TR1: the first map, where the map left was
+      if (handed) camera = { center: handed.center, zoom: handed.zoom };
       const m = map = new gl.Map({ container: canvas, style: FP.basemaps.style("aerial", { reliefOnAerial: false }), ...(camera ? { center: camera.center, zoom: camera.zoom } : { bounds: [[171.4, -43.6], [172.7, -42.7]] }), maxZoom: 18,
         attributionControl: phoneMode ? false : { compact: true, customAttribution: FP.brand?.org_legal || "" } });
+      // TR1: the map in place hands over when the address changes; the first one, arriving, has the picture kept over it until it has drawn
+      unhand?.(); unhand = FP.mapHandoff?.register(m, { kind: "water", base: () => base }) || null;
+      if (handed) { handoff.raise(); handoff.watch(m); }
       if (phoneMode) m.addControl(new gl.AttributionControl({ compact: true, customAttribution: FP.brand?.org_legal || "" }), "bottom-left");
       if (!phoneMode) m.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");   // (a phone pinches)
       m.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
@@ -750,11 +779,27 @@
       const d = g.getImageData(0, 0, size, size);
       return { width: size, height: size, data: new Uint8Array(d.data.buffer) };
     }
-    function frame(b, sub) {
+    // TR1: smooth: a sub-group chosen after the first frame: the camera eases there (one move, at once with less motion); the first frame
+    // after a hand-over eases from where the map left was, once its picture has gone, unless the person has moved the map meanwhile
+    function frame(b, sub, smooth = false) {
       const pts = [...(sub?.rings?.length ? sub.rings.flat() : b.area.flat()), ...(b.area.length ? [] : rows.map((r) => r.lngLat).filter(Boolean))];
-      if (!pts.length) return;
+      if (!pts.length) { arrived = true; return; }
       const bounds = pts.reduce((bb, p) => bb.extend(p), new gl.LngLatBounds(pts[0], pts[0]));
-      map.fitBounds(bounds, { padding: phoneMode ? 30 : 50, duration: 0, maxZoom: 13 });
+      const target = { bounds: [bounds.getSouthWest().toArray(), bounds.getNorthEast().toArray()], padding: phoneMode ? 30 : 50, maxZoom: 13 };
+      if (!arrived) { arrived = true; arriveFrom(target); return; }
+      if (smooth && FP.mapHandoff) FP.mapHandoff.ease(map, target);
+      else map.fitBounds(bounds, { padding: phoneMode ? 30 : 50, duration: 0, maxZoom: 13 });
+    }
+    // TR1: arriving: the outline, the darkening and the sites fade in as the picture of the map left goes, then the one ease. Always the
+    // map in place: one made again meanwhile (WQ3) is drawn whole by its own set-up, and nothing is done to one removed.
+    const ARRIVING = ["wqp-mask", "wqp-area-line", "wqp-subs-line", "wqp-sites", "wqp-own-sites", "wqp-clusters"];
+    async function arriveFrom(target) {
+      const Hd = FP.mapHandoff, m = map;
+      for (const id of ARRIVING) Hd.setLevel(m, id, 0);
+      await handoff.reveal(m);
+      if (gone || m !== map) return;
+      Hd.fade(m, ARRIVING, { to: 1, ms: 500 });
+      if (handoff.mayMove(m)) await Hd.ease(m, target);   // (a map moved by the person meanwhile stays where they put it)
     }
     // ---- the supporting layers, by water type ---------------------------------------------------------------------------------
     // (WQ2: layers only; no legend: the colours explain themselves and a click on a site says what it is)
@@ -798,13 +843,23 @@
       const byPath = new Map(list(urls).filter((u) => u.signedUrl).map((u) => [u.path, u.signedUrl]));
       return rows.filter((r) => byPath.has(r.tiles_path)).map((r) => ({ ...r, url: byPath.get(r.tiles_path) }));
     }
-    function hide(l) { if (gone) return; for (const id of l.ids) if (map.getLayer?.(id)) map.setLayoutProperty(id, "visibility", "none"); }
+    // TR1: a layer switched off fades out (map-handoff.js toggle, on the map in place), never a pop
+    function hide(l) {
+      if (gone) return;
+      if (FP.mapHandoff?.toggle) { FP.mapHandoff.toggle(map, l.ids, false); return; }
+      for (const id of l.ids) if (map.getLayer?.(id)) map.setLayoutProperty(id, "visibility", "none");
+    }
     function under() { return map.getLayer("wqp-subs-line") ? "wqp-subs-line" : undefined; }
     async function show(l) {
       await whenReady();   // (WQ3: never into a map being made again)
       if (gone) return;
       if (!l.on) { hide(l); return; }
-      if (l.ids.length) { for (const id of l.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible"); if (l.def.kind === "ref") readRef(l); if (l.def.kind === "rivers") readRivers(); return; }
+      if (l.ids.length) {
+        // TR1: switched on: faded in
+        if (FP.mapHandoff?.toggle) FP.mapHandoff.toggle(map, l.ids, true);
+        else for (const id of l.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
+        if (l.def.kind === "ref") readRef(l); if (l.def.kind === "rivers") readRivers(); return;
+      }
       if (l.def.kind === "rivers") {
         const sid = "wqp-rivers";
         if (!map.getSource(sid)) map.addSource(sid, { type: "geojson", data: empty() });
@@ -839,7 +894,9 @@
       }
       // (WQ3: a layer already on the map from an earlier visit to this water type was left hidden by the switch away from it: Groundwater,
       // Surface water, Groundwater again drew no allocation zones though they were ticked)
-      for (const id of l.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
+      // (TR1: faded in, and any fade-out of the same layers still under way, from a switch away, is overtaken: toggle's latest wins)
+      if (FP.mapHandoff?.toggle) { for (const id of l.ids) FP.mapHandoff.setLevel(map, id, 0); FP.mapHandoff.toggle(map, l.ids, true); }
+      else for (const id of l.ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
     }
     // a reference layer by the box in view (reference_view_features: at most 1,000 features; over that, "zoom in")
     async function readRef(l) {
@@ -870,7 +927,7 @@
     // (WQ3: in a WebKit browser, once the map's box settles at a new size, the map is made again in place; elsewhere it resizes as usual)
     keep = FP.mapKeep?.watch?.(mapbox, rebuild) || null;
     keep?.made();
-    let lastKey = null;
+    let lastKey = null, lastPlace = null, lastDots = null;
     return {
       side, card,
       async update(data, s) {
@@ -878,10 +935,15 @@
         await whenReady();
         if (gone) return;
         const b = data.base, sub = s.sub ? b.subs.find((x) => x.id === s.sub) : null;
-        outline();
-        push(); paintNow();
+        // TR1: what changed is changed by fading (the mask and outline for another sub-group; the dots for another water type, measure or
+        // set of sites), on the map in place; the first draw as it was
+        const Hd = FP.mapHandoff, placeKey = s.sub || "", dotsKey = s.type + "|" + s.measure + "|" + rows.map((r) => r.id).join(",");
+        if (framed && Hd && placeKey !== lastPlace) Hd.refade(map, ["wqp-mask", "wqp-area-line"], () => { if (!gone) outline(); }); else outline();
+        if (framed && Hd && dotsKey !== lastDots) Hd.refade(map, ["wqp-sites", "wqp-own-sites", "wqp-clusters"], () => { if (!gone) push(); }); else push();
+        lastPlace = placeKey; lastDots = dotsKey;
+        paintNow();
         const key = (s.sub || "") + "|" + s.type;
-        if (!framed || key !== lastKey) { frame(b, sub); framed = true; lastKey = key; }
+        if (!framed || key !== lastKey) { frame(b, sub, framed); framed = true; lastKey = key; }
         await setType(s.type);
         if (gone) return;
         drawPanel(s.type);
@@ -907,7 +969,7 @@
         map.panBy([p.x - x, p.y - y], { duration: root.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 300 });
       },
       get map() { return map; },
-      destroy() { gone = true; keep?.stop(); waiters = []; scheme?.removeEventListener?.("change", paint); themeWatch?.disconnect(); try { map.remove(); } catch { /* gone */ } },
+      destroy() { gone = true; keep?.stop(); waiters = []; scheme?.removeEventListener?.("change", paint); themeWatch?.disconnect(); try { handoff?.drop(); unhand?.(); } catch { /* gone */ } try { map.remove(); } catch { /* gone */ } },
     };
   }
   // SR1: a saved sampling round changes the group's results: the next visit reads them again

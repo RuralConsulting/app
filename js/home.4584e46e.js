@@ -94,7 +94,7 @@
   const mapItem = (p) => ({ id: p.id, kind: p.kind, name: p.name, hueKey: p.kind === "subgroup" && p.parentId ? p.parentId : p.id,
     logo: p.kind === "farm" ? null : root.FP.groupModel?.groupLogo?.({ slug: p.slug })?.src || null, ...shapes.get(p.id) });
   const placeOf = (id) => list.find((x) => x.id === id) || null;
-  function drawLevel() {
+  function drawLevel({ keep = false } = {}) {
     const g = at && placeOf(at), back = $("#home-level");
     if (back) {
       back.hidden = !g;
@@ -107,7 +107,10 @@
     if (!onMap) return Promise.resolve();
     const items = H.level(list, at).filter((p) => shapes.has(p.id)).map(mapItem);
     const ctx = g && shapes.has(g.id) ? mapItem(g) : null;
-    return root.FP.farmMap.home(items, (id) => goThere(id), padding(), { context: ctx, frame: ctx?.bbox || null });
+    // TR1: Places is drawn at once from what it read last time and again when its read comes back, so a level asked for meanwhile may be
+    // overtaken by a newer draw of the map: this waits for the newest draw to finish, so a caller sees the map as it now is
+    const drawing = lastDraw = Promise.resolve(root.FP.farmMap.home(items, (id) => goThere(id), padding(), { context: ctx, frame: ctx?.bbox || null, keep }));
+    return (async () => { let p = drawing; await p; while (lastDraw !== p) { p = lastDraw; await p; } })();
   }
   // PH5 (the owner, 14 Nov 2026: "just zoom to it smoothly"): a place tapped on the map is marked, the map eases to it, and then it
   // opens (its own space), with no card to approve first. MapLibre gives no click after a drag or a pinch, so neither opens anything.
@@ -121,8 +124,19 @@
     $("#home-card").hidden = true;
     for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", String(b.dataset.homePlace === p.id));
     const open = () => { if (going === p.id && mine === token && document.body.classList.contains("portfolio-active")) root.location.hash = root.FP.href(H.openHref(p)); };
+    if (handOver(p)) { open(); return; }
     const flying = root.FP.farmMap.homeGo?.(p.id, padding(), open);
     if (!flying) open();
+  }
+  // TR1 (the owner, 16 Nov 2026: "transitions are smooth from page to page map to map"): a group or sub-group opens at once, its outline
+  // handed to the map it opens on (its own Home's map), which carries on from this map's picture and makes the one move into it
+  // (map-handoff.js). A farm opens on this same map, which flies there itself (homeGo, as before).
+  function handOver(p) {
+    if (p.kind === "farm" || !root.FP.mapHandoff) return false;
+    const s = shapes.get(p.id);
+    root.FP.farmMap.homeMark?.(p.id);
+    root.FP.mapHandoff.entering(s ? { id: p.id, kind: p.kind, geometry: s.geometry, bbox: s.bbox } : { id: p.id, kind: p.kind });
+    return true;
   }
   // Into a group (its places shown, the group's own mark gone), or back out to where it sits
   async function step(to) {
@@ -228,15 +242,30 @@
     // wide screens open with the list showing; a phone keeps it folded under the search box
     $("#home-fold").open = wide();
     list = H.places(farms, groups); shapes = new Map();
+    // TR1: arriving from another map (a place's Home, its Maps): this map takes its camera and picture and moves on from there
+    // (map-handoff.js; nothing is handed over on a deep link or a reload, and Places opens directly, as before)
+    const box = $("#map"), handed = box && root.FP.mapHandoff?.take({ box });
+    root.FP.farmMap.renew?.();   // (WebKit only: the map, hidden while another screen showed, made again)
+    if (handed) root.FP.farmMap.arrive?.(handed);
+    // TR1: the outlines read when Places was last shown this visit are drawn at once (the move out starts without waiting for the read);
+    // the same read is made again below, and the map is drawn again only if what comes back differs (without moving the camera)
+    const kept = held && held.key === placesKey(farms, groups) ? held : null;
+    if (kept) { shapes = kept.shapes; onMap = true; }
     drawList(); drawLevel();
     const [found, parents] = await Promise.all([readShapes(sb, farms, groups).catch(() => new Map()), readParents(sb, groups).catch(() => ({}))]);
     if (mine !== token || !document.body.classList.contains("portfolio-active")) return;
     if (Object.keys(parents).length) { list = H.places(farms, groups, parents); drawList(); drawResults(); }
+    held = { key: placesKey(farms, groups), shapes: found };
+    if (kept && sameShapes(kept.shapes, found)) { shapes = found; return; }
     shapes = found;
     // PL2: the top level only (each top-level group one outline and one mark; its sub-groups appear once it is stepped into).
     // UI2: a sub-group is drawn in its parent's hue, lighter (map-palette.js)
     onMap = true;
-    await drawLevel();
+    await drawLevel({ keep: !!kept });
   }
+  // TR1: the outlines last read for this person's places, kept for this visit only (in memory), for the next time Places is shown
+  let held = null, lastDraw = Promise.resolve();
+  const placesKey = (farms, groups) => [...farms.map((f) => "f" + f.id), ...groups.map((g) => "g" + g.id)].sort().join(",");
+  const sameShapes = (a, b) => a.size === b.size && [...a].every(([id, s]) => JSON.stringify(b.get(id)?.bbox) === JSON.stringify(s.bbox) && b.get(id)?.geometry?.coordinates?.length === s.geometry?.coordinates?.length);
   return { readShapes, readParents, show, CAP };
 });

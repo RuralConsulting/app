@@ -90,6 +90,8 @@
     });
     // (made on the plain ground for an overview: no background is drawn until the one asked for has come)
     base = startBase && startBase !== "aerial" && baseNames().includes(startBase) ? "ground" : "aerial";
+    // TR1: this map hands over when the address changes (with Places' marks, so they fade with its picture)
+    FP.mapHandoff?.register(map, { kind: "scene", base: () => want || base, marks: () => (map ? map.getContainer().querySelectorAll(".home-label:not(.off)") : []) });
     // #259: on a phone the attribution starts as the (i) and opens on tap (MapLibre starts a compact one open until the map
     // is first moved, which put two lines over the map above the sheet). Folded once the map is up, and again when a narrow
     // canvas follows a wide one; a person who opened it is not folded again while the canvas stays narrow.
@@ -185,8 +187,10 @@
     const mine = ++asks;
     if (!baseNames().includes(k)) { base = k; paletteChanged(); return; }   // the demo: the plain ground stands for every background
     const m = init();
-    if (k !== "aerial") { FP.basemaps.ground?.(m); base = "ground"; }
-    try { await FP.basemaps.pick(m, k); }
+    // TR1: from one background to the other, cross-faded (basemaps.js swap): no plain ground between them
+    const crossFade = !!FP.basemaps.swap && ["aerial", "topo"].includes(k) && ["aerial", "topo"].includes(base);
+    if (k !== "aerial" && !crossFade) { FP.basemaps.ground?.(m); base = "ground"; }
+    try { await (crossFade ? FP.basemaps.swap : FP.basemaps.pick)(m, k); }
     catch (e) {
       console.warn("The " + k + " background couldn't be drawn:", e?.message || e);
       if (mine !== asks) return;
@@ -978,11 +982,50 @@
   // places (not a target, no mark). frame: the box to fit (the group stepped into), else every place drawn.
   // items: [{ id, kind: "farm" | "group" | "subgroup", name, geometry, bbox, pointZoom, hueKey, logo }] (hueKey: a sub-group's parent).
   let homeOff = null, homeItems = [], homeChosen = null;
-  async function home(items, onSelect, padding, { context = null, frame = null } = {}) {
+  // TR1: arriving on Places from another map (map-handoff.js): this map is put at once at the camera handed over, under the picture of
+  // the map just left, which fades once this map has drawn there; then home() eases ONCE from there to Places' own frame, its outlines
+  // and marks fading in when there were none on this map yet (a map that showed Places before still holds them: they show through as
+  // the picture fades, "the outline and badge return"). False when nothing was handed over (a deep link: Places opens directly).
+  let arrival = null;
+  const HOME_LAYERS = ["home-mask", "home-context", "home-fill", "home-chosen-fill", "home-casing", "home-line", "home-chosen"];
+  function arrive(h) {
+    if (!h || !FP.mapHandoff) return false;
+    if (!map) startBase = overviewBase();
+    init();
+    h.cover();
+    try { map.jumpTo(h.camera); } catch { /* the map's own frame */ }
+    const none = ["in", ["get", "id"], ["literal", []]];
+    for (const id of ["home-chosen", "home-chosen-fill"]) if (map.getLayer(id)) map.setFilter(id, none);   // (the place tapped on the way out, unmarked)
+    homeChosen = null; declutter?.();
+    // (the picture goes once this map has drawn there, whatever Places' own read is doing)
+    arrival = { h, fresh: !map.getLayer("home-line"), revealed: h.watch(map).reveal(map) };
+    return true;
+  }
+  // TR1 (WebKit, Safari's engine: a map's canvas resized after it was first drawn shows blank, map-keep.js): this map is hidden while
+  // another screen shows (its canvas resized meanwhile), so in such a browser Places shown again makes the map again (under the picture
+  // handed over, when there is one: nothing blank is seen). Other browsers keep the one map.
+  function renew() {
+    if (!map || !FP.mapKeep?.affected?.()) return false;
+    if (bgControl) { bgControl.remove(); bgControl = null; }
+    remove();
+    return true;
+  }
+  // The place tapped, marked (no move: the map it opens on carries the move on, TR1)
+  function homeMark(id) {
+    if (!map?.getLayer("home-chosen")) return false;
+    const only = ["in", ["get", "id"], ["literal", id ? [id] : []]];
+    map.setFilter("home-chosen", only); map.setFilter("home-chosen-fill", only);
+    homeChosen = id || null; declutter?.();
+    return true;
+  }
+  async function home(items, onSelect, padding, { context = null, frame = null, keep = false } = {}) {
     const request = ++opening;
     if (!map) startBase = overviewBase();   // UI2b: a map made for Places opens on the plain ground
     init(); await loaded();
     if (request !== opening) return;
+    // TR1: Places drawn again on a map that shows Places now (a group stepped into, or back out): the old drawing is cross-faded into
+    // the new one at the same camera (map-handoff.js still), then one ease to the new frame; never a cut
+    const crossing = !arrival && !keep && map.getLayer("home-line") && map.getContainer().getClientRects().length ? FP.mapHandoff?.still?.(map) || null : null;
     clear(); flightKey = null; framed = null; removeSketch(); hasShown = true;
     overviewMode(true);
     map.resize();
@@ -1078,8 +1121,26 @@
     const boxes = homeItems.map((i) => i.bbox);
     // all of them at once (never closer than a district, so one small farm still shows where it is), or New Zealand
     const to = frame || (boxes.length ? H.union(boxes) : [[166.3, -47.4], [178.6, -34.3]]);
-    map.fitBounds(to, { padding, duration: 0, maxZoom: frame ? 13 : 10, pitch: 0 });
+    const a = arrival;
+    arrival = null;
+    if (a) homeArrive(a, marks, { bounds: to, padding, maxZoom: frame ? 13 : 10 });
+    else if (crossing) { const m = map; crossing.reveal(m).then(() => { if (m === map) FP.mapHandoff.ease(m, { bounds: to, padding, maxZoom: frame ? 13 : 10 }); }); }
+    else if (!keep) map.fitBounds(to, { padding, duration: 0, maxZoom: frame ? 13 : 10, pitch: 0 });
     show(); place();
+  }
+  // TR1: Places drawn on a map that has just taken a hand-over: what is new on it fades in, and once the picture has gone the map eases
+  // once to Places' frame
+  function homeArrive(a, marks, target) {
+    const Hd = FP.mapHandoff, m = map;
+    if (a.fresh) {
+      for (const id of HOME_LAYERS) Hd.setLevel(m, id, 0);
+      for (const x of marks) x.node.classList.add("tr-in");
+    }
+    a.revealed.then(() => {
+      if (m !== map) return;
+      if (a.fresh) Hd.fade(m, HOME_LAYERS, { to: 1, ms: 500 });
+      if (a.h.mayMove(m)) Hd.ease(m, target);   // (Places' read may land after the picture has gone: a map moved meanwhile is left)
+    });
   }
   // The chosen place: marked, and framed in the part of the map the home panels leave (nothing moves for a place with no shape).
   function homeChoose(id, padding) {
@@ -1504,7 +1565,7 @@
     // PERF3b: a group's deferred layer drawn for the map in view
     layerData, view, onMoveEnd,
     // LP1: the home map of every place the person can see, and the one chosen on it
-    home, homeChoose, homeGo,
+    home, homeChoose, homeGo, homeMark, arrive, renew,
     // LK2: looks that came after the scene was drawn, applied to it; LK4: a second context fill drawn as outline and hatch
     restyle, setStacked,
     // PERF1b: a reference source read after the farm was drawn joins the scene; Rivers read ahead for the map in view.
