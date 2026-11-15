@@ -17,6 +17,30 @@
   const list = (v) => (Array.isArray(v) ? v : []);
   const fill = (node, ...kids) => node.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
   const BATCH = 200, LAWA_BATCH = 100, PAGE = 1000, MAX_PAGES = 20;
+  // PERF3f: a read's batches are asked side by side, at most POOL at a time (as the overview asks its site reads); the first that
+  // fails rejects, as the old one-after-another loop did, and no batch is started after it (batches already asked run to their end).
+  // gate: slots shared with other reads (the figures and LAWA's trends share one gate of POOL, so one open has at most POOL of those
+  // heavier statements in flight at once, never POOL of each)
+  const POOL = 4, SUMMARY_POOL = 2;
+  const batches = (ids, size) => { const out = []; for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size)); return out; };
+  function slots(n) {
+    let free = n;
+    const waiting = [];
+    const release = () => { const next = waiting.shift(); if (next) next(); else free++; };
+    return () => (free > 0 ? (free--, Promise.resolve(release)) : new Promise((res) => waiting.push(() => res(release))));
+  }
+  async function pool(tasks, n = POOL, gate = null) {
+    let next = 0, failed = false;
+    const lane = async () => {
+      while (!failed && next < tasks.length) {
+        const release = gate ? await gate() : null;
+        if (failed || next >= tasks.length) { release?.(); break; }
+        const t = tasks[next++];
+        try { await t(); } catch (e) { failed = true; throw e; } finally { release?.(); }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(n, tasks.length) }, lane));
+  }
   const isPhone = () => !!root.matchMedia?.("(max-width: 800px)").matches;
   const fmt = (n) => Number(n || 0).toLocaleString("en-NZ");
   const href = (groupId) => FP.href(FP.groupModel.href(groupId, "water"));
@@ -33,11 +57,14 @@
     };
     const rpc = async (name, args) => { const { data, error } = await sb.rpc(name, args); if (error) throw error; return data || []; };
     const soft = (p) => p.then((x) => x, () => null);
+    const heavy = slots(POOL);   // PERF3f: wq_site_figures and wq_state_trend_for_sites together, at most POOL in flight
     // The group's sites (wq_area_sites: every served water-quality site source, ECan's rivers and wells and NIWA's network alike, and the
     // group's own, its sub-groups' own and datasets shared to it, as the person may read them), its area and its sub-groups' (those the person may read). Before that function is deployed, S5's
     // group_wq_sites (ECan's 'ecan-wq-sites' and the own sites only).
     const missing = (e) => ["PGRST202", "42883"].includes(e?.code);
-    const sitesOf = () => rpc("wq_area_sites", { g: groupId }).catch((e) => (missing(e) ? rpc("group_wq_sites", { g: groupId }) : Promise.reject(e)));
+    // PERF3f: the sites' read on its own too, so the summary (which needs only the sites' ids) can start the moment it lands, beside
+    // the areas' read; base() is built on the same one read
+    const sitesOf = () => once("sites", () => rpc("wq_area_sites", { g: groupId }).catch((e) => (missing(e) ? rpc("group_wq_sites", { g: groupId }) : Promise.reject(e))));
     const base = () => once("base", async () => {
       const [rows, subs] = await Promise.all([sitesOf(), soft(rpc("subgroup_counts", { parent_org: groupId }))]);
       const subList = list(subs).map((s) => ({ id: s.subgroup_id, name: s.subgroup_name, member: !!s.is_member }));
@@ -48,17 +75,20 @@
       return { rows: list(rows), area: ringsOf(groupId), subs: subList.map((s) => ({ ...s, rings: ringsOf(s.id) })) };
     });
     // WQ1's summary of one family for these sites: one row per site, BATCH ids a call, each paged (the API answers at most 1,000 rows).
+    // PERF3f: the batches are asked side by side (at most SUMMARY_POOL at a time), not one after another; each batch's pages stay in
+    // order. 2, not 4 (review of #578, round two: on the live app this read's slowest batch went from 0.86 s one after another to
+    // 3.06 s four at a time; 2 costs 0.01 to 0.11 s against 4, and the most one open has in flight is then 4, where main had 2)
     const summary = (family, ids) => once("summary|" + family, async () => {
       const out = {};
-      for (let i = 0; i < ids.length; i += BATCH) {
+      await pool(batches(ids, BATCH).map((part) => async () => {
         for (let page = 0; page < MAX_PAGES; page++) {
-          const { data, error } = await sb.from("site_record_summary").select("site_id, family, n, first_sampled, last_sampled").in("site_id", ids.slice(i, i + BATCH)).eq("family", family)
+          const { data, error } = await sb.from("site_record_summary").select("site_id, family, n, first_sampled, last_sampled").in("site_id", part).eq("family", family)
             .order("site_id").range(page * PAGE, (page + 1) * PAGE - 1);
           if (error) throw error;
           for (const r of list(data)) out[r.site_id] = r;
           if (list(data).length < PAGE) break;
         }
-      }
+      }), SUMMARY_POOL);
       return out;
     });
     // wq_site_figures for the sites asked (BATCH a call); each site is read once per family, period and field choice.
@@ -68,23 +98,23 @@
       const set = figureSets.get(key) || { rows: new Map(), asked: new Set() };
       figureSets.set(key, set);
       const missing = ids.filter((id) => !set.asked.has(id));
-      for (let i = 0; i < missing.length; i += BATCH) {
-        const part = missing.slice(i, i + BATCH);
+      // (PERF3f: the batches side by side, each kept as it lands: the same calls with the same sites, never one after another)
+      await pool(batches(missing, BATCH).map((part) => async () => {
         const rows = await rpc("wq_site_figures", { p_sites: part, p_family: family, p_from: from, p_include_field: !!field });
         for (const id of part) { set.asked.add(id); set.rows.set(id, []); }
         for (const r of list(rows)) set.rows.get(r.site_id)?.push(r);
-      }
+      }), POOL, heavy);
       return ids.flatMap((id) => set.rows.get(id) || []);
     }
     // LAWA's latest band and 10-year trend for the shared sites (LAWA_BATCH a call).
     const lawaRows = new Map();
     async function lawa(ids) {
       const missing = ids.filter((id) => !lawaRows.has(id));
-      for (let i = 0; i < missing.length; i += LAWA_BATCH) {
-        const part = missing.slice(i, i + LAWA_BATCH), rows = await rpc("wq_state_trend_for_sites", { p_sites: part, p_period_years: 10 });
+      await pool(batches(missing, LAWA_BATCH).map((part) => async () => {
+        const rows = await rpc("wq_state_trend_for_sites", { p_sites: part, p_period_years: 10 });
         for (const id of part) lawaRows.set(id, []);
         for (const r of list(rows)) lawaRows.get(r.monitoring_site_id)?.push(r);
-      }
+      }), POOL, heavy);
       return Object.fromEntries(ids.map((id) => [id, lawaRows.get(id) || []]));
     }
     // One site's results of the keys, from a date, oldest first, a page at a time (bounded: MAX_PAGES pages).
@@ -101,7 +131,7 @@
       }
       return out;
     });
-    const L = { sb, base, summary, figures, lawa, series };
+    const L = { sb, sites: sitesOf, base, summary, figures, lawa, series };
     loaders.set(groupId, L);
     return L;
   }
@@ -109,12 +139,20 @@
   // Everything one measure needs for one water type: the rows, from the summary and the bounded reads. figures: false (the overview
   // card) skips wq_site_figures: the rows, LAWA's classes and the sentence need only the summary and LAWA.
   async function rowsOf(L, st, now, { figures: withFigures = true } = {}) {
+    // PERF3f: the summary of the measure's family starts as soon as the sites are read, beside the areas' read (it needs only the
+    // sites' ids, in the same order the page gives them below); the same one read, kept once per family, as before. st is the page's
+    // own state, so the measure is read again when the sites land: a measure changed meanwhile starts nothing early, and the family
+    // read after the areas is the one used (as main). What remains: a measure changed after the sites land but before the areas do
+    // has already asked the old family's summary once (the cheap precomputed table); nothing else is asked for the old family.
+    const famNow = () => M().measure(st.measure)?.key || st.measure, family0 = famNow();
+    const early = L.sites().then((rows) => (famNow() === family0 ? L.summary(family0, M().sites(rows, { org: st.org }).map((s) => s.id)) : null));
+    early.catch(() => {});
     const b = await L.base(), names = new Map([...b.subs.map((s) => [s.id, s.name]), ...(st.names || new Map())]);
     const all = M().sites(b.rows, { org: st.org, names });
     const m = M().measure(st.measure), family = m?.key || st.measure;
     const sub = st.sub ? b.subs.find((s) => s.id === st.sub) : null;
     const typeSites = M().filterSites(all, { type: st.type, sub: sub?.id || null, subRings: sub?.rings || null });
-    const summary = await L.summary(family, all.map((s) => s.id));
+    const summary = family === family0 ? (await early) || (await L.summary(family, all.map((s) => s.id))) : await L.summary(family, all.map((s) => s.id));
     const ids = typeSites.filter((s) => s.own || summary[s.id]).map((s) => s.id);
     const from = M().periodFrom(st.period, now);
     const [figures, lawa] = await Promise.all([withFigures ? L.figures(family, from, st.includeField, ids) : [],
@@ -974,5 +1012,5 @@
   }
   // SR1: a saved sampling round changes the group's results: the next visit reads them again
   const forget = (groupId) => loaders.delete(groupId);
-  FP.wqPage = { view, summary, href, loader, forget, close: () => live?.destroy(), debugMap: () => live?.map?.() || null };
+  FP.wqPage = { view, summary, href, loader, rowsOf, forget, close: () => live?.destroy(), debugMap: () => live?.map?.() || null };
 })(typeof window === "undefined" ? globalThis : window);
