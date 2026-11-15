@@ -14,7 +14,7 @@
 (() => {
   const FP = (window.FP = window.FP || {});
   const SIGNIN = ["vendor/supabase.d6a5c441.js", "js/config.a14912fe.js", "js/brand.80965af9.js", "js/util.1d5eb095.js", "js/privacy.6b656fd5.js", "js/auth.1e4f2997.js", "js/signin.41091fef.js"];
-  const LAST = "js/main.c32a7d09.js";
+  const LAST = "js/main.7c93ce5b.js";
   // PERF3a: the demo's own code, loaded only when the page opens on a demo address (demo.js picks the demo client at load)
   const DEMO = ["js/demo.fb38c9ec.js", "js/demo-wq-page.a8b05130.js", "js/demo-documents.6bf46a91.js", "js/plans/demo.0d0eeef6.js"];
   const hash = location.hash || "";
@@ -89,7 +89,7 @@
     preload(LAST);   // main.js comes down with the rest and is run once the stylesheets are in
     const runs = before.map(script);
     // (a file that fails leaves this rejected: the page says to reload, since the files already run can't be run again in order)
-    whole = Promise.all([stylesLoaded, ...runs]).then(() => script(LAST));
+    whole = Promise.all([stylesLoaded, ...runs]).then(() => script(LAST)).then(reserveTop);
     return whole;
   }
   // Only the sign-in form's files; resolves once signin.js has run.
@@ -99,13 +99,69 @@
   // so its download of every file never competes with the sign-in form or the first screen.
   function worker() {
     if (FP.demo?.active || !("serviceWorker" in navigator) || location.protocol !== "https:") return;
-    const go = () => navigator.serviceWorker.register("sw.js").catch(() => {});
+    const go = () => navigator.serviceWorker.register("sw.js").then((reg) => { if (!watched) watched = watch(reg, navigator.serviceWorker); }).catch(() => {});
     const idle = () => (window.requestIdleCallback ? requestIdleCallback(go, { timeout: 5000 }) : setTimeout(go, 1000));
     if (document.readyState === "complete") idle(); else addEventListener("load", idle, { once: true });
   }
 
+  // PERF3e: a new version noticed by an open app; one line offers Reload (app/README.md)
+  const CHECK_EVERY = 15 * 60 * 1000;
+  let watched = null;
+  function reserveTop() {
+    const root = document.documentElement, banner = document.querySelector(".demo-banner"), line = document.querySelector(".nv-line:not([hidden])");
+    const b = banner ? banner.getBoundingClientRect().height : 0, l = line ? line.getBoundingClientRect().height : 0;
+    root.style.setProperty("--nv-top", b + "px");
+    root.style.setProperty("--nv-h", l + "px");
+    root.classList.toggle("nv-on", !!line);
+    root.classList.toggle("nv-keep", !!line && !!FP.mapKeep?.affected?.());
+    if (banner || line) root.style.setProperty("--demo-banner-height", b + l + "px"); else root.style.removeProperty("--demo-banner-height");
+  }
+  // its look (css/new-version.css) is loaded the first time it is needed, so the sign-in page carries none of it
+  function showLine(reload) {
+    let line = document.querySelector(".nv-line");
+    if (line) { line.hidden = false; reserveTop(); return; }
+    if (!document.querySelector("link[data-nv]")) {
+      const css = document.createElement("link");
+      css.rel = "stylesheet"; css.href = "css/new-version.541cf0f9.css"; css.setAttribute("data-nv", "");
+      css.onload = css.onerror = () => showLine(reload);
+      document.head.append(css);
+      return;
+    }
+    const mk = (tag, cls, attrs = {}) => { const n = document.createElement(tag); n.className = cls; for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+    const ns = "http://www.w3.org/2000/svg", x = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path");
+    for (const [n, a] of [[x, { viewBox: "0 0 24 24", width: 20, height: 20, "aria-hidden": "true" }], [p, { d: "M6 6l12 12M18 6L6 18", stroke: "currentColor", "stroke-width": 1.8, "stroke-linecap": "round", fill: "none" }]]) for (const k in a) n.setAttribute(k, a[k]);
+    x.append(p);
+    line = mk("aside", "nv-line", { "aria-label": "New version" });
+    const words = mk("p", "nv-words", { role: "status", "aria-live": "polite" }), again = mk("button", "nv-reload", { type: "button" }), close = mk("button", "nv-close", { type: "button", "aria-label": "Dismiss" });
+    again.textContent = "Reload";
+    again.onclick = () => reload();
+    close.append(x);
+    close.onclick = () => { line.hidden = true; reserveTop(); };
+    line.append(words, again, close);
+    document.body.append(line);
+    setTimeout(() => { words.textContent = "A new version is ready."; reserveTop(); }, 50);
+    reserveTop();
+    if (window.ResizeObserver) new ResizeObserver(reserveTop).observe(line);
+  }
+  function watch(reg, sw, { now = () => Date.now(), reload = () => location.reload(), doc = document } = {}) {
+    let checked = now(), had = !!sw?.controller;
+    const done = { checks: 0, shown: 0 };
+    doc.addEventListener("visibilitychange", () => {
+      if (doc.visibilityState !== "visible" || now() - checked < CHECK_EVERY) return;
+      checked = now();
+      done.checks++;
+      try { Promise.resolve(reg?.update?.()).catch(() => {}); } catch { /* next open */ }
+    });
+    sw?.addEventListener?.("controllerchange", () => {
+      // (never in the middle of a move from map to map (TR1): the boxes the picture handed over lies on would move under it)
+      if (had) { done.shown++; whenParsed(() => { const go = () => showLine(reload), calm = FP.mapHandoff?.settled?.(); if (calm) calm.then(go); else go(); }); }
+      had = true;
+    });
+    return done;
+  }
+
   const eager = demo || link || saved;
-  FP.boot = { app, worker, eager, isDemo, SIGNIN, DEMO, loaded: () => !!whole };
+  FP.boot = { app, worker, watch, reserveTop, eager, isDemo, SIGNIN, DEMO, CHECK_EVERY, loaded: () => !!whole };
   const failed = (text) => () => whenParsed(() => { const p = document.getElementById("loading"); if (p) p.textContent = text; });
   if (eager) app().catch(failed("The app couldn't load. Check your connection and reload the page."));
   else signIn().catch(failed("The sign-in page couldn't load. Check your connection and reload the page."));

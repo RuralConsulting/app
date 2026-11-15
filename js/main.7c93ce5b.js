@@ -359,7 +359,8 @@
     banner.querySelector(".demo-switch").addEventListener("click", () => setDemoLinks(!banner.classList.contains("open")));
     document.addEventListener("click", (e) => { if (!e.target.closest(".demo-switch")) setDemoLinks(false); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && banner.classList.contains("open")) { setDemoLinks(false); banner.querySelector(".demo-switch").focus(); } });
-    const reserveBanner = () => document.documentElement.style.setProperty("--demo-banner-height", banner.getBoundingClientRect().height + "px");
+    // (PERF3e: with the new-version line's height under it while that line shows: boot.js reserveTop)
+    const reserveBanner = () => FP.boot?.reserveTop ? FP.boot.reserveTop() : document.documentElement.style.setProperty("--demo-banner-height", banner.getBoundingClientRect().height + "px");
     reserveBanner();
     new ResizeObserver(reserveBanner).observe(banner);
     FP.demo.ready.then(start).catch((e) => { show("screen-farms"); msg("#farms-msg", e.message); });

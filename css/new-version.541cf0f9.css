@@ -1,0 +1,25 @@
+/* PERF3e: "A new version is ready." with Reload and ×, made by boot.js (showLine), which loads this file the first time the line is
+   needed, so the sign-in page carries none of it. One quiet line across the top, under the demo's banner when there is one. Its room
+   is reserved (boot.js reserveTop adds its height to --demo-banner-height, which every signed-in screen already sits below; the card
+   screens get a border of the same height), so it covers nothing. Under the header's menus, every sheet, the + and the sampling
+   round's helper (z-index 9 and up). Reload is a quiet control, never a second filled button. Tokens only. */
+.nv-line { position: fixed; z-index: 7; top: var(--nv-top, 0px); left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2) var(--s-1) var(--s-4); background: var(--panel); border-bottom: 1px solid var(--rule); }
+body:not(.demo-mode) > .nv-line { padding-top: max(var(--s-1), env(safe-area-inset-top, 0px)); }
+.nv-words { margin: 0 var(--s-2) 0 0; font-size: var(--text-small); }
+.nv-line button { cursor: pointer; }
+.nv-reload { min-height: var(--tap); padding: 0 var(--s-4); border: 1px solid var(--rule); border-radius: var(--radius-pill); background: none; font: 600 var(--text-small)/1 var(--f-ui); }
+.nv-close { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink-2); }
+.nv-reload:hover, .nv-close:hover { background: var(--fill); color: var(--ink); }
+html.nv-on body:not(.demo-mode) .screen { border-top: var(--nv-h, 0px) solid var(--clear); }
+/* review of #568: on WebKit (map-keep.js affected()) a map whose canvas changes size after its first draw goes blank. There, while the
+   line shows, the maps that fill a screen keep their size: they reach up under the header by the line's height instead of getting
+   shorter, so neither the line nor × resizes them; their own top controls move down with the screen. On a computer an ordinary
+   group's Home map (#group-map) beside the panel is clipped to its box; on a phone (760 px and under) it is a strip that only moves. */
+html.nv-keep :is(#pa-map, .maps-viewer > .rv-map, #screen-map > #map) { top: calc(-1 * var(--nv-h, 0px)); }
+html.nv-keep :is(#pa-map, .maps-viewer > .rv-map, #screen-map > #map) :is(.maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right) { top: var(--nv-h, 0px); }
+@media (min-width: 761px) { html.nv-keep #group-map { overflow: hidden; }
+  html.nv-keep #group-map > .map-scene > .map-scene-canvas { top: calc(-1 * var(--nv-h, 0px)); height: calc(100% + var(--nv-h, 0px)); }
+  html.nv-keep #group-map .maplibregl-ctrl-top-right { top: var(--nv-h, 0px); } }
+@media print { .nv-line { display: none !important; } html.nv-on body:not(.demo-mode) .screen { border-top: 0; } }
+
