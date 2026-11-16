@@ -15,6 +15,10 @@
   // Pages outside a farm or group a client may open, as their address after "#/" (for example "account/qgis"). V8: the privacy
   // and terms note, which everyone can read. J2c: "places", Places itself ("All places"; the bare address may land in a place).
   const CLIENT_PAGES = ["privacy", "places"];
+  // A place's views a client may open by their address that are not tabs: the view itself decides, by who the person is, whether
+  // it shows them anything. FEP1: a farm's Plan, for a coordinator of a group the farm belongs to (HV1); never the farm's own people
+  // (farm-plan-model.js audience; the owner's v1 ruling), who get no row, and "not open to you" if they type its address.
+  const CLIENT_ROUTES = { farm: ["plan"], group: [] };
 
   const SAMPLE = "00000000-0000-4000-8000-000000000000";
   const browserModels = () => ({ farm: root.FP.farmModel, group: root.FP.groupModel });
@@ -32,7 +36,7 @@
       if (!r) continue;
       const id = r[space], list = known(space, models);
       if (r.view === "map") return list.length ? { action: "go", space, id, view: list[0][0], href: models[space].href(id, list[0][0]) } : { action: "hidden", space, id };
-      return list.some(([key]) => key === r.view) ? { action: "open", space, id, view: r.view } : { action: "hidden", space, id };
+      return list.some(([key]) => key === r.view) || CLIENT_ROUTES[space].includes(r.view) ? { action: "open", space, id, view: r.view } : { action: "hidden", space, id };
     }
     return CLIENT_PAGES.includes(h.replace(/^#\//, "").split("?")[0]) ? { action: "open" } : { action: "hidden" };
   }
@@ -63,5 +67,5 @@
     document.title = "Not available | " + (FP.brand?.product || "");
     FP.show("screen-unavailable");
   }
-  return { CLIENT_VIEWS, CLIENT_PAGES, decide, on, gate, tabs, landing, notAvailable };
+  return { CLIENT_VIEWS, CLIENT_PAGES, CLIENT_ROUTES, decide, on, gate, tabs, landing, notAvailable };
 });

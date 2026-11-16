@@ -25,7 +25,9 @@
 
   // opts: { space: "farm" | "group", place: { id, name, role, parent_org_id }, sections: [[key, label]] (the person's tabs here),
   //   people: whether People's lists are this person's (people-model canSeeTab), addCtx: the Add context or a promise of it,
-  //   sb, today: "YYYY-MM-DD", search(view, q): the host fills that section's own search when it opens }
+  //   sb, today: "YYYY-MM-DD", search(view, q): the host fills that section's own search when it opens,
+  //   extra: a promise of more rows the host decides on, [{ key, label, line, icon, href, after }] (FEP1: a farm's Plan, beside Maps and
+  //   Files, for those who may see it), each drawn after the section named by `after` (else last) }
   function view(opts) {
     close();
     const { space, place } = opts, sb = opts.sb || FP.sb, group = space === "group";
@@ -126,16 +128,19 @@
     // ---- the sections, each with a quiet line ---------------------------------------------------------------------------------------
     const list = el("ul", { class: "ph-rows ph-sections-list" });
     const sectionsBox = el("nav", { class: "ph-sections", "aria-label": "Sections" }, list);
+    let extra = [];
     function drawSections() {
       if (!live()) return;
       const items = H().shortcuts(sections, facts);
-      list.replaceChildren(...items.map((s) => el("li", {}, el("a", { class: "ph-row", href: FP.href(model.href(place.id, s.key)), "data-section": s.key },
-        el("span", { class: "ph-row-icon", "aria-hidden": "true" }, FP.icon(FP.icons?.forView(s.key) || "file", 18)),
+      for (const x of extra) { const at = items.findIndex((s) => s.key === x.after); items.splice(at < 0 ? items.length : at + 1, 0, x); }
+      list.replaceChildren(...items.map((s) => el("li", {}, el("a", { class: "ph-row", href: s.href || FP.href(model.href(place.id, s.key)), "data-section": s.key },
+        el("span", { class: "ph-row-icon", "aria-hidden": "true" }, FP.icon(s.icon || FP.icons?.forView(s.key) || "file", 18)),
         el("span", { class: "ph-row-text" }, el("b", {}, s.label), s.line ? el("small", {}, s.line) : null),
         FP.icon("chevron", 16)))));
       if (!items.length) sectionsBox.remove();
     }
     drawSections();
+    if (opts.extra) Promise.resolve(opts.extra).then((rows) => { if (Array.isArray(rows) && rows.length) { extra = rows.filter((x) => x?.key && x.label); drawSections(); } }, () => {});
     if (keys.includes("maps")) Promise.resolve().then(() => FP.mapsView?.listMaps?.(owner) || null).then((m) => { if (Array.isArray(m)) { facts.maps = m.length; drawSections(); } }, () => {});
     if (keys.includes("documents")) headCount(sb.from("documents").select("id", { count: "exact", head: true }).eq(Object.keys(match)[0], place.id)).then((n) => { if (n != null) { facts.files = n; drawSections(); } });
     if (group && keys.includes("events")) {

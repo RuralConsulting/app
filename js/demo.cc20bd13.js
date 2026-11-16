@@ -63,7 +63,7 @@
   const FARM2 = "de000000-0000-4000-8000-000000000005";
   const GROUP = "de000000-0000-4000-8000-000000000006";   // the catchment group (S5): "HDLG (example)", invented members
   const PHOTO = "demo/photo-synthetic.svg";   // a drawn stand-in: no real photo is in the demo
-  const VIEWS = /^$|^\/(home|maps|ask|create|documents|people|onboarding)$/;
+  const VIEWS = /^$|^\/(home|maps|ask|create|documents|people|onboarding|plan)$/;   // FEP1: plan
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|\?|$)/.test(hash);
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|\?|$)/.test(hash);
@@ -238,6 +238,8 @@
       farm_parcels: [], farm_boundaries: [],
       plan_import_requests: [],   // FU4: "Read this plan in" requests made in this session (public.request_plan_import)
       proposals: [],   // ON3d: the farm's "to confirm" lines as proposals (farmChecksSync), made when the Onboarding view is opened
+      // FEP1: a farm's digitised plan records (planDemo fills them; the almost-empty farm has none)
+      land_units: [], activities: [], risks: [], actions: [], action_places: [], action_risks: [],
     }, reference: { [FARM]: f.reference || [] }, build: f.ops.build, loadGaps: f.ops.load_gaps || [], ratchet: f.ops.ratchet || null, onboardingEffort: f.ops.onboarding_effort || null, ask: f.ask || [], parcels: parcels(extent), wq: null, wqEmpty: false };   // wq is made when first read (wqOf): wq-model.js may load after this
     // LK2: the first batch, proposed (served to no map: layer_styles_for_map serves reviewed looks only), and the staff page's
     // invented reference for its pictures
@@ -310,8 +312,20 @@
       if (memberFarm === "1" || memberFarm === "long") {
         data.tables.farm_members = data.tables.farm_members.filter((m) => m.farm_id !== FARM2);
         if (memberFarm === "long") second.name = data.map2.farm.name = "Upper Waiau River Flats and Hill Country Station — synthetic demo";
+        // FEP1: the person is the facilitator of the first invented group, and the member farm is actively associated with it, so they
+        // read it as that group's coordinator (HV1); the farm has an invented digitised plan
+        const g = MULTI_GROUPS[0].id;
+        data.tables.org_members.find((m) => m.org_id === g && m.user_id === USER).role = "facilitator";
+        data.tables.farm_group_associations = [...(data.tables.farm_group_associations || []), { id: "demo-m-a1", org_id: g, farm_id: FARM2, group_member_id: null, status: "active" },
+          // (and the person's own farm too: a coordinator who also holds a role on the farm sees no Plan there, the v1 rule winning)
+          { id: "demo-m-a2", org_id: g, farm_id: FARM, group_member_id: null, status: "active" }];
+        data.tables.documents.push({ id: "demo2-doc-fep", farm_id: FARM2, title: "Farm Environment Plan, May 2021 (synthetic)", doc_type: "fep", date_prepared: "2021-05-01",
+          created_at: "2026-11-16T00:00:00Z", storage_path: "demo/fep.pdf", page_count: 24, status: "final" });
+        planDemo(data, FARM2, "demo2-doc-fep", "2021-05-01", [{ code: "A", name: "Flats (synthetic)", area_ha: 96.4 }, { code: "B", name: "Terraces (synthetic)", area_ha: 81.2 }, { code: "C", name: "Hill (synthetic)", area_ha: 42.5 }]);
       }
     }
+    // FEP1: the farm's digitised plan, invented (land units, their use and ratings, ticked actions), as the plan loads leave them
+    if (!sparse) planDemo(data, FARM, "doc-fep", "2024-08-01", f.land_units);
     // Documents as F1e and B3 leave them: every one primary by default, and the walk notes filed with the plan by a
     // person (so the demo shows a supporting document folded under its main one). relates_to is read through the view.
     const plan = data.tables.documents.find((d) => d.doc_type === "fep");
@@ -323,6 +337,52 @@
     data.tables.farm_summaries = data.tables.farms.map((x) => summary(data, x));
     data.people = people(data, { sparse, farmer });
     return data;
+  }
+  // FEP1: an invented digitised plan on a farm, in the shape the plan loads give it (tools' PL2 and PF1 loads): one land unit per code
+  // (the land_units view's columns), each unit's use as an activity, the inherent-risk ratings as sentences that carry the rating word,
+  // and the ticked actions with the plan's By when and Progress kept in their sentence (never a due date; the status as the loads set
+  // it, which the Plan page never shows). Every word is made up. The tag "DEMO load" stands where a real load writes its own.
+  const PLAN_TOPICS = [["n_leach", "Nitrogen leaching", "leaching", ["nitrogen"]], ["p_leach", "Phosphorus leaching", "leaching", ["phosphorus"]],
+    ["runoff", "Runoff", "runoff", ["sediment", "phosphorus", "E. coli"]], ["erosion", "Erosion", "other", ["sediment"]], ["compaction", "Soil compaction", "other", ["sediment"]],
+    ["mahinga", "Mahinga kai", "other", []]];
+  const PLAN_RATINGS = [["High", "Medium", "Medium", "Low", "Medium", "Low"], ["Medium", "Low", "Low", "Low", "Low", "Low"], ["Medium", "Medium", "High", "Medium", "High", "Medium"]];
+  const PLAN_USES = ["Irrigated sheep and beef finishing, winter brassica crop (synthetic)", "Dryland sheep breeding and trading cattle (synthetic)", "Irrigated dairy grazing (synthetic)"];
+  const PLAN_ACTIONS = [
+    ["Nutrient management", "Use a nutrient budget to plan fertiliser each season (synthetic).", "By when 1 Year (Sum of Act!Q12); Progress Underway (Sum of Act!R12)", "in_progress", 9, 0],
+    ["Nutrient management", "Split nitrogen applications so none is over 50 kg N/ha at once (synthetic).", "By when 2 Years (Sum of Act!Q13); Progress Not Started (Sum of Act!R13)", "planned", 9, null],
+    ["Irrigation management", "Check the irrigator's application depth every season (synthetic).", "By when 2 Years (Sum of Act!Q21); Progress Finished (Sum of Act!R21)", "done", 11, 0],
+    ["Irrigation management", "Use soil moisture readings to decide when to irrigate (synthetic).", "By when 5 Years (Sum of Act!Q22); Progress Underway (Sum of Act!R22)", "in_progress", 11, null],
+    ["Soil management", "Graze winter crops from the top of the slope down (synthetic).", "By when 2 Years (Sum of Act!Q30); Progress Not Started (Sum of Act!R30)", "planned", 13, 2],
+    ["Waterways", "Fence the creek on the flats and leave a 3 m grass margin (synthetic).", "By when 10 Years (Sum of Act!Q41); Progress Underway (Sum of Act!R41)", "in_progress", 15, 1],
+    ["Waterways", "Plant natives where the drain meets the creek (synthetic).", "no By when and no Progress given (the summary row could not be tied to this action)", "possible", null, null],
+  ];
+  function planDemo(data, farm, docId, planDate, units) {
+    const T = data.tables, id = (k, n) => "de000000-0000-4000-8000-00000" + k + String(n).padStart(4, "0") + (farm === FARM ? "1" : "2");
+    for (const k of ["land_units", "activities", "risks", "actions", "action_places", "action_risks"]) T[k] = T[k] || [];
+    (units || []).forEach((u, i) => {
+      const place = id("e1", i), page = 7 + i;
+      T.land_units.push({ id: place, farm_id: farm, code: "LMU-" + u.code, name: u.name, area_ha: u.area_ha ?? null,
+        description: "DEMO load: what the plan said, as at " + planDate + " (Land!B" + (10 + i * 20) + ", PDF page " + page + "). land use: " + (PLAN_USES[i] || "not given") + " (Land!C" + (11 + i * 20) + ")" });
+      if (i >= PLAN_RATINGS.length) return;   // (the last land unit has no ratings read: the page says so)
+      const activity = id("e2", i);
+      T.activities.push({ id: activity, farm_id: farm, kind: "land_use", place_id: place, name: u.name + ": activity",
+        description: "DEMO load: what the plan said, as at " + planDate + ": " + PLAN_USES[i] + " (FEP Land!C" + (11 + i * 20) + ")" });
+      PLAN_TOPICS.forEach(([key, label, pathway, contaminants], k) => T.risks.push({ id: id("e3", i * 10 + k), farm_id: farm, place_id: place, activity_id: activity, pathway, contaminants,
+        likelihood: null, significance: null, author_kind: "advisor",
+        description: "DEMO load: " + label + ", inherent risk " + PLAN_RATINGS[i][k] + " on " + u.name + ", as the plan's author rated it (a Low/Medium/High scale; what the plan said, as at " +
+          planDate + "; Risk Ass!" + "DEFGHI"[k] + (12 + i) + ", PDF page " + page + ")" }));
+    });
+    const places = T.land_units.filter((u) => u.farm_id === farm);
+    PLAN_ACTIONS.forEach(([area, title, said, status, page, unit], n) => {
+      const a = id("e4", n);
+      T.actions.push({ id: a, farm_id: farm, title, rationale: n === 3 ? "Probe on the flats only (synthetic)." : null, place_id: unit === 0 ? places[0]?.id ?? null : null,
+        status, due_date: null, source_document_id: docId, source_page: page,
+        description: "DEMO load: " + area + ", an additional action ticked in the FEP (Act!B" + (12 + n) + "; wording Act!C" + (12 + n) + "). What the plan said, as at " + planDate + ": " + said + "." +
+          (n === 3 ? " Comment: Probe on the flats only (synthetic). (Act!E15)." : "") + " Status '" + status + "': as the load read it. No due date: the plan gives a period, not a date." });
+      if (unit && places[unit]) T.action_places.push({ action_id: a, place_id: places[unit].id, farm_id: farm });
+    });
+    // one action tied to the rating it answers (action_risks), as a plan import can tie them
+    if (units?.length) T.action_risks.push({ action_id: id("e4", 1), risk_id: id("e3", 0), farm_id: farm });
   }
   // LP1: the two-farm demo's person also belongs to three invented catchment groups, so the home map has farms and groups on
   // it: a parent group and three of its sub-groups (PL2), each with an area place (its geometry in NZTM metres, as the places table holds

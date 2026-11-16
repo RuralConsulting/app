@@ -86,3 +86,82 @@
 .working-notes-text small { color: var(--ink-3); font-size: var(--text-small); }
 .working-notes-list .link { flex: none; min-height: 44px; }
 .working-notes-empty { margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+
+/* FEP1: a farm's Plan (js/farm-plan.js; in this file, beside Home, which it is reached from, so the sign-in page loads no extra tag): what the plan said, as at its date, read only. Calm and dense: the farm's name, one line
+   that says what this is, the plan file as an ink link, quiet counts; then lists of rows with hairlines between (no cards), the
+   plan's words in regular weight, ratings as quiet neutral labels (never coloured good or bad), the PDF page at the right of a row
+   as a 44 px target. Phone first; a computer gets the same in a comfortable width. Tokens only. */
+.farm-plan-screen { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--demo-banner-height) + var(--farm-header-height)); background: var(--wash); overflow: auto; }
+.farm-plan { display: grid; align-content: start; gap: var(--s-6); width: 100%; max-width: var(--page-max); margin: 0 auto; padding: var(--s-3) var(--space) var(--s-8);
+  color: var(--ink); font-family: var(--f-ui); font-size: var(--text-body); line-height: 1.4; }
+
+/* the top: back to Home, the farm's name, what this is, the plan file, the counts */
+.fp-head { display: grid; gap: var(--s-2); }
+.fp-back { display: inline-flex; align-items: center; gap: var(--s-1); justify-self: start; min-height: 44px; margin-left: calc(-1 * var(--s-1)); padding: 0 var(--s-1);
+  color: var(--ink-2); text-decoration: none; font-size: var(--text-small); }
+.fp-back:hover { color: var(--ink); }
+.fp-back:focus-visible, .fp-file-open:focus-visible, .fp-page:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fp-head h1 { margin: 0; font: 600 var(--text-heading)/1.25 var(--f-ui); overflow-wrap: anywhere; }
+.fp-asat { margin: 0; color: var(--ink-2); }
+.fp-file { display: flex; align-items: center; gap: var(--s-2); margin: 0; color: var(--ink-2); }
+.fp-file .icon { flex: none; color: var(--ink-3); }
+.fp-file-open { min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-thickness: 1px; cursor: pointer; overflow-wrap: anywhere; }
+.fp-file-open:hover { text-decoration-thickness: 2px; }
+.fp-counts { display: flex; flex-wrap: wrap; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
+.fp-counts li { padding: 2px var(--s-2); border-radius: 999px; background: var(--fill); color: var(--ink-2); font-size: var(--text-small); }
+
+/* a section: its heading and one quiet sentence about what it is */
+.fp-section { display: grid; gap: var(--s-3); }
+.fp-section h2 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.fp-note, .fp-quiet { margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+.fp-capped { color: var(--ink-2); }
+
+/* a land unit: its name and area, its PDF page; its use; its ratings */
+.fp-units { display: grid; gap: var(--s-5); margin: 0; padding: 0; list-style: none; }
+.fp-unit { display: grid; gap: var(--s-2); }
+.fp-unit-head { display: flex; align-items: center; gap: var(--s-3); min-height: 44px; }
+.fp-unit-head h3 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); overflow-wrap: anywhere; }
+.fp-use { margin: 0; overflow-wrap: anywhere; }
+.fp-label { color: var(--ink-3); }
+
+/* rows: hairlines, no cards; the plan's words in regular weight */
+.fp-rows { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); }
+.fp-rows > li + li { border-top: 1px solid var(--rule-soft); }
+.fp-row { display: flex; align-items: center; gap: var(--s-3); min-height: 44px; padding: var(--s-2) 0; }
+.fp-row-text { flex: 1 1 auto; display: grid; gap: 2px; min-width: 0; }
+.fp-row-text b { font-weight: 400; overflow-wrap: anywhere; }
+.fp-action .fp-row-text b { font-weight: 500; }
+.fp-row-text small { color: var(--ink-3); font-size: var(--text-small); line-height: 1.35; overflow-wrap: anywhere; }
+.fp-row-text small .fp-label { color: var(--ink-3); }
+.fp-row-text small [data-plan-words] { color: var(--ink-2); }
+/* a rating as the plan wrote it: a quiet, neutral label */
+.fp-pill { flex: none; padding: 2px var(--s-2); border-radius: 999px; box-shadow: inset 0 0 0 1px var(--rule-soft); color: var(--ink-2); font-size: var(--text-small); white-space: nowrap; }
+/* the PDF page: a quiet control at the right, a full 44 px target */
+.fp-page { flex: none; min-width: 44px; min-height: 44px; margin-left: auto; padding: 0 var(--s-2); border: 0; border-radius: var(--radius-s); background: none; color: var(--ink-2);
+  font: 400 var(--text-small) var(--f-ui); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; }
+.fp-page:hover { background: var(--fill); color: var(--ink); }
+.fp-page[disabled] { opacity: .6; }
+
+/* the actions, grouped under the plan's own topics */
+.fp-group { display: grid; gap: var(--s-1); }
+.fp-group + .fp-group { margin-top: var(--s-3); }
+.fp-group h3 { margin: 0; color: var(--ink-2); font: 600 var(--text-small)/1.3 var(--f-ui); }
+
+/* the foot: where this came from, what is not here, the PDF is the plan */
+.fp-foot { display: grid; gap: var(--s-1); padding-top: var(--s-3); border-top: 1px solid var(--rule-soft); color: var(--ink-3); font-size: var(--text-small); }
+.fp-foot p { margin: 0; }
+
+@media (max-width: 800px) {
+  body.farm-space-active #screen-farm-plan { bottom: var(--tabbar-h); }
+  .farm-plan { padding-bottom: calc(var(--fab) + var(--s-8)); }
+}
+@media (min-width: 801px) {
+  .farm-plan { padding-top: var(--s-5); }
+  .fp-head h1 { font-size: var(--text-title); }
+  body:has(#screen-farm-plan:not([hidden])) #farm-space-header.space-head { padding-left: max(var(--s-3), calc((100% - var(--page-max)) / 2)); padding-right: max(var(--s-5), calc((100% - var(--page-max)) / 2 + var(--s-4))); }
+}
+@media print {
+  .farm-plan-screen { position: static; overflow: visible; }
+  .fp-back, .fp-page { display: none; }
+}

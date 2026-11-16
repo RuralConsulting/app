@@ -160,6 +160,7 @@
   function close() {
     FP.mapsView?.close();
     FP.placeHome?.close();
+    FP.farmPlan?.close();   // FEP1
     FP.addBlock?.close(false);
     document.body.classList.remove("farm-space-active", "farm-detail", "portfolio-active");
     flushDone();   // a Done still inside its Undo window is written before the farm is left (#258)
@@ -424,7 +425,8 @@
     // More as in a group (space-nav.js)
     const tabs = farmTabs();
     const navTabs = tabs.map(([key, label]) => ({ key, label, href: FP.href(M.href(farm.id, key)), icon: FP.icons?.forView(key) }));
-    if (FP.spaceNav) FP.spaceNav.render($("#farm-actions"), navTabs, route.view);
+    // (FEP1: the Plan page is reached from Home, which stays the current section)
+    if (FP.spaceNav) FP.spaceNav.render($("#farm-actions"), navTabs, route.view === "plan" ? "home" : route.view);
     else $("#farm-actions").replaceChildren(...navTabs.map((t) => el("a", { href: t.href, "data-tab": t.key, ...(route.view === t.key ? { "aria-current": "page" } : {}) }, FP.icon(t.icon), el("span", {}, t.label))));
     // HV1: a member's farm opened by a coordinator of its group says so: "Member farm · read only" under its name, and the account
     // menu's line; nothing on it offers a change (the person has no role on the farm, and the database lets them read only)
@@ -1552,15 +1554,41 @@
     const tabs = farmTabs();
     const addCtx = farmRole(farm).then(({ role, tiers }) => ({ space: "farm", id: farm.id, name: farm.name, role, documentTiers: tiers, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: "home" }));
     const host = $("#screen-farm-home");
-    host.replaceChildren(FP.placeHome.view({ space: "farm", place: { id: farm.id, name: farm.name }, sections: tabs, addCtx, sb: FP.sb }));
+    // FEP1: the Plan row beside Maps and Files, only for RCL staff and the coordinators of a group the farm belongs to, and only when
+    // the farm has plan records (farm-plan.js homeRow); never for the farm's own people
+    const extra = FP.farmPlan ? FP.farmPlan.homeRow(farm, { sb: FP.sb, who: planWho(farm) }).then((row) => (row ? [row] : [])) : null;
+    host.replaceChildren(FP.placeHome.view({ space: "farm", place: { id: farm.id, name: farm.name }, sections: tabs, addCtx, sb: FP.sb, extra }));
     // NP1b: the working notes, drawn only for those the database lets read them (RCL staff on the farm; a member group's coordinators)
     const notes = FP.workingNotes?.view(farm.id, { sb: FP.sb });
     if (notes) host.querySelector(".place-home")?.append(notes);
     host.scrollTop = 0;
   }
+  // FEP1: who the person is on this farm, for the Plan page and its Home row: their farm role (farm_members, as Add reads it), the
+  // staff flag, and their own catchment groups with their roles (read at sign-in)
+  // Fails closed: a failed farm_members read rejects (never "no role"), so the Plan shows to nobody it should not (farm-plan.js)
+  const planWho = (farm) => (context?.farm.id === farm.id ? Promise.resolve(context.role)
+    : Promise.resolve(FP.sb.from("farm_members").select("role").eq("farm_id", farm.id).eq("user_id", user.id).maybeSingle()).then((r) => { if (!r || r.error) throw r?.error || Error("no answer"); return r.data?.role || null; }))
+    .then((role) => ({ role, staff: FP.ops?.isStaff?.() === true, staffKnown: FP.ops?.staffKnown?.() === true, groups: FP.groupSpace?.groups?.() || [] }));
+  // FEP1: the farm's Plan is its own screen under the farm's header (js/farm-plan.js), read only; no farm map and none of the farm's reads
+  function openPlan(farm, route) {
+    if (context && context.farm.id !== farm.id) close();   // another farm's reads and map go first
+    token++;
+    FP.mapsView?.close();
+    document.body.classList.remove("portfolio-active"); $("#portfolio").hidden = true;
+    document.body.classList.add("farm-space-active");
+    setDrawer(false); FP.farmMap.closePopup?.(); FP.shapeEditor?.close();
+    // (its screen is made here, beside Home's, so the sign-in page carries nothing of it)
+    if (!$("#screen-farm-plan")) $("#screen-farm-home").after(el("main", { id: "screen-farm-plan", class: "farm-plan-screen", hidden: true }));
+    FP.show("screen-farm-plan");
+    header(farm, route); reserveHeader();
+    document.title = farm.name + " · " + M.viewLabel("plan") + " | " + FP.brand?.product;
+    return FP.farmPlan?.open($("#screen-farm-plan"), { farm, sb: FP.sb, who: planWho(farm) });
+  }
   async function open(farm, route) {
     flushDone();   // going to another view (or farm) writes any Done still inside its Undo window (#258)
     if (route.view !== "home") FP.placeHome?.close();
+    if (route.view !== "plan") FP.farmPlan?.close();
+    if (route.view === "plan") return openPlan(farm, route);
     if (route.view === "home") return openHome(farm, route);
     if (route.view === "maps") return openMaps(farm, route);
     FP.mapsView?.close();
