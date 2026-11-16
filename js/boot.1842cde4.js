@@ -15,6 +15,7 @@
   const FP = (window.FP = window.FP || {});
   const SIGNIN = ["vendor/supabase.d6a5c441.js", "js/config.a14912fe.js", "js/brand.80965af9.js", "js/util.1d5eb095.js", "js/privacy.6b656fd5.js", "js/auth.1e4f2997.js", "js/signin.41091fef.js"];
   const LAST = "js/main.7c93ce5b.js";
+  const LATER_STYLES = ["css/app.0e810d94.css", "css/ui.bbd7c8db.css"];   // SI2: in the stylesheets' templates (signin-first.test.cjs keeps them in step)
   // PERF3a: the demo's own code, loaded only when the page opens on a demo address (demo.js picks the demo client at load)
   const DEMO = ["js/demo.c458dd05.js", "js/demo-wq-page.a8b05130.js", "js/demo-documents.6bf46a91.js", "js/plans/demo.0d0eeef6.js"];
   const hash = location.hash || "";
@@ -33,11 +34,11 @@
   // boot.js runs in the head: each file is asked for at once (a preload), and run once the page's screens are parsed
   const whenParsed = (f) => (document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", f, { once: true }) : f());
   const preloaded = new Set();
-  function preload(src) {
+  function preload(src, as = "script") {
     if (preloaded.has(src)) return;
     preloaded.add(src);
     const l = document.createElement("link");
-    l.rel = "preload"; l.as = "script"; l.href = src;
+    l.rel = "preload"; l.as = as; l.href = src;
     document.head.appendChild(l);
   }
   const started = new Map();   // src -> promise of its load
@@ -83,6 +84,10 @@
   // Loads the rest of the app; resolves once main.js has run (it starts the app itself). Safe to call more than once.
   function app() {
     if (whole) return whole;
+    // SI2: the shared look's signed-in part (the largest held-back stylesheets) downloads beside the scripts at once, as it did when
+    // the page linked it; its templates are further down the head, so their links are put in place once the page is parsed.
+    // (review F3: before stylesLoaded, whose links go in at once on a sign-in; a preload put in after them is a second download in WebKit)
+    for (const s of LATER_STYLES) preload(s, "style");
     // (the stylesheets' templates are further down the head than boot.js: they are put back once the page is parsed)
     const order = scriptsInOrder(), stylesLoaded = new Promise((resolve) => whenParsed(() => resolve(styles())));
     const before = order.filter((s) => s !== LAST);
@@ -168,7 +173,7 @@
   }
 
   const eager = demo || link || saved;
-  FP.boot = { app, worker, watch, reserveTop, eager, isDemo, SIGNIN, DEMO, CHECK_EVERY, loaded: () => !!whole };
+  FP.boot = { app, worker, watch, reserveTop, eager, isDemo, SIGNIN, DEMO, LATER_STYLES, CHECK_EVERY, loaded: () => !!whole };
   const failed = (text) => () => whenParsed(() => { const p = document.getElementById("loading"); if (p) p.textContent = text; });
   if (eager) app().catch(failed("The app couldn't load. Check your connection and reload the page."));
   else signIn().catch(failed("The sign-in page couldn't load. Check your connection and reload the page."));
