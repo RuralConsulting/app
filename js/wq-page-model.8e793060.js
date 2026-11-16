@@ -420,6 +420,36 @@
       shown: r.held ? "no (older or sparse)" : "yes" })));
   }
   const fileName = (group, measureKey, type, today) => [group, "water quality", type, measure(measureKey)?.name || measureKey, today].join(" ").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".csv";
+  // EX1: the lines a copy of the page carries (the spreadsheet's first rows, the chart image's last lines): which group and sub-group,
+  // what is shown (water type, measure, period, whose sites, older and sparse, field readings), the sources and their caveats, and
+  // where and when it came from. Nothing about anyone: no names of people, no contact details.
+  // o: { group, sub (a sub-group's name or null), measureKey, type, period, whose (countsWhat's words), showAll, includeField, sources
+  //      (sourcesLine), credit (the page's credit line), saved (share-save-model.js savedLine) }
+  function exportLines(o) {
+    const m = measure(o.measureKey);
+    return [
+      "Water quality: " + o.group + (o.sub ? ", " + o.sub : ""),
+      "Shown: " + TYPE_WORDS[o.type] + ", " + (m?.name || o.measureKey) + ", " + periodWords(o.period) + "; counting " + o.whose + "; " +
+        (o.showAll ? "older and sparse records included" : "older and sparse records left out") + "; medians " + (o.includeField ? "include field and test-strip readings" : "use laboratory results (and results whose method is not recorded)") + ".",
+      o.sources || "",
+      o.credit || "",
+      "A median marked about (≈ on screen) could move with a result below or above a detection limit. LAWA trends are LAWA's, over 10 years. " + KEY_RULE,
+      o.saved || "",
+    ].filter(Boolean);
+  }
+  // EX1: one site's results as the chart draws them (each key the site holds of the measure, laboratory and field alike, censored ones
+  // as reported), oldest first. series: the rows read from public.measurements for the chart; nothing else is read.
+  const RESULT_COLUMNS = [["date", "Date"], ["site", "Site"], ["siteId", "Site id"], ["keyName", "Measured as"], ["reported", "Result as reported"], ["value", "Value"],
+    ["unit", "Unit"], ["limit", "Detection limit"], ["method", "Method"], ["lab", "Laboratory"]];
+  function siteResultsCsv(row, series, measureKey, toCsv) {
+    const keys = new Set(measure(measureKey)?.keys || [row.key]);
+    const rows = list(series).filter((r) => r && keys.has(r.parameter) && r.value !== null && r.value !== undefined)
+      .sort((a, b) => String(a.sampled_at).localeCompare(String(b.sampled_at)))
+      .map((r) => ({ date: day(r.sampled_at), site: row.name, siteId: row.externalId || "", keyName: keyName(r.parameter), reported: W.reportedText(r), value: Number(r.value),
+        unit: r.unit || row.unit || "", limit: W.isCensored(r) ? (r.qualifier === ">" ? "above (>)" : "below (<)") : "",
+        method: METHOD_WORDS[methodKind(r.method, r.lab, r.source_parameter, row.shared)] || "", lab: r.lab || "" }));
+    return toCsv(RESULT_COLUMNS, rows);
+  }
 
   // ---- ticks and the chart ---------------------------------------------------------------------------------------------------------
   const MAX_TICKED = S.MAX_CHOSEN;
@@ -489,6 +519,6 @@
   return { TYPES, TYPE_WORDS, viewOf, methodKind, METHOD_WORDS, hollow, MEASURES, FIRST, measure, measuresFor, keyName, PERIODS, periodFrom, periodWords,
     sites, depthText, tagsOf, keyLine, KEY_RULE, needsType, inRings, rings, near, filterSites, pickFigure, rowsFor, shownRows, hiddenCount,
     TIERS, tierOf, tierRank, GOOD_WORDS, whoseWords, CLASSES, classOf, headline, roundWords, NONE_TICKED, sentence, others, lawaLine, anyTicked,
-    SHAPES, SIZES, RAMP, NO_LEVEL, PLAIN, LEVEL_BANDS, LEVEL_MEDIAN_MIN, levelOf, bandsFor, bandOf, fillOf, symbol, FILLS, ICONS, WHOSE, WHOSE_DEFAULT, whoseRows, publicLabel, countsWhat, card, CLUSTER, nearestSite, COLUMNS, sortRows, medianText, latestText, methodsText, CSV_COLUMNS, csv, fileName, MAX_TICKED, defaultTicks, tick, tickList,
+    SHAPES, SIZES, RAMP, NO_LEVEL, PLAIN, LEVEL_BANDS, LEVEL_MEDIAN_MIN, levelOf, bandsFor, bandOf, fillOf, symbol, FILLS, ICONS, WHOSE, WHOSE_DEFAULT, whoseRows, publicLabel, countsWhat, card, CLUSTER, nearestSite, COLUMNS, sortRows, medianText, latestText, methodsText, CSV_COLUMNS, csv, fileName, exportLines, RESULT_COLUMNS, siteResultsCsv, MAX_TICKED, defaultTicks, tick, tickList,
     points, chartData, siteChartData, MIN_YEAR_SITES, medianByYear, medianChart, sourcesLine, fieldNote, NOT_SHARED, HELD_WORDS, whenText };
 });

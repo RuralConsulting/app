@@ -54,7 +54,10 @@
     // PH1: Locate me (the phone's position)
     locate: "M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
     send: "M12 16V5M7 10l5-5 5 5M5 20h14",
-    projects: "M5 21V4M5 4h12.5l-2.5 4 2.5 4H5",   // PJ1: a group's projects (a flag)
+    projects: "M5 21V4M5 4h12.5l-2.5 4 2.5 4H5",
+    // EX1: Share or save's rows (send is Share itself)
+    link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+    print: "M7 8V3.5h10V8M5 17H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-1M7 14h10v6.5H7z",   // PJ1: a group's projects (a flag)
   };
   // The icon each space view shows in the tab bar
   const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records", water: "water", projects: "projects" };

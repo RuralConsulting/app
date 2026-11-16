@@ -212,8 +212,8 @@
     // LAWA's published trend, last and in words (WQ2), under the map, chart or table
     const lawaBox = el("p", { class: "wqp-lawa" });
     const viewSeg = segment("Show as", [["map", "Map"], ["chart", "Chart"], ["table", "Table"]], () => st.view, (v) => { st.view = v; drawView(); }, "wqp-views");
-    const download = el("button", { type: "button", class: "wqp-quiet wqp-download", hidden: true, onclick: () => downloadCsv() }, FP.icon ? FP.icon("download", 18) : null, el("span", {}, "Download"));
-    const viewBar = el("div", { class: "wqp-viewbar" }, viewSeg.node, download);
+    // EX1: the Table's Download is now the header's "Share or save" (share-save.js), for every view and on a phone too
+    const viewBar = el("div", { class: "wqp-viewbar" }, viewSeg.node);
     const mapPane = el("div", { class: "wqp-pane wqp-mappane" }), chartPane = el("div", { class: "wqp-pane wqp-chartpane", hidden: true }), tablePane = el("div", { class: "wqp-pane wqp-tablepane", hidden: true });
     const credit = el("p", { class: "wqp-credit" });
     // SR1: for the group's coordinators, "Enter a round" and the latest rounds (wq-round.js), under the page's name
@@ -302,6 +302,7 @@
       drawFigures(h);
       lawaBox.textContent = M().lawaLine(h, st.measure, st.type) || "";
       credit.textContent = creditLine(shown);
+      FP.shareSave?.set(offer);   // EX1
       if (phone) return drawPhone();
       drawView();
     }
@@ -344,7 +345,7 @@
       // WQ2 (WebKit, Safari's engine, stops drawing a MapLibre map whose box is resized after its first draw): the map's pane is never
       // display: none; set aside it keeps its size, out of sight and out of the flow (.wqp-off)
       mapPane.classList.toggle("wqp-off", st.view !== "map"); mapPane.toggleAttribute("inert", st.view !== "map");
-      chartPane.hidden = st.view !== "chart"; tablePane.hidden = st.view !== "table"; download.hidden = st.view !== "table";
+      chartPane.hidden = st.view !== "chart"; tablePane.hidden = st.view !== "table";
       if (!data) return;
       if (st.view === "map") drawMap(); else if (st.view === "chart") drawChart(); else drawTable();
     }
@@ -409,7 +410,8 @@
         siteFacts(row), host,
         el("div", { class: "wqp-siteactions" }, el("button", { type: "button", class: "wqp-quiet", "aria-pressed": String(ticked), disabled: !ticked && st.ticked.length >= M().MAX_TICKED,
           onclick: () => { st.ticked = M().tick(st.ticked, row.id); drawSite(); } }, ticked ? "Ticked to compare" : "Tick to compare"),
-          el("button", { type: "button", class: "wqp-link", onclick: () => { if (!st.ticked.includes(row.id)) st.ticked = M().tick(st.ticked, row.id); st.view = "chart"; drawView(); } }, "Compare in Chart")));
+          el("button", { type: "button", class: "wqp-link", onclick: () => { if (!st.ticked.includes(row.id)) st.ticked = M().tick(st.ticked, row.id); st.view = "chart"; drawView(); } }, "Compare in Chart"),
+          FP.shareSave ? FP.shareSave.button(siteOffer(row, host)) : null));
       box.querySelector("h2")?.focus({ preventScroll: true });
       siteSeries(row).then((series) => {
         if (gone || st.chosen !== row.id) return;
@@ -479,11 +481,41 @@
           el("td", { class: "wqp-num" }, M().latestText(r), M().keyLine(r, st.measure) ? el("small", {}, M().keyLine(r, st.measure)) : null), el("td", { class: "wqp-num" }, M().medianText(r)), el("td", {}, r.trendWords || "–"))))),
         el("p", { class: "wqp-hint" }, "Results and medians are for " + M().periodWords(st.period) + ". A median marked ≈ could move with a result below or above a detection limit. LAWA trends are LAWA's, over 10 years. " + M().KEY_RULE)));
     }
-    function downloadCsv() {
-      const text = M().csv(M().sortRows(data.shown, st.sort.key, st.sort.dir), FP.peopleModel.toCsv);
-      const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" })), download: M().fileName(group.name, st.measure, st.type, today || new Date(now).toISOString().slice(0, 10)) });
-      document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    // ---- EX1: share or save what is on the page (share-save.js): the rows shown as a spreadsheet, the chart as an image ---------------
+    // Made here from what the page already read, with the page's filters, sort and caveats; nothing is read for it.
+    const dayOf = () => today || new Date(now).toISOString().slice(0, 10);
+    const subName = () => (st.sub ? data?.base.subs.find((s) => s.id === st.sub)?.name || null : null);
+    const stampOf = (what) => FP.shareSaveModel.stamp({ what, place: [group.name, subName()].filter(Boolean).join(", "), product: FP.brand?.product || "the farm platform", day: dayOf() });
+    function lines() {
+      return M().exportLines({ group: group.name, sub: subName(), measureKey: st.measure, type: st.type, period: st.period, showAll: st.showAll, includeField: st.includeField,
+        whose: M().countsWhat(st.whose, M().publicLabel(data.typeSites), present(data.typeSites)), sources: M().sourcesLine(data.all.filter((s) => s.view)), credit: creditLine(data.shown),
+        saved: FP.shareSaveModel.savedLine({ product: FP.brand?.product || "", day: dayOf() }) });
+    }
+    const csvText = () => FP.shareSaveModel.withHeader(lines(), M().csv(phone ? M().sortRows(data.shown, "own") : M().sortRows(data.shown, st.sort.key, st.sort.dir), FP.peopleModel.toCsv));
+    const chartBlock = () => (!phone && st.view === "chart" ? chartPane.querySelector(".wqp-chart .chart-block") : null);
+    function offer() {
+      if (!data) return null;
+      const m = M().measure(st.measure), n = data.shown.length, block = chartBlock(), name = (ext, ...more) => FP.shareSaveModel.fileName([group.name, subName(), "water quality", st.type, m?.name || st.measure, ...more, dayOf()], ext);
+      return { what: [m?.name || st.measure, M().TYPE_WORDS[st.type], fmt(n) + (n === 1 ? " site" : " sites")].join(" · "), link: true,
+        files: [
+          block ? { key: "chart", label: "Save chart as image", hint: "PNG, with its key, sources and date", name: name("png", st.chartMode === "median" ? "median by year" : "chart"), type: "image/png", image: true, share: "chart image",
+            make: () => FP.shareSave.chartImage(block, { sub: stampOf("Water quality"), foot: lines().slice(1) }) } : null,
+          { key: "csv", label: "Export " + (n === 1 ? "this site" : "these " + fmt(n) + " sites") + " (CSV)", hint: "A spreadsheet of the sites shown, with the filters and caveats", name: M().fileName(group.name, st.measure, st.type, dayOf()),
+            type: "text/csv", share: "spreadsheet", make: () => csvText() },
+        ].filter(Boolean) };
+    }
+    // One site: its chart as an image and its results as a spreadsheet, from the series its view already read
+    function siteOffer(row, host) {
+      return () => {
+        const block = host.querySelector(".chart-block"), m = M().measure(st.measure), name = (ext, what) => FP.shareSaveModel.fileName([row.name, m?.name || st.measure, what, dayOf()], ext);
+        return { what: row.name + " · " + (m?.name || st.measure),
+          files: [
+            block ? { key: "chart", label: "Save chart as image", hint: "PNG, with its key, sources and date", name: name("png", "chart"), type: "image/png", image: true, share: "chart image",
+              make: () => FP.shareSave.chartImage(block, { sub: stampOf(row.source + " · " + M().TYPE_WORDS[row.type]), foot: lines().slice(1) }) } : null,
+            { key: "csv", label: "Export its results (CSV)", hint: "Every result the chart draws, with its method", name: name("csv", "results"), type: "text/csv", share: "spreadsheet",
+              make: async () => FP.shareSaveModel.withHeader([row.name + (row.externalId ? " (" + row.externalId + ")" : "") + ", " + row.source, ...lines()], M().siteResultsCsv(row, await siteSeries(row), st.measure, FP.peopleModel.toCsv)) },
+          ].filter(Boolean) };
+      };
     }
 
     // ---- a phone: a quick answer --------------------------------------------------------------------------------------------------
@@ -514,7 +546,7 @@
         d.addEventListener("toggle", () => {
           if (!d.open || body.childElementCount) return;
           const host = el("div", { class: "block-host" });
-          fill(body, siteFacts(r), host);
+          fill(body, siteFacts(r), host, FP.shareSave ? el("div", { class: "wqp-siteshare" }, FP.shareSave.button(siteOffer(r, host))) : null);
           siteSeries(r).then((s) => renderChart(host, siteData(r, s), "No results of this measure in the period."),
             () => fill(host, el("p", {}, "Couldn't read this site's results just now.")));
         });
@@ -558,7 +590,7 @@
     media?.addEventListener?.("change", onMedia);
     root_.classList.toggle("wqp-is-phone", phone);
     draw();
-    const api = { node: root_, map: () => mapUi?.map || null, destroy() { gone = true; token++; chart?.destroy(); siteChart?.destroy(); mapUi?.destroy(); mapUi = null; media?.removeEventListener?.("change", onMedia); if (live === api) live = null; }, state: st };
+    const api = { node: root_, map: () => mapUi?.map || null, destroy() { gone = true; token++; FP.shareSave?.clear(); chart?.destroy(); siteChart?.destroy(); mapUi?.destroy(); mapUi = null; media?.removeEventListener?.("change", onMedia); if (live === api) live = null; }, state: st };
     root_.wqp = api;
     live = api;
     return root_;

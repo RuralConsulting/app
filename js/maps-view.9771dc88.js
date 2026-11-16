@@ -157,6 +157,17 @@
       return new Promise((done) => { (function tick() { if (applies() || Date.now() > until) done(); else setTimeout(tick, 16); })(); });
     },
     overlay: (map, holder, owner, state, bounds) => FP.wqSites?.attach({ map, holder, sb: FP.sb, owner, state, bounds }) || null,
+    unshare: () => FP.shareSave?.clear(),
+    // EX1: the header's "Share or save" (share-save.js): this view as an image, the viewer's own A4 print, and a link to this map
+    share: (map, holder, { title, place }) => FP.shareSave?.set(() => {
+      const S = FP.shareSaveModel, day = new Intl.DateTimeFormat("en-CA", { timeZone: "Pacific/Auckland" }).format(new Date());
+      const print = holder.querySelector(".rv-tools button[aria-label^='Print']");
+      return { what: title, link: true,
+        files: [{ key: "map", label: "Save this view as an image", hint: "PNG, with its title, date, scale and credits", name: S.fileName([place, title, day], "png"), type: "image/png", image: true, share: "map image",
+          make: () => FP.shareSave.mapImage(map, { title, sub: S.stamp({ what: "Map", place, product: FP.brand?.product || "the farm platform", day }),
+            foot: ["Indicative only: boundaries and features are approximate and are not a legal survey.", S.savedLine({ product: FP.brand?.product || "", day })] }) }],
+        ...(print ? { print: () => print.click(), printHint: "One A4 page with its legend, or save it as a PDF" } : {}) };
+    }),
     go: (hash) => { location.hash = hash; }, now: () => Date.now(), visible: () => document.visibilityState === "visible",
     setTimer: (f, ms) => setTimeout(f, ms), clearTimer: (t) => clearTimeout(t),
   });
@@ -360,6 +371,7 @@
         s.unhand = globalThis.FP?.mapHandoff?.register?.(s.map, { kind: "maps", base: () => { try { const b = globalThis.localStorage?.getItem("rv-basemap"); return b === "map" ? "topo" : b || "aerial"; } catch { return null; } } }) || null;
       } catch { s.handoff?.drop(); say(s, UNAVAILABLE, tryAgain(s)); return; }
       try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq, read.manifest?.bounds || null) : null; } catch { s.overlay = null; }
+      try { env.share?.(s.map, holder, { title: s.chosen.title, place: s.opts.name }); } catch {}   // EX1
       s.renewAt = env.now() + RENEW_MS;
       s.timer = env.setTimer(wake, RENEW_MS);
     }
@@ -413,6 +425,7 @@
       const s = shown;
       if (!s) return;
       shown = null;
+      env.unshare?.();   // EX1: the header's Share or save goes with the map
       s.handoff?.drop();   // TR1
       dropMap(s);
       s.host.replaceChildren();
