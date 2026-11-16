@@ -457,3 +457,95 @@ summary.onboarding-line::before { content: ""; position: absolute; left: 2px; to
 .onboarding-checked { color: var(--ink); }
 .onboarding-save { display: grid; gap: 6px; margin-top: 12px; max-width: 28rem; }
 .onboarding-save input { min-height: 36px; font: inherit; max-width: 10rem; }
+
+/* ---- PL2b: Places on a phone looks like a group's screens (the owner, 15 and 16 Nov 2026: "completely different look to once in in the
+   group"; "The first load screen for me is inconsistent with the groups"). The same pieces a group uses: the space header's slim bar (a
+   mark tile, the name, round buttons; ui.css "the space's header"), Home's round Locate and upright Aerial | Topo at the same places
+   (capture.css .pa-locate, .pa-bg), and Home's sheet along the bottom with its grabber and one row (capture.css HM1 .pa-peek, .pa-grip,
+   .pa-row). Everything lies over the map: the map's box is the same as before (map-keep.js), and so is the hand-over to a group (TR1).
+   A computer keeps its card: there the sheet and its body are boxes of no account (display: contents) and the phone's extras are hidden. */
+/* (weighted by #portfolio and #home-card: capture.css, which loads later, shows .pa-grip, .pa-row and .space-mark; the phone block below
+   weighs the same and comes later, so it shows them on a phone) */
+#portfolio :is(.home-mark, .home-search-open, .home-grip, .home-peek-line), #home-card .home-grip { display: none; }
+@media (min-width: 801px) {
+  #portfolio { display: flex; flex-direction: column; }
+  #home-sheet, #home-sheet-body { display: contents; }
+  #portfolio :is(.home-head, .home-find, .home-level, .home-results, .home-none, .home-clear, .home-fold) { flex: none; }
+  #portfolio .home-find { order: 1; }
+  #portfolio :is(.home-level, .home-results, .home-none, .home-clear, .home-fold) { order: 2; }
+  #portfolio .home-level[hidden], #portfolio .home-results[hidden], #portfolio .home-clear[hidden], #portfolio .home-fold[hidden] { display: none; }
+}
+@media (max-width: 800px) {
+  /* the header: one thin line across the top, as a group's (back, mark, name, account; here a mark, Places, Search and the account) */
+  body.portfolio-active #portfolio { top: 0; left: 0; right: 0; width: auto; max-height: none; overflow: visible; padding: 0; border-radius: 0; box-shadow: none;
+    background: var(--panel); border-bottom: 1px solid var(--rule-soft); }
+  /* (ui.css, a phone: ".space-bar" 48 px, 2 px top and bottom; ".space-mark" 30 px) */
+  #portfolio .home-head { flex-wrap: nowrap; justify-content: flex-start; gap: var(--s-3); min-height: 48px; margin: 0; padding: 2px var(--s-3); box-sizing: border-box; }
+  #portfolio .home-mark { display: grid; width: 30px; height: 30px; }
+  #portfolio .home-mark .icon { width: 18px; height: 18px; }
+  #portfolio .home-title { flex: 1; min-width: 0; font: 600 var(--text-body)/1.25 var(--f-display); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Search and the account: the header's round 36 px buttons, each a 44 px target */
+  #portfolio .home-search-open { position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+    background: none; color: var(--ink); cursor: pointer; }
+  #portfolio .home-search-open::after { content: ""; position: absolute; inset: -4px; }
+  #portfolio .home-search-open:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #portfolio #home-account-menu.open { position: absolute; top: calc(100% + var(--s-2)); right: var(--s-2); flex-basis: auto; width: max-content; min-width: 240px; max-width: min(320px, calc(100vw - 24px));
+    margin: 0; box-shadow: var(--shadow-2); }
+  /* the map's controls: Home's round Locate (44 px, the panel's colour, a hairline, a soft shadow) 12 px under the header and 12 px in
+     from the edge, and the upright Aerial | Topo 10 px under it (Home: 12 and 66 px from the top of its map) */
+  body.portfolio-active #map .maplibregl-ctrl-top-right > .maplibregl-ctrl { margin: 10px 12px 0 0; }
+  body.portfolio-active #map .maplibregl-ctrl-top-right > .maplibregl-ctrl:first-child, body.portfolio-active #map .maplibregl-ctrl-top-right > .maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) { margin-top: 12px; }
+  body.portfolio-active #map .maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) { width: 44px; height: 44px; overflow: visible; border: 1px solid var(--rule); border-radius: 50%;
+    background: var(--panel); box-shadow: var(--shadow-1); box-sizing: border-box; }
+  body.portfolio-active #map .maplibregl-ctrl-group:has(.maplibregl-ctrl-geolocate) button.maplibregl-ctrl-geolocate { width: 42px; height: 42px; border-radius: 50%; background-color: var(--clear); }
+  /* the scale and the credit ride above the sheet, as on Home */
+  body.portfolio-active #map :is(.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right) { bottom: var(--home-sheet-h, 0px); }
+  /* the sheet: Home's (capture.css .pa-peek), along the bottom of the screen, over the map */
+  #home-sheet { position: fixed; z-index: 6; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; max-height: calc(100% - var(--demo-banner-height, 0px) - 57px);
+    box-sizing: border-box; padding: 0 0 max(6px, env(safe-area-inset-bottom, 0px)); background: var(--panel); color: var(--ink); border-top: 1px solid var(--rule-soft);
+    border-radius: var(--radius-l) var(--radius-l) 0 0; box-shadow: var(--shadow-2); }
+  #portfolio.has-card #home-sheet { display: none; }
+  #home-sheet[data-state="half"] { max-height: 60%; }
+  #home-sheet.moving { transition: height .24s var(--ease, ease); }
+  #home-sheet.dragging { transition: none; }
+  /* searching (Search tapped, or a search typed): the sheet takes the screen, over the header too, as a group's Search does (ui.css
+     ".fp-search"), so the box sits at the top and its first results stay above the phone's keyboard; the map is covered, so its
+     controls step aside */
+  #home-sheet[data-state="half"].searching:not(.dragging) { top: calc(var(--demo-banner-height, 0px) + env(safe-area-inset-top, 0px)); height: auto; max-height: none; }
+  body.portfolio-active:has(#home-sheet[data-state="half"].searching:not(.dragging)) #map :is(.maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right) { visibility: hidden; }
+  #portfolio .home-grip { display: flex; }
+  /* (the grabber's reach above the sheet keeps to the middle, clear of the scale and the credit's "i" in the corners above it) */
+  #home-sheet .home-grip::after { left: 25%; right: 25%; }
+  #home-sheet .home-level { flex: none; margin: 0; padding: 0 var(--s-4); border-bottom: 1px solid var(--rule-soft); }
+  #home-sheet .home-level[hidden] { display: none; }
+  /* closed: the grabber and ONE row (Home's 52 px row: a small icon, the words, the count and a chevron) */
+  #portfolio .home-peek-line { display: flex; flex: none; min-height: 52px; gap: 12px; padding: 6px 20px; touch-action: none; }
+  #portfolio .home-peek-line .pa-text b { -webkit-line-clamp: 1; }
+  #portfolio .home-peek-line .pa-far { font-size: var(--text-body); }
+  #home-sheet[data-state="half"] .home-peek-line { display: none; }
+  #home-sheet[data-state="peek"] .home-sheet-body { display: none; }
+  /* pulled up: the search (Home's: one quiet 44 px field) and the list, scrolling inside the sheet */
+  .home-sheet-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 6px 16px 12px; }
+  #home-sheet .home-find input { min-height: var(--tap); border: 0; border-radius: var(--radius-l); background: none; box-shadow: inset 0 0 0 1px var(--rule); }
+  #home-sheet .home-fold > summary { display: none; }
+  /* a search's results: one line each for the name and its kind (cut short with "…"), so the first few stay above a phone's keyboard */
+  #home-sheet .home-results .home-item :is(b, small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+  #home-sheet .home-fold, #portfolio #home-sheet .home-fold { margin-top: 10px; }
+  #home-sheet .home-list { margin-top: 0; }
+  /* the place chosen: the same sheet, its grabber and the place, with Open the one filled button */
+  #home-card { left: 0; right: 0; bottom: 0; padding: 0 var(--s-5) max(var(--s-4), env(safe-area-inset-bottom, 0px)); border-radius: var(--radius-l) var(--radius-l) 0 0;
+    border-top: 1px solid var(--rule-soft); box-shadow: var(--shadow-2); }
+  #home-card .home-grip { display: flex; margin: 0 calc(-1 * var(--s-5)); width: calc(100% + 2 * var(--s-5)); }
+  #home-card h2 { margin: 2px 52px 2px 0; font: 600 var(--text-body)/1.3 var(--f-display); }
+  #home-card-close { top: 30px; right: var(--s-3); width: 44px; height: 44px; background: none; box-shadow: none; }
+  /* inside a group stepped into, its way back out stays on the card (home.js moves the row there while the card shows) */
+  #home-card .home-level { margin: 0 calc(-1 * var(--s-5)) var(--s-2); padding: 0 var(--s-4); border-bottom: 1px solid var(--rule-soft); }
+  #home-card .home-level[hidden] { display: none; }
+  #home-card:has(.home-level:not([hidden])) #home-card-close { top: 74px; }
+  #home-card .home-card-actions { margin-top: var(--s-3); }
+  #home-card-open { min-height: var(--tap); padding: 0 var(--s-6, 28px); border-radius: var(--radius-pill); }
+}
+@media (max-width: 800px) and (prefers-reduced-motion: reduce) { #home-sheet.moving { transition: none; } }
+/* PERF3e's new-version line in WebKit (new-version.css nv-keep) lifts the map's top by the line's height and puts its top controls just
+   under the line; on Places they stand under the header instead (--portfolio-bottom is measured from the screen's top, home.js) */
+html.nv-keep body.portfolio-active #screen-map > #map .maplibregl-ctrl-top-right { top: calc(var(--portfolio-bottom, 0px) + var(--nv-h, 0px)); }

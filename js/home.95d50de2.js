@@ -63,7 +63,90 @@
     const cardH = card && !card.hidden ? card.getBoundingClientRect().height + 16 : 0;
     // wide: the panel and the card share the left-hand column
     if (wide()) return { top: 60, right: 70, bottom: 50, left: Math.min(Math.max(panel.right, card && !card.hidden ? card.getBoundingClientRect().right : 0) - map.left + 40, map.width / 2) };
-    return { top: Math.min(panel.bottom - map.top + 24, map.height / 2), right: 40, bottom: Math.min(40 + cardH, map.height / 3), left: 40 };
+    // PL2b: a phone: the header bar along the top (the panel), the sheet (or the card in its place) along the bottom
+    return { top: Math.min(panel.bottom - map.top + 24, map.height / 2), right: 40, bottom: Math.min(24 + Math.max(cardH, sheetHeight()), map.height / 3), left: 40 };
+  }
+  // ---- PL2b: on a phone, Places' search and list are a sheet along the bottom, as a group's Home has (phone-area.js peekSheet) -------
+  // Closed ("peek"): its grabber and one row, "All places (n)" (and the way back out of a group stepped into). Pulled up ("half"): the
+  // search and the list. A tap on the grabber or the row opens or closes it, a drag on either follows the finger and settles at the
+  // nearer stop, Escape closes it. It lies over the map: the map's box never changes (map-keep.js: WebKit blanks a resized map).
+  // searchOpen: Search was tapped (the sheet takes the screen, its box at the top, until the sheet next closes; a search typed does too)
+  let sheetState = "peek", sheetDrag = null, sheetDragged = false, searchOpen = false;
+  const markSearching = () => $("#home-sheet")?.classList.toggle("searching", sheetState === "half" && (searchOpen || !!$("#home-search")?.value.trim()));
+  const sheetHeight = () => { const s = $("#home-sheet"); if (!s || wide() || $("#portfolio")?.hidden) return 0; const r = s.getBoundingClientRect(); return s.getClientRects().length ? Math.round(r.height) : 0; };
+  function settle(next, { focus = false } = {}) {
+    const s = $("#home-sheet"), grip = $("#home-grip");
+    if (!s) return;
+    sheetState = next; s.dataset.state = next; s.style.height = ""; s.classList.remove("dragging");
+    if (next === "peek") searchOpen = false;
+    markSearching();
+    grip?.setAttribute("aria-expanded", String(next === "half"));
+    grip?.setAttribute("aria-label", next === "half" ? "Show less of Places" : "Show all places");
+    $("#home-peek-line")?.setAttribute("aria-expanded", String(next === "half"));
+    // (in the tap itself: iOS raises the keyboard only for a focus made while handling the tap)
+    if (focus) $("#home-search")?.focus({ preventScroll: true });
+  }
+  // The phone's pieces, made here rather than in index.html (the sign-in page's weight, SI1): the header's mark tile and round Search;
+  // the sheet's grabber (Home's, capture.css .pa-grip) and its one row (Home's .pa-row: an icon, the words, the count, a chevron); the
+  // card's grabber. A computer hides them (farm-space.css "PL2b").
+  function build() {
+    const icon = (name, size = 20) => root.FP.icon ? root.FP.icon(name, size) : "";
+    const grip = (id, label, more = {}) => el("button", { type: "button", id, class: "home-grip pa-grip", "aria-label": label, ...more }, el("span", { class: "pa-grip-bar", "aria-hidden": "true" }));
+    const title = $("#portfolio .home-title"), sheet = $("#home-sheet"), card = $("#home-card");
+    if (!title || !sheet || $("#home-grip")) return;
+    title.before(el("span", { class: "home-mark space-mark", "aria-hidden": "true" }, icon("map", 18)));
+    title.after(el("button", { type: "button", id: "home-search-open", class: "home-search-open", "aria-label": "Find a farm or group", "aria-controls": "home-sheet-body" }, icon("search")));
+    sheet.prepend(grip("home-grip", "Show all places", { "aria-expanded": "false", "aria-controls": "home-sheet-body" }));
+    $("#home-level").after(el("button", { type: "button", id: "home-peek-line", class: "home-peek-line pa-row", "aria-controls": "home-sheet-body" },
+      el("span", { class: "pa-dot", "aria-hidden": "true" }, icon("map")), el("span", { class: "pa-text" }, el("b", {}, "All places")),
+      el("span", { id: "home-peek-count", class: "pa-far" }), el("span", { class: "pa-chev", "aria-hidden": "true" }, icon("up", 16))));
+    card?.prepend(grip("home-card-grip", "Show all places"));
+  }
+  function bindSheet() {
+    const s = $("#home-sheet"), grip = $("#home-grip"), line = $("#home-peek-line");
+    if (!s || !grip) return;
+    const toggle = () => { if (sheetDragged) { sheetDragged = false; return; } settle(sheetState === "half" ? "peek" : "half"); };
+    grip.addEventListener("click", toggle);
+    line?.addEventListener("click", toggle);
+    $("#home-search-open")?.addEventListener("click", () => { unchoose({ keepMap: true }); searchOpen = true; settle("half", { focus: true }); });
+    $("#home-card-grip")?.addEventListener("click", () => { unchoose({ keepMap: true }); settle("half"); });
+    s.addEventListener("keydown", (e) => { if (e.key === "Escape" && sheetState === "half" && !e.defaultPrevented && !e.target.value) { e.preventDefault(); e.stopPropagation(); settle("peek"); grip.focus(); } });
+    // the drag (on the grabber or the one row): the finger is followed over the whole page once it is down
+    const doc = root.document;
+    const down = (e) => {
+      if (e.button > 0 || wide()) return;
+      const peekH = sheetState === "peek" ? s.getBoundingClientRect().height : (grip.offsetHeight + (line?.offsetHeight || 52) + 6);
+      sheetDrag = { y: e.clientY, h: s.getBoundingClientRect().height, id: e.pointerId, moved: false, peek: peekH, half: Math.round(root.innerHeight * 0.6) };
+      doc.addEventListener("pointermove", move, { passive: false }); doc.addEventListener("pointerup", up); doc.addEventListener("pointercancel", up);
+    };
+    const move = (e) => {
+      const d = sheetDrag;
+      if (!d || e.pointerId !== d.id) return;
+      const dy = d.y - e.clientY;
+      if (!d.moved) { if (Math.abs(dy) < 6) return; d.moved = true; sheetDragged = true; s.classList.add("dragging"); s.dataset.state = "half"; }
+      s.style.height = Math.max(d.peek, Math.min(d.half + 24, d.h + dy)) + "px";
+      d.last = { y: e.clientY, t: performance.now(), prev: d.last };
+      e.preventDefault();
+    };
+    const up = (e) => {
+      const d = sheetDrag;
+      if (!d || e.pointerId !== d.id) return;
+      sheetDrag = null;
+      doc.removeEventListener("pointermove", move); doc.removeEventListener("pointerup", up); doc.removeEventListener("pointercancel", up);
+      if (!d.moved) return;
+      const h = s.getBoundingClientRect().height, p = d.last?.prev, fast = p ? (p.y - d.last.y) / Math.max(16, d.last.t - p.t) : 0;
+      settle(Math.abs(fast) > 0.6 ? (fast > 0 ? "half" : "peek") : (Math.abs(h - d.half) < Math.abs(h - d.peek) ? "half" : "peek"));
+      setTimeout(() => { sheetDragged = false; }, 0);
+    };
+    for (const t of [grip, line].filter(Boolean)) t.addEventListener("pointerdown", down);
+    // the map's scale and credit ride above the sheet (or the card), as on a group's Home
+    const map = $("#map"), card = $("#home-card");
+    if (map && typeof ResizeObserver !== "undefined") {
+      const keep = () => map.style.setProperty("--home-sheet-h", (wide() ? 0 : Math.max(sheetHeight(), card && !card.hidden ? Math.round(card.getBoundingClientRect().height) : 0)) + "px");
+      const ro = new ResizeObserver(keep);
+      ro.observe(s); if (card) ro.observe(card);
+      root.addEventListener("resize", keep);
+    }
   }
   // UI2: the list's swatch is the place's colour on the map (its group's hue; a sub-group lighter; a farm its ink marker)
   function swatch(p) {
@@ -92,6 +175,9 @@
       return li;
     }));
     $("#home-count").textContent = "(" + list.length + ")";
+    const peek = $("#home-peek-count");
+    if (peek) peek.textContent = String(list.length);
+    $("#home-peek-line")?.setAttribute("aria-label", "All places, " + list.length);
   }
   // ---- PL2: the map shows one level: the top level, or the places inside the group stepped into ---------------------------------
   const mapItem = (p) => ({ id: p.id, kind: p.kind, name: p.name, hueKey: p.kind === "subgroup" && p.parentId ? p.parentId : p.id,
@@ -124,7 +210,7 @@
     const mine = token;
     if ((p.within || null) !== at) { at = p.within || null; await drawLevel(); if (mine !== token) return; }
     chosen = p.id; going = p.id;
-    $("#home-card").hidden = true;
+    showCard(false);
     for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", String(b.dataset.homePlace === p.id));
     const open = () => { if (going === p.id && mine === token && document.body.classList.contains("portfolio-active")) root.location.hash = root.FP.href(H.openHref(p)); };
     if (handOver(p)) { open(); return; }
@@ -155,6 +241,7 @@
     const clear = $("#home-clear");
     if (clear) clear.hidden = !(q.trim() && !found.length);
     $("#home-fold").hidden = !!q.trim();   // while searching, the matches stand in for the list
+    markSearching();   // (a phone: a search typed takes the screen, its box at the top)
   }
   // A place chosen (on the map, in the list or in search): marked and framed on the map, and its card shown.
   // A place chosen from the list or search that is not at the level drawn takes the map to its level first (never both levels).
@@ -176,26 +263,44 @@
       into.hidden = !inner.length;
       into.textContent = inner.every((x) => x.kind === "subgroup") ? "Show its " + inner.length + " sub-group" + (inner.length === 1 ? "" : "s") : "Show the " + inner.length + " place" + (inner.length === 1 ? "" : "s") + " in it";
     }
-    $("#home-card").hidden = false;
+    showCard(true);
     for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", String(b.dataset.homePlace === p.id));
     root.FP.farmMap.homeChoose?.(p.id, padding());
     if (focus) $("#home-card-open").focus();
   }
+  // PL2b: on a phone the card of the place chosen takes the sheet's place along the bottom (CSS: #portfolio.has-card)
+  function showCard(on) {
+    $("#home-card").hidden = !on;
+    $("#portfolio")?.classList.toggle("has-card", !!on);
+    if (on) settle("peek");
+    // inside a group stepped into, its way back out stays one tap away: on a phone the row goes onto the card while the card shows
+    // (the sheet is put away then), and back to the sheet after
+    const level = $("#home-level"), card = $("#home-card"), grip = $("#home-grip");
+    if (level && card && grip) {
+      if (on && !wide()) { if (level.parentElement !== card) $("#home-card-grip")?.after(level); }
+      else if (level.parentElement !== grip.parentElement) grip.after(level);
+    }
+  }
   function unchoose({ keepMap = false } = {}) {
-    chosen = null; going = null; $("#home-card").hidden = true;
+    chosen = null; going = null; showCard(false);
     for (const b of document.querySelectorAll("[data-home-place]")) b.setAttribute("aria-current", "false");
     if (!keepMap) root.FP.farmMap.homeChoose?.(null, padding());
   }
   function bind() {
     if (bound) return;
     bound = true;
+    build();
+    bindSheet();
+    keepMap();
     $("#home-search").addEventListener("input", drawResults);
     $("#home-clear")?.addEventListener("click", () => { $("#home-search").value = ""; drawResults(); $("#home-search").focus(); });
     // RF1: on a phone the Places card spans the map's width and the map's controls (Locate, Aerial | Topo) stand below it, never
     // beside it: the card's bottom edge, kept as --portfolio-bottom on the map, however the card grows (search, the list opened)
     const panel = $("#portfolio"), map = $("#map");
     if (panel && map && typeof ResizeObserver !== "undefined") {
-      const keep = () => { const p = panel.getBoundingClientRect(), m = map.getBoundingClientRect(); map.style.setProperty("--portfolio-bottom", (panel.hidden || !p.height ? 0 : Math.max(0, Math.round(p.bottom - m.top))) + "px"); };
+      // (from the top of the screen the panel and the map share: PERF3e's new-version line in WebKit lifts the map's own top above it,
+      // nv-keep, and farm-space.css adds the line's height there)
+      const keep = () => { const p = panel.getBoundingClientRect(), m = (panel.offsetParent || map).getBoundingClientRect(); map.style.setProperty("--portfolio-bottom", (panel.hidden || !p.height ? 0 : Math.max(0, Math.round(p.bottom - m.top))) + "px"); };
       new ResizeObserver(keep).observe(panel);
       root.addEventListener("resize", keep);
     }
@@ -217,23 +322,39 @@
         fold.setAttribute("aria-expanded", String(open)); if (subs) subs.hidden = !open;
         return;
       }
-      if (e.target.closest("#home-level-back")) { const g = at && placeOf(at); step(g?.within || null); return; }
       const b = e.target.closest("[data-home-place]");
       if (!b) return;
       const fromSearch = b.dataset.from === "search";
       if (fromSearch) { $("#home-search").value = b.querySelector("b").textContent; $("#home-results").hidden = true; }
-      // a phone: the open list covers most of the map, so it folds away to show the place chosen from it
-      else if (!wide()) $("#home-fold").open = false;
+      // a phone: the sheet goes back down, and the place chosen shows in its place (its card)
       // a click by keyboard (no pointer position) takes the focus to Open
       choose(b.dataset.homePlace, { focus: e.detail === 0 });
     });
+    // (its own listener: on a phone the row sits on the card while a place's card shows)
+    $("#home-level-back")?.addEventListener("click", () => { const g = at && placeOf(at); step(g?.within || null); });
     $("#home-card-close").addEventListener("click", () => { const back = chosen && $('#portfolio [data-home-place="' + CSS.escape(chosen) + '"]'); unchoose(); back?.focus(); });
     $("#home-card-into")?.addEventListener("click", () => { if (chosen) step(chosen); });
     // Escape: the card closes; with no card open, the map steps back out of the group it is in
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || e.defaultPrevented || !document.body.classList.contains("portfolio-active")) return;
       if (!$("#home-card").hidden) unchoose();
+      else if (sheetState === "half" && !wide()) settle("peek");
       else if (at && !e.target.closest?.("input")) { const g = placeOf(at); step(g?.within || null); }
+    });
+  }
+  // PL2b, the review of #571: in a browser built on WebKit a map whose box changes size after its first draw shows blank (map-keep.js), as
+  // Places' did when the phone was turned. Its map is made again once the box has settled at its new size, at the same place and zoom,
+  // with Places drawn on it again (as the group overview and Water quality do, #555, #560). Only while Places shows, never mid-move; the
+  // farm's map on the same box is left to the farm space.
+  let keeper = null;
+  function keepMap() {
+    const box = $("#map");
+    if (keeper || !box || !root.FP.mapKeep?.watch) return;
+    keeper = root.FP.mapKeep.watch(box, () => {
+      if (!onMap || !document.body.classList.contains("portfolio-active") || document.documentElement.getAttribute("data-map-moving") === "on") return;
+      const m = root.FP.farmMap.glMap?.(), cam = m && { center: m.getCenter(), zoom: m.getZoom() };
+      if (!root.FP.farmMap.renew?.()) return;
+      drawLevel({ keep: true }).then(() => { const n = root.FP.farmMap.glMap?.(); if (cam && n) n.jumpTo(cam); keeper?.made(); });
     });
   }
   // The home page: the farm space has already put its own things away and shown the map screen (farmSpace.showPortfolio).
@@ -241,14 +362,16 @@
     const mine = ++token, sb = root.FP.sb;
     bind();
     document.title = "Farms and groups | " + (root.FP.brand?.product || "");
-    chosen = null; going = null; at = null; onMap = false; $("#home-card").hidden = true; $("#home-search").value = ""; drawResults();
-    // wide screens open with the list showing; a phone keeps it folded under the search box
-    $("#home-fold").open = wide();
+    chosen = null; going = null; at = null; onMap = false; showCard(false); $("#home-search").value = ""; drawResults();
+    // wide screens open with the list showing; a phone opens with its sheet closed (the list is the sheet pulled up, never folded there)
+    $("#home-fold").open = true;
+    settle("peek");
     list = H.places(farms, groups); shapes = new Map();
     // TR1: arriving from another map (a place's Home, its Maps): this map takes its camera and picture and moves on from there
     // (map-handoff.js; nothing is handed over on a deep link or a reload, and Places opens directly, as before)
     const box = $("#map"), handed = box && root.FP.mapHandoff?.take({ box });
     root.FP.farmMap.renew?.();   // (WebKit only: the map, hidden while another screen showed, made again)
+    keeper?.made();   // (the size it shows at now: a box that changed while another screen showed is not a turn of the phone)
     if (handed) root.FP.farmMap.arrive?.(handed);
     // TR1: the outlines read when Places was last shown this visit are drawn at once (the move out starts without waiting for the read);
     // the same read is made again below, and the map is drawn again only if what comes back differs (without moving the camera)

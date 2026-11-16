@@ -1076,8 +1076,9 @@
       return { i, node, face };
     });
     // what the marks must keep clear of: the Places panel, the card, the back row and the map's own controls
-    const avoid = () => [...document.querySelectorAll("#portfolio, #home-card, #home-level, #map .maplibregl-ctrl-top-right > *, #map .maplibregl-ctrl-bottom-left > *, #map .maplibregl-ctrl-bottom-right > *")]
-      .filter((n) => !n.hidden && n.offsetParent !== null).map((n) => { const r = n.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    // (PL2b: on a phone the panel is the header bar and its sheet lies along the bottom, fixed, so a box is counted when it is drawn at all)
+    const avoid = () => [...document.querySelectorAll("#portfolio, #home-sheet, #home-card, #home-level, #map .maplibregl-ctrl-top-right > *, #map .maplibregl-ctrl-bottom-left > *, #map .maplibregl-ctrl-bottom-right > *")]
+      .filter((n) => !n.hidden && n.getClientRects().length).map((n) => { const r = n.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }).filter((r) => r.w && r.h);
     let queued = false;
     const place = () => {
       queued = false;
