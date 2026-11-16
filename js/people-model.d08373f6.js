@@ -168,6 +168,37 @@
   // The last contact, short, for the right of a row: "today", "yesterday", "5 days ago", "3 weeks ago", else the date; "None yet".
   const lastShort = (t, today) => (t ? ago(t, today) : "None yet");
 
+  // ---- PE2: a phone's one sort control ---------------------------------------------------------------------------------------------
+  // The orders a phone offers for each list (the owner, 16 Nov 2026: "can i sort by member number"): Members by name, member number or
+  // last contact; People and other contacts by name or last contact (they have no member number). The interaction log, follow-ups and
+  // To review keep their own date order. The same orders as a computer's column headings: sortPhone uses sortDirectory, so a phone and a
+  // computer list a group alike (numbers as numbers, "AF-2" before "AF-12", no number last, ties by name).
+  const PHONE_SORTS = {
+    businesses: [["name", "Name (A to Z)"], ["member", "Member number"], ["last", "Last contact (most recent first)"]],
+    people: [["name", "Name (A to Z)"], ["last", "Last contact (most recent first)"]],
+    contacts: [["name", "Name (A to Z)"], ["last", "Last contact (most recent first)"]],
+  };
+  const SORT_WORDS = { name: "By name", member: "By member number", last: "By last contact" };
+  const SORT_SPOKEN = { name: "in name order", member: "by member number, then by name", last: "by last contact, the most recent first" };
+  // The order a list is shown in: the key asked for when that list offers it, else name.
+  const phoneSortOf = (tab, key) => ((PHONE_SORTS[tab] || []).some(([k]) => k === key) ? key : "name");
+  // The rows in that order (a new array): name as a phone's contacts (byName); the others exactly as the computer's column sorts them.
+  function sortPhone(rows, key = "name", nameOf = (r) => r.display_name ?? r.business_name) {
+    if (key === "member") return sortDirectory(rows, "member", 1);
+    if (key === "last") return sortDirectory(rows, "last", -1);
+    return [...(rows || [])].sort(byName(nameOf));
+  }
+  // What this device remembers (sessionStorage, per person and group, as farm-space.js keeps a place's tab): { businesses, people,
+  // contacts }, each a key a list offers. Anything else (nothing kept, a bad value) is name order.
+  const phoneSortStoreKey = (person, group) => "fp-people-sort-" + (person || "anon") + "-" + group;
+  function readPhoneSorts(text) {
+    let v = null;
+    try { v = JSON.parse(text || "null"); } catch { v = null; }
+    const out = {};
+    for (const tab of Object.keys(PHONE_SORTS)) { const k = v && typeof v === "object" ? phoneSortOf(tab, v[tab]) : "name"; if (k !== "name") out[tab] = k; }
+    return out;
+  }
+
   // Rows from crm_people. filters: { q, archived: boolean }.
   function searchPeople(rows, filters = {}) {
     const words = fold(filters.q).split(" ").filter(Boolean);
@@ -423,7 +454,7 @@
   }
   const memberFarmText = (name) => "Open " + name + " (read only)";
 
-  return { memberFarmLinks, memberFarmText, MEMBER_FARMS_CAP, DEFAULT_FILTERS, STATUS_TEXT, filterChips, removeFilter, clearFilters, toggleLabel, sortDirectory, lastShort, letterOf, initials, byName, withLetters, ROLES, canSee, canArchive, KINDS, KIND_TEXT, DIRECTIONS, DIRECTED, FOLLOW_UPS, FOLLOW_TEXT, fold, plural, splitList, dayKey, whenText, dateText, ago,
+  return { memberFarmLinks, memberFarmText, MEMBER_FARMS_CAP, DEFAULT_FILTERS, STATUS_TEXT, filterChips, removeFilter, clearFilters, toggleLabel, sortDirectory, lastShort, PHONE_SORTS, SORT_WORDS, SORT_SPOKEN, phoneSortOf, sortPhone, phoneSortStoreKey, readPhoneSorts, letterOf, initials, byName, withLetters, ROLES, canSee, canArchive, KINDS, KIND_TEXT, DIRECTIONS, DIRECTED, FOLLOW_UPS, FOLLOW_TEXT, fold, plural, splitList, dayKey, whenText, dateText, ago,
     followUp, topicsOf, searchDirectory, labels, searchPeople, whoWith, linkText, feedArgs, groupByDay, heading, loggedBy, toForm, toSave, PERSON_FIELDS, personForm, toPerson,
     detailsForm, toDetails, cell, toCsv, DIRECTORY_COLUMNS, FEED_COLUMNS, directoryCsv, feedCsv, fileName,
     isSubgroup, parentOf, canSeeTab, canWriteSubgroups, SUBGROUP_CAP, subgroupMapSize, subgroupIndex, inSubgroups, subgroupChips, addChoices, subgroupLabel, roster, rosterLine, contactsNote };

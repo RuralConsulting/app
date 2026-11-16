@@ -346,3 +346,42 @@
   .group-people .sg-chip a.sg-name, .group-people .crm-quiet > a { display: inline-flex; align-items: center; min-height: 44px; }
   .group-people :is(.mf-inline input, .mf-inline select, .mf-field select, .mf-field input:not([type="checkbox"])) { min-height: 44px; }
 }
+
+/* ---- PE2: sort People on a phone (people.js phoneSort; the owner, 16 Nov 2026: "can i sort by member number"). One quiet control in
+   the views row, the order in words (as Files' folder says "By name"), opening the app's sheet with the orders the list offers. In an
+   order other than name the letters and the A to Z jump give way; by member number the number takes the row's right edge (where the
+   last contact sits), so the numbers read down one edge; by last contact a person's last contact shows there too. Rows keep their
+   height. A computer's table and its column headings are unchanged (the whole bar is a phone's). ------------------------------------- */
+.crm-sort-sheet .crm-sort-choice .add-item-text b { font-weight: 400; }
+.crm-sort-sheet .crm-sort-choice[aria-checked="true"] .add-item-text b { font-weight: 600; }
+.crm-sort-sheet .crm-sort-tick { display: inline-flex; margin-left: auto; color: var(--ink); }
+.crm-member-none { display: none; }
+@media (max-width: 760px) {
+  /* large text on a small phone (#586 review: 320 px at 150%): the row wraps, the sort control going under the views at the right, and
+     its words end in "…" before they could push the page sideways (the whole order is in its name); it keeps its 44 px height */
+  .group-people .crm-views-bar { flex-wrap: wrap; row-gap: 0; }
+  .group-people .crm-views-toggle { max-width: 100%; }
+  .group-people .crm-views-end { display: flex; align-items: center; min-width: 0; max-width: 100%; margin-left: auto; }
+  .group-people .crm-sorter { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--ink-2);
+    font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; white-space: nowrap; }
+  .group-people .crm-sorter svg { flex: none; }
+  .group-people .crm-sorter span { min-width: 0; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }   /* (room for "y" and "g" below the line) */
+  .group-people .crm-views-end .crm-jump { flex: none; }
+  .group-people .crm-sorter:hover { color: var(--ink); }
+  .group-people .crm-sorter[hidden] { display: none; }
+  .group-people .crm-sorter svg { color: var(--ink-3); }
+  /* by member number: the number alone at the right edge of the quiet line, where the last contact sits in name order (the word
+     "Member" kept for a screen reader); the last contact is on the member's page. The row keeps its two lines (DN1's flex row). */
+  .group-people .crm-table.crm-order-member .crm-c-member { order: 1; margin-left: auto; padding-left: var(--s-3); color: var(--ink-2);
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .group-people .crm-table.crm-order-member .crm-c-member .crm-member-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .group-people .crm-table.crm-order-member .crm-c-last { display: none; }
+  /* a member with no number says so, quietly, in the number's place (its row then keeps the height of the others) */
+  .group-people .crm-table.crm-order-member .crm-member-none { display: inline; color: var(--ink-3); }
+  .group-people .crm-table.crm-order-member .crm-row .crm-c-member::after, .group-people .crm-table.crm-order-member .crm-row .crm-c-contact::before { content: none; }
+  /* by last contact: a person's or a contact's last contact at the right of the name's line (their quiet line is full width), so the
+     row keeps its two lines; none recorded says nothing, as on a member's row */
+  .group-people .crm-table-people.crm-order-last .crm-c-name { flex: 1 1 55%; min-width: 0; }   /* (never 0: the full-width quiet line would then share its line) */
+  .group-people .crm-table-people.crm-order-last .crm-c-last { display: block; order: 1; margin-left: auto; padding-left: var(--s-3); white-space: nowrap; }
+  .group-people .crm-table-people.crm-order-last .crm-c-contact { order: 2; }
+}

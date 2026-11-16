@@ -109,6 +109,19 @@
       sg: { open: false, loading: false, counts: null, index: null, failed: null, truncated: false, chosen: [] }, roster: null };
     const entryTab = opts.tab || null;
     let fills = 0;
+    // PE2: a phone's own order for each list (Name, Member number, Last contact), kept for this group on this device for the session
+    // (sessionStorage per person and group, as farm-space.js keeps a place's tab); a computer's table keeps its column headings
+    // (st.sort), which this never touches.
+    const sortStore = M().phoneSortStoreKey(me, g);
+    st.phoneSort = (() => { try { return M().readPhoneSorts(root.sessionStorage?.getItem(sortStore)); } catch { return {}; } })();
+    const phoneNow = () => !!root.matchMedia?.("(max-width: 760px)").matches;
+    const phoneSort = (tab = st.tab) => M().phoneSortOf(tab, st.phoneSort[tab]);
+    function setPhoneSort(tab, key) {
+      const next = { ...st.phoneSort, [tab]: key };
+      if (key === "name") delete next[tab];
+      st.phoneSort = next;
+      try { root.sessionStorage?.setItem(sortStore, JSON.stringify(next)); } catch { /* kept for this visit */ }
+    }
 
     // opening: the first read (shared, see openingLists), drawn in two steps: the businesses as soon as they are in, then the rest.
     async function loadLists(opening = false) {
@@ -269,8 +282,29 @@
         onclick: () => { const open = nav.classList.toggle("open"); toggle.setAttribute("aria-expanded", String(open)); } },
         el("span", {}, shownLabel), FP.icon("down", 16));
       const jump = el("button", { type: "button", class: "crm-jump", hidden: true, "aria-haspopup": "dialog", "aria-expanded": "false", "aria-label": "Jump to a letter" }, "A–Z");
+      // PE2: one quiet sort control beside them (a phone only, as the whole bar is), saying the order in words, as Files' folder does
+      // ("By name"); it opens the app's sheet with the orders this list offers, the current one ticked
+      const sorter = el("button", { type: "button", class: "crm-sorter", "data-action": "sort", "aria-haspopup": "dialog", "aria-expanded": "false",
+        onclick: () => openSort(sorter) }, FP.icon("sort", 16), el("span", {}));
+      const drawSorter = () => {
+        const k = phoneSort();
+        sorter.hidden = !M().PHONE_SORTS[st.tab];
+        sorter.dataset.sort = k;
+        sorter.querySelector("span").textContent = M().SORT_WORDS[k];
+        sorter.setAttribute("aria-label", "Order: " + M().SORT_SPOKEN[k] + ". Change the order");
+      };
+      drawSorter();
+      function openSort(opener) {
+        const tab = st.tab, now = phoneSort(tab);
+        FP.sheet.open({ opener, title: "Sort", where: tab === "businesses" ? "Members" : tab === "contacts" ? "Contacts" : "People", className: "fp-menu crm-sort-sheet",
+          body: (done) => el("ul", { class: "add-list", role: "radiogroup", "aria-label": "Sort" }, ...M().PHONE_SORTS[tab].map(([k, label]) => el("li", {},
+            el("button", { type: "button", role: "radio", "aria-checked": String(k === now), class: "add-item fp-menu-item crm-sort-choice", "data-sort": k,
+              ...(k === now ? { autofocus: true } : {}),
+              onclick: () => { setPhoneSort(tab, k); done(); drawSorter(); fill(); } },
+              el("span", { class: "add-item-text" }, el("b", {}, label)), k === now ? el("span", { class: "crm-sort-tick", "aria-hidden": "true" }, FP.icon("check", 18)) : null)))) });
+      }
       box.append(nav);
-      nav.append(el("div", { class: "crm-views-bar" }, toggle, jump), el("div", { class: "crm-views-panel", id: "crm-views-panel" },
+      nav.append(el("div", { class: "crm-views-bar" }, toggle, el("div", { class: "crm-views-end" }, sorter, jump)), el("div", { class: "crm-views-panel", id: "crm-views-panel" },
         el("div", { class: "crm-switch", role: "group", "aria-label": "Show" },
           view("Members (" + count("businesses") + ")", { "data-tab": "businesses", onclick: () => { st.tab = "businesses"; draw(); } }, st.tab === "businesses"),
           view("People (" + count("people") + ")", { "data-tab": "people", onclick: () => { st.tab = "people"; draw(); } }, st.tab === "people"),
@@ -428,7 +462,10 @@
         jump.hidden = !(nameOf && shown.length > LONG && letters.length > 1);
         return ul;
       }
-      const byName = () => (st.sort.by || "name") === "name";
+      const byName = () => (phoneNow() ? phoneSort() : st.sort.by || "name") === "name";
+      // PE2: on a phone, the list's order said to a screen reader with its count, and named on the table for the rows' look
+      const spoken = () => (phoneNow() ? ", " + M().SORT_SPOKEN[phoneSort()] : "");
+      const orderClass = () => (phoneNow() ? " crm-order-" + phoneSort() : "");
       // a computer's table header: each column sorts (again: the other way); the header stays as the list scrolls
       function head(cols) {
         return el("div", { class: "crm-thead" }, ...cols.map(([by, label]) => {
@@ -450,23 +487,25 @@
           const cols = FP.membershipModel ? MM().columns(st.defs.fields) : [["name", "Member"], ["member", "No."], ["contact", "Primary contact"], ["last", "Last contact"]];
           const extra = FP.membershipModel ? MM().listFields(st.defs.fields).length : 0;
           // one column template for the header and every row (set here in full, whatever the number of list fields)
-          const table = el("div", { class: "crm-table" + (FP.membershipModel ? " mf-table" : "") + (extra > 0 ? " mf-wide" : ""),
+          const table = el("div", { class: "crm-table" + (FP.membershipModel ? " mf-table" : "") + (extra > 0 ? " mf-wide" : "") + orderClass(),
             ...(FP.membershipModel ? { style: "--cols: " + MM().colTemplate(extra) + "; --mf-extra: " + extra } : {}) },
             head(cols), listOf(shown, businessRow, byName() ? (r) => r.business_name : null));
-          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "member", "members")),
+          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "member", "members") + spoken()),
             shown.length ? (extra > 0 ? el("div", { class: "mf-scroll" }, table) : table)
               : el("p", { class: "crm-empty" }, st.directory.length ? "No member matches." : "The group's member register is empty."));
         } else if (st.tab === "contacts") {
           if (st.contacts.failed) { list.replaceChildren(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the contacts just now: " + st.contacts.failed)); return; }
           if (!st.contacts.rows) { list.replaceChildren(el("p", { class: "crm-count", role: "status" }, "Reading the group's other contacts…")); readContacts(); return; }
-          const shown = ordered(MM().searchContacts(st.contacts.rows, st.contacts.q, st.archived), st.sort.by === "member" ? null : st.sort.by);
-          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "contact", "contacts")),
-            shown.length ? el("div", { class: "crm-table crm-table-people" }, head([["name", "Name"], ["contact", "Organisation"], ["last", "Last contact"]]), listOf(shown, contactRow, byName() ? (r) => r.display_name : null))
+          const found = MM().searchContacts(st.contacts.rows, st.contacts.q, st.archived);
+          const shown = phoneNow() ? M().sortPhone(found, phoneSort(), (r) => r.display_name) : ordered(found, st.sort.by === "member" ? null : st.sort.by);
+          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "contact", "contacts") + spoken()),
+            shown.length ? el("div", { class: "crm-table crm-table-people" + orderClass() }, head([["name", "Name"], ["contact", "Organisation"], ["last", "Last contact"]]), listOf(shown, contactRow, byName() ? (r) => r.display_name : null))
               : el("p", { class: "crm-empty" }, st.contacts.rows.length ? "Nobody matches." : "No other contacts yet. Add council staff, funders and contractors the group works with from the … menu."));
         } else {
-          const shown = ordered(M().searchPeople(st.people, { q: st.pq, archived: st.archived }), st.sort.by === "member" ? null : st.sort.by);
-          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "person", "people")),
-            shown.length ? el("div", { class: "crm-table crm-table-people" }, head([["name", "Name"], ["contact", "Members"], ["last", "Last contact"]]), listOf(shown, personRow, byName() ? (r) => r.display_name : null))
+          const found = M().searchPeople(st.people, { q: st.pq, archived: st.archived });
+          const shown = phoneNow() ? M().sortPhone(found, phoneSort(), (r) => r.display_name) : ordered(found, st.sort.by === "member" ? null : st.sort.by);
+          list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "person", "people") + spoken()),
+            shown.length ? el("div", { class: "crm-table crm-table-people" + orderClass() }, head([["name", "Name"], ["contact", "Members"], ["last", "Last contact"]]), listOf(shown, personRow, byName() ? (r) => r.display_name : null))
               : el("p", { class: "crm-empty" }, st.people.length ? "Nobody matches." : "No people recorded yet. Add one, or import the Apptivo contacts."));
         }
       }
@@ -500,7 +539,9 @@
             el("b", {}, r.business_name), due ? el("span", { class: "visually-hidden" }, " " + M().plural(due, "follow-up", "follow-ups") + " due") : null,
             r.ended_at ? el("span", { class: "crm-badge" }, "Ended") : null),
           // (a computer's table heads the column "No.": the word Member is for a phone's row and for screen readers)
-          el("span", { class: "crm-c-member" }, el("span", { class: "crm-member-word" }, "Member "), r.member_number),
+          el("span", { class: "crm-c-member" }, el("span", { class: "crm-member-word" }, "Member "), r.member_number,
+            // PE2: by member number on a phone, a member without one says so in the number's place (hidden otherwise)
+            r.member_number ? null : el("span", { class: "crm-member-none" }, "No number")),
           // M1b: the membership type (quiet words; a computer's "Type" column)
           FP.membershipModel && r.membership_type ? el("span", { class: "crm-c-type" }, el("span", { class: "visually-hidden" }, "Type "), r.membership_type) : null,
           // M1b: the fields shown in the list, each its own column on a computer (hidden on a phone, so their inline column never
@@ -517,6 +558,7 @@
     function shownMembers() {
       let rows = M().searchDirectory(st.directory, { ...st.filters, subgroups: st.sg.chosen, subgroupIndex: st.sg.index });
       if (FP.membershipModel) rows = MM().filterRows(rows, st.filters);
+      if (phoneNow()) return M().sortPhone(rows, phoneSort("businesses"), (r) => r.business_name);   // PE2: a phone's own order
       if ((st.sort.by || "name") === "name") return ordered(rows, "name", (r) => r.business_name);
       return (FP.membershipModel && MM().sortBy(rows, st.sort.by, st.sort.dir, st.defs.fields)) || M().sortDirectory(rows, st.sort.by, st.sort.dir);
     }

@@ -38,6 +38,7 @@
     home: "M3.5 11L12 4l8.5 7M5.5 9.5V20h4.5v-5.5h4V20h4.5V9.5",   // J2: Home
     overview: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z",
     filter: "M4 6h16M7 12h10M10 18h4",
+    sort: "M8 4v16M4.5 7.5L8 4l3.5 3.5M16 20V4M12.5 16.5L16 20l3.5-3.5",   // PE2: a list's order (up and down), apart from Filter
     download: "M12 4v11M7 10.5l5 5 5-5M5 20h14",
     plan: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M8.5 15.5c1.5-3 3-1 4.5-2.5s1.5-2 2.5-2.5",
     consent: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 14l2 2 4-4",

@@ -17,7 +17,7 @@
   const LAST = "js/main.7c93ce5b.js";
   const LATER_STYLES = ["css/app.0e810d94.css", "css/ui.bbd7c8db.css"];   // SI2: in the stylesheets' templates (signin-first.test.cjs keeps them in step)
   // PERF3a: the demo's own code, loaded only when the page opens on a demo address (demo.js picks the demo client at load)
-  const DEMO = ["js/demo.c458dd05.js", "js/demo-wq-page.a8b05130.js", "js/demo-documents.6bf46a91.js", "js/plans/demo.0d0eeef6.js"];
+  const DEMO = ["js/demo.859ca523.js", "js/demo-wq-page.a8b05130.js", "js/demo-documents.6bf46a91.js", "js/plans/demo.0d0eeef6.js"];
   const hash = location.hash || "";
   const isDemo = (h) => /^#\/demo(?:\/|\?|$)/.test(h || "");
   const demo = isDemo(hash);
