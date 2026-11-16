@@ -97,9 +97,11 @@
       const box = el("div", { class: "events-calendar" });
       const toggle = el("div", { class: "events-toggle", role: "group", "aria-label": "Show the events as" },
         ...[["list", "List"], ["month", "Month"]].map(([k, label]) => el("button", { type: "button", "aria-pressed": String(st.mode === k), onclick: () => { st.mode = k; draw(); } }, label)));
-      // UI2: Add an event is quiet (the + offers Event too); Export and Import are tucked under "…"
+      // UX1 (the owner, 16 Nov 2026, of the month grid: "its not obvious i need to click on a date to add an event"): on a computer Add
+      // event is the page's one filled button, in List and Month (the header's + stays quiet); on a phone the round + is the add, as
+      // before. Export and Import are tucked under "…"
       const actions = el("div", { class: "events-actions" }, toggle,
-        canWrite ? el("button", { type: "button", class: "primary", "data-action": "add", onclick: () => openForm(null, today()) }, FP.icon("plus", 16), el("span", {}, "Add an event")) : null,
+        canWrite ? el("button", { type: "button", class: "primary", "data-action": "add", onclick: () => openForm(null, addDay()) }, FP.icon("plus", 16), el("span", {}, "Add event")) : null,
         FP.sheet.moreButton("More actions", [
           { label: "Export", hint: "A spreadsheet or a calendar file", icon: "download", action: "export", run: () => go("export") },
           ...(canWrite ? [{ label: "Import", hint: "Events from a spreadsheet", icon: "file", action: "import", run: () => go("import", { preview: null }) }] : [])]));
@@ -108,10 +110,16 @@
       if (st.truncated) box.append(el("p", { class: "group-fine" }, "The group has " + st.total.toLocaleString("en-NZ") + " events; the earliest " + CAP.toLocaleString("en-NZ") + " are shown."));
       // RF1: a group with no events says so once, in one sentence naming it, where the list would start (no Upcoming and Past tabs
       // with nothing in either); the month grid keeps its days and says it once under them
-      if (!st.events.length) { if (st.mode === "month") box.append(monthNode()); box.append(el("p", { class: "events-empty" }, M().emptyWords(group.name))); return box; }
+      // UX1: and carries the same action as Add event, for those who may add one
+      if (!st.events.length) { if (st.mode === "month") box.append(monthNode()); box.append(emptyLine(M().emptyWords(group.name), "events-empty")); return box; }
       box.append(st.mode === "month" ? monthNode() : listNode());
       return box;
     }
+    // UX1: the day Add event starts on: today, or the first of the month shown when that is another month
+    const addDay = () => (st.mode === "month" && st.month !== today().slice(0, 7) ? st.month + "-01" : today());
+    // UX1: an empty calendar's one sentence, with Add event for those who may add one (the same form; nobody else sees a button)
+    const emptyLine = (text, cls) => (canWrite && FP.add?.emptyState ? FP.add.emptyState({ text, label: "Add event", run: () => openForm(null, addDay()), id: "event", className: cls })
+      : el("p", { class: cls }, text));
     function chip(ev) {
       return el("button", { type: "button", class: "events-chip" + (ev.cancelled_at ? " cancelled" : ""), "data-event": ev.id, title: ev.title + " · " + M().whenText(ev), onclick: () => openEvent(ev.id) },
         ev.all_day ? "" : el("span", { class: "events-chip-time" }, M().clock(M().timeKey(ev.starts_at)) + " "), ev.title);
@@ -149,7 +157,8 @@
       const tabs = el("div", { class: "events-tabs", role: "tablist" }, ...[["upcoming", "Upcoming", l.upcoming.length], ["past", "Past", l.past.length]].map(([k, label, n]) =>
         el("button", { type: "button", role: "tab", "aria-selected": String(st.tab === k), onclick: () => { st.tab = k; draw(); } }, label + " (" + n + ")")));
       const shown = st.tab === "past" ? l.past : l.upcoming;
-      if (!shown.length) return el("div", { class: "events-list-wrap" }, tabs, el("p", { class: "events-empty-tab" }, M().emptyWords(group.name, st.tab)));
+      if (!shown.length) return el("div", { class: "events-list-wrap" }, tabs, st.tab === "upcoming" ? emptyLine(M().emptyWords(group.name, st.tab), "events-empty-tab")
+        : el("p", { class: "events-empty-tab" }, M().emptyWords(group.name, st.tab)));
       // UI2: an agenda: the events under their month, with a slim strip of the months along the top to jump to one
       const months = [];
       for (const ev of shown) { const key = M().span(ev).first.slice(0, 7); if (!months.length || months[months.length - 1].key !== key) months.push({ key, events: [] }); months[months.length - 1].events.push(ev); }

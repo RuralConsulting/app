@@ -43,12 +43,14 @@
     // FL1: "?files=4" leaves the demo group four files (a guide, a form, a protocol and a map) and none shared by member farms, as the
     // owner saw a group's Files on 15 Nov 2026 (the folders it shows then)
     const fewFiles = new URLSearchParams(root.location.search).get("files") === "4";
+    // UX1: "?blank=1" leaves the demo group with nothing in Records, Events, Files or People (its members stay), as a group starts
+    const blank = new URLSearchParams(root.location.search).get("blank") === "1";
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles, blank })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -185,7 +187,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -274,6 +276,10 @@
     if (group && (overview === "full" || overview === "empty" || overview === "sub")) overviewDemo(data, overview);   // MC1, CO1
     if (group && titles) titleQuestionsDemo(data);   // LT1
     if (group && projects) projectsDemo(data);   // PJ1
+    if (group && blank) {   // UX1: an empty group's screens (its members and their pages stay)
+      for (const k of ["captures", "group_events", "group_event_attendees", "people", "group_member_people", "interactions", "interaction_links"]) data.tables[k] = [];
+      data.groupTables.documents = []; data.group.sharedDocs = [];
+    }
     demoMaps(data, sparse);
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];

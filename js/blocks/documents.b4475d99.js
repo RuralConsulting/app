@@ -345,6 +345,9 @@
       '<li><button type="button" data-fx-rename-start="' + esc(open.id) + '">Rename</button></li>' +
       (open.items.length ? '<li class="doc-menu-head">Move its files out to remove it</li>' : '<li><button type="button" data-fx-remove="' + esc(open.id) + '">Remove folder</button></li>') + "</ul>";
   }
+  // UX1: an empty Files (or folder) in one sentence, and, for those who may add files, one button that opens the same add step
+  const emptyHtml = (sentence, canAdd) => (canAdd ? '<div class="empty-next fx-empty" data-empty=""><p class="fx-none">' + sentence + '</p><button type="button" class="empty-add" data-doc-add-first>' +
+    svg("plus", 16) + "<span>Add a file</span></button></div>" : '<p class="fx-none">' + sentence + "</p>");
   const SORTS = { newest: "Newest first", name: "By name" };
   const sortHtml = (sort) => '<button type="button" class="fx-sort" data-fx-sort="' + (sort === "name" ? "newest" : "name") + '" aria-label="Sort: ' + esc(SORTS[sort] || SORTS.newest) + '. Change">' +
     svg("filter", 16) + "<span>" + esc(SORTS[sort] || SORTS.newest) + "</span></button>";
@@ -353,7 +356,8 @@
   function explorerBody(data, o, st = {}) {
     const d = data || {}, f = folders(d.documents, folding(d, st)), arranger = arranges(d);
     // (RF1: an empty Files names its place in its one sentence, where the list would start; the + is how to add one)
-    const none = !list(d.documents).length && !list(d.shared).length ? '<p class="fx-none">' + (text(d.place) ? "No files have been added to " + esc(text(d.place)) + " yet." : "No files yet.") + "</p>" : "";
+    // (UX1: with the first thing to do, Add a file, for those who may add one: the same step the + and the drop take)
+    const none = !list(d.documents).length && !list(d.shared).length ? emptyHtml((text(d.place) ? "No files have been added to " + esc(text(d.place)) + " yet." : "No files yet."), d.canAdd) : "";
     if (!f.folders.length) return none || '<p class="fx-none">Every file here is archived; search to find one.</p>';
     const holding = o.selected != null ? f.folders.find((x) => x.items.some((p) => String(p.doc.id) === String(o.selected))) : null;
     const key = st.folder === undefined && holding ? holding.key : st.folder;
@@ -362,7 +366,7 @@
     const up = '<button type="button" class="fx-up" data-fx-up data-from="' + esc(open.key) + '">' + svg("back", 18) + "<span>Files</span></button>" +
       '<span class="fx-sep" aria-hidden="true">/</span><h4 class="fx-here" aria-current="location">' + esc(open.label) + "</h4>";
     const more = open.made && arranger ? fxFolderMoreHtml(open) : "";
-    const empty = open.items.length ? "" : '<p class="fx-none">Nothing in ' + esc(open.label) + " yet." + (arranger && open.made ? " Move a file here from its •••, or add one with +." : "") + "</p>";
+    const empty = open.items.length ? "" : emptyHtml("Nothing in " + esc(open.label) + " yet." + (arranger && open.made ? " Move a file here from its •••, or add one." : ""), d.canAdd);
     return '<nav class="fx-crumbs" aria-label="Where you are">' + up + (open.items.length > 1 ? sortHtml(st.sort) : "") + more + "</nav>" + empty +
       (open.items.length ? '<ul class="fx-list fx-files" data-fx-folder="' + esc(open.key) + '">' + open.items.map((p) => fxFileHtml(p, o, d)).join("") + "</ul>" : "");
   }
@@ -671,6 +675,8 @@
     });
     rootEl.addEventListener("click", async (e) => {
       if (e.target.closest("[data-doc-cancel]")) { closeConfirm(); return; }
+      // UX1: an empty Files' Add a file: the block's own file picker (its input), so the same confirm step follows
+      if (e.target.closest("[data-doc-add-first]")) { rootEl.querySelector("[data-doc-file]")?.click(); return; }
       // FL1: New folder (the quiet last row), a made folder's "•••" (Rename, Remove), and Cancel on a folder's name
       if (fx && e.target.closest("[data-fx-new]")) {
         const slot = e.target.closest("[data-fx-new]").parentElement;

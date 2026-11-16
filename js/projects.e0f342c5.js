@@ -61,6 +61,12 @@
     const own = list.filter((p) => p.own !== false), other = list.filter((p) => p.own === false);
     status.textContent = list.length ? "" : coordinator ? "No projects yet. A project holds who takes part, what is due to the funder, and its files, layers and events." : "No projects are shared with you here.";
     status.hidden = !status.textContent;
+    // UX1: an empty list for a coordinator: the sentence and New project under it, the one button on the screen (the head's gives way)
+    if (!list.length && coordinator && FP.add?.emptyState) {
+      status.hidden = true; add.hidden = true;
+      body.replaceChildren(FP.add.emptyState({ text: status.textContent, label: "New project", id: "project", run: (e) => projectSheet(ctx, null, e?.currentTarget || add), className: "pj-empty-next" }));
+      return;
+    }
     const section = (title, items, key) => (items.length ? el("section", { class: "pj-section", "data-section": key, "aria-label": title },
       el("h3", {}, title), el("ul", { class: "pj-list fs-set", "aria-label": title }, ...items.map((p) => listRow(ctx, p, coordinator)))) : null);
     body.replaceChildren(...[section(other.length ? "This group's projects" : "", own, "own"), section("Projects this group takes part in", other, "taking-part")].filter(Boolean));

@@ -500,14 +500,20 @@
           const shown = phoneNow() ? M().sortPhone(found, phoneSort(), (r) => r.display_name) : ordered(found, st.sort.by === "member" ? null : st.sort.by);
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "contact", "contacts") + spoken()),
             shown.length ? el("div", { class: "crm-table crm-table-people" + orderClass() }, head([["name", "Name"], ["contact", "Organisation"], ["last", "Last contact"]]), listOf(shown, contactRow, byName() ? (r) => r.display_name : null))
-              : el("p", { class: "crm-empty" }, st.contacts.rows.length ? "Nobody matches." : "No other contacts yet. Add council staff, funders and contractors the group works with from the … menu."));
+              : st.contacts.rows.length ? el("p", { class: "crm-empty" }, "Nobody matches.")
+                : emptyNext("No other contacts yet: council staff, funders and contractors the group works with.", "Add a contact", () => openPersonForm(null, null, true), "contact"));
         } else {
           const found = M().searchPeople(st.people, { q: st.pq, archived: st.archived });
           const shown = phoneNow() ? M().sortPhone(found, phoneSort(), (r) => r.display_name) : ordered(found, st.sort.by === "member" ? null : st.sort.by);
           list.replaceChildren(el("p", { class: "crm-count", role: "status" }, M().plural(shown.length, "person", "people") + spoken()),
             shown.length ? el("div", { class: "crm-table crm-table-people" + orderClass() }, head([["name", "Name"], ["contact", "Members"], ["last", "Last contact"]]), listOf(shown, personRow, byName() ? (r) => r.display_name : null))
-              : el("p", { class: "crm-empty" }, st.people.length ? "Nobody matches." : "No people recorded yet. Add one, or import the Apptivo contacts."));
+              : st.people.length ? el("p", { class: "crm-empty" }, "Nobody matches.")
+                : emptyNext("No people recorded yet: the people at the group's members, with their phones and emails.", "Add a person", () => openPersonForm(null, null), "person"));
         }
+      }
+      // UX1: an empty list's one sentence and its first step (People is shown only to those who may add here: people-model canSee)
+      function emptyNext(text, label, run, id) {
+        return FP.add?.emptyState ? FP.add.emptyState({ text, label, run, id, className: "crm-empty-next" }) : el("p", { class: "crm-empty" }, text);
       }
       drawChips();
       fill();
@@ -737,8 +743,15 @@
       } else if (p.subs?.failed) box.append(el("p", { role: "alert", class: "crm-failed" }, "Couldn't read the subscriptions and agreements just now: " + p.subs.failed));
       box.append(el("section", { class: "crm-section", "data-section": "notes" }, el("h4", {}, "Notes"),
         d.notes ? el("p", { class: "crm-notes" }, d.notes) : el("p", { class: "crm-empty" }, "No notes. Add them with Edit details.")));
-      box.append(el("section", { class: "crm-section" }, el("h4", {}, "Interactions (" + p.interactions_total + ")"),
+      box.append(el("section", { class: "crm-section", "data-section": "interactions" }, el("h4", {}, "Interactions (" + p.interactions_total + ")"),
         timeline(p.interactions || [], p.interactions_total)));
+      // UX1 (the owner, 16 Nov 2026, of this page on a computer: "there is a lot of dead space"): the parts in two columns, in the
+      // product page's order, down the first column and on down the second: who they are (contact details and the people linked,
+      // membership, tags, where they are at) beside the group's dealings with them (subscriptions, agreements, notes, interactions).
+      // On a phone the columns are one, in the same order as before.
+      const SIDE = ["subscriptions", "agreements", "notes", "interactions"];
+      const parts = [...box.children].slice(3), side = parts.filter((n) => SIDE.includes(n.dataset?.section));
+      box.append(el("div", { class: "crm-cols" }, el("div", { class: "crm-col crm-col-main" }, ...parts.filter((n) => !side.includes(n))), el("div", { class: "crm-col crm-col-side" }, ...side)));
       const links = [];
       // HV1: the member's farm, opened read only (its Home: map, files and plan, as the farm's own people see them)
       for (const f of p.farms || []) links.push(el("a", { href: FP.href(f.href), "data-member-farm": f.id }, M().memberFarmText(f.name)));

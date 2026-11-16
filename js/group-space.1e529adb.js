@@ -193,6 +193,15 @@
     addCtx = { space: "group", id: group.id, name: group.name, role: group.role || null, staff: !!FP.ops?.isStaff?.(), views: tabs.map(([key]) => key), view: route.view };
     shownTabs = tabs;
     FP.add?.update(addCtx);
+    // UX1 (the owner, 16 Nov 2026: "as an admin when i click on my letter i expect to be able to get settings or option to manage who
+    // logs in"): for the group's admins, the account menu leads to where its members and their sign-ins are managed today, Manage's
+    // Members (invites to a member's farm, farm links); only where Manage is one of the person's sections. Nobody else sees it.
+    const manageLink = $("#group-account-manage");
+    if (manageLink) {
+      const shows = G().canManage(group.role) && tabs.some(([k]) => k === "manage");
+      manageLink.hidden = !shows;
+      if (shows) manageLink.setAttribute("href", FP.href(G().href(group.id, "manage", "members"))); else manageLink.removeAttribute("href");
+    }
   }
   async function open(group, route) {
     const current = ++token;

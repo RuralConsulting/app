@@ -12,6 +12,7 @@
   const el = (...a) => FP.el(...a);
   const COLUMNS = "id,client_id,org_id,kind,created_by,created_by_name,taken_at,taken_at_from,latitude,longitude,position_from,accuracy_m,note,tags,data,shared_with_group,photo_path,thumb_path,photo_width,photo_height";
   const LIMIT = 200;
+  const EMPTY = "No photos, water samples or pest control recorded yet.";
   let shown = null;
 
   function view(group, { sb = FP.sb, item = null } = {}) {
@@ -32,7 +33,10 @@
     const filters = el("div", { class: "rec-filters", role: "group", "aria-label": "Show records tagged", hidden: true });
     const status = el("p", { class: "rec-quiet rec-status", role: "status" }, "Loading…");
     const list = el("ul", { class: "rec-list", "aria-label": "Records" });
-    wrap.append(head, waitBox, filters, status, list);
+    // UX1: an empty Records says what goes here, with the first thing to do: take a photo on a phone, choose photos on a computer (the
+    // same actions the + offers, for those it offers them to)
+    const emptyBox = el("div", { class: "rec-empty", hidden: true });
+    wrap.append(head, waitBox, filters, status, emptyBox, list);
 
     // ---- what this phone has not sent --------------------------------------------------------------------------------------------
     async function drawWaiting() {
@@ -120,8 +124,11 @@
       const waitingIds = new Set(st.local.filter((o) => o.state !== "synced").map((o) => o.record?.client_id));
       const shownRows = rows.filter((x) => !waitingIds.has(x.client_id));
       status.textContent = st.failed && shownRows.length ? "" : st.failed ? (root.navigator.onLine === false ? "You're offline. The group's records show here when you're back in range." : "The group's records couldn't be read just now.")
-        : !shownRows.length ? (st.tag ? "Nothing tagged " + st.tag + "." : "Nothing here yet. Tap + to take a photo.") : (st.rows.length >= LIMIT ? "The newest " + LIMIT + "." : "");
-      status.hidden = !status.textContent;
+        : !shownRows.length ? (st.tag ? "Nothing tagged " + st.tag + "." : st.local.some((o) => o.state !== "synced") ? "" : EMPTY) : (st.rows.length >= LIMIT ? "The newest " + LIMIT + "." : "");
+      const empty = status.textContent === EMPTY;
+      status.hidden = !status.textContent || empty;
+      emptyBox.hidden = !empty;
+      if (empty && !emptyBox.firstChild) emptyBox.append(FP.add?.emptyState ? FP.add.emptyState({ text: EMPTY, ids: phone ? ["photo", "photos"] : ["photos", "photo"] }) : el("p", {}, EMPTY));
       list.replaceChildren(...shownRows.map((x) => row(x)));
       if (item && !st.opened) {
         const hit = (st.rows || []).find((x) => x.client_id === item || x.id === item);

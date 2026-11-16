@@ -329,6 +329,29 @@
     if (refocus && opener && !opener.hidden) opener.focus();
   }
 
+  // ---- UX1: an empty page says what goes there and offers the first thing to do --------------------------------------------------
+  // (the owner, 16 Nov 2026: "when I get to a page thats empty its not obvious to click the + add"). One short sentence and ONE real
+  // button, never an illustration. The button runs the same action the + offers for that kind (the first of `ids` this person may add
+  // here, so who sees it is the registry's rule, unchanged), or the page's own `run` for a thing the + does not offer. No button
+  // when the person may not add: the sentence alone.
+  function firstOf(ids, ctx = current) {
+    const ok = registry.available(ctx);
+    for (const id of [].concat(ids || [])) { const a = ok.find((x) => x.id === id); if (a) return a; }
+    return null;
+  }
+  function emptyButton({ label, run, id = null, icon = "plus" }) {
+    return el("button", { type: "button", class: "empty-add", ...(id ? { "data-empty-add": id } : {}), onclick: run }, FP().icon(icon, 16), el("span", {}, label));
+  }
+  // emptyState({ text, ids?, label?, run?, ctx?, className? }): ids from the registry (the action's own words unless `label`), or
+  // label and run for the page's own action (pass neither when the person may not add)
+  function emptyState({ text, ids = null, label = null, run = null, ctx = current, className = "", id = null }) {
+    const a = ids ? firstOf(ids, ctx) : null;
+    const button = a ? emptyButton({ label: label || a.verb || "Add " + a.label.toLowerCase(), run: () => a.run(ctx), id: a.id })
+      : run && label ? emptyButton({ label, run, id }) : null;
+    return el("div", { class: "empty-next" + (className ? " " + className : ""), "data-empty": "" }, el("p", {}, text), button);
+  }
+
   return { createRegistry, registry, register: registry.register, available: registry.available, mount, update, open, openSheet, close, toast, mayAddFile, mayAddEvent, mayAddPeople, mayCapture,
+    firstOf, emptyState,
     get context() { return current; }, buttons: () => [...buttons.values()] };
 });
