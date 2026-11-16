@@ -43,6 +43,9 @@
     // FL1: "?files=4" leaves the demo group four files (a guide, a form, a protocol and a map) and none shared by member farms, as the
     // owner saw a group's Files on 15 Nov 2026 (the folders it shows then)
     const fewFiles = new URLSearchParams(root.location.search).get("files") === "4";
+    // ST1: "?places=many" with "#/demo/multi": the person (RCL staff) has as many places as a staff member does, so their list of
+    // places is long: two more invented groups and 34 invented farms in them (and a few in no group); list entries and map outlines only
+    const manyPlaces = new URLSearchParams(root.location.search).get("places") === "many";
     // UX1: "?blank=1" leaves the demo group with nothing in Records, Events, Files or People (its members stay), as a group starts
     const blank = new URLSearchParams(root.location.search).get("blank") === "1";
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
@@ -50,7 +53,7 @@
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles, blank })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles, blank, manyPlaces })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -68,6 +71,8 @@
   const VIEWS = /^$|^\/(home|maps|ask|create|documents|people|onboarding|plan)$/;   // FEP1: plan
   const copy = (v) => structuredClone(v);
   const isRoute = (hash) => /^#\/demo(?:\/|\?|$)/.test(hash);
+  // ST1: the 34 invented farms of "?places=many" (list entries and map outlines only)
+  const isInvented = (id) => /^de000000-0000-4000-8000-0000000007\d\d$/.test(String(id || ""));
   const isSparse = (hash) => /^#\/demo\/empty(?:\/|\?|$)/.test(hash);
   const isFarmer = (hash) => /^#\/demo\/farmer(?:\/|\?|$)/.test(hash);
   const isMulti = (hash) => /^#\/demo\/multi(?:\/|\?|$)/.test(hash);
@@ -86,6 +91,7 @@
       const suffix = hash.split("?")[0].slice("#/demo/group".length);
       if (suffix === "/farms") return "";
       if (suffix === "/places") return "#/places";   // J2c: Places itself (the bare address may land in the group)
+      if (suffix === "/places/map") return "#/places/map";   // ST1: Places' map (RCL staff open on the list at "/places")
       if (suffix === "/privacy") return "#/privacy";   // V8: the privacy and terms note
       // LK2: the staff page for layer looks, with the group's map at group scale
       if (suffix === "/ops/looks") return "#/ops/looks";
@@ -106,6 +112,7 @@
     if (suffix === "/") suffix = "";
     if (suffix === "/farms") return "";
     if (suffix === "/places") return "#/places";                // J2c: Places itself ("All places")
+    if (suffix === "/places/map") return "#/places/map";        // ST1: Places' map (RCL staff open on the list at "/places")
     if (suffix === "/privacy") return "#/privacy";              // V8: the privacy and terms note, in any demo
     if (suffix === "/layers") return "#/layers";                  // Layer notes (LN2): the same screen for advisors and farm editors
     if (suffix === "/account/qgis" && !multi) return "#/account/qgis";   // the person's access keys for QGIS (QGIS1a)
@@ -129,13 +136,17 @@
     if (hash === "") return multi ? "#/demo/multi" : "#/demo/farms";
     if (hash === "#/layers") return "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/layers";
     if (hash === "#/ops") return "#/demo/ops";
-    if (hash === "#/places") return "#/demo" + (group ? "/group" : multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/places" + (group && queue ? "?queue=" + queue : "");   // J2c
+    if (hash === "#/places" || hash === "#/places/map") return "#/demo" + (group ? "/group" : multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + hash.slice(1) + (group && queue ? "?queue=" + queue : "");   // J2c, ST1
     if (hash === "#/privacy") return group ? "#/demo/group/privacy" : "#/demo" + (multi ? "/multi" : sparse ? "/empty" : farmer ? "/farmer" : "") + "/privacy";
     if (hash === "#/account/qgis") return "#/demo/account/qgis";
     if (hash === "#/ops/layers") return "#/demo/ops/layers";
     if (hash === "#/ops/looks") return group ? "#/demo/group/ops/looks" + (queue ? "?queue=" + queue : "") : "#/demo/ops/looks";
     if (/^#\/(?:blocks|plans)(?:\?|$)/.test(hash)) return "#/demo" + hash.slice(1);
     if (hash.startsWith("#/group/" + GROUP)) return "#/demo/group" + hash.slice(("#/group/" + GROUP).length) + (queue ? "?queue=" + queue : "");
+    // ST1: an invented farm of "?places=many" has no space in the demo: its address is the screen it was tapped on, so nothing opens
+    // (and the demo is never left for the sign-in page)
+    const invented = /^#\/farm\/([0-9a-f-]{36})/.exec(hash);
+    if (invented && isInvented(invented[1])) return globalThis.location?.hash || "#/demo/multi";
     const farm = [FARM, FARM2].find((id) => hash.startsWith("#/farm/" + id));
     if (!farm) return hash;
     return "#/demo" + (multi ? "/multi/farm-" + (farm === FARM2 ? 2 : 1) : sparse ? "/empty" : farmer ? "/farmer" : "") + hash.slice(("#/farm/" + farm).length);
@@ -187,7 +198,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false, manyPlaces = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -314,6 +325,7 @@
       data.map2 = { farm: { id: FARM2, name: second.name, region: second.region }, extent: polygon(172.62, -42.78, 172.64, -42.765), extent_ha: 220,
         titles: collection([]), land_units: collection([]), layers: [], reference: [] };
       multiGroups(data);
+      if (manyPlaces) manyPlacesDemo(data);   // ST1
       // HV1: the second farm a member's farm, read (as row-level security lets a group's coordinator read it) but not the person's own
       if (memberFarm === "1" || memberFarm === "long") {
         data.tables.farm_members = data.tables.farm_members.filter((m) => m.farm_id !== FARM2);
@@ -402,7 +414,38 @@
     { id: "de000000-0000-4000-8000-0000000003b4", name: "Central Sub-group (synthetic)", parent: "de000000-0000-4000-8000-0000000003b1", area: { at: [172.33, -42.88], r: 0.1, points: 160 } },
     { id: "de000000-0000-4000-8000-0000000003b5", name: "West Sub-group (synthetic)", parent: "de000000-0000-4000-8000-0000000003b1", area: { at: [171.98, -42.95], r: 0.09, points: 140 } },
   ];
-  function multiGroups(data) {
+  // ST1: "?places=many": two more invented groups (one with an area, one without) and 34 invented farms, most in one of the person's
+  // groups, a few in none (their region on their line), each with a small invented rectangle inside its group's area for the map
+  const MANY_GROUPS = [
+    { id: "de000000-0000-4000-8000-0000000003b6", name: "Example Stream Care Group (synthetic)", parent: null, area: { at: [172.95, -43.22], r: 0.12, points: 160 } },
+    { id: "de000000-0000-4000-8000-0000000003b7", name: "Hillside Catchment Group (synthetic)", parent: null, area: null },
+  ];
+  const MANY_FARMS = ["Alder Downs", "Beech Terrace", "Cobble Flat", "Dunmore Rise", "Elm Gully", "Fernside Run", "Gorse Hill", "Harrow Plains", "Ironbark Station",
+    "Juniper Flat", "Kettle Downs", "Larch Spur", "Mistle Rise", "Northbank Run", "Oxbow Flat", "Pebble Creek", "Quarry Downs", "Ridgeback Station", "Shingle Flat",
+    "Tarn Hill", "Upland Run", "Vale End", "Willow Bend", "Yarrow Downs", "Zephyr Flat", "Bracken Rise", "Clover Terrace", "Driftwood Run", "Eastfield",
+    "Flint Hill", "Greystone Flat", "Hollow Creek", "Inlet Downs", "Lantern Hill"];
+  function manyPlacesDemo(data) {
+    const all = [...MULTI_GROUPS, ...MANY_GROUPS], at = (id) => all.find((g) => g.id === id);
+    for (const g of MANY_GROUPS) {
+      data.tables.organisations.push({ id: g.id, name: g.name, slug: null, kind: "catchment_group", parent_org_id: g.parent });
+      data.tables.org_members.push({ org_id: g.id, user_id: USER, role: "member" });
+    }
+    multiAreas(data, MANY_GROUPS);
+    // which group each farm is in, in turn: the collective and its sub-groups most, then the others, and every ninth farm in none
+    const homes = ["de000000-0000-4000-8000-0000000003b2", "de000000-0000-4000-8000-0000000003b4", "de000000-0000-4000-8000-0000000003b5", "de000000-0000-4000-8000-0000000003b1",
+      "de000000-0000-4000-8000-0000000003b3", "de000000-0000-4000-8000-0000000003b6", "de000000-0000-4000-8000-0000000003b2", "de000000-0000-4000-8000-0000000003b7"];
+    data.extents = data.extents || {};
+    MANY_FARMS.forEach((name, i) => {
+      const id = "de000000-0000-4000-8000-0000000007" + String(i + 1).padStart(2, "0"), home = i % 9 === 8 ? null : homes[i % homes.length];
+      const g = home && at(home)?.area ? at(home).area : { at: [172.75, -43.35], r: 0.2 };
+      const a = (i * 2.399) % (2 * Math.PI), k = g.r * (0.25 + 0.6 * ((i * 37) % 10) / 10), x = g.at[0] + Math.cos(a) * k * 1.35, y = g.at[1] + Math.sin(a) * k;
+      data.tables.farms.push({ id, org_id: home, name: name + " (example)", region: "canterbury" });
+      data.tables.farm_members.push({ farm_id: id, user_id: USER, role: "admin" });
+      data.extents[id] = polygon(x - 0.012, y - 0.008, x + 0.012, y + 0.008);
+    });
+  }
+  // each group's area place (its geometry made when first read, in NZTM metres, as the places table holds it)
+  function multiAreas(data, groups) {
     // a wobbly ring round a centre (an illustration, not a catchment), in NZTM metres; made when first read (wq-model.js, which
     // converts, may load after the fixture does)
     const ring = ({ at: [x, y], r, points }) => {
@@ -413,15 +456,20 @@
       }
       return [...out, out[0]];
     };
-    for (const g of MULTI_GROUPS) {
-      data.tables.organisations.push({ id: g.id, name: g.name, slug: null, kind: "catchment_group", parent_org_id: g.parent });
-      data.tables.org_members.push({ org_id: g.id, user_id: USER, role: "member" });
+    for (const g of groups) {
       if (!g.area) continue;
       const row = { id: g.id.slice(0, -3) + "a" + g.id.slice(-2), org_id: g.id, farm_id: null, kind: "area", code: null, name: g.name + " area", valid_to: null };
       let geom = null;
       Object.defineProperty(row, "geom", { enumerable: true, get: () => (geom ||= { type: "MultiPolygon", coordinates: [[ring(g.area)]] }) });
       data.tables.places.push(row);
     }
+  }
+  function multiGroups(data) {
+    for (const g of MULTI_GROUPS) {
+      data.tables.organisations.push({ id: g.id, name: g.name, slug: null, kind: "catchment_group", parent_org_id: g.parent });
+      data.tables.org_members.push({ org_id: g.id, user_id: USER, role: "member" });
+    }
+    multiAreas(data, MULTI_GROUPS);
   }
   // S5: the catchment group "HDLG (example)" with invented member farms, records, documents and its own layers. Each member
   // farm's own share choice is `share`; how it is shown follows the group's setting (memory only) by the database's rule:
@@ -1826,7 +1874,7 @@
   // What farm_summaries (0038) gives the portfolio, counted from the same rows.
   function summary(d, farm) {
     const mine = (t) => d.tables[t].filter((r) => r.farm_id === farm.id).length;
-    return { id: farm.id, name: farm.name, region: farm.region, extent: (farm.id === FARM2 ? d.map2 : d.map).extent, as_at: d.asAt,
+    return { id: farm.id, name: farm.name, region: farm.region, extent: d.extents?.[farm.id] || (farm.id === FARM2 ? d.map2 : d.map).extent, as_at: d.asAt,
       overdue_actions: 0,
       authorisation_count: mine("authorisations"), document_count: mine("documents") };
   }
@@ -2718,5 +2766,5 @@
         } }) },
     };
   }
-  return { FARM, FARM2, USER, ORG, GROUP, MEMBERS, levelOf, groupRpc, proposalsRpc, GROUP_MEMBERS, queueOf, wqOf, wqLatest, askReply, isRoute, isSparse, isFarmer, isMulti, isGroup, routeHash, href, dataset, client };
+  return { FARM, FARM2, USER, ORG, GROUP, MEMBERS, levelOf, groupRpc, proposalsRpc, GROUP_MEMBERS, queueOf, wqOf, wqLatest, askReply, isRoute, isInvented, isSparse, isFarmer, isMulti, isGroup, routeHash, href, dataset, client };
 });

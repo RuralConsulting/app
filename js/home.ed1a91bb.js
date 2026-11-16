@@ -96,6 +96,8 @@
     if (!title || !sheet || $("#home-grip")) return;
     title.before(el("span", { class: "home-mark space-mark", "aria-hidden": "true" }, icon("map", 18)));
     title.after(el("button", { type: "button", id: "home-search-open", class: "home-search-open", "aria-label": "Find a farm or group", "aria-controls": "home-sheet-body" }, icon("search")));
+    // ST1: RCL staff open on the list of their places (staff-home.js); from this map, one tap back to it. Shown to staff only (show()).
+    title.after(el("a", { id: "home-to-list", class: "home-to-list", href: "#/places", "aria-label": "List of places", title: "List of places", hidden: true }, icon("list", 20)));
     sheet.prepend(grip("home-grip", "Show all places", { "aria-expanded": "false", "aria-controls": "home-sheet-body" }));
     $("#home-level").after(el("button", { type: "button", id: "home-peek-line", class: "home-peek-line pa-row", "aria-controls": "home-sheet-body" },
       el("span", { class: "pa-dot", "aria-hidden": "true" }, icon("map")), el("span", { class: "pa-text" }, el("b", {}, "All places")),
@@ -363,6 +365,8 @@
     bind();
     document.title = "Farms and groups | " + (root.FP.brand?.product || "");
     chosen = null; going = null; at = null; onMap = false; showCard(false); $("#home-search").value = ""; drawResults();
+    const toList = $("#home-to-list");
+    if (toList) { toList.hidden = !root.FP.ops?.isStaff?.(); toList.href = root.FP.href("#/places"); }
     // wide screens open with the list showing; a phone opens with its sheet closed (the list is the sheet pulled up, never folded there)
     $("#home-fold").open = true;
     settle("peek");

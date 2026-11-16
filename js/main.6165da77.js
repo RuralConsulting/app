@@ -187,6 +187,8 @@
   function route() {
     if (!readyToRoute || FP.twoFactor?.asking()) return;
     const hash = routed();
+    // ST1: Places' map by its own address is staff's (from their list); anyone else asking for it goes to their usual landing, as before
+    if (hash === "#/places/map" && !FP.ops.isStaff()) { location.replace(FP.href("") || "#/"); return; }
     // V6: the simple view. Nothing below this runs for a route a client may not open.
     const simple = FP.simpleView.on();
     $("body").classList.toggle("simple-view", simple);
@@ -239,6 +241,7 @@
     // runs only once the groups are known), so an address of People answers "not available" to anyone else and never to them
     if (group && groupRoute.view === "people" && !FP.peopleModel?.canSeeTab(group, groups)) { closeAll(); FP.simpleView.notAvailable({ space: "group", id: group.id }, { farms: allFarms, groups }); return; }
     if (group) lastGroup = group;   // HV1: the group a member farm opened from it goes back to
+    if (group) FP.staffHome?.visited("group", group.id);   // ST1: a staff member's recent places (staff only; in this browser)
     if (group) { FP.farmSpace.close(); markFiles(groupRoute.view); FP.groupSpace.open(group, groupRoute); return; }
     const landed = land.to === "group" && !ownFarm && FP.groupSpace.find(land.id);
     if (landed) { const view = homeView("group"); lastGroup = landed; FP.farmSpace.close(); markFiles(view); FP.groupSpace.open(landed, { group: landed.id, view }); return; }
@@ -246,7 +249,7 @@
     const route = FP.farmModel.match(hash);
     // the farm the address names, or the one the bare address lands on (one farm and no group, or a farmer's one farm in its group)
     const farm = (route && allFarms.find((f) => f.id === route.farm)) || (land.to === "farm" ? allFarms.find((f) => f.id === land.id) : null);
-    if (farm) { const shown = route?.farm === farm.id ? route : { farm: farm.id, view: homeView("farm") }; markFiles(shown.view); FP.farmSpace.open(farm, shown); }
+    if (farm) { const shown = route?.farm === farm.id ? route : { farm: farm.id, view: homeView("farm") }; FP.staffHome?.visited("farm", farm.id); markFiles(shown.view); FP.farmSpace.open(farm, shown); }
     // HV1: a member's farm the person reads as a coordinator of its group, opened only by its address (People's link), read only,
     // with a way back to the group they came from
     else if (route && memberFarms.some((f) => f.id === route.farm)) openMemberFarm(memberFarms.find((f) => f.id === route.farm), route, hash, simple);
@@ -262,6 +265,8 @@
   // LP1: Places, a map of every farm and group the person can see, with search and a folded list (home.js); "#/places" always
   // opens it ("All places"). A person the bare address lands in a place (J2c) was taken there above; a person with none gets the plain note.
   function listFarms() {
+    // ST1: RCL staff open on the list of their places (staff-home.js), the map one tap away at "#/places/map"; everyone else, as before
+    if (farms.length + groups.length && FP.staffHome?.opensList(routed(), FP.ops.isStaff())) { FP.farmSpace.close(); FP.staffHome.show({ farms, groups }); return; }
     if (farms.length + groups.length) { FP.farmSpace.showPortfolio(); FP.home.show({ farms, groups }); return; }
     FP.farmSpace.close();
     msg("#farms-msg", FP.brand.no_farms_note);

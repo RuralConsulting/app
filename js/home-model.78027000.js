@@ -204,7 +204,8 @@
   // parent_org_id, the staff flag), nothing else. hash: the app's own address (the demo's already turned into it).
   //   link: true            an address of its own (a place, Files, #/ops...): it wins, as the router follows it first; `to` is
   //                         only where an address the router cannot open (someone else's place, a staff page) falls back to
-  //   { to: "places" }      Places: "#/places" ("All places"), or the bare address when nothing below decides
+  //   { to: "places" }      Places: "#/places" ("All places"; for RCL staff its list, ST1), "#/places/map" (the map), or the bare address
+  //                         when nothing below decides
   //   { to: "none" }        no farm and no group (the plain note)
   //   { to: "farm" | "group", id }   the bare address opens this place (on its Home)
   // The rule, for the bare address (and so for sign-in):
@@ -217,7 +218,7 @@
   const COORDINATOR = new Set(["facilitator", "advisor", "admin"]);
   const isBare = (h) => h == null || h === "" || h === "#" || h === "#/";
   function landing(hash, people = {}) {
-    if (hash === "#/places") return { to: "places" };
+    if (hash === "#/places" || hash === "#/places/map") return { to: "places" };   // (ST1: "#/places/map", Places' map by its own address)
     return isBare(hash) ? start(people) : { ...start(people), link: true };
   }
   function start({ farms, groups, staff, staffKnown }) {

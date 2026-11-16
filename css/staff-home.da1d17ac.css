@@ -1,0 +1,76 @@
+/* ST1: RCL staff open on a list of their places (js/staff-home.js). Calm and list-first (Attio), on DN1's scale (rows.css): 16 px names,
+   one 13 px quiet line, rows of at least 48 px with one hairline between them, small symbols, no box round the list on a phone. A
+   computer shows the same list as one calm card in the middle of the page, as the older maps site's "Your properties" card. Loaded after
+   sign-in (a template in index.html), never by the sign-in page. */
+#screen-staff-home { min-height: 100%; background: var(--panel); color: var(--ink); }
+#screen-staff-home[hidden] { display: none; }
+.sh-page { box-sizing: border-box; width: 100%; max-width: 640px; margin: 0 auto; padding: calc(var(--demo-banner-height, 0px) + var(--s-2)) var(--s-4) calc(var(--s-8) + env(safe-area-inset-bottom, 0px)); }
+
+/* the title and the account, one line */
+.sh-head { display: flex; align-items: center; gap: var(--s-3); min-height: 48px; }
+.sh-title { flex: 1; min-width: 0; margin: 0; font: 700 var(--text-heading)/1.2 var(--f-display); letter-spacing: -.015em; overflow-wrap: anywhere; }
+.sh-account { position: relative; flex: none; }
+.sh-account .account-open { position: relative; }
+.sh-account .account-open::after { content: ""; position: absolute; inset: -4px; }
+
+/* the tools: small pills; Map is the one primary action (ink), Operations quiet. Each 36 px to see, 44 px to tap */
+.sh-tools { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-1) 0 var(--s-3); }
+.sh-tool { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 var(--s-3); border-radius: var(--radius-pill);
+  background: var(--fill); color: var(--ink); font: 600 var(--text-small)/1 var(--f-ui); text-decoration: none; }
+.sh-tool::after { content: ""; position: absolute; inset: -4px 0; }
+.sh-tool:hover { background: var(--fill-hover); text-decoration: none; }
+.sh-tool .icon { flex: none; }
+.sh-tool-main { background: var(--accent); color: var(--accent-ink); }
+.sh-tool-main:hover { background: var(--accent-hover); }
+.sh-tool:focus-visible, .sh-row:focus-visible { outline: 2px solid var(--focus, var(--ink)); outline-offset: 2px; }
+
+/* the search box: shown once the list is longer than a screen; it stays at the top while the list scrolls */
+.sh-find { position: sticky; top: var(--demo-banner-height, 0px); z-index: 2; display: flex; align-items: center; margin: 0 calc(-1 * var(--s-4)); padding: var(--s-2) var(--s-4);
+  background: var(--panel); color: var(--ink-3); }
+.sh-find[hidden] { display: none; }
+.sh-find input { flex: 1; min-width: 0; min-height: var(--tap); margin: 0; padding: 0 var(--s-3) 0 36px; border: 1px solid var(--field-border); border-radius: var(--radius-s); background: var(--panel); color: var(--ink);
+  font: 400 var(--text-body)/1.2 var(--f-ui); box-sizing: border-box; }
+.sh-find .icon { position: absolute; left: calc(var(--s-4) + 12px); pointer-events: none; }
+
+/* the sections: a small quiet heading with its count, then plain rows */
+.sh-section + .sh-section { margin-top: var(--s-4); }
+.sh-heading { display: flex; align-items: baseline; gap: var(--s-2); margin: var(--s-3) 0 0; padding-bottom: 2px; color: var(--ink-3); font: 600 var(--text-small)/1.3 var(--f-ui); }
+.sh-count { font-weight: 400; font-variant-numeric: tabular-nums; }
+.sh-list { margin: 0; padding: 0; list-style: none; }
+.sh-list > li { position: relative; }
+.sh-list > li + li::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--row-rule); pointer-events: none; }
+.sh-row { display: grid; grid-template-columns: minmax(0, 1fr) var(--row-chev); align-items: center; column-gap: var(--row-gap); min-height: var(--row-min); padding: var(--row-pad) 0;
+  box-sizing: border-box; color: var(--ink); text-decoration: none; line-height: var(--row-lh); }
+.sh-row:hover { text-decoration: none; }
+.sh-inert b { font-weight: 400; color: var(--ink-2); }
+.sh-text { display: flex; flex-direction: column; min-width: 0; }
+.sh-text b { font-weight: 600; overflow-wrap: anywhere; }
+.sh-text small { color: var(--ink-3); font-size: var(--text-small); overflow-wrap: anywhere; }
+.sh-chev { display: grid; place-items: center; color: var(--ink-3); }
+.sh-chev .icon { width: var(--row-chev); height: var(--row-chev); }
+.sh-none { margin: var(--s-3) 0 0; color: var(--ink-2); }
+.sh-none:empty { display: none; }
+.sh-who { margin: var(--s-6) 0 0; color: var(--ink-3); font-size: var(--text-small); overflow-wrap: anywhere; }
+.sh-who:has(.who:empty) { display: none; }
+
+/* a computer: one calm card on the page's grouped background; a row's hover fills its width */
+@media (min-width: 801px) {
+  #screen-staff-home { background: var(--wash); }
+  .sh-page { padding-top: calc(var(--demo-banner-height, 0px) + var(--s-8)); }
+  .sh-card { padding: var(--s-4) var(--s-5) var(--s-4); border: 1px solid var(--rule-soft); border-radius: var(--radius-l); background: var(--panel); box-shadow: var(--shadow-1); }
+  .sh-find { margin: 0 calc(-1 * var(--s-5)); padding: var(--s-2) var(--s-5); }
+  .sh-find .icon { left: calc(var(--s-5) + 12px); }
+  .sh-lists { margin: 0 calc(-1 * var(--s-3)); }
+  .sh-heading { padding-left: var(--s-2); }
+  .sh-list > li + li::before { left: var(--s-2); right: var(--s-2); }
+  .sh-row { padding-left: var(--s-2); padding-right: var(--s-2); border-radius: var(--radius-s); }
+  .sh-row:hover { background: var(--fill); }
+  .sh-who { margin-top: var(--s-4); padding: 0 var(--s-5); }
+}
+
+/* Places' map, for staff: one tap back to the list (home.js), a round 36 px button in its header like Search */
+#portfolio .home-to-list { position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px; margin-left: auto; border-radius: 50%; color: var(--ink); }
+#portfolio .home-to-list::after { content: ""; position: absolute; inset: -4px; }
+#portfolio .home-to-list:hover { background: var(--fill); }
+#portfolio .home-to-list[hidden] { display: none; }
+@media (max-width: 800px) { #portfolio .home-to-list { margin-left: 0; } }
