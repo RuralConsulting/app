@@ -37,7 +37,7 @@
     // N2c: older and sparse sites are hidden until the person switches them on; the choice is remembered on this device
     if (st.showAll === undefined) { try { st.showAll = root.localStorage?.getItem(SHOW_KEY) === "1"; } catch { st.showAll = false; } }
     const gl = root.maplibregl;
-    let sites = null, where = owner.farm ? "farm" : "group", partial = false, gone = false, token = 0, chart = null, framed = !!st.framed;
+    let sites = null, where = owner.farm ? "farm" : "group", partial = false, unreadResults = false, gone = false, token = 0, chart = null, framed = !!st.framed;
     const markers = new Map();
 
     // ---- reads, each once per map (failures are not kept) ------------------------------------------------------------------
@@ -56,7 +56,7 @@
       const rows = await rpc("group_wq_sites", { g: owner.org });
       if (rows.length || !M().boxes(bounds).length) return { rows, where: "group" };
       const box = await sitesInBox(bounds);
-      return { rows: box.rows, where: "map", partial: box.partial };
+      return { rows: box.rows, where: "map", partial: box.partial, unread: box.unread };
     });
     // reference_view_features (the ECan site list's features in a box, at most 1000; a fuller box is split, at most twice), then the
     // monitoring sites of those features (monitoring_sites: shared, served sites, which every signed-in person may read), then their
@@ -83,9 +83,11 @@
         siteRows.push(...list(data));
       }
       // one row per site AND parameter family, and the API answers at most 1000 rows a request: read in pages (M().summaryRows)
+      // (OV1: without it the sites still list, by name, and the list says their results couldn't be read: never "no recent results")
+      let unread = false;
       try { summary.push(...await M().summaryRows(sb, siteRows.map((r) => r.id))); }
-      catch { /* without it the sites still list, as having no results yet */ }
-      return { rows: M().boxRows(siteRows, features, summary), partial };
+      catch { unread = true; }
+      return { rows: M().boxRows(siteRows, features, summary), partial, unread };
     }
     const latestOf = (id) => once("latest|" + id, async () => W().latest(await rpc("wq_site_latest", { site: id })));
     // the council's summary, for shared sites only (M().record); a failed read is not kept and shows no line
@@ -248,8 +250,16 @@
       const t = ++token;
       // WQV1: a sub-group's own site is named for its sub-group (the person's groups), as on the Water quality page
       const names = new Map((FP.groupSpace?.groups?.() || []).map((g) => [g.id, g.name]));
-      try { const read = await readSites(); where = read.where; partial = !!read.partial; sites = M().restore(M().siteList(read.rows, owner, now(), where, names), st); }
-      catch { if (t === token && !gone) { say(""); fill(body, el("p", {}, "Couldn't load the water quality sites just now."), el("button", { type: "button", class: "wqs-button", onclick: switchOn }, "Try again")); } return; }
+      try { const read = await readSites(); where = read.where; partial = !!read.partial; unreadResults = !!read.unread; sites = M().restore(M().siteList(read.rows, owner, now(), where, names), st); }
+      catch {
+        // OV1: the sites couldn't be read: said in the panel (opened, on a phone too, where the list waits for "Sites"), with Try again (read
+        // once more on the tap only); the chip is not left on over no sites, and no list is drawn over sites never read
+        if (t === token && !gone) {
+          st.on = false; toggle.setAttribute("aria-pressed", "false"); holder.classList.remove("wqs-on"); clearPins();
+          say(""); openPanel(); fill(body, el("p", { class: "wqs-failed", role: "status" }, "Couldn't read the monitoring sites just now."), el("button", { type: "button", class: "wqs-button", onclick: switchOn }, "Try again"));
+        }
+        return;
+      }
       if (gone || !st.on) return;
       drawPins(); frame();
       if (t === token) render();
@@ -288,11 +298,22 @@
 
     // The list: sites sampled lately first, then older ones; those with no results folded away; a search over every site read.
     function showList() {
+      if (!sites) return null;   // (OV1: never a list over sites not read; switchOn says why)
       const results = el("div", { class: "wqs-results" }), intro = el("p", { class: "wqs-meta" });
       const search = el("input", { type: "search", class: "wqs-search", placeholder: "Search every site by name", "aria-label": "Search water quality sites by name", value: st.query });
       const toggleAll = el("input", { type: "checkbox", class: "wqs-show-all", role: "switch", ...(st.showAll ? { checked: true } : {}) });
       const fold = (label, items, open) => el("details", { class: "wqs-none", ...(open ? { open: true } : {}) }, el("summary", {}, label + " (" + items.length + ")"), el("ul", { class: "wqs-list" }, ...items.map(siteButton)));
       const draw = () => {
+        // (OV1: the sites' results couldn't be read: every site by name, and the list says why, never "no recent results")
+        if (unreadResults) {
+          const q = st.query.trim().toLowerCase(), named = [...sites].filter((s) => !q || s.name.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name, "en-NZ"));
+          intro.textContent = M().SUMMARY_UNREAD;
+          // (review three: each by its name and its source only, never "no results yet": here none were read)
+          const byName = (s) => el("li", {}, el("button", { type: "button", class: "wqs-site", onclick: () => pick(s.id, false) },
+            el("b", {}, s.name), [s.away, s.owner].filter(Boolean).length ? el("small", {}, [s.away, s.owner].filter(Boolean).join(" · ")) : null));
+          fill(results, named.length ? el("ul", { class: "wqs-list" }, ...named.map(byName)) : el("p", { class: "wqs-hint" }, "No site's name matches “" + st.query + "”."));
+          return;
+        }
         const l = M().listing(sites, st.query, st.showAll);
         intro.textContent = M().intro(sites, owner, where, st.showAll, l.search);
         fill(results,
@@ -309,7 +330,7 @@
         try { root.localStorage?.setItem(SHOW_KEY, st.showAll ? "1" : "0"); } catch { /* not remembered: still applies now */ }
         drawPins(); draw();
       });
-      const held = sites.filter((s) => !s.current).length;
+      const held = unreadResults ? 0 : sites.filter((s) => !s.current).length;   // (review three: none held back for results never read)
       // WQV1: a group's map leads to its Water quality page (every site, Surface water and Groundwater, Map, Chart and Table)
       const page = owner.org && FP.groupModel ? el("p", { class: "wqs-hint wqs-pagelink" }, el("a", { href: FP.href(FP.groupModel.href(owner.org, "water")) }, "Open the Water quality page")) : null;
       fill(body, heading("Water quality sites"), page, intro,
@@ -428,11 +449,14 @@
         el("button", { type: "button", "aria-label": "Remove " + s.name + " from the comparison", onclick: () => { st.chosen = M().remove(st.chosen, s.id); st.adding = false; drawPins(); render(); body.querySelector("h2")?.focus({ preventScroll: true }); } }, "×"))));
       fill(body, heading("Comparing " + chosen.length + " sites"), chips, adder()); say("Loading the sites' results…");
       const latest = {};
-      await pool(chosen.map((s) => async () => { try { latest[s.id] = await latestOf(s.id); } catch { latest[s.id] = { rows: [] }; } }), CONCURRENCY);
+      // (OV1: a site whose latest results couldn't be read is marked, and said so, never as having no results)
+      await pool(chosen.map((s) => async () => { try { latest[s.id] = await latestOf(s.id); } catch { latest[s.id] = { rows: [], failed: true }; } }), CONCURRENCY);
       if (t !== token || gone) return;
       say("");
+      const unreadNames = chosen.filter((s) => latest[s.id]?.failed).map((s) => s.name);
+      if (unreadNames.length) body.append(el("p", { class: "wqs-failed", role: "status" }, unreadNames.length === chosen.length ? "Couldn't read these sites' results just now." : M().unreadLine(unreadNames)));
       const offered = M().parameters(latest, chosen.map((s) => s.id));
-      if (!offered.length) { body.append(el("p", {}, "None of these sites has results recorded yet.")); return; }
+      if (!offered.length) { if (unreadNames.length < chosen.length) body.append(el("p", {}, unreadNames.length ? "None of the other sites has results recorded yet." : "None of these sites has results recorded yet.")); return; }
       st.parameter = M().pickParameter(offered, st.parameter);
       const host = el("div", { class: "block-host wqs-chart" }), table = el("div", { class: "wqs-table-wrap", "aria-live": "polite" });
       body.append(el("div", { class: "wqs-controls" },
@@ -443,17 +467,22 @@
       async function draw() {
         const m = ++token, parameter = st.parameter, years = st.years, p = offered.find((x) => x.key === parameter);
         fill(host, el("p", { class: "wqs-status" }, "Loading the chart…")); fill(table);
-        const per = {}, series = {};
+        // (OV1: a site whose results over time couldn't be read is marked: its key says so, and the empty period's line is never said
+        // over a read that failed)
+        const per = {}, series = {}, unread = {};
         await pool(chosen.map((s) => async () => {
           const row = list(latest[s.id]?.rows).find((r) => r.parameter === parameter);
-          const [read, summary, band, trend] = row ? await Promise.all([seriesOf(s.id, parameter, years).catch(() => ({ rows: [] })), analysis("summary", s.id, parameter, years), analysis("band", s.id, parameter, years), analysis("trend", s.id, parameter, years)]) : [{ rows: [] }, null, null, null];
+          const [read, summary, band, trend] = row ? await Promise.all([seriesOf(s.id, parameter, years).catch(() => ({ rows: [], failed: true })), analysis("summary", s.id, parameter, years), analysis("band", s.id, parameter, years), analysis("trend", s.id, parameter, years)]) : [{ rows: [] }, null, null, null];
           series[s.id] = read.rows; per[s.id] = { latest: latest[s.id], summary, band, trend };
+          if (read.failed || latest[s.id]?.failed) unread[s.id] = true;
         }), CONCURRENCY);
         if (m !== token || gone) return;
-        if (years && Object.values(series).every((r) => !list(r).length)) {
+        const noneRead = Object.values(series).every((r) => !list(r).length);
+        if (noneRead && Object.keys(unread).length) fill(host, el("p", { class: "wqs-failed", role: "status" }, Object.keys(unread).length === chosen.length ? "Couldn't read these sites' results just now." : M().unreadLine(chosen.filter((s) => unread[s.id]).map((s) => s.name))));
+        else if (years && noneRead) {
           const last = W().latestInstant(chosen.map((s) => list(latest[s.id]?.rows).find((r) => r.parameter === parameter)?.sampled_at));
           fill(host, el("p", { class: "wqs-empty" }, M().emptyPeriod(years, last)), wholeRecord(() => draw()));
-        } else drawChart(host, M().chartData({ sites: chosen, parameter, name: p?.name, unit: p?.unit, seriesBySite: series, latestBySite: latest, years }));
+        } else drawChart(host, M().chartData({ sites: chosen, parameter, name: p?.name, unit: p?.unit, seriesBySite: series, latestBySite: latest, years, unread }));
         const rows = M().compareRows(chosen, parameter, per, years, offered);
         const windowLabel = M().WINDOWS.find((w) => w.years === years)?.label.toLowerCase() || "";
         fill(table, el("table", { class: "wqs-table" }, el("caption", {}, (p?.name || parameter) + ", " + windowLabel),

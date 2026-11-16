@@ -48,6 +48,7 @@
   function clean(series) {
     return list(series).map((s, i) => ({
       id: text(s?.id) || "series-" + i, label: text(s?.label) || (i ? "Comparison site" : "This site"), owner: text(s?.owner), note: text(s?.note), part: i > 0 && s?.part === true,
+      unread: s?.unread === true,   // (OV1: its results couldn't be read: said as such, never "no results")
       points: list(s?.points).map((p) => ({ ...p, ms: ms(p?.t), value: p?.value === null || p?.value === "" ? NaN : Number(p?.value) }))
         .filter((p) => Number.isFinite(p.ms) && Number.isFinite(p.value)).sort((a, b) => a.ms - b.ms),
     }));
@@ -227,7 +228,7 @@
     const series = shownSeries(data, o), unit = text(data?.parameter?.unit);
     const limits = limitLines(data).map((l) => l.label + " at " + number(l.value) + (unit ? " " + unit : ""));
     return series.map((s) => {
-      if (!s.points.length) return s.label + ": no results.";
+      if (!s.points.length) return s.label + (s.unread ? ": couldn't be read just now." : ": no results.");
       const first = s.points[0], last = s.points[s.points.length - 1], n = s.points.length;
       const cens = s.points.filter(censored).length;
       return s.label + ": " + n + (n === 1 ? " result" : " results") + (n > 1 ? " from " + when(first.ms) + " to " + when(last.ms) : "") + "; latest " + shown(last) + (unit ? " " + unit : "") + " on " + when(last.ms) +
@@ -244,7 +245,7 @@
   function legend(series, any, o, data) {
     const items = series.map((s, c) => '<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><line class="chart-line chart-s' + c + '" x1="1" x2="27" y1="6" y2="6"/>' +
       (MARK[c] === "square" ? '<rect class="chart-mark chart-s' + c + '" x="10.5" y="2.5" width="7" height="7"/>' : MARK[c] === "diamond" ? '<path class="chart-mark chart-s' + c + '" d="M14 1.5 l4.5 4.5 l-4.5 4.5 l-4.5 -4.5 z"/>' : '<circle class="chart-mark chart-s' + c + '" cx="14" cy="6" r="3.8"/>') + "</svg>" +
-      "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c && (s.note || data?.palette !== "sites") ? " (" + (s.note || "comparison") + ")" : "") + (s.points.length || data?.palette !== "sites" ? "" : " · no results in this window") + "</span></li>");
+      "<span><b>" + esc(s.label) + "</b>" + (s.owner ? " · " + esc(s.owner) : "") + (c && (s.note || data?.palette !== "sites") ? " (" + (s.note || "comparison") + ")" : "") + (s.points.length || data?.palette !== "sites" ? "" : s.unread ? " · couldn't be read just now" : " · no results in this window") + "</span></li>");
     if (any) items.push('<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><path class="chart-mark chart-s0 chart-censored" d="M14 9.5 l-5.5 -9.4 h11 z"/></svg><span>Open triangle: below (&lt;) or above (&gt;) a detection limit, so not an exact value</span></li>');
     // WQV1: only when a field reading is drawn
     if (series.some((s) => s.points.some((p) => p.field === true && !censored(p)))) items.push('<li class="chart-key"><svg class="chart-swatch" viewBox="0 0 28 12" width="28" height="12" aria-hidden="true" focusable="false"><circle class="chart-mark chart-s0" cx="7" cy="6" r="3.8"/><circle class="chart-mark chart-s0 chart-field" cx="21" cy="6" r="3.8"/></svg><span>Solid: a laboratory result. Hollow: a field meter or test-strip reading</span></li>');

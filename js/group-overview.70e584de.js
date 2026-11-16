@@ -26,7 +26,9 @@
 //   group_events                 the next two, and head counts of those held this year (ended before now), for those with Events
 //   proposals (as documents)     the open review questions, for People's roles only (as Home's waiting line counts them)
 //   core_layers + map-packages   the context layers' themes (N1), read and signed only when one is switched on
-// A read that fails leaves its part out: the page never says "not available" and never shows an error.
+// OV1: a number is shown only when its read came back. A read that fails is said in its own tile or in the list, in one calm line
+// ("Couldn't read the samples just now."), with Try again, which reads what failed once more on the tap; never as 0, as none, as an
+// empty list, or as a part counted as the whole. The page never shows an error message or a code.
 (function (root) {
   const FP = root.FP;
   const O = () => FP.groupOverviewModel, S = () => FP.wqSitesModel;
@@ -52,24 +54,35 @@
   }
 
   // ---- reads ---------------------------------------------------------------------------------------------------------------
+  // -> { subs, failed } (OV1: failed, the list couldn't be read: the person's own sub-groups only, never counted as the group's)
   async function readSubgroups(sb, group, groups) {
-    if (group.parent_org_id) return [];
+    if (group.parent_org_id) return { subs: [], failed: false };
     const got = await rows(sb.rpc("subgroup_counts", { parent_org: group.id }));
     const subs = got ? got.map((r) => ({ id: r.subgroup_id, name: r.subgroup_name, slug: r.subgroup_slug || null, member: !!r.is_member }))
       : list(groups).filter((g) => g.parent_org_id === group.id).map((g) => ({ id: g.id, name: g.name, slug: g.slug || null, member: true }));
-    return subs.filter((s) => s.id && s.name).sort((a, b) => a.name.localeCompare(b.name, "en-NZ"));
+    return { subs: subs.filter((s) => s.id && s.name).sort((a, b) => a.name.localeCompare(b.name, "en-NZ")), failed: !got };
   }
   // CO1b: one request, not a count and then the rows (one wait fewer before the map has its shapes): at most AREA_CAP rows, as before
+  // (OV1: null when the read failed, never taken for "no boundary held")
   async function readAreas(sb, ids) {
     if (!ids.length) return [];
     const r = await Promise.resolve(sb.from("places").select("org_id,geom").eq("kind", "area").is("valid_to", null).in("org_id", ids).limit(AREA_CAP)).catch(() => null);
-    return !r || r.error ? [] : list(r.data).slice(0, AREA_CAP);
+    return !r || r.error ? null : list(r.data).slice(0, AREA_CAP);
   }
+  // (null when any batch failed: a part of the counts is never shown as the whole, OV1)
   async function readCounts(sb, ids, since) {
     const batches = [];
     for (let i = 0; i < ids.length; i += COUNT_BATCH) batches.push(ids.slice(i, i + COUNT_BATCH));
-    const got = await pool(batches.map((b) => () => rows(sb.rpc("wq_site_result_counts", { site_ids: b, parameter_keys: [...O().KEYS], ...(since ? { since } : {}) }))), 2);
-    return got.some((g) => g === null) ? null : got.flat();
+    // (OV1 review: no batch is started once one has failed, as #578's pool does: the answer is thrown away, and a database that has
+    // just timed out is not sent more; those already under way run to their end)
+    let failed = false;
+    const got = await pool(batches.map((b) => async () => {
+      if (failed) return null;
+      const r = await rows(sb.rpc("wq_site_result_counts", { site_ids: b, parameter_keys: [...O().KEYS], ...(since ? { since } : {}) }));
+      if (r === null) failed = true;
+      return r;
+    }), 2);
+    return failed || got.some((g) => g === null) ? null : got.flat();
   }
   function askTrend(sb, body) {
     const k = S().requestKey(body);
@@ -95,6 +108,13 @@
   const quiet = (text) => el("p", { class: "ov-quiet" }, text);
   const cardLink = (href, text, onclick) => el("a", { class: "ov-card-link", href, ...(onclick ? { onclick } : {}) }, text, FP.icon ? FP.icon("chevron", 14) : null);
   const big = (value, unit) => el("p", { class: "ov-num" }, value, unit ? el("span", { class: "ov-unit" }, " " + unit) : null);
+  // OV1: a read that failed, said in the tile's own place in one calm line, with the app's Try again (FU2's quiet link button, as the
+  // farm's and the group's reference counts have it): one more read, on the tap only, of whatever on the page failed
+  const again = (c) => el("button", { type: "button", class: "link ov-again", onclick: (e) => c.retry(e.currentTarget) }, "Try again");
+  const couldNot = (c, what) => [quiet(c.O.FAILED[what]), again(c)];
+  // (in the headline row, clamped to one line: the short line, the whole one on hover)
+  const couldNotLead = (c, what) => [el("p", { class: "ov-quiet", "data-full": c.O.FAILED[what] }, c.O.FAILED_LEAD), again(c)];
+  const isFailed = (d) => FP.groupOverviewModel.failed(d);
   const tileOf = (c, key) => c.O.tiles({ group: c.group, subgroups: c.subs, areas: c.areas, filter: c.filter, members: c.members }).find((t) => t.key === key) || null;
   // CO1 (the groups' own reports: headline numbers rebuilt for each audience did not agree): the tiles are one dated "group in
   // numbers". Each says what it counts and "as at" the day, so everyone quotes the same figure.
@@ -105,20 +125,27 @@
   const nzYearStart = (c) => FP.placeHomeModel?.nzDayStart?.(String(c.today || new Date().toISOString()).slice(0, 4) + "-01-01") || null;
   cards.register({ id: "subgroups", title: "Sub-groups", group: "About the group", order: 10, lead: true, line: "How many sub-groups the group has", can: (v) => !v.sub,
     render(c) {
+      if (c.filter.sub) return null;   // (a sub-group selected: its own numbers only)
+      if (c.failed.subgroups) return couldNotLead(c, "subgroups");   // (OV1: the person's own sub-groups are not the group's count)
       const t = tileOf(c, "subgroups");
-      if (!t || c.filter.sub) return null;   // (a sub-group selected: its own numbers only)
-      return [big(t.value), counted(c, t.note || "Listed on the left")];
+      if (!t) return null;
+      // (OV1: the boundaries couldn't be read: nothing said of them)
+      return [big(t.value), counted(c, (c.failed.areas ? null : t.note) || "Listed on the left")];
     } });
   cards.register({ id: "area", title: "Area", group: "About the group", order: 20, lead: true, line: "The area of the group, or of the sub-group selected",
     render(c) {
+      // (OV1: the boundaries couldn't be read: no area, and no part of one summed as the whole)
+      if (c.failed.areaHere) return couldNotLead(c, "areas");
       const t = tileOf(c, "area");
       if (!t) return null;
       return [big(t.value.replace(/ ha$/, ""), "ha"), counted(c, c.filter.sub || c.group.parent_org_id ? "The sub-group's boundary" : t.note || "From the boundaries held")];
     } });
   cards.register({ id: "members", title: "Members", group: "About the group", order: 30, lead: true, line: "The group's current members (coordinators)", can: (v) => !!v.coordinator,
     render(c) {
+      if (c.filter.sub) return null;   // (members are not counted per sub-group: SG2 shows no sub-group's business count)
+      if (c.failed.members) return couldNotLead(c, "members");
       const t = tileOf(c, "members");
-      if (!t || c.filter.sub) return null;   // (members are not counted per sub-group: SG2 shows no sub-group's business count)
+      if (!t) return null;
       return [big(t.value), counted(c, "Current members")];
     } });
   cards.register({ id: "records", title: "Records and photos this year", group: "Activity", order: 40, wide: true,
@@ -131,7 +158,7 @@
       // number alone, never a cut-off chart. CO1b: the first page comes with the count, so one request where there are 1,000 or fewer)
       const first = await Promise.resolve(where(c.sb.from("captures").select("taken_at", { count: "exact" })).order("taken_at", { ascending: true }).range(0, c.O.PAGE_ROWS - 1)).catch(() => null);
       const n = first && !first.error && Number.isInteger(first.count) ? first.count : null;
-      if (n === null) return null;
+      if (n === null) return c.O.READ_FAILED;
       const pages = c.O.recordPages(n);
       if (!pages.length) return { n, series: null };
       const times = list(first.data).map((r) => r.taken_at);
@@ -144,6 +171,7 @@
     },
     render(c, d) {
       if (d === undefined) return [quiet("Counting…")];
+      if (isFailed(d)) return couldNot(c, "records");
       if (!d || !d.n) return null;
       return [big(c.O.count(d.n)), d.series && d.series.length ? monthChart(d.series) : null, since1Jan(c, "Those you can see, taken")].filter(Boolean);
     } });
@@ -155,9 +183,9 @@
   const subHref = (id, view, tab) => FP.href(FP.groupModel.href(id, view, tab || null));
   // read(columns, options): the tile's own read across `orgs`, with those columns
   async function countHeld(c, orgs, read) {
-    if (orgs.length < 2) return { n: await headCount(read("id", { count: "exact", head: true })), held: null, multi: false };
+    if (orgs.length < 2) { const n = await headCount(read("id", { count: "exact", head: true })); return n === null ? c.O.READ_FAILED : { n, held: null, multi: false }; }
     const r = await Promise.resolve(read("org_id", { count: "exact" }).limit(c.O.PAGE_ROWS)).catch(() => null);
-    if (!r || r.error || !Number.isInteger(r.count)) return null;
+    if (!r || r.error || !Number.isInteger(r.count)) return c.O.READ_FAILED;
     const got = list(r.data);
     return { n: r.count, held: got.length === r.count ? c.O.heldBy(got, c.group.id, c.subs) : null, multi: true };
   }
@@ -176,12 +204,14 @@
   cards.register({ id: "coming", title: "Coming up", group: "Activity", order: 50, line: "The next two events", can: (v) => v.sections.includes("events"),
     async load(c, orgs) {
       const from = FP.placeHomeModel?.nzDayStart?.(String(c.today || new Date().toISOString()).slice(0, 10)) || new Date().toISOString();
-      return rows(c.sb.from("group_events").select("id,org_id,title,starts_at,all_day,place_name,cancelled_at").in("org_id", orgs).is("cancelled_at", null).gte("starts_at", from)
+      const got = await rows(c.sb.from("group_events").select("id,org_id,title,starts_at,all_day,place_name,cancelled_at").in("org_id", orgs).is("cancelled_at", null).gte("starts_at", from)
         .order("starts_at", { ascending: true }).range(0, 1));
+      return got === null ? c.O.READ_FAILED : got;
     },
     render(c, d) {
       if (d === undefined) return [quiet("Reading the calendar…")];
-      if (!d || !d.length) return null;   // couldn't be read, or nothing coming: left out, never an error
+      if (isFailed(d)) return couldNot(c, "coming");   // (OV1: couldn't be read is said; only nothing coming is left out)
+      if (!d || !d.length) return null;
       // CO1b: an event a sub-group holds names it, with a link to that sub-group's Events (the group's own page lists only its own)
       const subOf = (e) => (e.org_id && e.org_id !== c.group.id && !c.filter.sub ? c.subs.find((s) => s.id === e.org_id) || null : null);
       const anySub = d.some((e) => subOf(e));
@@ -200,10 +230,11 @@
       const now = new Date(Math.min(Date.now(), Date.parse(tomorrow))).toISOString();
       const base = () => c.sb.from("group_events").select("id", { count: "exact", head: true }).in("org_id", orgs).is("cancelled_at", null).gte("starts_at", from);
       const [ended, open] = await Promise.all([headCount(base().lt("ends_at", now)), headCount(base().is("ends_at", null).lt("starts_at", today))]);
-      return ended === null || open === null ? null : ended + open;
+      return ended === null || open === null ? c.O.READ_FAILED : ended + open;
     },
     render(c, d) {
       if (d === undefined) return [quiet("Counting…")];
+      if (isFailed(d)) return couldNot(c, "held");
       if (!d) return null;
       return [big(c.O.count(d)), since1Jan(c, "Held")];
     } });
@@ -211,6 +242,7 @@
     load(c, orgs) { return countHeld(c, orgs, (cols, o) => c.sb.from("documents").select(cols, o).in("org_id", orgs)); },
     render(c, d) {
       if (d === undefined) return [quiet("Counting…")];
+      if (isFailed(d)) return couldNot(c, "files");
       if (!d || !d.n) return null;
       return [big(c.O.count(d.n)), ...heldParts(c, d, { plain: "Open Files", own: "Open the group's own Files", open: (id) => (id === c.group.id ? c.href("documents") : subHref(id, "documents")) })];
     } });
@@ -223,6 +255,7 @@
     },
     render(c, d) {
       if (d === undefined) return [quiet("Counting…")];
+      if (isFailed(d)) return couldNot(c, "review");
       if (!d || !d.n) return null;
       // (a sub-group's To review is linked only where the person sees that sub-group's People)
       const open = (id) => (id === c.group.id ? c.href("people", "review") : (() => { const g = c.groups.find((x) => x.id === id); return g && FP.peopleModel?.canSeeTab?.(g, c.groups) ? subHref(id, "people", "review") : null; })());
@@ -231,24 +264,32 @@
   cards.register({ id: "wqsites", title: "Water quality sites", group: "Water", order: 90, off: true, line: "The monitoring sites inside the boundaries, and their samples",
     render(c) {
       if (!c.loaded) return [quiet("Reading the monitoring sites…")];
+      // OV1: the sites not all read (a boundary or an area's sites): no number; the samples not read: the sites, and never "0 samples"
+      const f = c.failed.water;
+      if (f === "areas" || f === "sites") return couldNot(c, f);
       const w = c.O.wqCard({ scope: c.scope, classes: new Map(), filter: c.filter, plan: null });
       if (!w) return null;
+      if (f === "counts") return [big(c.O.count(c.scope.length)), ...couldNot(c, "counts")];
       return [big(c.O.count(c.scope.length)), counted(c, w.line.replace(/^[\d,]+ sites? · /, ""))];
     } });
   cards.register({ id: "water", title: "Water quality", group: "Water", order: 100, off: true, wide: true,
     line: "The main trend in one sentence, and the way to the detail",
     render(c) {
       if (!c.loaded) return [quiet("Reading the monitoring sites…")];
-      const w = c.O.wqCard({ scope: c.scope, classes: c.classes, filter: c.filter, plan: c.plan });
+      // OV1: what of the sites and samples couldn't be read is said in place of their line ("N sites · 0 samples" before), with Try again
+      const f = c.failed.water, known = f !== "areas" && f !== "sites";
+      const w = known ? c.O.wqCard({ scope: c.scope, classes: c.classes, filter: c.filter, plan: c.plan }) : null;
       const link = c.O.waterQualityLink(c.group.id, (id, view) => FP.href(FP.groupModel.href(id, view)));
-      if (!w) return c.areas.size ? [quiet(c.sitesRead ? "No water quality monitoring sites lie inside the boundaries held." : "The monitoring sites will show here."), cardLink(link.href, "Open water quality", link.opensPanel ? c.waterQuality : null)]
+      if (!w && known) return c.areas.size ? [quiet(c.sitesRead ? "No water quality monitoring sites lie inside the boundaries held." : "The monitoring sites will show here."), cardLink(link.href, "Open water quality", link.opensPanel ? c.waterQuality : null)]
         : [quiet("Once a boundary is held, the monitoring sites inside it show here.")];
       // WQV1, WQ2: the Water quality page's own headline (the group's own sampling first, then the other sources' sites with a good
       // record) and, last and quiet, LAWA's line; always read from this group, with the sub-group selected picked out as the page does
       const s = c.wqSummary(c.filter.sub || null);
       if (s !== null) return [s ? el("p", { class: "ov-sentence", id: "ov-wq-sentence" }, s.sentence) : el("p", { class: "ov-quiet ov-working", id: "ov-wq-sentence", role: "status" }, "Reading the water quality sites…"),
-        s?.others ? quiet(s.others) : null, s?.noArea ? null : quiet(w.line), s?.lawa ? quiet(s.lawa) : null,
+        s?.others ? quiet(s.others) : null, s?.noArea ? null : quiet(f ? c.O.FAILED[f] : w.line), s?.lawa ? quiet(s.lawa) : null,
+        (f && !s?.noArea) || s?.failed || s?.lawaFailed ? again(c) : null,
         cardLink(s?.href || link.href, "Open water quality")].filter(Boolean);
+      if (f) return [...couldNot(c, f), cardLink(link.href, "Open water quality", link.opensPanel ? c.waterQuality : null)];
       // (without the page's code, MC1's own indicative trends)
       return [w.pending ? el("p", { class: "ov-quiet ov-working", id: "ov-wq-sentence", role: "status" }, w.sentence) : el("p", { class: "ov-sentence", id: "ov-wq-sentence" }, w.sentence),
         !w.pending && w.band && w.band.assessed ? c.bar(w.band) : null, quiet(w.line),
@@ -276,6 +317,21 @@
     const now = Date.parse(String(opts.today || "").slice(0, 10) + "T12:00:00Z") || Date.now();
     const P = FP.mapPalette;
     let subs = [], subsKnown = false, A = new Map(), all = [], sitesRead = true, members = null, loaded = false, classes = new Map(), plan = null, token = 0;
+    // OV1: which of the page's own reads failed (each said where its numbers would be, never as 0 or none): the list of sub-groups, the
+    // members' count, the boundaries, the sites inside an area (by the place whose read failed), the sites' result counts
+    const failedReads = { subgroups: false, members: false, areas: false, sites: new Set(), counts: false };
+    // the scope's sites unknown ("areas", "sites"), or only their samples ("counts"); null when every read it rests on came back
+    const waterFailed = () => {
+      const sub = filter.sub;
+      if (sub ? areasMissing.has(sub) : areasMissing.size > 0) return "areas";
+      if (sub ? failedReads.sites.has(sub) : failedReads.sites.size > 0) return "sites";
+      return failedReads.counts ? "counts" : null;
+    };
+    const sitesKnownFor = (id) => !areasMissing.has(id) && !failedReads.sites.has(id);
+    // (OV1 review: by the places whose boundary read failed, so a sub-group whose boundary came back as none is still said as none)
+    const areasMissing = new Set();
+    // the area shown unknown: the selected sub-group's boundary not read; else the group's own, or, with none of its own, any sub-group's
+    const areaHere = () => (filter.sub ? areasMissing.has(filter.sub) : areasMissing.has(group.id) || (!A.has(group.id) && areasMissing.size > 0));
     const counts = new Map();   // period key -> rows of wq_site_result_counts (all time)
     const key = O().storeKey(person?.id, group.id);
     // CO1b (the owner: the overview "often opens filtered"): every visit opens on "All sub-groups", unless the address names one
@@ -310,7 +366,7 @@
         const v = n.querySelector(".ov-num"), what = n.querySelector(".ov-quiet")?.textContent.trim();
         return v ? n.querySelector("h2").textContent + ": " + v.textContent.replace(/\s+/g, " ").trim() + (what ? " (" + what + ")" : "") : null;
       }).filter(Boolean);
-      return lines.length ? [group.name + ". " + O().scopeWords({ name: group.name, isSub, subgroups: subs, selectedName: filter.sub ? subName(filter.sub) : null }) + (when ? ", as at " + when : ""), ...lines].join("\n") : "";
+      return lines.length ? [group.name + ". " + O().scopeWords({ name: group.name, isSub, subgroups: subs, selectedName: filter.sub ? subName(filter.sub) : null, known: !failedReads.subgroups }) + (when ? ", as at " + when : ""), ...lines].join("\n") : "";
     }
     async function copyNumbers() {
       const text = numbersText();
@@ -348,16 +404,19 @@
       const sortBy = ["name", "area", "results"].includes(filter.sort) ? filter.sort : "name";
       const sort = el("select", { id: "ov-sort", "aria-label": "Sort the sub-groups by", onchange: (e) => { filter.sort = e.target.value; save(); drawList(); } },
         ...[["name", "Name"], ["area", "Area"], ["results", "Samples"]].map(([k, t]) => el("option", { value: k, ...(k === sortBy ? { selected: true } : {}) }, t)));
-      const rowsOf = O().subgroupRows(subs, A, all, classes, null, sortBy);
+      // (OV1: a sub-group whose sites or samples couldn't be read has none said, and is never ranked by a zero; the list says why, once)
+      const rowsOf = O().subgroupRows(subs, A, all, classes, null, sortBy, { sites: (id) => !loaded || sitesKnownFor(id), results: () => !loaded || !failedReads.counts });
       const total = O().hectares(A.get(group.id)?.ha);
+      const why = failedReads.subgroups ? "subgroups" : failedReads.areas ? "areas" : failedReads.sites.size ? "sites" : failedReads.counts ? "counts" : null;
       // (#544 review: the list is drawn again on a choice; keyboard focus stays where it was, on the same row or control, so Enter
       // selects a row and Enter again opens it)
       const active = listBox.contains(document.activeElement) ? document.activeElement : null, hadRow = active?.dataset?.row || null, hadId = active?.id || null;
       const allRow = el("li", {}, el("button", { type: "button", class: "ov-row ov-all" + (filter.sub ? "" : " chosen"), id: "ov-all", "aria-pressed": String(!filter.sub), onclick: () => select(null) },
-        el("span", { class: "ov-row-text" }, el("b", {}, "All sub-groups"), el("small", {}, [O().plural(subs.length, "sub-group", "sub-groups"), total].filter(Boolean).join(" · ")))));
+        el("span", { class: "ov-row-text" }, el("b", {}, "All sub-groups"), el("small", {}, [failedReads.subgroups ? null : O().plural(subs.length, "sub-group", "sub-groups"), total].filter(Boolean).join(" · ")))));
       listBox.replaceChildren(el("div", { class: "ov-list-head" }, el("h2", {}, "Sub-groups"), el("label", { class: "ov-field ov-sort" }, el("span", {}, "Sort"), sort)),
+        ...(why ? [el("p", { class: "ov-failed", role: "status" }, el("span", { class: "ov-quiet" }, O().FAILED[why]), " ", again({ retry }))] : []),
         el("ol", { class: "ov-rows" }, allRow, ...rowsOf.map((x) => {
-          const line = [x.area || (x.member ? "No boundary held yet" : "Not one of your places"), x.sites ? O().plural(x.sites, "site", "sites") : null, x.results ? O().plural(x.results, "sample", "samples") : null].filter(Boolean).join(" · ");
+          const line = [x.area || (x.member ? (areasMissing.has(x.id) ? null : "No boundary held yet") : "Not one of your places"), x.sites ? O().plural(x.sites, "site", "sites") : null, x.results ? O().plural(x.results, "sample", "samples") : null].filter(Boolean).join(" · ");
           const chosen = filter.sub === x.id;
           const hover = { onmouseenter: () => highlight(x.id), onmouseleave: () => highlight(null), onfocus: () => highlight(x.id), onblur: () => highlight(null) };
           const inner = [el("span", { class: "ov-swatch", style: "--sw: " + hueOf(x.id), "aria-hidden": "true" }), el("span", { class: "ov-row-text" }, el("b", {}, x.name), el("small", {}, line))];
@@ -394,7 +453,8 @@
     // the places the tiles read for (#544 review): one selected sub-group's own, else the group and every sub-group the person is in
     const orgs = () => O().orgsInScope(group.id, subs, filter.sub || null);
     const ctx = () => ({ group, groups, subs, areas: A, sites: all, scope: scope(), classes, plan, filter, loaded, sitesRead, members, el, O: O(), bar, hrefOf, sb, today: opts.today || null, now,
-      href: (view, tab) => FP.href(FP.groupModel.href(org(), view, tab || null)), waterQuality: () => { wqIntent = true; }, wqSummary });
+      href: (view, tab) => FP.href(FP.groupModel.href(org(), view, tab || null)), waterQuality: () => { wqIntent = true; }, wqSummary,
+      failed: { subgroups: failedReads.subgroups, members: failedReads.members, areas: failedReads.areas, areaHere: areaHere(), water: loaded ? waterFailed() : null }, retry: (button) => retry(button) });
     // WQV1: the Water quality page's summary for this group, or for one of its sub-groups picked out of this group's sites, once per choice
     const wqSums = new Map();
     function wqSummary(sub) {
@@ -405,7 +465,7 @@
         FP.wqPage.summary(sb, group.id, { sub, today: String(opts.today || "").slice(0, 10) || null }).then((x) => x, () => false).then((x) => { wqSums.set(k, x); if (live()) drawCards(); });
       }
       const x = wqSums.get(k);
-      if (x === false) return { sentence: "The trends couldn't be read just now.", bar: [], basis: null, href: null };
+      if (x === false) return { sentence: "The trends couldn't be read just now.", bar: [], basis: null, href: null, failed: true };
       return x?.noArea ? { ...x, sentence: "This sub-group's boundary is not one you can see, so its sites are not picked out here." } : x;
     }
     let layout = O().layoutFrom(store.get(O().cardsKey(person?.id, group.id)), cards.available(viewer));
@@ -421,14 +481,14 @@
         (def.lead ? lead : nodes).push(el("section", { class: "ov-card" + (def.wide ? " wide" : ""), "data-card": id, "aria-labelledby": "ov-card-h-" + id }, el("h2", { id: "ov-card-h-" + id }, def.title), ...[].concat(body)));
       }
       leadBox.replaceChildren(...lead);
-      for (const q of leadBox.querySelectorAll(".ov-quiet, h2")) q.title = q.textContent;   // (CO1b review: the row's lines are clamped; whole on hover)
+      for (const q of leadBox.querySelectorAll(".ov-quiet, h2")) q.title = q.dataset.full || q.textContent;   // (CO1b review: the row's lines are clamped; whole on hover)
       leadBox.hidden = !lead.length;
       cardsBox.replaceChildren(...nodes);
       cardsBox.parentElement.hidden = !nodes.length;
       copyText.hidden = !leadBox.querySelector(".ov-num") && !cardsBox.querySelector(".ov-num");
       const c0 = ctx();
       // (CO1b: said once the sub-groups are known, so the line never changes under the reader)
-      scopeLine.textContent = !subsKnown ? "" : [O().scopeWords({ name: group.name, isSub, subgroups: subs, selectedName: filter.sub ? subName(filter.sub) : null }), asAt(c0)].filter(Boolean).join(" · ");
+      scopeLine.textContent = !subsKnown ? "" : [O().scopeWords({ name: group.name, isSub, subgroups: subs, selectedName: filter.sub ? subName(filter.sub) : null, known: !failedReads.subgroups }), asAt(c0)].filter(Boolean).join(" · ");
       scopeLine.hidden = !scopeLine.textContent;
       scopeLine.title = scopeLine.textContent;   // (CO1b: at most three lines are shown; the whole line on hover)
     }
@@ -463,7 +523,7 @@
       await Promise.all(cards.available(viewer).filter((d) => typeof d.load === "function" && isShown(d.id) && !cardData.has(d.id + "|" + at)).map(async (d) => {
         const k = d.id + "|" + at;
         cardData.set(k, undefined);
-        try { cardData.set(k, await d.load(c, set)); } catch { cardData.set(k, null); }
+        try { cardData.set(k, await d.load(c, set)); } catch { cardData.set(k, O().READ_FAILED); }
         if (live()) drawCards();
       }));
     }
@@ -482,7 +542,7 @@
     function drawNote() {
       // the calm line, on the map, when no boundary is held (CO1b review: never over "The map couldn't open here.")
       if (mapFailed) return;
-      const line = loaded ? O().emptyLine({ areas: A, sites: all, filter, sitesRead }) : null, onMap = !!line && /^No boundary/.test(line);
+      const line = loaded ? O().emptyLine({ areas: A, sites: all, filter, sitesRead, areasFailed: areaHere() }) : null, onMap = !!line && (/^No boundary/.test(line) || line === O().FAILED.areas);
       mapNote.textContent = onMap ? line : ""; mapNote.hidden = !onMap;
     }
 
@@ -823,7 +883,10 @@
       };
       showBox.replaceChildren(...[
         A.size ? box("ov-show-subgroups", subs.length ? "Sub-groups" : "The group's area", show.subs, (v) => { show.subs = v; drawAreas(); }) : null,
-        all.length ? box("ov-show-sites", "Water quality sites", show.sites, (v) => { show.sites = v; drawSites(); drawLegend(); }) : null,
+        // (OV1: the map's dots are N2c's useful sites, which the sites and their counts decide: not all read, the switch is not offered
+        // to show some or none of them; one quiet line says so)
+        loaded && (failedReads.areas || failedReads.sites.size || failedReads.counts) ? el("p", { class: "ov-quiet ov-check" }, "Water quality sites couldn't be read just now.")
+          : all.length ? box("ov-show-sites", "Water quality sites", show.sites, (v) => { show.sites = v; drawSites(); drawLegend(); }) : null,
         ...(themes.list || []).map(themeRow)].filter(Boolean));
       showBox.hidden = !showBox.childElementCount;
       drawLegend();
@@ -929,16 +992,51 @@
     }
 
     // ---- load ------------------------------------------------------------------------------------------------------------
-    let siteReads = [], siteIds = [];
+    // OV1: each step keeps what came back and notes what did not (failedReads), so a number is drawn only from a read that came back,
+    // and Try again reads only what failed (and what it leads to), once, in the same requests and the same batches as the first time
+    let siteReads = [], siteIds = [], stage = "subgroups";
+    const areaRows = [], areaAsked = new Set(), counted = new Set();
+    const visibleIds = () => [group.id, ...subs.filter((x) => x.member).map((x) => x.id)];
+    const membersRead = () => headCount(sb.from("group_members").select("id", { count: "exact", head: true }).eq("org_id", group.id).is("ended_at", null));
+    function takeAreas(ids, got) {
+      for (const id of ids) areaAsked.add(id);
+      for (const id of ids) if (got === null) areasMissing.add(id); else areasMissing.delete(id);
+      if (got) areaRows.push(...got);
+      failedReads.areas = areasMissing.size > 0;
+      A = O().areas(areaRows.filter((r) => visibleIds().includes(r?.org_id)));
+    }
+    // the sites inside each area: the group's own (when it has one) and each sub-group's (to know which sub-group a site is in)
+    const areaOrgs = () => [...(A.has(group.id) ? [group.id] : []), ...subs.filter((x) => A.has(x.id)).map((x) => x.id)];
+    async function readSites(orgs) {
+      const got = await pool(orgs.map((o) => async () => ({ org: o, rows: await rows(sb.rpc("group_wq_sites", { g: o, km: 0 })) })), SITES_POOL);
+      for (const r of got) {
+        siteReads = siteReads.filter((x) => x.org !== r.org);
+        if (r.rows === null) failedReads.sites.add(r.org); else { failedReads.sites.delete(r.org); siteReads.push({ org: r.org, rows: r.rows }); }
+      }
+      siteIds = [...new Set(siteReads.flatMap((r) => r.rows.map((x) => Number(x.site_id))).filter(Number.isFinite))];
+    }
+    // the counts of the sites not yet counted (all of them the first time, or after a failure): all or nothing (readCounts)
+    async function readSiteCounts() {
+      const ids = siteIds.filter((id) => !counted.has(id));
+      if (!ids.length) { failedReads.counts = false; return; }
+      const got = await readCounts(sb, ids, null);
+      if (got === null) { failedReads.counts = true; return; }
+      counts.set("all", [...(counts.get("all") || []), ...got]);
+      for (const id of ids) counted.add(id);
+      failedReads.counts = false;
+    }
+    function settleSites() {
+      sitesRead = !failedReads.areas && !failedReads.sites.size && !failedReads.counts;
+      all = O().sites(siteReads, counts.get("all") || [], null, now);
+    }
     // CO1b: the areas are asked for at once, beside the sub-groups (not after them): the group's own and those of its sub-groups the
     // person is in, known from their own places; any other sub-group the list says they are in is asked for when the list comes
     const firstIds = [group.id, ...(isSub ? [] : list(groups).filter((g) => g.parent_org_id === group.id).map((g) => g.id))];
-    const areasAsked = readAreas(sb, firstIds).catch(() => []);
+    const areasAsked = readAreas(sb, firstIds).catch(() => null);
     (async () => {
-      const [s, m] = await Promise.all([readSubgroups(sb, group, groups).catch(() => []),
-        isCoordinator ? headCount(sb.from("group_members").select("id", { count: "exact", head: true }).eq("org_id", group.id).is("ended_at", null)) : null]);
+      const [s, m] = await Promise.all([readSubgroups(sb, group, groups).catch(() => ({ subs: [], failed: true })), isCoordinator ? membersRead() : null]);
       if (!live()) return;
-      subs = s; members = m; subsKnown = true;
+      subs = s.subs; failedReads.subgroups = s.failed; members = m; failedReads.members = isCoordinator && m === null; subsKnown = true;
       codes = O().distinctCodes(subs.map((x) => ({ key: x.id, name: x.name })), FP.icons?.monogram);
       layout = O().layoutFrom(store.get(O().cardsKey(person?.id, group.id)), cards.available(viewer));
       // (CO1b: All sub-groups, unless the address names one the person is in)
@@ -946,29 +1044,72 @@
       drawList(); drawCards(); loadCards();
       // the page has its final shape now (the list, the headline): the map is made at its own size, never squeezed afterwards
       (root.requestAnimationFrame || ((f) => setTimeout(f, 0)))(() => makeMap());
-      const visible = [group.id, ...subs.filter((x) => x.member).map((x) => x.id)], more = visible.filter((id) => !firstIds.includes(id));
-      const got = [...await areasAsked, ...(more.length ? await readAreas(sb, more).catch(() => []) : [])];
+      stage = "areas";
+      const more = visibleIds().filter((id) => !firstIds.includes(id));
+      const first = await areasAsked, second = more.length ? await readAreas(sb, more).catch(() => null) : [];
       if (!live()) return;
-      A = O().areas(got.filter((r) => visible.includes(r?.org_id)));
+      takeAreas(firstIds, first); takeAreas(more, second);
       areasKnown = true;
       drawList(); drawCards(); drawLayers(); shapesIn();
-      // the sites inside each area: the group's own (when it has one) and each sub-group's (to know which sub-group a site is in)
-      const orgs = [...(A.has(group.id) ? [group.id] : []), ...subs.filter((x) => A.has(x.id)).map((x) => x.id)];
-      siteReads = await pool(orgs.map((o) => async () => ({ org: o, rows: await rows(sb.rpc("group_wq_sites", { g: o, km: 0 })) })), SITES_POOL);
-      sitesRead = siteReads.every((r) => r.rows !== null);
-      siteReads = siteReads.map((r) => ({ org: r.org, rows: r.rows || [] }));
-      siteIds = [...new Set(siteReads.flatMap((r) => r.rows.map((x) => Number(x.site_id))).filter(Number.isFinite))];
-      const allCounts = siteIds.length ? await readCounts(sb, siteIds, null) : [];
+      stage = "sites";
+      await readSites(areaOrgs());
+      stage = "counts";
+      await readSiteCounts();
+      stage = "drawn";
       if (!live()) return;
-      if (allCounts === null) sitesRead = false;
-      counts.set("all", allCounts || []);
-      all = O().sites(siteReads, counts.get("all"), null, now);
+      settleSites();
       loaded = true;
       wrap.setAttribute("aria-busy", "false");
       startTrends();
       drawList(); drawCards(); drawLayers(); drawNote();
       if (map?.getSource("ov-areas")) { drawSites(); frame(); }
-    })().catch(() => { if (live()) { loaded = true; areasKnown = true; subsKnown = true; wrap.setAttribute("aria-busy", "false"); drawList(); drawCards(); drawLayers(); drawNote(); makeMap(); shapesIn(); } });
+    })().catch(() => {
+      if (!live()) return;
+      // (a step that threw is a read that failed, said as such)
+      if (stage === "subgroups") failedReads.subgroups = true; else if (stage === "areas") { for (const id of visibleIds()) if (!A.has(id)) areasMissing.add(id); failedReads.areas = areasMissing.size > 0; }
+      else if (stage === "sites") for (const o of areaOrgs()) failedReads.sites.add(o); else if (stage === "counts") failedReads.counts = true;
+      settleSites();
+      loaded = true; areasKnown = true; subsKnown = true; wrap.setAttribute("aria-busy", "false"); drawList(); drawCards(); drawLayers(); drawNote(); makeMap(); shapesIn();
+    });
+
+    // OV1: Try again (a tile's, or the list's): every read on the page that failed is made once more, on the person's tap only (never by
+    // itself: a database that has just timed out is not asked again unasked), each in its own requests and batches as before; what
+    // comes back is drawn, and what fails again is said again
+    let retrying = false;
+    async function retry() {
+      if (retrying || !live() || !loaded) return;
+      retrying = true;
+      for (const b of wrap.querySelectorAll("button.ov-again")) { b.disabled = true; b.textContent = "Trying again…"; }
+      try {
+        const jobs = [];
+        for (const [k, d] of [...cardData]) if (O().failed(d)) cardData.delete(k);
+        jobs.push(loadCards());
+        // (the Water quality page's summary: asked again where it failed; its loader keeps every read and batch that came back, and
+        // lets go only of a sub-groups or boundaries read that failed, so only what is missing is asked again)
+        let askAgain = false;
+        for (const [k, x] of [...wqSums]) if (x === false || x?.lawaFailed) { wqSums.delete(k); askAgain = true; }
+        if (askAgain) await FP.wqPage?.forgetFailed?.(group.id);
+        if (failedReads.members) jobs.push(membersRead().then((n) => { members = n; failedReads.members = n === null; }));
+        jobs.push((async () => {
+          if (failedReads.subgroups) {
+            const r = await readSubgroups(sb, group, groups).catch(() => null);
+            if (r && !r.failed) { subs = r.subs; failedReads.subgroups = false; codes = O().distinctCodes(subs.map((x) => ({ key: x.id, name: x.name })), FP.icons?.monogram); }
+          }
+          const ask = visibleIds().filter((id) => areasMissing.has(id) || !areaAsked.has(id));
+          if (ask.length) takeAreas(ask, await readAreas(sb, ask).catch(() => null));
+          const orgs = areaOrgs().filter((o) => !siteReads.some((r) => r.org === o));
+          if (orgs.length) await readSites(orgs);
+          await readSiteCounts();
+        })());
+        await Promise.all(jobs);
+      } catch { /* each read has said what it could */ }
+      retrying = false;
+      if (!live()) return;
+      settleSites();
+      startTrends();
+      drawList(); drawCards(); drawLayers(); drawNote();
+      if (map?.getSource("ov-areas")) { drawAreas(); drawSites(); frame(); }
+    }
 
     // the context layers' themes (N1), listed in the Layers panel; their files are signed only when a theme is switched on
     const safe = (make) => { try { return rows(make()); } catch { return Promise.resolve(null); } };

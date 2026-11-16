@@ -365,6 +365,9 @@
     return ["subgroups", "area", "members"].map((k) => by.get(k)).filter(Boolean)
       .map((t) => (t.key === "area" ? t.value : t.value + " " + String(t.label || "").toLowerCase())).join(" · ");
   }
+  // OV1: what's new or next couldn't all be read: said, never "Nothing has been added" or "Nothing new" (rows: some were read)
+  const failedLine = (rows) => (rows ? "Some of what's new couldn't be read just now." : "Couldn't read what's new just now.");
+  const SUBS_FAILED = "Couldn't read every sub-group just now.";
   // An empty place: one honest sentence, never invented content
   const emptyLine = (name) => "Nothing has been added to " + (String(name || "").trim() || "this place") + " yet.";
   const eventRow = (event) => ({ key: "event", icon: "events", title: clip(event.title || "Event"), note: [eventWhen(event), clip(event.place_name, 30)].filter(Boolean).join(" · "), open: { event } });
@@ -387,13 +390,15 @@
       note: Number(review) === 1 ? "A question about the register" : "Questions about the register", open: { view: "people", tab: "review" } });
     return out.slice(0, NEXT_MAX);
   }
-  // The one line on the closed sheet: the next event, else the latest thing added, else the facts, else the empty sentence.
+  // The one line on the closed sheet: the next event, else the latest thing added, else the facts, else the empty sentence (OV1: else,
+  // when the next event or the latest thing couldn't be read, that it couldn't).
   // -> { key, icon, title, note, open } (open null: nothing to open)
-  function peekLine({ event = null, latest = null, facts = "", name = "" } = {}) {
+  function peekLine({ event = null, latest = null, facts = "", name = "", failed = false } = {}) {
     if (event) return eventRow(event);
     if (latest) return { key: "latest", icon: kindIcon(latest.kind), title: kindLabel(latest.kind) + (latest.note ? ": " + clip(latest.note, 40) : ""),
       note: "Added " + shortDay(latest.taken_at), open: { view: "records", item: latest.id } };
     if (facts) return { key: "facts", icon: "places", title: facts, note: "", open: null };
+    if (failed) return { key: "failed", icon: "places", title: failedLine(false), note: "", open: null };
     return { key: "empty", icon: "places", title: emptyLine(name), note: "", open: null };
   }
   // How far the sheet comes up when pulled half way (px): about 60% of the map, but never onto the map's top-right controls (the +
@@ -408,5 +413,5 @@
   return { PHONE, NEARBY, READ_CAP, PHOTO_FIX_AGE, LOCATE_WAIT, PRIMARY, QUICK_TAGS, PHOTO_NEEDS_LOCATION, NO_SITES, SITES_FAILED, LOCATE_HINT,
     fix, fresh, fixForShot, photoProblem, locateProblem, locationHelp, platformOf, photoGate, accuracyWords, sitesFrom, nearby, nearbyLine,
     displayName, outerOutline, outlineFor, outlineHeld, labelPoint, keepLabels, rows, rowWords, quickTags,
-    NEXT_MAX, NEW_DAYS, shortDay, eventWhen, daysBefore, factsLine, emptyLine, nextRows, peekLine, halfHeight };
+    NEXT_MAX, NEW_DAYS, shortDay, eventWhen, daysBefore, factsLine, emptyLine, failedLine, SUBS_FAILED, nextRows, peekLine, halfHeight };
 });

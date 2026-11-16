@@ -242,3 +242,15 @@ span.ov-mark { cursor: default; }
   .ov-bg button { padding: 0 var(--s-2); }
 }
 @media (prefers-reduced-motion: reduce) { .ov-row { transition: none; } }
+/* OV1: a read that failed: its one calm line, then the app's Try again (group-space.css's quiet link button), at the start of its tile;
+   in the headline row (one fixed height) without its extra height; in the list, one line under its heading */
+.group-overview :is(.ov-card, .ov-failed) button.ov-again { justify-self: start; font-size: var(--text-small); }
+.group-overview :is(.ov-lead > .ov-card, .ov-failed) button.ov-again { min-height: 0; padding: 0; line-height: 1.35; }
+.ov-failed { margin: 0; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--rule-soft); font-size: var(--text-small); }
+.ov-failed .ov-quiet { display: inline; }
+/* (review of #584: a touch screen at a computer's width, a tablet at 820 px, gets Try again's tap area at 44 px, by an invisible hit
+   area round it, so the headline row and the list keep their size) */
+@media (pointer: coarse) {
+  .group-overview button.ov-again { position: relative; }
+  .group-overview button.ov-again::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--tap)); height: var(--tap); transform: translate(-50%, -50%); }
+}

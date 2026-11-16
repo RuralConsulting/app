@@ -261,9 +261,12 @@
   const others = (h, measureKey, type) => (!h.ownSites || !h.good ? null
     : and(h.goodWho) + (h.goodWho.length > 1 ? " also monitor " : " also monitors ") + plural(h.good, typeNoun(type) + " site", typeNoun(type) + " sites") + " here with a good record of " + lower(measure(measureKey)?.name || measureKey) + ".");
   // LAWA's published trends, last and in words: how many of the sites it assesses, and what it says of them. Groundwater: rivers only.
-  function lawaLine(h, measureKey, type) {
+  // (OV1: failed, LAWA's trends couldn't be read: said as such, never as "LAWA publishes no 10-year trend")
+  const LAWA_FAILED = "LAWA's trends couldn't be read just now.";
+  function lawaLine(h, measureKey, type, { failed = false } = {}) {
     const name = lower(measure(measureKey)?.name || measureKey);
     if (type === "groundwater") return "LAWA publishes trends for river sites only.";
+    if (failed) return LAWA_FAILED;
     if (!h.rows) return null;
     if (!h.assessed) return "LAWA publishes no 10-year trend of " + name + " at these sites.";
     const c = h.classes, parts = [c.improving ? "getting better at " + fmt(c.improving) : "", c.indeterminate ? "no clear trend at " + fmt(c.indeterminate) : "", c.degrading ? "getting worse at " + fmt(c.degrading) : ""].filter(Boolean);
@@ -516,7 +519,7 @@
   const HELD_WORDS = S.HELD_WORDS;
   const whenText = (t) => (t ? W.date(t) : "–");
 
-  return { TYPES, TYPE_WORDS, viewOf, methodKind, METHOD_WORDS, hollow, MEASURES, FIRST, measure, measuresFor, keyName, PERIODS, periodFrom, periodWords,
+  return { LAWA_FAILED, TYPES, TYPE_WORDS, viewOf, methodKind, METHOD_WORDS, hollow, MEASURES, FIRST, measure, measuresFor, keyName, PERIODS, periodFrom, periodWords,
     sites, depthText, tagsOf, keyLine, KEY_RULE, needsType, inRings, rings, near, filterSites, pickFigure, rowsFor, shownRows, hiddenCount,
     TIERS, tierOf, tierRank, GOOD_WORDS, whoseWords, CLASSES, classOf, headline, roundWords, NONE_TICKED, sentence, others, lawaLine, anyTicked,
     SHAPES, SIZES, RAMP, NO_LEVEL, PLAIN, LEVEL_BANDS, LEVEL_MEDIAN_MIN, levelOf, bandsFor, bandOf, fillOf, symbol, FILLS, ICONS, WHOSE, WHOSE_DEFAULT, whoseRows, publicLabel, countsWhat, card, CLUSTER, nearestSite, COLUMNS, sortRows, medianText, latestText, methodsText, CSV_COLUMNS, csv, fileName, exportLines, RESULT_COLUMNS, siteResultsCsv, MAX_TICKED, defaultTicks, tick, tickList,

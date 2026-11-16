@@ -19,6 +19,7 @@
   }
   const rows = (query) => Promise.resolve(query).then((r) => (r?.error ? [] : r?.data || []), () => []);
   // Each place's outline for the map: Map id -> { geometry, bbox, pointZoom }. A place with no outline is simply not in it.
+  // (OV1: the map also says, as `areasFailed`, when the areas' own read failed, so a caller can tell a failed read from no outline)
   async function readShapes(sb, farms, groups) {
     const shapes = new Map();
     const put = (id, geom) => { const light = geom && H.lighten(geom); if (light) shapes.set(id, { ...light, pointZoom: H.pointZoom(light.bbox) }); };
@@ -30,7 +31,9 @@
       const where = (q) => q.eq("kind", "area").is("valid_to", null).in("org_id", groupIds);
       const n = await count(where(sb.from("places").select("id", { count: "exact", head: true })));
       if (n === 0) return [];
-      return rows(where(sb.from("places").select("org_id,geom")).limit(Math.min(n ?? CAP.areas, CAP.areas)));
+      const r = await Promise.resolve(where(sb.from("places").select("org_id,geom")).limit(Math.min(n ?? CAP.areas, CAP.areas))).catch(() => null);
+      if (!r || r.error) { shapes.areasFailed = true; return []; }
+      return r.data || [];
     })();
     const [farmRows, areaRows] = await Promise.all([farmRead, areaRead]);
     for (const r of farmRows) if (farmIds.has(r.id)) put(r.id, r.extent);

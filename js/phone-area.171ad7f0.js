@@ -69,7 +69,9 @@
     // the group's area, its sub-groups and theirs: each read once, for the map and for the sheet alike
     // (the area first, for the map's frame and its mask; the sub-groups, their shapes and the sheet's reads only after the map has drawn
     // the area: afterMap, review of HM1)
-    const area = Promise.resolve().then(() => FP.home?.readShapes?.(sb, [], [group]) || new Map()).then((m) => m.get(group.id) || null, () => null);
+    // (OV1: a failed read of the group's own boundary is noted, so an area summed from its sub-groups is never given as the group's)
+    const area = Promise.resolve().then(() => FP.home?.readShapes?.(sb, [], [group]) || new Map())
+      .then((m) => { if (m.areasFailed) me.areaFailed = true; return m.get(group.id) || null; }, () => { me.areaFailed = true; return null; });
     let subgroupsRead = null, subShapesRead = null;
     // the sub-groups' names and fills: drawn once, and only on a map that has loaded (its sources added), whichever comes last, the
     // map's load or the reads (second review of HM1: a map loading after the timer still gets its fills)
@@ -81,7 +83,7 @@
     function afterMap() {
       if (subgroupsRead || !live()) return;
       subgroupsRead = readSubgroups().catch(() => []);
-      subShapesRead = subgroupsRead.then((subs) => (subs.length ? Promise.resolve(FP.home?.readShapes?.(sb, [], subs)).catch(() => null) : new Map()));
+      subShapesRead = subgroupsRead.then((subs) => (subs.length ? Promise.resolve(FP.home?.readShapes?.(sb, [], subs)).then((m) => { if (!m || m.areasFailed) me.subAreasFailed = true; return m; }, () => { me.subAreasFailed = true; return null; }) : new Map()));
       peek.start();
       labels();
     }
@@ -114,10 +116,14 @@
       const next = el("ul", { class: "pa-set pa-next", id: "pa-next", "aria-label": "New and next", hidden: true });
       const quiet = el("p", { class: "pa-empty", id: "pa-empty", hidden: true });
       const subsList = el("ul", { class: "pa-subs-list" });
-      const subsBox = el("section", { class: "pa-set pa-subs", id: "pa-subs", "aria-labelledby": "pa-subs-title", hidden: true }, el("h3", { id: "pa-subs-title" }, "Sub-groups"), subsList);
+      // (OV1: the list of sub-groups couldn't be read: the person's own are listed, and the sheet says the list is not every one)
+      const subsNote = el("p", { class: "pa-empty", id: "pa-subs-failed", hidden: true });
+      const subsBox = el("section", { class: "pa-set pa-subs", id: "pa-subs", "aria-labelledby": "pa-subs-title", hidden: true }, el("h3", { id: "pa-subs-title" }, "Sub-groups"), subsNote, subsList);
       const body = el("div", { class: "pa-peek-body", id: "pa-peek-body", hidden: true }, searchSlot, facts, next, quiet, subsBox);
       const node = el("section", { class: "pa-peek", id: "pa-peek", "data-state": "peek", "aria-label": "About " + group.name }, grip, lineBox, body);
-      const got = { event: undefined, latest: undefined, round: null, photos: null, review: null, members: null, subs: null, areas: new Map() };
+      // (OV1 failed: the reads of what's new or next that failed, never taken for none)
+      const got = { event: undefined, latest: undefined, round: null, photos: null, review: null, members: null, subs: null, areas: new Map(), failed: new Set() };
+      const NEW_READS = ["event", "latest", "photos", "round", "review"];
       let state = "peek", peekH = 0, halfH = 0, settleTimer = null, search = null, drag = null, dragged = false;
       const reducedNow = () => !!root.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       const setVar = () => me.wrap?.style.setProperty("--pa-peek-h", (node.hidden ? 0 : Math.round(node.getBoundingClientRect().height)) + "px");
@@ -239,10 +245,14 @@
         el("span", { class: "pa-dot", "aria-hidden": "true" }, FP.icon(r.icon, 20)),
         el("span", { class: "pa-text" }, el("b", {}, r.title), r.note ? el("small", {}, r.note) : null),
         el("span", { class: "pa-chev", "aria-hidden": "true" }, FP.icon("chevron", 16))));
-      const factsTiles = () => FP.groupOverviewModel?.tiles?.({ group, subgroups: got.subs || [], areas: got.areas, members: got.members }) || [];
+      // (OV1: the list of sub-groups couldn't be read: neither their count nor an area summed from them is a fact of the group's; the
+      // group's own boundary couldn't be read, or some sub-groups' with none of its own: no area, never a part of it as the whole)
+      const areaUnknown = () => me.areaFailed || (!got.areas.has(group.id) && (me.subsFailed || me.subAreasFailed));
+      const factsTiles = () => (FP.groupOverviewModel?.tiles?.({ group, subgroups: got.subs || [], areas: got.areas, members: got.members }) || [])
+        .filter((t) => !(me.subsFailed && t.key === "subgroups") && !(t.key === "area" && areaUnknown()));
       function drawLine() {
         if (got.event === undefined || (got.event === null && got.latest === undefined)) return;   // (until the next event, or the latest thing, is known)
-        const r = P().peekLine({ event: got.event, latest: got.latest, facts: P().factsLine(factsTiles()), name: group.name });
+        const r = P().peekLine({ event: got.event, latest: got.latest, facts: P().factsLine(factsTiles()), name: group.name, failed: got.failed.has("event") || got.failed.has("latest") });
         lineBox.dataset.line = r.key;
         if (r.open) lineBox.replaceChildren(el("ul", { class: "pa-peek-row" }, row(r, "pa-peek-open")));
         else lineBox.replaceChildren(el("p", { class: "pa-row pa-row-plain", id: "pa-peek-open", "data-row": r.key },
@@ -257,13 +267,15 @@
         next.hidden = !rows.length;
         // nothing new or next: one honest sentence (what was added is older than a week; or nothing at all), never invented content
         const settled = got.event !== undefined && got.latest !== undefined;
-        quiet.textContent = !rows.length && settled ? (got.latest ? "Nothing new in the last week." : P().emptyLine(group.name)) : "";
+        const failed = NEW_READS.some((k) => got.failed.has(k));
+        quiet.textContent = settled && failed ? P().failedLine(rows.length > 0) : !rows.length && settled ? (got.latest ? "Nothing new in the last week." : P().emptyLine(group.name)) : "";
         quiet.hidden = !quiet.textContent;
         drawSubs();
       }
       function drawSubs() {
         const subs = got.subs || [];
-        subsBox.hidden = !subs.length;
+        subsBox.hidden = !subs.length && !me.subsFailed;
+        subsNote.textContent = me.subsFailed ? P().SUBS_FAILED : ""; subsNote.hidden = !me.subsFailed;
         subsList.replaceChildren(...subs.map((s) => {
           const colour = me.colours?.get(s.name) || null, ha = FP.groupOverviewModel?.hectares?.(got.areas.get(s.id)?.ha);
           const parts = [el("span", { class: "pa-dot", "aria-hidden": "true" }, el("span", { class: "pa-swatch", ...(colour ? { style: "background:" + colour } : {}) })),
@@ -296,22 +308,22 @@
       if (keys.includes("events")) {
         safely(() => rows1(sb.from("group_events").select("id,title,starts_at,ends_at,all_day,place_name,cancelled_at").eq("org_id", group.id).is("cancelled_at", null)
           .gte("starts_at", H?.nzDayStart?.(day) || new Date().toISOString()).order("starts_at", { ascending: true }).range(0, 0)))
-          .then((r) => { got.event = r?.[0] || null; redraw(); });
+          .then((r) => { got.event = r?.[0] || null; if (r === null) got.failed.add("event"); redraw(); });
       } else got.event = null;
       if (keys.includes("records")) {
         safely(() => rows1(sb.from("captures").select("id,kind,note,taken_at").eq("org_id", group.id).is("archived_at", null).order("taken_at", { ascending: false }).range(0, 0)))
-          .then((r) => { got.latest = r?.[0] || null; redraw(); });
+          .then((r) => { got.latest = r?.[0] || null; if (r === null) got.failed.add("latest"); redraw(); });
         const since = P().daysBefore(day, P().NEW_DAYS);
         if (since) safely(() => head(sb.from("captures").select("id", { count: "exact", head: true }).eq("org_id", group.id).is("archived_at", null).eq("kind", "photo").gte("taken_at", since)))
-          .then((n) => { got.photos = n ? { n, since } : null; redraw(); });
+          .then((n) => { got.photos = n ? { n, since } : null; if (n === null) got.failed.add("photos"); redraw(); });
       } else got.latest = null;
       if (coordinator && keys.includes("water")) {
         safely(() => rows1(sb.from("sampling_rounds").select("id,sampled_on,counts").eq("org_id", group.id).order("sampled_on", { ascending: false }).limit(1)))
-          .then((r) => { got.round = r?.[0] || null; redraw(); });
+          .then((r) => { got.round = r?.[0] || null; if (r === null) got.failed.add("round"); redraw(); });
       }
       if (home?.people && keys.includes("people") && FP.reviewItemsModel) {
         safely(() => head(sb.from("proposals").select("id", { count: "exact", head: true }).eq("org_id", group.id).in("kind", FP.reviewItemsModel.KINDS).eq("status", "proposed")))
-          .then((n) => { got.review = n; redraw(); });
+          .then((n) => { got.review = n; if (n === null) got.failed.add("review"); redraw(); });
       }
       if (!group.parent_org_id && FP.peopleModel?.canSee?.(group.role)) {
         safely(() => head(sb.from("group_members").select("id", { count: "exact", head: true }).eq("org_id", group.id).is("ended_at", null))).then((n) => { got.members = n; redraw(); });
@@ -528,7 +540,7 @@
         const { data, error } = await sb.rpc("subgroup_counts", { parent_org: group.id });
         if (error) throw error;
         return (Array.isArray(data) ? data : []).map((r) => ({ id: r.subgroup_id, name: r.subgroup_name, parent_org_id: group.id, member: !!r.is_member })).filter((s) => s.id && s.name).slice(0, 40);
-      } catch { return (FP.groupSpace?.groups?.() || []).filter((g) => g.parent_org_id === group.id).map((g) => ({ ...g, member: true })).slice(0, 40); }
+      } catch { me.subsFailed = true; return (FP.groupSpace?.groups?.() || []).filter((g) => g.parent_org_id === group.id).map((g) => ({ ...g, member: true })).slice(0, 40); }
     }
 
     // ---- a site: shown on the map, and what Maps shows for it -----------------------------------------------------------------------

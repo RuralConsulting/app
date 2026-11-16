@@ -72,24 +72,31 @@
       const areas = await soft(sb.from("places").select("org_id, geom").eq("kind", "area").is("valid_to", null).in("org_id", ids).limit(ids.length * 4)
         .then(({ data, error }) => { if (error) throw error; return data || []; }));
       const ringsOf = (id) => list(areas).filter((a) => a.org_id === id).flatMap((a) => M().rings(a.geom));
-      return { rows: list(rows), area: ringsOf(groupId), subs: subList.map((s) => ({ ...s, rings: ringsOf(s.id) })) };
+      // (OV1 failed: the sub-groups or their boundaries couldn't be read, so a sub-group missing here is not known to be out of reach)
+      return { rows: list(rows), area: ringsOf(groupId), subs: subList.map((s) => ({ ...s, rings: ringsOf(s.id) })), failed: subs === null || areas === null };
     });
     // WQ1's summary of one family for these sites: one row per site, BATCH ids a call, each paged (the API answers at most 1,000 rows).
     // PERF3f: the batches are asked side by side (at most SUMMARY_POOL at a time), not one after another; each batch's pages stay in
     // order. 2, not 4 (review of #578, round two: on the live app this read's slowest batch went from 0.86 s one after another to
     // 3.06 s four at a time; 2 costs 0.01 to 0.11 s against 4, and the most one open has in flight is then 4, where main had 2)
+    // (OV1: a batch that came back is kept when another fails, so asking again reads only the sites not yet read)
+    const summarySets = new Map();
     const summary = (family, ids) => once("summary|" + family, async () => {
-      const out = {};
-      await pool(batches(ids, BATCH).map((part) => async () => {
+      const set = summarySets.get(family) || { out: {}, asked: new Set() };
+      summarySets.set(family, set);
+      await pool(batches(ids.filter((id) => !set.asked.has(id)), BATCH).map((part) => async () => {
+        const got = [];
         for (let page = 0; page < MAX_PAGES; page++) {
           const { data, error } = await sb.from("site_record_summary").select("site_id, family, n, first_sampled, last_sampled").in("site_id", part).eq("family", family)
             .order("site_id").range(page * PAGE, (page + 1) * PAGE - 1);
           if (error) throw error;
-          for (const r of list(data)) out[r.site_id] = r;
+          got.push(...list(data));
           if (list(data).length < PAGE) break;
         }
+        for (const r of got) set.out[r.site_id] = r;
+        for (const id of part) set.asked.add(id);
       }), SUMMARY_POOL);
-      return out;
+      return set.out;
     });
     // wq_site_figures for the sites asked (BATCH a call); each site is read once per family, period and field choice.
     const figureSets = new Map();
@@ -131,7 +138,9 @@
       }
       return out;
     });
-    const L = { sb, sites: sitesOf, base, summary, figures, lawa, series };
+    // (OV1: the sub-groups' or boundaries' read inside base failed: let base go, so the next ask reads it again; nothing else)
+    const dropFailed = async () => { const p = cache.get("base"); if (p && (await p.catch(() => null))?.failed && cache.get("base") === p) cache.delete("base"); };
+    const L = { sb, sites: sitesOf, base, summary, figures, lawa, series, dropFailed };
     loaders.set(groupId, L);
     return L;
   }
@@ -155,9 +164,11 @@
     const summary = family === family0 ? (await early) || (await L.summary(family, all.map((s) => s.id))) : await L.summary(family, all.map((s) => s.id));
     const ids = typeSites.filter((s) => s.own || summary[s.id]).map((s) => s.id);
     const from = M().periodFrom(st.period, now);
+    // (OV1: LAWA's read failing leaves the rest of the page; lawaFailed says so, so its line never says LAWA publishes none)
+    let lawaFailed = false;
     const [figures, lawa] = await Promise.all([withFigures ? L.figures(family, from, st.includeField, ids) : [],
-      L.lawa(typeSites.filter((s) => s.shared && s.sourceKey === "ecan-wq-sites" && summary[s.id]).map((s) => s.id)).catch(() => ({}))]);
-    return { base: b, all, typeSites, rows: M().rowsFor(typeSites, { summary, figures, lawa, measureKey: st.measure, now }) };
+      L.lawa(typeSites.filter((s) => s.shared && s.sourceKey === "ecan-wq-sites" && summary[s.id]).map((s) => s.id)).catch(() => { lawaFailed = true; return {}; })]);
+    return { base: b, all, typeSites, rows: M().rowsFor(typeSites, { summary, figures, lawa, measureKey: st.measure, now }), lawaFailed };
   }
 
   // ---- the overview card's one call (MC1's Water quality card on a group's computer Home) -----------------------------------------------
@@ -170,13 +181,16 @@
     const now = today ? Date.parse(today + "T12:00:00+13:00") : Date.now();
     const L = loader(sb, groupId);
     if (sub) {
-      const s = (await L.base()).subs.find((x) => x.id === sub);
-      if (!s || !s.rings.length) return { sentence: null, others: null, lawa: null, figures: null, noArea: true, href: href(groupId) };
+      const b = await L.base(), s = b.subs.find((x) => x.id === sub);
+      if (!s || !s.rings.length) {
+        if (b.failed) throw new Error("the sub-groups' boundaries couldn't be read");   // (OV1: never "not one you can see" for a failed read)
+        return { sentence: null, others: null, lawa: null, figures: null, noArea: true, href: href(groupId) };
+      }
     }
     const st = { org: groupId, names: names || namesOf(), measure, type, sub, period: "all", includeField: false };
-    const { rows } = await rowsOf(L, st, now, { figures: false });
+    const { rows, lawaFailed } = await rowsOf(L, st, now, { figures: false });
     const picked = M().whoseRows(rows), h = M().headline(M().shownRows(picked, false), { figures: false });
-    return { sentence: M().sentence(h, measure, type, M().hiddenCount(picked)), others: M().others(h, measure, type), lawa: M().lawaLine(h, measure, type), figures: h, noArea: false, href: href(groupId) };
+    return { sentence: M().sentence(h, measure, type, M().hiddenCount(picked)), others: M().others(h, measure, type), lawa: M().lawaLine(h, measure, type, { failed: lawaFailed }), lawaFailed, figures: h, noArea: false, href: href(groupId) };
   }
   const namesOf = () => new Map(list(FP.groupSpace?.groups?.()).map((g) => [g.id, g.name]));
 
@@ -300,7 +314,7 @@
       drawSub(data.base); drawSwitch(M().hiddenCount(picked)); drawWhose(data.typeSites);
       sources.textContent = M().sourcesLine(data.all.filter((s) => s.view));
       drawFigures(h);
-      lawaBox.textContent = M().lawaLine(h, st.measure, st.type) || "";
+      lawaBox.textContent = M().lawaLine(h, st.measure, st.type, { failed: data.lawaFailed }) || "";
       credit.textContent = creditLine(shown);
       FP.shareSave?.set(offer);   // EX1
       if (phone) return drawPhone();
@@ -563,7 +577,7 @@
       // review of #538, 10: above the map only the one quiet control, the sentence and the bar (the page's name is for a screen
       // reader; the bar's More already marks where you are); the count and the latest date go quietly under the map
       // WQ2: the headline is the group's own sampling when there is any; LAWA's line goes low, under the map
-      const others = M().others(h, st.measure, st.type), lawa = M().lawaLine(h, st.measure, st.type);
+      const others = M().others(h, st.measure, st.type), lawa = M().lawaLine(h, st.measure, st.type, { failed: data?.lawaFailed });
       fill(phoneBox, el("h1", { class: "wqp-phonetitle visually-hidden" }, "Water quality"), choose,
         el("p", { class: "wqp-sentence" }, headlineOf(h)), others ? el("p", { class: "wqp-others" }, others) : null, mapHost,
         el("p", { class: "wqp-phonelead" }, fmt(h.sites) + (h.sites === 1 ? " site" : " sites") + " with results" + (h.latest ? " · latest " + W().date(h.latest) : "")),
@@ -1044,5 +1058,6 @@
   }
   // SR1: a saved sampling round changes the group's results: the next visit reads them again
   const forget = (groupId) => loaders.delete(groupId);
-  FP.wqPage = { view, summary, href, loader, rowsOf, forget, close: () => live?.destroy(), debugMap: () => live?.map?.() || null };
+  const forgetFailed = (groupId) => loaders.get(groupId)?.dropFailed?.();
+  FP.wqPage = { view, summary, href, loader, rowsOf, forget, forgetFailed, close: () => live?.destroy(), debugMap: () => live?.map?.() || null };
 })(typeof window === "undefined" ? globalThis : window);

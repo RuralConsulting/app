@@ -351,13 +351,14 @@
   const gradable = (site) => site?.waterType !== "groundwater";
   // The Chart block's data for one site, or for several (one line each, the site colours). seriesBySite: {id: rows of
   // measurement_series}. A site with no results in the window is still in the key ("no results").
-  function chartData({ sites, parameter, name, unit, seriesBySite, latestBySite, years, limits = NO_LIMITS }) {
+  // (OV1 unread: {site id: true} for a site whose results couldn't be read: its key says so, never "no results")
+  function chartData({ sites, parameter, name, unit, seriesBySite, latestBySite, years, limits = NO_LIMITS, unread = null }) {
     const all = list(sites), one = all.length === 1;
     const lines = all.map((s) => {
       const L = latestBySite?.[s.id], row = list(L?.rows).find((r) => r.parameter === parameter);
       const d = W.chartData({ site: s, parameter, name, unit, series: seriesBySite?.[s.id] || [], attribution: L?.attribution || "", provisional: row?.provisional });
       const points = d.series[0].points.map((p) => ({ ...p, text: p.text ? tidy(p.text) : p.text }));
-      return { site: s, latest: L, row, series: { ...d.series[0], points, id: "site-" + s.id, label: s.name, owner: s.owner || "" } };
+      return { site: s, latest: L, row, series: { ...d.series[0], points, id: "site-" + s.id, label: s.name, owner: s.owner || "", ...(unread?.[s.id] ? { unread: true } : {}) } };
     });
     // WQV1: a groundwater site is never shaded with the NPS-FM's river bands; the drinking-water limit is drawn as a reference line instead
     const gw = all.some((s) => s.waterType === "groundwater"), bands = bandsFor(parameter, all);
@@ -473,11 +474,16 @@
     return r ? tidy(r.value) + (r.unit ? " " + r.unit : "") + ", " + r.date : null;
   }
 
+  // OV1: a site's results that couldn't be read, in the comparison's table, chart and lines
+  const UNREAD = "Couldn't read just now";
+  const unreadLine = (names) => (names.length === 1 ? "Couldn't read the results of " + names[0] + " just now." : "Couldn't read the results of " + names.length + " of these sites just now: " + names.join(", ") + ".");
+  const SUMMARY_UNREAD = "Couldn't read these sites' results just now, so they are listed by name.";
   // The comparison table: one row per chosen site. per: {site id: {latest, summary, band, trend}} (summary, band and trend are the
   // analysis function's replies, or null when not asked).
   function compareRows(sites, parameter, per, years, offered) {
     return list(sites).map((s, i) => {
       const x = per?.[s.id] || {}, latest = latestWords(x.latest, parameter), row = { id: s.id, slot: i + 1, name: s.name, owner: s.owner || "" };
+      if (x.latest?.failed) return { ...row, latest: UNREAD, median: "–", band: "–", trend: "–" };   // (OV1: never "No results of this measure")
       if (!latest) return { ...row, latest: "No results of this measure", median: "–", band: "–", trend: "–" };
       return { ...row, latest, median: medianWords(x.summary), band: bandWords(x.band, parameter, offered).short, trend: trendWords(x.trend, years).short };
     });
@@ -485,5 +491,5 @@
 
   return { DOT_GAP, thinRank, thin, bandsFor, RIVERS_ONLY, DRINKING_WATER, drinkingWater, GROUNDWATER_WORDS, gradable, CURRENT, isCurrent, HELD_WORDS, refine, holdBack, markSparse, restore, compareHint, analysisYears, ANALYSIS_LONGEST, emptyPeriod, MAX_SITES, MAX_CHOSEN, RECENT_YEARS, LABEL_ZOOM, WINDOWS, DEFAULT_YEARS, ANALYSED, ATTRIBUTE_OF, NPSFM_MEDIAN, NO_LIMITS,
     tidy, credit, siteList, listing, pinned, intro, boxes, BOX_MARGIN_KM, quarters, boxRows, MAX_READ, PARTIAL, summaryRows, SUMMARY_IDS, SUMMARY_PAGE, framePadding, buttonTop, choose, remove, full, parameters, pickParameter, pickYears, record, recordLine, recordOf, bandRanges, windowStart, chartData,
-    analysisRequest, requestKey, bandWords, trendWords, trendClass, TOO_LITTLE, medianWords, lawaWords, lawaLine, latestWords, compareRows };
+    analysisRequest, requestKey, bandWords, trendWords, trendClass, TOO_LITTLE, medianWords, lawaWords, lawaLine, latestWords, compareRows, UNREAD, unreadLine, SUMMARY_UNREAD };
 });

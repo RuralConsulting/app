@@ -481,11 +481,12 @@
   }
   // The dated line's words: never "the whole group" when some sub-groups are left out.
   // input: { name (the group's), isSub (the page is a sub-group's own), subgroups, selectedName }
-  function scopeWords({ name = "", isSub = false, subgroups = [], selectedName = null } = {}) {
+  // (OV1 known: false when the list of sub-groups couldn't be read, and only the person's own are known: never "the whole group")
+  function scopeWords({ name = "", isSub = false, subgroups = [], selectedName = null, known = true } = {}) {
     if (selectedName) return selectedName + " in numbers";
     const subs = list(subgroups), mine = subs.filter((s) => s.member !== false).length;
-    if (isSub || !subs.length) return (name || "The group") + " in numbers";
-    if (mine === subs.length) return "The whole group in numbers";
+    if (isSub || (!subs.length && known)) return (name || "The group") + " in numbers";
+    if (mine === subs.length && known) return "The whole group in numbers";
     if (!mine) return "The group's own numbers (not its sub-groups)";
     return "The group and your " + (mine === 1 ? "1 sub-group" : count(mine) + " sub-groups") + " in numbers";
   }
@@ -505,8 +506,32 @@
   // Where "Open water quality" goes, in one place: the group's Water quality page (WQV1, `#/group/<id>/water`).
   const waterQualityLink = (groupId, href) => ({ href: href(groupId, "water"), opensPanel: false });
 
+  // OV1 (a live walk: the largest group's overview said "N sites · 0 samples" when wq_site_result_counts timed out): a number is shown
+  // only when the read it rests on came back. A read that failed is said in one calm line, in the tile's or the list's own place, with
+  // the screen's Try again; never as 0, as none, or as an empty list. A read made in batches that failed in any batch is not read.
+  const FAILED = Object.freeze({
+    counts: "Couldn't read the samples just now.",
+    sites: "Couldn't read the monitoring sites just now.",
+    areas: "Couldn't read the boundaries just now.",
+    subgroups: "Couldn't read the sub-groups just now.",
+    members: "Couldn't read the members just now.",
+    records: "Couldn't read the records just now.",
+    coming: "Couldn't read the calendar just now.",
+    held: "Couldn't read the events just now.",
+    files: "Couldn't read the files just now.",
+    review: "Couldn't read the questions just now.",
+  });
+  // (review of #584: the headline row's tiles show one line, clamped; there the tile's title says what, and the line is short; the
+  // whole line is its tooltip)
+  const FAILED_LEAD = "Couldn't read it just now.";
+  // A tile's read that failed (a tile's load gives this, never null, so a failure is never taken for "nothing to show")
+  const READ_FAILED = Object.freeze({ failed: true });
+  const failed = (d) => !!d && d.failed === true;
+
   // The calm line under the tiles and on the map when something is missing; null when nothing is.
-  function emptyLine({ areas: A = new Map(), sites: all = [], filter = {}, sitesRead = true } = {}) {
+  // OV1: a boundary read that failed is said as such, never as "No boundary held".
+  function emptyLine({ areas: A = new Map(), sites: all = [], filter = {}, sitesRead = true, areasFailed = false } = {}) {
+    if (areasFailed && (filter.sub ? !A.has(filter.sub) : true)) return FAILED.areas;
     if (filter.sub ? !A.has(filter.sub) : !A.size) return filter.sub ? "No boundary held for this sub-group yet." : "No boundary held for this group yet.";
     if (sitesRead && !inScope(all, filter).length) return "No water quality monitoring sites lie inside the boundaries held.";
     return null;
@@ -515,16 +540,19 @@
   // ---- the ranked list ---------------------------------------------------------------------------------------------------
   // The sub-groups with what is known of each (area, sites inside, results in the period, the chosen measure's band), sorted by
   // name, area (largest first) or results (most first); none known go last.
-  function subgroupRows(subgroups, A, all, classes, measure, sort = "name") {
+  // OV1 known: { sites(id), results(id) } -> false where that sub-group's read failed: its sites or results are null (unknown), never 0,
+  // and a sort by results puts the unknown after every known number (a zero included), never among them.
+  function subgroupRows(subgroups, A, all, classes, measure, sort = "name", known = {}) {
+    const sitesKnown = known.sites || (() => true), resultsKnown = known.results || (() => true);
     const rows = list(subgroups).map((s) => {
-      const inside = list(all).filter((x) => x.orgs.includes(s.id));
-      return { id: s.id, name: s.name, member: s.member !== false, ha: A.get(s.id)?.ha ?? null, area: hectares(A.get(s.id)?.ha), sites: inside.length,
-        results: inside.reduce((n, x) => n + (x.periodResults || 0), 0), band: measure ? band(inside, measure, classes) : null, hasArea: A.has(s.id) };
+      const inside = list(all).filter((x) => x.orgs.includes(s.id)), haveSites = sitesKnown(s.id), haveResults = haveSites && resultsKnown(s.id);
+      return { id: s.id, name: s.name, member: s.member !== false, ha: A.get(s.id)?.ha ?? null, area: hectares(A.get(s.id)?.ha), sites: haveSites ? inside.length : null,
+        results: haveResults ? inside.reduce((n, x) => n + (x.periodResults || 0), 0) : null, band: measure && haveResults ? band(inside, measure, classes) : null, hasArea: A.has(s.id) };
     });
     const by = {
       name: (a, b) => a.name.localeCompare(b.name, "en-NZ"),
       area: (a, b) => (b.ha ?? -1) - (a.ha ?? -1) || a.name.localeCompare(b.name, "en-NZ"),
-      results: (a, b) => b.results - a.results || (b.ha ?? -1) - (a.ha ?? -1) || a.name.localeCompare(b.name, "en-NZ"),
+      results: (a, b) => (b.results ?? -1) - (a.results ?? -1) || (b.ha ?? -1) - (a.ha ?? -1) || a.name.localeCompare(b.name, "en-NZ"),
     };
     return rows.sort(by[sort] || by.name);
   }
@@ -568,5 +596,5 @@
     headlineMeasure, wqCard, KEYS, TREND_CAP, PARAMETER_NAMES, CARD_GROUPS, createCards, cardsKey, layoutFrom, layoutText, shownCards, moveCard, toggleCard, pickerGroups, waterQualityLink,
     MEASURES, measureOf, minTimes, windowFloor, trendPlan, band, bands, CLASS_WORDS, BAR, bandWords, trendSentence, tiles, emptyLine, subgroupRows, siteRows, classLabel,
     contextThemes, YEAR_MS, monthSeries, orgsInScope, scopeWords, recordPages, wholeSeries, PAGE_ROWS, RECORDS_CAP,
-    startFilter, startText, frameKey, frameFrom, frameText, codeChoices, distinctCodes, spreadMarks, heldBy, heldWords };
+    startFilter, startText, frameKey, frameFrom, frameText, codeChoices, distinctCodes, spreadMarks, heldBy, heldWords, FAILED, FAILED_LEAD, READ_FAILED, failed };
 });
