@@ -28,21 +28,24 @@
   function mount(holder, options) {
     let store = null;
     try { store = localStorage; } catch {}
-    const { phoneGroup = false, ...rest } = options;
-    return api.seedStartOn(store, rest.referenceLayers, () => mountWith(holder, rest), { phoneGroup });
+    const { phoneGroup = false, showing = null, ...rest } = options;
+    return api.seedStartOn(store, rest.referenceLayers, () => mountWith(holder, rest), { phoneGroup, showing });
   }
   const phone = () => !!root.matchMedia?.("(max-width: 720px)").matches;   // the viewer's own phone width
   // PH2: what the app sets around the viewer's own controls on a phone (viewer.js is the portal's and is not edited): one "More"
   // control after Locate holds zoom, the compass, 3D, measure and print (shown by maps.css while it is open); the credit starts
   // folded to its "i"; a group's map fits "Whole area" (not "Whole property") and its line says when it was published, not surveyed.
-  function chrome(map, holder, { group = false, publishedAt = null, areaHa = null } = {}) {
+  // MV1 (the owner, 16 Nov 2026, of the older maps portal: "the maps are just simpler and much easier to navigate"): one panel in the
+  // portal's shape. Its head: the place's name small, the map's title large, one line of facts (api.meta); "Whole group" (or "Whole
+  // farm", "Whole sub-group": api.wholeLabel) at the foot of the one column of controls on a computer.
+  function chrome(map, holder, { group = false, sub = false, publishedAt = null, areaHa = null, surveyDate = null, kind = "", place = "" } = {}) {
     const el = (...a) => FP.el(...a);
-    if (group) {
-      const fit = holder.querySelector(".rv-fit");
-      if (fit) fit.textContent = "Whole area";
-      const line = holder.querySelector(".rv-meta");
-      if (line) line.textContent = api.meta({ publishedAt, areaHa });
-    }
+    const fit = holder.querySelector(".rv-fit");
+    if (fit) fit.textContent = api.wholeLabel({ group, sub });
+    const line = holder.querySelector(".rv-meta");
+    if (line) line.textContent = api.meta({ publishedAt, areaHa, surveyDate: group ? null : surveyDate, kind });
+    const kicker = holder.querySelector(".rv-kicker");
+    if (kicker && place) kicker.textContent = place;
     FP.basemaps?.quietCredit?.(map);
     const button = el("button", { type: "button", class: "ph-more-btn", "aria-expanded": "false", "aria-label": "More map tools", title: "More map tools" }, FP.icon ? FP.icon("more", 20) : "…");
     const box = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group ph-more" }, button);
@@ -51,28 +54,55 @@
     // a tool that takes over the map (3D, measure, print, compare) closes the list; zoom keeps it open for another tap
     holder.addEventListener("click", (e) => { if (e.target.closest?.(".rv-3d button, .rv-tools button, .ph-fit button")) more(false); });   // (RF1: Whole area too)
     try { map.addControl({ onAdd: () => box, onRemove: () => box.remove() }, "top-right"); } catch {}
-    try { map.addControl({ onAdd: () => locateControl(map), onRemove: () => {} }, "top-right"); } catch {}
-    // RF1 (the owner's phone, 14 Nov 2026: the title wrapped beside Layers, and "Whole area", the Water quality chip and Layers split
-    // one job across two places): on a phone what the map shows is chosen in one row top left, Layers first (it opens the map's own
-    // sheet, whose own Layers button steps aside so the title has the row), then Water quality and Sites (wq-sites.js places them
-    // after it); "Whole area" joins the tools under More. Nothing is removed. maps.css shows each only at a phone's width.
-    const sheetBtn = holder.querySelector(".rv-layers-btn");
-    if (sheetBtn && !holder.querySelector(".ph-layers")) {
-      const chip = el("button", { type: "button", class: "ph-layers", "aria-expanded": sheetBtn.getAttribute("aria-expanded") || "false", "aria-label": "Layers and legend" },
-        FP.icon ? FP.icon("layers", 16) : null, el("span", {}, "Layers"));
-      chip.addEventListener("click", () => sheetBtn.click());
-      if (typeof MutationObserver !== "undefined") new MutationObserver(() => chip.setAttribute("aria-expanded", sheetBtn.getAttribute("aria-expanded") || "false")).observe(sheetBtn, { attributes: true, attributeFilter: ["aria-expanded"] });
-      holder.append(chip);
-    }
+    let locate = null;
+    try { map.addControl({ onAdd: () => (locate = locateControl(map)), onRemove: () => locate?.remove() }, "top-right"); } catch {}
+    // RF1 then MV1: "Whole area" (now "Whole group") is in the one column of controls: at its foot on a computer, under More on a phone.
+    // (RF1's Layers chip on a phone is gone from the map: MV1's peek, the sheet's own head, opens the same sheet with one tap.)
     const fitBtn = holder.querySelector(".rv-fit");
     if (fitBtn && !fitBtn.closest(".ph-fit")) {
-      const fitBox = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group ph-fit" }), home = fitBtn.parentElement;
-      // (on a computer it stays where the viewer put it; on a phone it is a tool under More)
-      const place = () => { if (phone()) { if (fitBtn.parentElement !== fitBox) fitBox.append(fitBtn); } else if (fitBtn.parentElement !== home && home?.isConnected) home.append(fitBtn); };
+      const fitBox = el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group ph-fit" }, fitBtn);
       try { map.addControl({ onAdd: () => fitBox, onRemove: () => fitBox.remove() }, "top-right"); } catch {}
-      place();
-      root.matchMedia?.("(max-width: 720px)")?.addEventListener?.("change", place);
     }
+    // MV1: on a phone nothing covers the map at rest but the sheet's peek and the +. Locate and More sit in the peek, beside the map's
+    // title (maps.css shows them only at a phone's width; on a computer the viewer's own Locate stays in the column). The whole peek
+    // opens the sheet (its title and facts are not targets of their own, so a tap on them is a tap on the head: maps.css), and the
+    // sheet's handle says whether it is open.
+    const bar = holder.querySelector(".rv-titlebar");
+    if (bar && !bar.querySelector(".mv-peek-tools")) bar.append(el("div", { class: "mv-peek-tools" }, ...(locate ? [locate] : []), box));
+    const grip = holder.querySelector(".rv-toggle-panel"), panel = holder.querySelector(".rv-panel");
+    if (grip && panel) {
+      grip.setAttribute("aria-label", "Layers and legend");
+      const said = () => grip.setAttribute("aria-expanded", String(!panel.classList.contains("collapsed")));
+      said();
+      if (typeof MutationObserver !== "undefined") new MutationObserver(said).observe(panel, { attributes: true, attributeFilter: ["class"] });
+    }
+  }
+  // MV1: the panel's body in the portal's order. The map's own layers first, each a switch with its legend under it (the viewer's own
+  // rows), then the water quality sites as one more switch (wq-sites.js's own button and its Sites, moved off the map), then one
+  // "Reference" group as the portal had it: roads and waterways, the context layers under their own folding themes, "Shade outside" and
+  // "Labels", each with its source line. Rows are moved, never made again, so every switch keeps what it does; a row the viewer has not
+  // shown (a reference file that has not answered) stays hidden, and the Reference group shows once one of its rows does. Called once
+  // the water quality overlay is attached (draw), so its button is there to move.
+  function dock(holder) {
+    const el = (...a) => FP.el(...a), body = holder.querySelector(".rv-panel .rv-body");
+    if (!body || body.querySelector(".mv-ref")) return;
+    const wq = holder.querySelector(":scope > .wqs-ctrl");
+    const ref = el("div", { class: "mv-ref", role: "group", "aria-labelledby": "mv-ref-head", hidden: "" }, el("div", { class: "mv-ref-head", id: "mv-ref-head", role: "heading", "aria-level": "3" }, "Reference"));
+    // the first of the viewer's Reference and context sections, or the shade and labels rows, marks where the group goes
+    const first = body.querySelector(":scope > .rv-ref-group, :scope > .rv-ctx-group, :scope > .rv-mask-row");
+    body.insertBefore(ref, first || null);
+    if (wq) body.insertBefore(el("div", { class: "mv-wq-row" }, wq), ref);
+    // (on a phone, Sites opens the sites' own sheet in place of the map's, which steps down to its peek)
+    const panel = holder.querySelector(".rv-panel"), grip = holder.querySelector(".rv-toggle-panel");
+    wq?.querySelector(".wqs-list-btn")?.addEventListener("click", () => { if (phone() && panel && !panel.classList.contains("collapsed")) grip?.click(); });
+    for (const row of body.querySelectorAll(".rv-ref-group .rv-ref-row")) ref.append(row);
+    for (const s of body.querySelectorAll(":scope > .rv-ctx-group")) ref.append(s);
+    for (const row of body.querySelectorAll(":scope > .rv-mask-row")) ref.append(row);
+    // shown once any row in it is shown (none of its rows, nor the theme it sits under, hidden)
+    const shows = () => [...ref.querySelectorAll(".rv-layer")].some((r) => { for (let n = r; n && n !== ref; n = n.parentElement) if (n.hidden) return false; return true; });
+    const check = () => { const on = shows(); if (ref.hidden === on) ref.hidden = !on; };
+    check();
+    if (typeof MutationObserver !== "undefined") new MutationObserver(check).observe(ref, { attributes: true, attributeFilter: ["hidden"], subtree: true });
   }
   // review of #538, 4: Locate me on a phone's map is the app's own, as on Home (the viewer's is MapLibre's, which a permission query
   // saying "denied" turns off for good and which says nothing when refused): the phone is asked from the tap itself, the real answer
@@ -109,10 +139,10 @@
     return box;
   }
   function mountWith(holder, options) {
-    if (linzKey()) return root.RCLViewer.mount(holder, options);
+    if (linzKey()) return api.heard([root, root.document], () => root.RCLViewer.mount(holder, options));
     let was = null;
     try { was = localStorage.getItem(BASEMAP_KEY); localStorage.setItem(BASEMAP_KEY, "none"); } catch {}
-    try { return root.RCLViewer.mount(holder, options); }
+    try { return api.heard([root, root.document], () => root.RCLViewer.mount(holder, options)); }
     finally { try { if (was === null) localStorage.removeItem(BASEMAP_KEY); else localStorage.setItem(BASEMAP_KEY, was); } catch {} }
   }
   FP.mapsView = api.create({
@@ -121,7 +151,9 @@
     // Switching it on returns once it applies: the map takes its size from the holder as it starts, and before the stylesheet
     // is in, the viewer's map element has no height (MapLibre then makes a 300 px canvas and keeps it). Chrome reads the sheet
     // again when its media changes, so it applies only once the page's style sheets list it (checked every 16 ms, 4 s at most).
-    phone, chrome,
+    phone, chrome, dock,
+    // MV1: a sub-group (a group inside another) fits "Whole sub-group"
+    subOf: (owner) => !!(owner?.org && (FP.groupSpace?.groups?.() || []).find((g) => g.id === owner.org)?.parent_org_id),
     // PH2: a group's map's sub-groups in the soft neutral set (map-palette.js), and the names of the person's sub-groups to know them by
     calm: async (manifest, owner, url) => {
       const group = !!(owner?.org && !owner.farm), css = typeof getComputedStyle === "function" ? getComputedStyle(document.documentElement) : null;
@@ -146,7 +178,7 @@
     // dotted lines at overview scale) and everything outside the area is under the 45% mask, cut along the area's outer edge; a farm's
     // map keeps its boundary and gets the mask only when its own package has none. On a phone a published map's own text labels start
     // off (one tap away, Labels in Layers). viewer.js is not edited: its layers are switched from here once it has added them.
-    focus: (map, holder, { group = false, manifest = null, url = null } = {}) => api.focusMap(map, holder, { group, manifest, url, phone: phone(), palette: FP.mapPalette, phoneModel: FP.phoneModel }),
+    focus: (map, holder, { group = false, manifest = null, url = null, again = false } = {}) => api.focusMap(map, holder, { group, manifest, url, phone: phone() && !again, palette: FP.mapPalette, phoneModel: FP.phoneModel }),
     styles: (on) => {
       const link = document.querySelector("link[data-viewer-styles]");
       if (!link) return null;
@@ -312,6 +344,9 @@
     }
 
     function dropMap(s) {
+      try { s.keep?.stop(); } catch {}
+      s.keep = null;
+      try { s.map?.mvUnheard?.(); } catch {}   // (MV1: the viewer's own window and document listeners, which it never takes away)
       env.clearTimer(s.timer); s.timer = null; s.renewAt = Infinity;
       try { s.overlay?.remove(); } catch {}
       s.overlay = null;
@@ -333,14 +368,19 @@
           el("small", {}, [m.kind, m.published_at ? "Updated " + day(m.published_at) : ""].filter(Boolean).join(" · "))))))));
     }
 
-    async function draw(s) {
+    // MV1 (and map-keep.js): in WebKit a map whose box changes size after it first drew goes blank (a phone turned sideways and back), so
+    // there the map is made again where it was, from the links already read (no new read; the hourly renewal still renews them)
+    async function draw(s, again = false) {
       const renewing = !!s.map;
       if (!renewing) say(s, "Loading the map…");
       let read = null;
-      try { read = await readPackage(s.chosen); } catch {}
+      if (again && s.read) read = s.read;
+      else try { read = await readPackage(s.chosen); } catch {}
+      s.read = read;
       if (s !== shown) return;
       if (!read) { s.handoff?.drop(); say(s, renewing ? RAN_OUT : UNAVAILABLE, tryAgain(s)); return; }
       const m = s.map, at = m && { center: m.getCenter(), zoom: m.getZoom(), bearing: m.getBearing(), pitch: m.getPitch() };
+      const kept = m && s.holder ? choicesOf(s.holder) : null;   // MV1: the person's layer switches and opacity, kept when the map is made again (here or on renewal)
       dropMap(s);
       // the viewer's stylesheet on, and read, before the map is made (env.styles), so the map starts at its holder's full size
       try { await env.styles(true); } catch {}
@@ -355,23 +395,30 @@
       try {
         s.host.replaceChildren(holder);
         s.map = env.mount(holder, {
-          manifest: { ...manifest, property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
+          manifest: { ...withChoices(manifest, kept), property: s.opts.name, title: s.chosen.title, map_title: s.chosen.title, description: s.chosen.description || "", kind: s.chosen.kind || "" },
           url,
-          ...(group && env.phone?.() ? { phoneGroup: true } : {}),
-          ...(read.shared.length ? { shared: read.shared } : {}),
+          ...(group && env.phone?.() && !m ? { phoneGroup: true } : {}),
+          ...(kept ? { showing: shownStores(kept) } : {}),
+          ...(read.shared.length ? { shared: kept ? withChoices({ layers: read.shared.map((L) => L || null) }, kept).layers : read.shared } : {}),
           referenceLayers: startOn(read.referenceLayers, s.opts.owner),
           onBack: s.several ? () => env.go(s.opts.href(null)) : null, backLabel: "All maps",
           ...env.backgrounds(),
         });
         if (at) s.map.jumpTo(at);
         else arriveFrom(s);   // TR1
-        try { env.chrome?.(s.map, holder, { group, publishedAt: s.chosen.published_at, areaHa: read.manifest?.area_ha }); } catch {}
-        try { env.focus?.(s.map, holder, { group, manifest: read.manifest, url }); } catch {}
+        try { env.chrome?.(s.map, holder, { group, sub: !!(group && env.subOf?.(s.opts.owner)), publishedAt: s.chosen.published_at, areaHa: read.manifest?.area_ha, surveyDate: read.manifest?.survey_date || null, kind: s.chosen.kind || "", place: s.opts.name || "" }); } catch {}
+        try { env.focus?.(s.map, holder, { group, manifest: read.manifest, url, again: !!m }); } catch {}
+        s.holder = holder;
+        if (kept) restoreSwitches(s.map, holder, kept);
         // TR1: this map hands over when the address changes (the viewer's background: its own remembered choice)
         s.unhand = globalThis.FP?.mapHandoff?.register?.(s.map, { kind: "maps", base: () => { try { const b = globalThis.localStorage?.getItem("rv-basemap"); return b === "map" ? "topo" : b || "aerial"; } catch { return null; } } }) || null;
       } catch { s.handoff?.drop(); say(s, UNAVAILABLE, tryAgain(s)); return; }
       try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq, read.manifest?.bounds || null) : null; } catch { s.overlay = null; }
+      try { env.dock?.(holder); } catch {}   // MV1
       try { env.share?.(s.map, holder, { title: s.chosen.title, place: s.opts.name }); } catch {}   // EX1
+      // (the map's own box, which #568's nv-keep holds still while the new-version line shows; never the whole tab)
+      s.keep = globalThis.FP?.mapKeep?.watch?.(s.map.getContainer?.() || holder, () => { if (s === shown && s.map) { const left = s.renewAt; draw(s, true).then(() => { if (s === shown && left !== Infinity) { env.clearTimer(s.timer); s.renewAt = left; s.timer = env.setTimer(wake, Math.max(0, left - env.now())); } }); } }) || null;
+      s.keep?.made?.();
       s.renewAt = env.now() + RENEW_MS;
       s.timer = env.setTimer(wake, RENEW_MS);
     }
@@ -443,7 +490,63 @@
   // The line under a group's map title. The viewer says "Surveyed <date>, <area>" from the package's survey_date, which the plugin
   // guesses from the commonest date among the features' date fields (drone photos, on a farm): a group's map is not surveyed. What
   // is true is when this version was published (map_packages.published_at, the date the maps list already gives as "Updated").
-  const meta = ({ publishedAt = null, areaHa = null } = {}) => [publishedAt ? "Updated " + day(publishedAt) : "", areaWords(areaHa)].filter(Boolean).join(" · ");
+  // MV1: one line for any map, as the portal's: a farm's map says when it was surveyed where its package says so (else when it was
+  // published), then its area and what kind of map it is ("Farm plan", "Catchment"), which was beside the place's name before.
+  const meta = ({ publishedAt = null, areaHa = null, surveyDate = null, kind = "" } = {}) => [surveyDate && day(surveyDate) ? "Surveyed " + day(surveyDate) : publishedAt ? "Updated " + day(publishedAt) : "",
+    areaWords(areaHa), String(kind || "").trim()].filter(Boolean).join(" · ");
+  // MV1: the listeners a call adds to each of `targets` (the window and the document), recorded so they can be taken away: the viewer
+  // adds window resize and document keydown listeners as it mounts and never removes them, which kept every map made again alive
+  // (and, in WebKit, its WebGL context). The returned map gets mvUnheard() to take them away.
+  function heard(targets, make) {
+    const added = [], put = [];
+    for (const t of targets.filter(Boolean)) {
+      const own = Object.prototype.hasOwnProperty.call(t, "addEventListener"), was = t.addEventListener;
+      t.addEventListener = function (type, fn, opts) { added.push([t, type, fn, opts]); return was.call(this, type, fn, opts); };
+      put.push(() => { if (own) t.addEventListener = was; else delete t.addEventListener; });
+    }
+    let made;
+    try { made = make(); } finally { for (const p of put) p(); }
+    if (made && typeof made === "object") made.mvUnheard = () => { for (const [t, type, fn, opts] of added.splice(0)) try { t.removeEventListener(type, fn, opts); } catch { /* gone */ } };
+    return made;
+  }
+  // MV1: the person's own choices on a map (its switches by id, its opacity sliders by name), to put back on a map made again
+  function choicesOf(holder) {
+    try {
+      return { on: Object.fromEntries([...holder.querySelectorAll(".rv-panel input.rv-switch[id]")].map((i) => [i.id, i.checked])),
+        opacity: Object.fromEntries([...holder.querySelectorAll(".rv-panel .rv-opacity input[aria-label]")].map((i) => [i.getAttribute("aria-label"), Number(i.value)])) };
+    } catch { return null; }   // (a holder that cannot be read: the map opens as published, as before)
+  }
+  const switchId = (L) => "rv-l-" + String(L.id).replace(/[^a-z0-9_-]/gi, "");   // (as the viewer names a layer's switch)
+  // a manifest whose layers start as the person left them (the viewer draws each layer from its own `visible` and `opacity`)
+  function withChoices(manifest, kept) {
+    if (!kept || !Array.isArray(manifest?.layers)) return manifest;
+    return { ...manifest, layers: manifest.layers.map((L) => {
+      if (!L) return L;
+      const on = kept.on[switchId(L)], op = kept.opacity[String(L.title) + " opacity"];
+      return { ...L, ...(typeof on === "boolean" ? { visible: on } : {}), ...(Number.isFinite(op) ? { opacity: op / 100 } : {}) };
+    }) };
+  }
+  // the stores the viewer reads its reference and context switches from, as they were showing (MV1, review of #589 round 2): a
+  // reference switch's id is rv-l-ref-<draw>, a context layer's rv-l-ctx-<key>
+  const REF_STORE = { "rv-l-ref-waterways": "rv-ref-ww", "rv-l-ref-roads": "rv-ref-rd" };
+  function shownStores(kept) {
+    if (!kept?.on) return null;
+    const out = {};
+    for (const [id, on] of Object.entries(kept.on)) {
+      const k = REF_STORE[id] || (id.startsWith("rv-l-ctx-") ? ctxStore(id.slice("rv-l-ctx-".length)) : null);
+      if (k && typeof on === "boolean") out[k] = on ? "1" : "0";
+    }
+    return out;
+  }
+  // the switches the viewer does not draw from the manifest (Labels, Shade outside the property): set as they were, by their own change
+  // event, at once and again once the map has loaded (the shading is added with the style)
+  function restoreSwitches(map, holder, kept) {
+    const put = () => { for (const id of ["rv-l-labels", "rv-l-mask"]) { const i = holder.querySelector("#" + id); if (i && typeof kept.on[id] === "boolean" && i.checked !== kept.on[id]) { i.checked = kept.on[id]; i.dispatchEvent(new Event("change", { bubbles: true })); } } };
+    put();
+    try { if (!map.loaded?.()) map.once?.("load", put); } catch { /* the map is going */ }
+  }
+  // MV1: the button that brings the whole place back into view, in the app's own words for a place
+  const wholeLabel = ({ group = false, sub = false } = {}) => (group ? (sub ? "Whole sub-group" : "Whole group") : "Whole farm");
   // The layer on a group's map that is its sub-groups: a categorised area layer drawn by the web map whose title says so, or whose
   // categories are mostly the group's own sub-groups' names (`names`, lower case).
   // (subs: the group's sub-groups, { id, name }: a category matched to one counts, review of #540, 2)
@@ -608,14 +711,18 @@
   // choice of their own remembered, then take away only what was set here. A store that cannot be used changes nothing.
   // PH2: on a phone a group's map is calm: `phoneGroup` seeds PHONE_START the same way and seeds no context layer on (the owner: "you
   // might use a map on your phone to find a site, but not turn on half a dozen layers"); each stays one tap away in Layers.
-  function seedStartOn(store, layers, start, { phoneGroup = false } = {}) {
+  // MV1 (review of #589, round 2): `showing`, a map made again (a WebKit re-make, the hourly renewal): its reference and context switches
+  // start exactly as they were showing (store key -> "1" or "0", shownStores), whatever start the phone or the computer would give;
+  // nothing turns itself on or off.
+  function seedStartOn(store, layers, start, { phoneGroup = false, showing = null } = {}) {
     const seeded = [];
     const seed = (k, v) => { try { if (k && store && store.getItem(k) === null) { store.setItem(k, v); seeded.push([k, v]); } } catch {} };
-    if (phoneGroup) for (const [k, v] of Object.entries(PHONE_START)) seed(k, v);
+    if (showing) for (const [k, v] of Object.entries(showing)) seed(k, v);
+    else if (phoneGroup) for (const [k, v] of Object.entries(PHONE_START)) seed(k, v);
     else for (const r of layers || []) if (r && r.startOn === true && r.style) seed(ctxStore(r.key), "1");
     try { return start(); }
     finally { for (const [k, v] of seeded) try { if (store.getItem(k) === v) store.removeItem(k); } catch {} }
   }
-  return { create, backgrounds, filesByPath, ctxStore, startOn, seedStartOn, areaWords, meta, subgroupLayer, calmLayer, calmManifest, subgroupColoursOf, matchSubgroups, focusMap, PHONE_START,
+  return { create, backgrounds, filesByPath, ctxStore, startOn, seedStartOn, areaWords, meta, wholeLabel, heard, choicesOf, withChoices, restoreSwitches, subgroupLayer, calmLayer, calmManifest, subgroupColoursOf, matchSubgroups, focusMap, shownStores, PHONE_START,
     BUCKET, MAX_MAPS, MAX_REFERENCE, LINK_SECONDS, RENEW_MS, NONE, UNAVAILABLE, RAN_OUT };
 });

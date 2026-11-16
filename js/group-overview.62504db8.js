@@ -36,7 +36,8 @@
   const list = (v) => (Array.isArray(v) ? v : []);
   const CONCURRENCY = 4, COUNT_BATCH = 150, AREA_CAP = 500, SITES_POOL = 4, LINK_SECONDS = 3600, BUCKET = "map-packages";
   const BASE_KEY = "fp-overview-basemap";   // the overview maps' background, remembered on this device (map-scene.js's own key)
-  const LAYERS_KEY = "fp-overview-layers";  // CO1: the Layers panel open or folded, remembered on this device (folded by default)
+  const LAYERS_KEY = "fp-overview-layers";  // CO1: the Layers panel open or folded, remembered on this device (MV1: open by default)
+  const SHADE_KEY = "fp-overview-shade";    // MV1: "Shade outside the group" turned off on this device ("off"), else on
   const CANTERBURY = [[170.6, -44.6], [174.1, -41.9]];
   const trendCache = new Map();   // analysis request -> Promise<class>, for this visit to the app (nothing is stored anywhere)
   let shown = null;
@@ -384,11 +385,17 @@
     const mapWait = el("p", { class: "ov-map-wait", id: "ov-map-wait", role: "status" }, "Loading map…");
     const layersToggle = el("button", { type: "button", id: "ov-layers-toggle", class: "ov-layers-toggle", "aria-expanded": "false", "aria-controls": "ov-layers" }, FP.icon ? FP.icon("layers", 18) : null, el("span", {}, "Layers"),
       el("span", { class: "ov-layers-x", "aria-hidden": "true" }, FP.icon ? FP.icon("close", 14) : "×"));
+    // MV1 (the owner, 16 Nov 2026: "I think i just prefer the look of the portal page"): the map's one panel in the shape of the Maps
+    // tab's (the portal's): the place's name small, the map's title large, one line of facts; the map's layers as switches with what
+    // their colours mean under each; a Reference group (the context themes, "Shade outside the group"); the background at its foot.
+    const factsLine = el("p", { class: "ov-pfacts" });
+    const panelHead = el("div", { class: "ov-phead" }, el("p", { class: "ov-pkicker" }, group.name), el("h2", { class: "ov-ptitle" }, "Map"), factsLine);
     const bgBox = el("div", { class: "ov-bg", role: "group", "aria-label": "Background" });
     const showBox = el("div", { class: "ov-shows" });
-    const legendBox = el("ul", { class: "ov-legend", "aria-label": "Key" });
-    const layersBody = el("div", { id: "ov-layers", class: "ov-layers-body" }, bgBox, showBox, legendBox);
-    const layersPanel = el("div", { class: "ov-layers" }, layersToggle, layersBody);
+    const refBox = el("div", { class: "ov-ref", role: "group", "aria-labelledby": "ov-ref-head" });
+    const legendBox = el("ul", { class: "ov-legend", "aria-label": "Key", hidden: true });   // (MV1: each layer's key is under its own switch)
+    const layersBody = el("div", { id: "ov-layers", class: "ov-layers-body" }, panelHead, el("div", { class: "ov-pbody" }, showBox, refBox, legendBox), el("div", { class: "ov-pfoot" }, bgBox));
+    const layersPanel = el("div", { class: "ov-layers mv-panel" }, layersToggle, layersBody);
     const mapBox = el("div", { class: "ov-mapbox loading" + (keptFrame ? " framed" : "") }, mapHost, layersPanel, mapNote, mapWait);
     const main = el("div", { class: "ov-main" + (isSub ? " no-list" : "") }, listBox, headline, side, mapBox);
     const wrap = el("section", { class: "group-overview", "data-view": "home", "aria-label": "Home", "aria-busy": "true" }, head, main);
@@ -556,7 +563,8 @@
     me.offs.push(() => { const m = map; map = me.map = null; for (const x of markers) { try { x.marker.remove(); } catch { /* gone */ } } markers = []; try { hover?.remove(); popup?.remove(); } catch { /* gone */ } try { m?.remove(); } catch { /* already gone */ } });
     const choices = () => { const n = FP.basemaps?.names || []; return n.length >= 2 ? n : FP.demo?.active ? ["aerial", "topo"] : []; };
     const onDark = () => (base === "aerial" && (FP.basemaps?.names || []).includes("aerial")) || darkTheme();
-    const show = { subs: true, sites: false };   // the water quality sites are off on the overview, on in the Layers panel
+    // (MV1: "Shade outside the group", the 45% darkening, a switch in the panel, on unless the person has turned it off on this device)
+    const show = { subs: true, sites: false, shade: store.get(SHADE_KEY) !== "off" };   // the water quality sites are off on the overview, on in the Layers panel
     const themes = { list: null, layersOn: new Set(), added: new Set() };
     // PH5: the sub-groups told apart by fill (map-palette.js subgroupColours: the same colours as Home on a phone and the Maps tab), a
     // hairline of the same hue, no casing; the group's own edge quiet, as the mask shows it
@@ -617,6 +625,7 @@
       map.getSource("ov-areas").setData(areaData());
       map.getSource("ov-mask")?.setData(maskData());
       for (const id of ["ov-area-fill", "ov-area-casing", "ov-area-line", "ov-area-hi", "ov-area-hiline"]) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", show.subs ? "visible" : "none");
+      if (map.getLayer("ov-mask")) map.setLayoutProperty("ov-mask", "visibility", show.shade ? "visible" : "none");   // MV1
       for (const m of markers) m.marker.remove();
       markers = [];
       if (!show.subs) return;
@@ -690,8 +699,9 @@
       const boxes = filter.sub ? [A.get(filter.sub)?.shape.bbox].filter(Boolean) : [...A.values()].map((a) => a.shape.bbox);
       const pts = scope().map((s) => s.lngLat).filter(Boolean);
       if (!boxes.length && pts.length) boxes.push([[Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1]))], [Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))]]);
-      const right = layersBody.hidden ? 48 : Math.min(300, layersPanel.offsetWidth + 40);
-      return { bounds: boxes.length ? FP.homeModel.union(boxes) : keptFrame || CANTERBURY, padding: { top: 48, bottom: 48, left: 48, right }, maxZoom: boxes.length || keptFrame ? 13 : 8 };
+      // (MV1: the panel sits at the left, the column of controls at the right)
+      const left = layersBody.hidden ? 48 : Math.min(300, layersPanel.offsetWidth + 24);
+      return { bounds: boxes.length ? FP.homeModel.union(boxes) : keptFrame || CANTERBURY, padding: { top: 40, bottom: 40, left, right: 56 }, maxZoom: boxes.length || keptFrame ? 13 : 8 };
     }
     // CO1b: the group's shapes are on the map (or it is known there are none): "Loading map…" goes and the map shows. The frame they
     // make is kept on this device for the next visit.
@@ -800,8 +810,11 @@
       if (h) reveal();   // (the map shows under the picture; "Loading map…" is not needed)
       me.keep?.made();
       map.touchZoomRotate?.disableRotation?.();
-      map.addControl(new gl.NavigationControl({ showCompass: false }), "bottom-right");
-      map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-left");
+      // MV1: one column of controls top right, as on the Maps tab: zoom, then "Whole group" (back to the group's own frame)
+      map.addControl(new gl.NavigationControl({ showCompass: false }), "top-right");
+      const whole = el("button", { type: "button", class: "ov-whole", id: "ov-whole", onclick: () => { if (filter.sub) select(null); else frame(true, true); } }, isSub ? "Whole sub-group" : "Whole group");
+      map.addControl({ onAdd: () => el("div", { class: "maplibregl-ctrl maplibregl-ctrl-group ov-whole-box" }, whole), onRemove: () => whole.parentElement?.remove() }, "top-right");
+      map.addControl(new gl.ScaleControl({ unit: "metric" }), "bottom-right");   // (MV1: clear of the panel at the left)
       const made = map;
       const ready = () => {
         if (!live() || !map || map !== made || map.getSource("ov-areas")) return;   // (a late load of a map already replaced does nothing)
@@ -872,7 +885,9 @@
       bgBox.replaceChildren(...(ch.length >= 2 ? [["aerial", "Aerial"], ["topo", "Topo"]].filter(([k]) => ch.includes(k)).map(([k, t]) => el("button", { type: "button", "data-base": k, id: "ov-base-" + k,
         "aria-pressed": String(base === k), onclick: () => { store.set(BASE_KEY, k); useBase(k); } }, t)) : []));
       bgBox.hidden = ch.length < 2;
-      const box = (id, label, on, change, extra = {}) => el("label", { class: "ov-check" }, el("input", { type: "checkbox", id, ...(on ? { checked: true } : {}), ...extra, onchange: (e) => change(e.target.checked) }), el("span", {}, label));
+      // MV1: each a switch (a checkbox drawn as one), what its colours mean under it while it is on (maps.css hides the key while off)
+      const box = (id, label, on, change, extra = {}) => el("label", { class: "ov-check" }, el("input", { type: "checkbox", class: "ov-switch", id, ...(on ? { checked: true } : {}), ...extra, onchange: (e) => change(e.target.checked) }), el("span", {}, label));
+      const c = clsColours(), key = (cls, text, kind = "dot") => el("ul", { class: "ov-rowkey", "aria-label": "Key" }, el("li", {}, el("span", { class: "ov-key " + kind, "data-cls": cls, ...(kind === "dot" && c[cls] ? { style: "--key: " + c[cls] } : {}) }), text));
       // a theme (N1): its switch turns on the layers marked to start on (CTX2's starts_on; every layer when none is marked), and each
       // layer is one level down, folded
       const themeRow = (t, i) => {
@@ -882,23 +897,22 @@
             ...t.layers.map((L) => box("ov-layer-" + L.key, L.title, themes.layersOn.has(L.key), (v) => layer(i, L.key, v)))) : null);
       };
       showBox.replaceChildren(...[
-        A.size ? box("ov-show-subgroups", subs.length ? "Sub-groups" : "The group's area", show.subs, (v) => { show.subs = v; drawAreas(); }) : null,
+        A.size ? el("div", { class: "ov-prow" }, box("ov-show-subgroups", subs.length ? "Sub-groups" : "The group's area", show.subs, (v) => { show.subs = v; drawAreas(); }),
+          key("area", subs.length ? "Each sub-group in its own colour, as in the list" : "The group's area", "line")) : null,
         // (OV1: the map's dots are N2c's useful sites, which the sites and their counts decide: not all read, the switch is not offered
         // to show some or none of them; one quiet line says so)
         loaded && (failedReads.areas || failedReads.sites.size || failedReads.counts) ? el("p", { class: "ov-quiet ov-check" }, "Water quality sites couldn't be read just now.")
-          : all.length ? box("ov-show-sites", "Water quality sites", show.sites, (v) => { show.sites = v; drawSites(); drawLegend(); }) : null,
-        ...(themes.list || []).map(themeRow)].filter(Boolean));
+          : all.length ? el("div", { class: "ov-prow" }, box("ov-show-sites", "Water quality sites", show.sites, (v) => { show.sites = v; drawSites(); drawLegend(); }), key("quiet", "Water quality site")) : null].filter(Boolean));
       showBox.hidden = !showBox.childElementCount;
+      // the Reference group: the context themes, then the darkening outside the group
+      refBox.replaceChildren(el("p", { class: "ov-ref-head", id: "ov-ref-head", role: "heading", "aria-level": "3" }, "Reference"), ...(themes.list || []).map(themeRow),
+        A.size ? el("div", { class: "ov-prow" }, box("ov-show-shade", isSub ? "Shade outside the sub-group" : "Shade outside the group", show.shade, (v) => { show.shade = v; store.set(SHADE_KEY, v ? "on" : "off"); drawAreas(); })) : null);
+      refBox.hidden = refBox.childElementCount < 2;
+      factsLine.textContent = [subs.length && !failedReads.subgroups ? O().plural(subs.length, "sub-group", "sub-groups") : null, O().hectares(A.get(group.id)?.ha)].filter(Boolean).join(" · ");
       drawLegend();
     }
-    function drawLegend() {
-      const c = clsColours(), item = (cls, text, kind = "dot") => el("li", {}, el("span", { class: "ov-key " + kind, "data-cls": cls, ...(kind === "dot" && c[cls] ? { style: "--key: " + c[cls] } : {}) }), text);
-      legendBox.replaceChildren(...[
-        A.size ? item("area", subs.length ? "Sub-group boundary" : "The group's area", "line") : null,
-        all.length && show.sites ? item("quiet", "Water quality site") : null,
-      ].filter(Boolean));
-      legendBox.hidden = !legendBox.childElementCount;
-    }
+    // (MV1: the key is under each switch; this box is kept, empty and hidden, for anything that still asks for it)
+    function drawLegend() { legendBox.hidden = true; }
     // a theme switched on: its starting layers (or all, when none is marked); off: all of its layers
     function theme(i, on) {
       const t = themes.list?.[i];
@@ -941,7 +955,7 @@
       if (remember) store.set(LAYERS_KEY, open ? "open" : "folded");
     }
     layersToggle.addEventListener("click", () => foldLayers(layersBody.hidden, true));
-    foldLayers(store.get(LAYERS_KEY) === "open");
+    foldLayers(store.get(LAYERS_KEY) !== "folded");   // MV1: open, as the Maps tab's panel is, unless folded on this device
 
     // ---- the selection ---------------------------------------------------------------------------------------------------
     async function setFilter(next, smooth = false) {

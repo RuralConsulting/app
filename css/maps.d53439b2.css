@@ -138,43 +138,44 @@
   /* review of #538, 2: More opens two short columns to the left of the cluster (zoom and the compass; 3D, measure, print), all within
      the top of the map, so on the shortest phone (320 x 568, Safari's bars showing) none runs under the sheet or the +, which steps
      aside while the list is open; the Water quality chip steps aside too */
-  .maps-viewer .maplibregl-ctrl-top-right { display: grid; grid-template-columns: repeat(3, auto); justify-content: end; align-items: start; gap: 10px; padding: 10px 10px 0 0; }
+  /* MV1: Locate and More sit in the sheet's peek (maps-view.js); More opens the tools in two short columns top right, as before */
+  .maps-viewer .maplibregl-ctrl-top-right { display: grid; grid-template-columns: repeat(2, auto); justify-content: end; align-items: start; gap: 10px; padding: 10px 10px 0 0; }
   .maps-viewer .maplibregl-ctrl-top-right > .maplibregl-ctrl { margin: 0; }
   .maps-viewer .maplibregl-ctrl-top-right > :has(.maplibregl-ctrl-geolocate) { display: none; }   /* the app's own Locate instead (maps-view.js) */
-  .maps-viewer .ph-locate { display: block; grid-column: 3; grid-row: 1; }
-  .maps-viewer .ph-more { display: block; grid-column: 3; grid-row: 2; }
+  .maps-viewer .ph-locate, .maps-viewer .ph-more { display: block; }
   .maps-viewer .maplibregl-ctrl-top-right > :has(.maplibregl-ctrl-zoom-in) { grid-column: 1; grid-row: 1 / span 3; }
   .maps-viewer .maplibregl-ctrl-top-right > .rv-3d { grid-column: 2; grid-row: 1; }
   .maps-viewer .maplibregl-ctrl-top-right > .rv-tools { grid-column: 2; grid-row: 2 / span 3; }
   .maps-viewer:not(.ph-more-open) .maplibregl-ctrl-top-right > :is(:has(.maplibregl-ctrl-zoom-in), .rv-3d, .rv-tools) { display: none; }
-  .maps-viewer.ph-more-open .wqs-ctrl { display: none; }
+  .maps-viewer.ph-more-open > .wqs-ctrl { display: none; }
   .maps-viewer .maplibregl-ctrl-top-right button { width: 44px; height: 44px; }
   .maps-viewer .rv-3d button { line-height: 44px; }
   .maps-viewer.ph-more-open .ph-more-btn { background: var(--fill); }
   /* PH5 (the owner's iPhone, 14 Nov 2026: Locate and More were black squares, the icon off-centre): the same round ink buttons as
-     Home's Locate (capture.css .pa-locate), the icon in the middle */
-  .maps-viewer .maplibregl-ctrl-top-right > :is(.ph-locate, .ph-more) { background: none; border: 0; border-radius: 50%; box-shadow: none; overflow: visible; }
-  .maps-viewer .maplibregl-ctrl-top-right :is(.ph-locate-btn, .ph-more-btn) { display: grid; place-items: center; box-sizing: border-box; width: 44px; height: 44px; margin: 0; padding: 0;
-    border: 1px solid var(--rule); border-radius: 50%; background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); line-height: 0; }
-  .maps-viewer .maplibregl-ctrl-top-right :is(.ph-locate-btn, .ph-more-btn) > .icon { display: block; margin: 0; }
-  .maps-viewer .maplibregl-ctrl-top-right .ph-locate-btn[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-  .maps-viewer.ph-more-open .maplibregl-ctrl-top-right .ph-more-btn { background: var(--fill); }
+     Home's Locate (capture.css .pa-locate), the icon in the middle (MV1: in the peek, without the shadow a button over the map needs) */
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) > :is(.ph-locate, .ph-more) { background: none; border: 0; border-radius: 50%; box-shadow: none; overflow: visible; }
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) :is(.ph-locate-btn, .ph-more-btn) { display: grid; place-items: center; box-sizing: border-box; width: 44px; height: 44px; margin: 0; padding: 0;
+    border: 1px solid var(--rule); border-radius: 50%; background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); line-height: 0; cursor: pointer; }
+  .maps-viewer .mv-peek-tools :is(.ph-locate-btn, .ph-more-btn) { box-shadow: none; }
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) :is(.ph-locate-btn, .ph-more-btn) > .icon { display: block; margin: 0; }
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) .ph-locate-btn[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .maps-viewer.ph-more-open :is(.maplibregl-ctrl-top-right, .mv-peek-tools) .ph-more-btn { background: var(--fill); }
+  .maps-viewer .mv-peek-tools { display: flex; flex: none; align-items: center; gap: 8px; margin: 0 0 0 auto; }
+  .maps-viewer .mv-peek-tools > .maplibregl-ctrl { margin: 0; float: none; }
+  /* the whole peek opens the sheet: its title and facts are not targets of their own, so a tap on them is a tap on the head */
+  .maps-viewer .rv-titlebar > div:first-child > * { pointer-events: none; }
   /* the scale and the credit: bottom left, above the map's sheet, side by side */
   .maps-viewer .maplibregl-ctrl-bottom-right { right: auto; left: 0; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px)); display: flex; align-items: flex-end; gap: 8px; padding: 0 0 8px 10px; }
   .maps-viewer .maplibregl-ctrl-bottom-right > .maplibregl-ctrl { margin: 0; }
   .maps-viewer .maplibregl-ctrl-attrib.maplibregl-compact-show { max-width: calc(100vw - 110px); }
-  .maps-viewer:is(.rv-panel-open, .wqs-open) :is(.maplibregl-ctrl-bottom-right, .wqs-ctrl) { display: none; }
-  /* the chips: 34 px to look at, 44 px to tap */
-  .maps-viewer .wqs-toggle::after, .maps-viewer .wqs-list-btn::after, .maps-viewer .ph-layers::after { content: ""; position: absolute; inset: -5px 0; }
+  .maps-viewer:is(.rv-panel-open, .wqs-open) .maplibregl-ctrl-bottom-right, .maps-viewer:is(.rv-panel-open, .wqs-open) > .wqs-ctrl { display: none; }
+  /* the chips (where one is still over the map): 34 px to look at, 44 px to tap */
+  .maps-viewer > .wqs-ctrl .wqs-toggle::after, .maps-viewer > .wqs-ctrl .wqs-list-btn::after { content: ""; position: absolute; inset: -5px 0; }
   .maps-viewer .wqs-toggle, .maps-viewer .wqs-list-btn { position: relative; }
-  /* RF1: what the map shows, chosen in one row top left: Layers (the map's own sheet), then Water quality and Sites (wq-sites.js
-     places them after it, or on the line under it on a narrow phone). The sheet's own Layers button steps aside, so its title has the
-     row to itself, on one line. "Whole area" is a tool under More (the cluster's third column, with Locate and More). */
-  .maps-viewer .ph-layers { position: absolute; z-index: 6; top: 10px; left: 12px; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px;
-    border: 0; border-radius: 4px; box-shadow: var(--map-pin-shadow); background: var(--panel); color: var(--ink); font: 600 var(--text-small) var(--f-ui); white-space: nowrap; cursor: pointer; }
-  .maps-viewer .ph-layers[aria-expanded="true"] { box-shadow: inset 0 0 0 1.5px var(--ink), var(--map-pin-shadow); }
-  .maps-viewer:is(.wqs-open, .ph-more-open, .rv-measuring, .rv-comparing) .ph-layers { display: none; }
+  /* RF1 then MV1: the sheet's own Layers button steps aside, so its title has the row to itself, on one line, beside Locate and More;
+     the peek itself opens the sheet. "Whole group" is a tool under More. */
   .maps-viewer .rv-titlebar .rv-layers-btn { display: none; }
+  .maps-viewer .rv-panel .wqs-toggle, .maps-viewer .rv-panel .wqs-list-btn { min-height: 44px; }
   .maps-viewer .rv-titlebar > div:first-child { flex: 1; }
   .maps-viewer .ph-fit { display: none; grid-column: 1 / -1; grid-row: 5; justify-self: end; }
   .maps-viewer.ph-more-open .maplibregl-ctrl-top-right > .ph-fit { display: block; background: none; border: 0; border-radius: var(--radius-pill); box-shadow: none; overflow: visible; }
@@ -189,7 +190,7 @@
      and the tools stay up top so the same button ends it; the + steps aside meanwhile (add.js) */
   .maps-viewer .rv-toolbar { top: auto; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px) + 10px); left: 10px; right: 10px; transform: none; max-width: none; }
   .maps-viewer:is(.rv-measuring, .rv-comparing) .maplibregl-ctrl-top-right > .rv-tools { display: block; }
-  .maps-viewer:is(.rv-measuring, .rv-comparing) :is(.maplibregl-ctrl-bottom-right, .wqs-ctrl) { display: none; }
+  .maps-viewer:is(.rv-measuring, .rv-comparing) .maplibregl-ctrl-bottom-right, .maps-viewer:is(.rv-measuring, .rv-comparing) > .wqs-ctrl { display: none; }
   /* RF2: every control in the Layers sheet a 44 px target, the sheet looking as it did. A section's heading and a layer's row are
      44 px tall (40 and about 42 before: the row's own 6 px margins became part of its label, the whole row a switch); the grab
      handle is a 44 px button with the bar drawn inside it, laid over the head's top so the sheet's peek is unchanged; Aerial, Topo
@@ -230,3 +231,37 @@
 @media (max-width: 720px) { .wqs-on .wqs-list-btn { display: inline-flex; align-items: center; } .wqs-ctrl { display: flex; } }
 /* the panel's top row is its own: the back link and the close button, over a hairline, so the close never sits on the list */
 .wqs-bar { border-bottom: 1px solid var(--rule-soft); padding-bottom: 4px; margin-bottom: 4px; }
+
+/* ---- MV1: one panel, few controls, one action (the owner, 16 Nov 2026, of the older maps portal: "the maps are just simpler and much
+   easier to navigate"). maps-view.js moves the viewer's own rows; viewer.js is not edited. -------------------------------------------- */
+.mv-peek-tools { display: none; }
+/* the water quality sites: one more switch in the panel, after the map's own layers (wq-sites.js's own button, drawn as a row) */
+.maps-viewer .mv-wq-row { padding: 6px 18px 6px 22px; }   /* (the switch where the viewer's own switches are, after their input's margin) */
+.maps-viewer .rv-panel .wqs-toggle { position: relative; }
+.maps-viewer .rv-panel .wqs-ctrl { position: static !important; display: flex; align-items: center; gap: 8px; }
+.maps-viewer .rv-panel .wqs-toggle { flex: 1; min-width: 0; height: auto; min-height: 30px; justify-content: flex-start; gap: 10px; padding: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; color: var(--ink); font: inherit; font-weight: 400; text-align: left; white-space: normal; }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"] { background: none; color: var(--ink); }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"] .wqs-drop { background: var(--map-wq); }
+/* (a switch drawn as the viewer draws its own: a pill and a knob; the button's pressed state is what it says) */
+.maps-viewer .rv-panel .wqs-toggle::before { content: ""; flex: none; width: 32px; height: 18px; border-radius: 9px; background: var(--rule); transition: background .15s; }
+.maps-viewer .rv-panel .wqs-toggle::after { content: ""; position: absolute; inset: auto; left: 2px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: var(--raised);
+  box-shadow: var(--shadow-1); transition: transform .15s; }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"]::before { background: var(--accent); }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"]::after { transform: translateX(14px); }
+.maps-viewer .rv-panel .wqs-list-btn { height: auto; margin: 0; padding: 0 4px; box-shadow: none; background: none; text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) { .maps-viewer .rv-panel .wqs-toggle::before, .maps-viewer .rv-panel .wqs-toggle::after { transition: none; } }
+/* one Reference group, as the portal had it: a quiet caption, not a fold of its own (its themes still fold) */
+.maps-viewer .mv-ref-head { padding: 14px 18px 2px; font-size: var(--text-small); font-weight: 600; color: var(--ink-3); }
+.maps-viewer .mv-ref .rv-section button.rv-group { padding-left: 18px; }
+@media (min-width: 721px) {
+  /* the one column of controls, top right, with "Whole group" at its foot (the portal's "Whole property") */
+  .maps-viewer .maplibregl-ctrl-top-right > .ph-fit { display: block; }
+  .maps-viewer .maplibregl-ctrl-top-right > .ph-fit .rv-fit { position: static; display: flex; align-items: center; width: auto; height: 29px; padding: 0 10px; border-radius: 4px; box-shadow: none;
+    background: var(--panel); color: var(--ink); font: 600 var(--text-small)/1 var(--f-ui); white-space: nowrap; }
+}
+@media (max-width: 720px) {
+  /* RF2's rule: every control in the sheet a 44 px target */
+  .maps-viewer .rv-panel .wqs-toggle, .maps-viewer .rv-panel .wqs-list-btn { min-height: 44px; }
+  .maps-viewer .mv-wq-row { padding-top: 0; padding-bottom: 2px; }
+}

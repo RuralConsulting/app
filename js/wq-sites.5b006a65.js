@@ -233,7 +233,8 @@
       if (!pts.length) return;
       framed = st.framed = true;
       const w = holder.clientWidth, h = holder.clientHeight;
-      const pad = M().framePadding(w, h, control.getBoundingClientRect().width || 120);
+      // (MV1: the button docked in the map's panel is not over the map: only the column of controls is)
+      const pad = M().framePadding(w, h, control.closest(".rv-panel") ? 44 : control.getBoundingClientRect().width || 120);
       const clear = (p) => { const q = map.project(p); return q.x >= pad.left && q.x <= w - pad.right && q.y >= pad.top && q.y <= h - pad.bottom; };
       if (pts.every(clear)) return;
       const b = map.getBounds(), all = new gl.LngLatBounds(b.getSouthWest(), b.getNorthEast());
