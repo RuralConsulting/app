@@ -930,10 +930,32 @@
       move: (id, change) => Files.moveFile(FP.sb, id, change),
       supersede: (id, by) => Files.supersedeFile(FP.sb, id, by),
       download: (doc) => Files.downloadLink(FP.sb, doc),
-      async changed(message) { data.documents = await groupDocuments(FP.sb, data.group.id); notice = message || null; handle?.refresh(); notice = null; },
+      // FL1: the group's made folders, and a file into or out of one (document_folders' and documents' policies decide)
+      makeFolder: (name) => Files.makeFolder(FP.sb, owner, name),
+      renameFolder: (id, name) => Files.renameFolder(FP.sb, id, name),
+      removeFolder: (id) => Files.removeFolder(FP.sb, id),
+      toFolder: (id, folder) => Files.toFolder(FP.sb, id, folder),
+      async changed(message) {
+        [data.documents, data.folders] = await Promise.all([groupDocuments(FP.sb, data.group.id), Files.readFolders(FP.sb, owner)]);
+        notice = message || null; handle?.refresh(); notice = null;
+      },
     };
-    handle = FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: { explorer: true } }, { read: () => ({ documents: data.documents, shared: shared(), place: data.group.name, canEdit: editable, canAdd: editable, canSupersede: editable && !!FP.ops?.isStaff?.(), notice }), level: 3, nested: true, href: FP.href, store });
+    handle = FP.blocks.render(own, { block: "documents", owner: { org: data.group.id }, options: { explorer: true } }, { read: () => ({ documents: data.documents, shared: shared(), place: data.group.name, canEdit: editable, canAdd: editable, canSupersede: editable && !!FP.ops?.isStaff?.(), notice,
+      folders: data.folders, space: "group" }), level: 3, nested: true, href: FP.href, store });
     notice = null;
+    // FL1: the made folders are read once Files opens (not with the group's other reads), and drawn when they arrive, unless a file is
+    // waiting at the confirm step or a folder's name is being typed (drawing again would drop it): then once that is done
+    if (data.folders === undefined) Files.readFolders(FP.sb, owner).then((rows) => {
+      data.folders = rows;
+      if (!own.isConnected) return;
+      const busy = () => !!own.querySelector(".doc-confirm:not([hidden]), [data-fx-name-form]");
+      if (!busy()) { handle?.refresh(); return; }
+      const wait = new MutationObserver(() => {
+        if (!own.isConnected) { wait.disconnect(); return; }
+        if (!busy()) { wait.disconnect(); handle?.refresh(); }
+      });
+      wait.observe(own, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
+    });
     wrap.addEventListener("click", async (e) => {
       const button = e.target.closest("[data-open-document]");
       const doc = button && [...data.documents, ...data.sharedDocuments].find((d) => d.id === button.dataset.openDocument);

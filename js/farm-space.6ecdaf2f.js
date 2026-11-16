@@ -19,10 +19,12 @@
   async function readDocuments(sb, farm) {
     // V5: bounded: count first, then fetch at most that many.
     const n = await Files.countRows(sb, { farm_id: farm.id });
-    const query = (columns) => sb.from("documents").select(DOCUMENT_COLUMNS + columns).eq("farm_id", farm.id).order("title").limit(n);
+    // FL1: with the made folder a file sits in, where the database has the column (learnt once, as the tiers are)
+    const query = (columns) => sb.from("documents").select(DOCUMENT_COLUMNS + columns + Files.folderColumn(sb)).eq("farm_id", farm.id).order("title").limit(n);
     let rows = null;
     for (const level of learnt.has(sb) ? [learnt.get(sb)] : ["chosen", "tiers", "none"]) {
-      const { data, error } = await query(TIER_COLUMNS[level]);
+      let { data, error } = await query(TIER_COLUMNS[level]);
+      if (error && Files.noFolders(sb, error)) ({ data, error } = await query(TIER_COLUMNS[level]));
       if (!error) { rows = data; learnt.set(sb, level); break; }
       if (!missingColumn(error) || level === "none") throw error;
     }
@@ -1273,7 +1275,7 @@
     host.append(wrap);
     const farm = context.farm.id, handles = [];
     const data = () => ({ documents: context.documents, place: context.farm.name, canEdit: editor(), canAdd: editor(), canSupersede: editor() && !!FP.ops?.isStaff?.(), notice: documentsNotice, offer: documentsOffer, readInHref: FP.simpleView?.on() ? null : FP.href(M.href(farm, "onboarding")),
-      requests: context.planRequests || [], userId: user?.id || null });
+      requests: context.planRequests || [], userId: user?.id || null, folders: context.folders, space: "farm" });
     handles.push(FP.blocks.render(sentence, { block: "answer", owner: { farm }, options: { compact: true } }, { read: () => { const sentenceData = M.documents(context, FP.documentsBlock.arrange(context.documents)); return FP.simpleView?.on() ? { ...sentenceData, title: "Files" } : sentenceData; }, level: 2, href: FP.href }));
     // PH3: folders, then files; drawn with no files too, so the screen says so in one sentence
     handles.push(FP.blocks.render(list, { block: "documents", owner: { farm }, options: { selected: item || null, explorer: true } },
@@ -1284,15 +1286,24 @@
     const mine = context;
     const confirming = () => !!list.querySelector(".doc-confirm:not([hidden])");
     const drawRequests = () => { if (!documentsNotice && !documentsOffer.length) for (const h of handles) h.refresh(); };
+    // (FL1: the farm's made folders the same way: read once the view is up, drawn when they arrive; a name being typed is not lost either)
+    const drawLater = () => {
+      if (!confirming() && !list.querySelector("[data-fx-name-form]")) { drawRequests(); return; }
+      const wait = new MutationObserver(() => {
+        if (!list.isConnected || context !== mine) { wait.disconnect(); return; }
+        if (!confirming() && !list.querySelector("[data-fx-name-form]")) { wait.disconnect(); drawRequests(); }
+      });
+      wait.observe(list, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
+    };
     if (!context.planRequests) readPlanRequests(FP.sb, context.farm).then((rows) => {
       if (context !== mine) return;
       context.planRequests = rows;
-      if (!confirming()) { drawRequests(); return; }
-      const wait = new MutationObserver(() => {
-        if (!list.isConnected || context !== mine) { wait.disconnect(); return; }
-        if (!confirming()) { wait.disconnect(); drawRequests(); }
-      });
-      wait.observe(list, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
+      drawLater();
+    });
+    if (context.folders === undefined) Files.readFolders(FP.sb, { farm_id: farm }).then((rows) => {
+      if (context !== mine) return;
+      context.folders = rows;
+      drawLater();
     });
     return { destroy: () => unmount(handles) };
   }
@@ -1302,6 +1313,11 @@
     return {
       add: (item) => Files.addFile(FP.sb, { farm_id: farm }, item, context.documents),
       move: (id, change) => Files.moveFile(FP.sb, id, change),
+      // FL1: the farm's made folders, and a file into or out of one (document_folders' and documents' policies decide)
+      makeFolder: (name) => Files.makeFolder(FP.sb, { farm_id: farm }, name),
+      renameFolder: (id, name) => Files.renameFolder(FP.sb, id, name),
+      removeFolder: (id) => Files.removeFolder(FP.sb, id),
+      toFolder: (id, folder) => Files.toFolder(FP.sb, id, folder),
       supersede: (id, by) => Files.supersedeFile(FP.sb, id, by),
       download: (doc) => Files.downloadLink(FP.sb, doc),
       // FU4: The read-it-in button asks for the plan to be read in: one row in plan_import_requests (public.request_plan_import), the same row
@@ -1316,7 +1332,9 @@
       // Read the farm's documents again and redraw, with one line saying what happened.
       async changed(notice, extra) {
         if (context?.farm.id !== farm) return;
-        context.documents = await readDocuments(FP.sb, context.farm);
+        const [documents, folders] = await Promise.all([readDocuments(FP.sb, context.farm), Files.readFolders(FP.sb, { farm_id: farm })]);
+        if (context?.farm.id !== farm) return;
+        context.documents = documents; context.folders = folders;
         documentsNotice = notice || null;
         documentsOffer = Array.isArray(extra?.offer) ? extra.offer : [];
         for (const h of handles()) h.refresh();

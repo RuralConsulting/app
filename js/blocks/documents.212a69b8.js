@@ -20,6 +20,9 @@
 // The block calls nothing itself: the host's store does (app/js/document-files.js holds the reads and writes both hosts use).
 // PH3: with option explorer (both Files screens) the same rows are drawn as a file explorer: folders from each file's kind, then a
 // folder's files with the way up and one sort; the actions above are unchanged and reached the same way (data-* attributes).
+// FL1: data.folders ([{ id, name }] the place's made folders, null when they can't be read) and data.space ("farm" or "group"); a
+// file's folder_id puts it in a made folder. The store adds makeFolder(name) -> { id, name }, renameFolder(id, name), removeFolder(id)
+// and toFolder(docId, folderId | null); an added file may carry folder_id.
 (function (root, factory) {
   const node = typeof module === "object" && module.exports;
   const api = factory(node ? require("./registry.js") : root.FP.blocks, node ? require("../farm-model.js") : root.FP.farmModel,
@@ -205,16 +208,40 @@
     return n === 0 ? "empty" : n < 3 ? "sparse" : "full";
   }
   // ---- PH3: Files as a file explorer (folders, then files) ------------------------------------------------------------------------
-  // The owner's direction (13 Nov 2026): on a phone Files looks like a phone's Files app or Dropbox. There is no folder column in the
-  // database, so the folders are the categories the files already carry: their kind (doc_type), read with docTier's kind order, and a
-  // few title words for reference documents. A file sits in exactly one folder. Empty folders are not shown; with only one folder
-  // its files are listed straight away. The archive stays out of the folders (search finds it), as before; a superseded file sits in
+  // The owner's direction (13 Nov 2026): on a phone Files looks like a phone's Files app or Dropbox. The standing folders are the
+  // categories the files already carry: their kind (doc_type), read with docTier's kind order, and a few title words for reference
+  // documents. A file sits in exactly one folder. (PH3 left empty folders out and listed a short list flat; FL1, below, changed both.)
+  // The archive stays out of the folders (search finds it), as before; a superseded file sits in
   // its kind's folder, after the current ones, and says so. A group's own files and what member farms shared (data.shared) are read
   // exactly as before; the shared ones are their own folder. Who can see a file is unchanged: only what the host read is listed.
+  // FL1 (the owner, 15 Nov 2026: "I think the files need folders (might have to create if not obvious)"): the folders always show, even
+  // for a few files. Two kinds: the standing folders above, worked out from each file's kind as before, and the folders people make
+  // (public.document_folders, data.folders: [{ id, name }]), first, A to Z. A file in a made folder (documents.folder_id) is listed there
+  // and nowhere else; a file in no made folder, or in one this person cannot read, sits in its kind's standing folder as before. Someone
+  // who may add files sees a short standing set even when empty (STANDING: where things go) and their made folders even when empty;
+  // anyone else sees only folders that hold a file they can read. A folder is a label for arranging: the host reads the same files as
+  // before, and who can read a file is decided by the database alone.
   const FOLDERS = [["plans", "Plans"], ["consents", "Consents"], ["reports", "Reports"], ["maps", "Maps"], ["resources", "Resources"],
     ["notes", "Notes and letters"], ["agreements", "Agreements"], ["other", "Other files"], ["shared", "Shared by member farms"]];
-  const FLAT_MAX = 6;
-  const folderLabel = (key) => (FOLDERS.find(([k]) => k === key) || [, "Files"])[1];
+  const STANDING = { farm: ["plans", "consents", "reports", "maps"], group: ["reports", "resources", "agreements", "notes"] };
+  const NAME_MAX = 60;   // the database's own limit (document_folders_name)
+  const madeKey = (id) => "f:" + id;
+  const folderLabel = (key, made) => (String(key).startsWith("f:") ? text(list(made).find((f) => madeKey(f.id) === key)?.name) || "Folder" : (FOLDERS.find(([k]) => k === key) || [, "Files"])[1]);
+  const madeList = (v) => list(v).filter((f) => f && f.id != null && text(f.name));
+  const madeOf = (doc, made) => (doc?.folder_id != null ? madeList(made).find((f) => String(f.id) === String(doc.folder_id)) || null : null);
+  // A folder's name as the database keeps it (spaces run together), or why not: empty, too long, or a name already used here (a made
+  // folder's, or a standing folder's, case aside). except: the folder being renamed.
+  const tidyName = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
+  function nameProblem(name, made, except = null) {
+    const n = tidyName(name);
+    if (!n) return "Give the folder a name.";
+    if ([...n].length > NAME_MAX) return "A folder's name is at most " + NAME_MAX + " characters.";
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f]/.test(n)) return "A folder's name is plain text.";
+    const same = (x) => x.toLowerCase() === n.toLowerCase();
+    if (madeList(made).some((f) => String(f.id) !== String(except) && same(f.name)) || FOLDERS.some(([, label]) => same(label))) return "There is already a folder called " + n + ".";
+    return null;
+  }
   // Where a file goes, in this order (PH3, review of #537): (1) its own kind, when the kind says what it is (a plan, consent, report,
   // map, agreement, soil fact sheet, or a letter or email, which stays with the letters whatever it is about); (2) for a file whose kind
   // says nothing (notes, other, none): a consent word or a consent number (CRC...) in the title goes to Consents; (3) other title words
@@ -252,13 +279,24 @@
     const cmp = sort === "name" ? nameOrder : (a, b) => newest(a.doc, b.doc);
     return [...items].sort((a, b) => (a.tier.tier === "superseded") - (b.tier.tier === "superseded") || cmp(a, b));
   }
-  // { folders: [{ key, label, items }] } in FOLDERS order, empty ones left out; archived files are not in any folder.
+  // { folders: [{ key, label, items, made?, id? }] }: the made folders A to Z (o.made; empty ones only with o.emptyMade), then the
+  // standing ones in FOLDERS order (empty ones only when named in o.standing); archived files are not in any folder.
   function folders(docs, o = {}) {
-    const a = arrange(docs), by = new Map(FOLDERS.map(([k]) => [k, []]));
-    for (const p of a.all) if (p.tier.tier !== "archive") by.get(folderOf(p.doc)).push(p);
+    const a = arrange(docs), by = new Map(FOLDERS.map(([k]) => [k, []])), made = madeList(o.made), inMade = new Map(made.map((f) => [String(f.id), []]));
+    for (const p of a.all) if (p.tier.tier !== "archive") (p.doc.folder_id != null && inMade.get(String(p.doc.folder_id)) || by.get(folderOf(p.doc))).push(p);
     for (const doc of list(o.shared)) if (doc && doc.id != null) by.get("shared").push({ doc, tier: { tier: "shared" }, shared: true });
-    return { folders: FOLDERS.map(([key, label]) => ({ key, label, items: sortItems(by.get(key), o.sort) })).filter((f) => f.items.length), archive: a.archive };
+    const keep = new Set(list(o.standing));
+    const mine = made.map((f) => ({ key: madeKey(f.id), id: f.id, label: tidyName(f.name), made: true, items: sortItems(inMade.get(String(f.id)), o.sort) }))
+      .filter((f) => f.items.length || o.emptyMade)
+      .sort((x, y) => x.label.localeCompare(y.label, "en-NZ", { sensitivity: "base", numeric: true }) || String(x.id).localeCompare(String(y.id)));
+    const standing = FOLDERS.map(([key, label]) => ({ key, label, items: sortItems(by.get(key), o.sort) })).filter((f) => f.items.length || keep.has(f.key));
+    return { folders: [...mine, ...standing], archive: a.archive };
   }
+  // What the host's data says about folders: the made ones (null: none can be read here, e.g. a database before FL1), whether this
+  // person arranges them (an editor, with the folders read), and the standing set shown empty to someone who may add files.
+  const folding = (d, st = {}) => ({ made: madeList(d.folders), shared: d.shared, sort: st.sort, emptyMade: !!d.canAdd,
+    standing: d.canAdd ? STANDING[d.space === "group" ? "group" : "farm"] : [] });
+  const arranges = (d) => !!d?.canEdit && Array.isArray(d.folders);
   // A short date and the size (or the kind when the size is not recorded): "1 Aug 2024 · 2.1 MB", "Shared 20 Sept 2026 · Ridge Road"
   const dateOf = (d) => day(d.date_prepared) || day(d.period_end) || day(d.created_at);
   function fileLine(p, data) {
@@ -277,7 +315,7 @@
   // and where it sits), the download arrow for anyone else. The name's button covers the row, so the whole row is the tap target.
   function fxFileHtml(p, o, data, note) {
     const d = p.doc, title = M.docTitle(d), mine = o.selected != null && String(o.selected) === String(d.id);
-    const icon = p.shared ? "file" : ICON_OF_FOLDER[folderOf(d)] || iconOf(p);
+    const icon = p.shared ? "file" : ICON_OF_FOLDER[folderOf(d)] || iconOf(p);   // (its kind's icon, whichever folder it is in)
     const name = d.storage_path ? '<button type="button" class="doc-open fx-name" data-open-document="' + esc(d.id) + '">' + esc(title) + "</button>" : '<span class="fx-name">' + esc(title) + "</span>";
     const end = !p.shared && data.canEdit ? '<button type="button" class="doc-move fx-more" data-doc-move="' + esc(d.id) + '" aria-expanded="false" aria-label="More for ' + esc(title) + '">' + svg("more") + "</button>"
       : !p.shared && canDownload(d) ? '<button type="button" class="doc-download fx-get" data-download-document="' + esc(d.id) + '" aria-label="Download ' + esc(title) + '">' + svg("download") + "</button>" : "";
@@ -285,37 +323,55 @@
       '<div class="fx-row"><span class="fx-icon" aria-hidden="true">' + svg(icon) + '</span><span class="fx-text">' + name +
       '<small class="fx-line">' + esc([note, fileLine(p, data)].filter(Boolean).join(" · ")) + "</small></span>" + end + "</div>" + (p.shared ? "" : requestedHtml(data, d)) + "</li>";
   }
-  const fxFolderHtml = (f) => '<li><button type="button" class="fx-row fx-folder" data-fx-open="' + esc(f.key) + '"><span class="fx-icon" aria-hidden="true">' + svg("files") +
-    '</span><span class="fx-text"><span class="fx-name">' + esc(f.label) + '</span></span><span class="fx-count">' + f.items.length + '<span class="visually-hidden"> ' + (f.items.length === 1 ? "file" : "files") + "</span></span></button></li>";
+  // FL1: a folder is a compact row: its icon, its name, its count (none when empty, said for a screen reader) and a chevron
+  const fxFolderHtml = (f) => '<li><button type="button" class="fx-row fx-folder" data-fx-open="' + esc(f.key) + '"' + (f.made ? ' data-fx-made="' + esc(f.id) + '"' : "") + '><span class="fx-icon" aria-hidden="true">' + svg("files") +
+    '</span><span class="fx-text"><span class="fx-name">' + esc(f.label) + '</span></span><span class="fx-count' + (f.items.length ? "" : " fx-count-none") + '">' + (f.items.length ? f.items.length + '<span class="visually-hidden"> ' + (f.items.length === 1 ? "file" : "files") + "</span>" : '<span class="visually-hidden">empty</span>') +
+    '</span><span class="fx-chevron" aria-hidden="true">' + svg("chevron", 16) + "</span></button></li>";
+  // FL1: "New folder", quiet: the last row under the folders, for someone who arranges them (never a second filled button; the + adds files)
+  const fxNewHtml = () => '<button type="button" class="fx-row fx-new" data-fx-new><span class="fx-icon" aria-hidden="true">' + svg("plus") + '</span><span class="fx-text"><span class="fx-name">New folder</span></span></button>';
+  // The one-line form that names a folder (new, or a rename): the name, then Make or Rename and Cancel, as plain words
+  const fxNameFormHtml = ({ id = null, value = "", doc = null } = {}) => '<form class="fx-name-form" data-fx-name-form' + (id != null ? ' data-fx-rename="' + esc(id) + '"' : "") + (doc != null ? ' data-fx-for-doc="' + esc(doc) + '"' : "") + ' novalidate>' +
+    '<label class="fx-name-field"><span class="visually-hidden">' + (id != null ? "The folder's new name" : "The new folder's name") + '</span><input name="folder-name" autocomplete="off" maxlength="' + NAME_MAX + '" placeholder="Folder name" value="' + esc(value) + '"></label>' +
+    '<button type="submit" class="fx-name-save">' + (id != null ? "Rename" : doc != null ? "Make and move" : "Make") + '</button><button type="button" class="fx-name-cancel" data-fx-name-cancel>Cancel</button>' +
+    '<p class="doc-msg fx-name-msg" role="status" aria-live="polite"></p></form>';
+  // In a made folder, for someone who arranges them: one quiet "•••" (Rename; Remove, once the folder is empty)
+  const fxFolderMoreHtml = (open) => '<button type="button" class="fx-more fx-folder-more" data-fx-folder-more="' + esc(open.id) + '" aria-expanded="false" aria-label="More for the folder ' + esc(open.label) + '">' + svg("more") + "</button>";
+  // FL1 (review of #574): a folder is removed only once the database finds no file in it (documents.folder_id, NO ACTION): one that looks
+  // empty here may hold files this person cannot see. The refusal says only that, never what is in it.
+  const REMOVE_REFUSED = "This folder still holds files, so it can't be removed.";
+  const removeRefusal = (err) => (err?.code === "23503" ? REMOVE_REFUSED : "That folder wasn't removed.");
+  function folderMenuHtml(open) {
+    return '<ul class="doc-menu fx-menu fx-folder-menu" data-fx-folder-menu="' + esc(open.id) + '" aria-label="The folder ' + esc(open.label) + '">' +
+      '<li><button type="button" data-fx-rename-start="' + esc(open.id) + '">Rename</button></li>' +
+      (open.items.length ? '<li class="doc-menu-head">Move its files out to remove it</li>' : '<li><button type="button" data-fx-remove="' + esc(open.id) + '">Remove folder</button></li>') + "</ul>";
+  }
   const SORTS = { newest: "Newest first", name: "By name" };
   const sortHtml = (sort) => '<button type="button" class="fx-sort" data-fx-sort="' + (sort === "name" ? "newest" : "name") + '" aria-label="Sort: ' + esc(SORTS[sort] || SORTS.newest) + '. Change">' +
     svg("filter", 16) + "<span>" + esc(SORTS[sort] || SORTS.newest) + "</span></button>";
-  // What the explorer shows: the folders, or one folder's files with the way up, or (a single folder) its files at the top.
+  // What the explorer shows: the folders (FL1: always, however few the files), or one folder's files with the way up.
   // st: { folder, sort } (the person's place, kept by the live part); the files of a route's ?item= open in their folder.
   function explorerBody(data, o, st = {}) {
-    const d = data || {}, f = folders(d.documents, { shared: d.shared, sort: st.sort });
+    const d = data || {}, f = folders(d.documents, folding(d, st)), arranger = arranges(d);
     // (RF1: an empty Files names its place in its one sentence, where the list would start; the + is how to add one)
-    if (!f.folders.length) return '<p class="fx-none">' + (list(d.documents).length ? "Every file here is archived; search to find one." : text(d.place) ? "No files have been added to " + esc(text(d.place)) + " yet." : "No files yet.") + "</p>";
-    // a short list needs no folders: up to FLAT_MAX files (or one folder's worth) are listed straight away, newest first
-    const all = f.folders.flatMap((x) => x.items);
-    if (f.folders.length === 1 || all.length <= FLAT_MAX) {
-      const items = sortItems(all, st.sort);
-      return '<nav class="fx-crumbs" aria-label="Files"><span class="fx-here fx-total">' + esc(plural(items.length, "file", "files")) + "</span>" + (items.length > 1 ? sortHtml(st.sort) : "") + "</nav>" +
-        '<ul class="fx-list fx-files" data-fx-folder="">' + items.map((p) => fxFileHtml(p, o, d)).join("") + "</ul>";
-    }
+    const none = !list(d.documents).length && !list(d.shared).length ? '<p class="fx-none">' + (text(d.place) ? "No files have been added to " + esc(text(d.place)) + " yet." : "No files yet.") + "</p>" : "";
+    if (!f.folders.length) return none || '<p class="fx-none">Every file here is archived; search to find one.</p>';
     const holding = o.selected != null ? f.folders.find((x) => x.items.some((p) => String(p.doc.id) === String(o.selected))) : null;
     const key = st.folder === undefined && holding ? holding.key : st.folder;
     const open = f.folders.find((x) => x.key === key);
-    if (!open) return '<ul class="fx-list fx-folders" aria-label="Folders">' + f.folders.map(fxFolderHtml).join("") + "</ul>";
-    const up = f.folders.length > 1 ? '<button type="button" class="fx-up" data-fx-up data-from="' + esc(open.key) + '">' + svg("back", 18) + "<span>Files</span></button>" +
-      '<span class="fx-sep" aria-hidden="true">/</span><h4 class="fx-here" aria-current="location">' + esc(open.label) + "</h4>" : '<h4 class="fx-here">' + esc(open.label) + "</h4>";
-    return '<nav class="fx-crumbs" aria-label="Where you are">' + up + (open.items.length > 1 ? sortHtml(st.sort) : "") + "</nav>" +
-      '<ul class="fx-list fx-files" data-fx-folder="' + esc(open.key) + '">' + open.items.map((p) => fxFileHtml(p, o, d)).join("") + "</ul>";
+    if (!open) return none + '<ul class="fx-list fx-folders" aria-label="Folders">' + f.folders.map(fxFolderHtml).join("") + (arranger ? "<li>" + fxNewHtml() + "</li>" : "") + "</ul>";
+    const up = '<button type="button" class="fx-up" data-fx-up data-from="' + esc(open.key) + '">' + svg("back", 18) + "<span>Files</span></button>" +
+      '<span class="fx-sep" aria-hidden="true">/</span><h4 class="fx-here" aria-current="location">' + esc(open.label) + "</h4>";
+    const more = open.made && arranger ? fxFolderMoreHtml(open) : "";
+    const empty = open.items.length ? "" : '<p class="fx-none">Nothing in ' + esc(open.label) + " yet." + (arranger && open.made ? " Move a file here from its •••, or add one with +." : "") + "</p>";
+    return '<nav class="fx-crumbs" aria-label="Where you are">' + up + (open.items.length > 1 ? sortHtml(st.sort) : "") + more + "</nav>" + empty +
+      (open.items.length ? '<ul class="fx-list fx-files" data-fx-folder="' + esc(open.key) + '">' + open.items.map((p) => fxFileHtml(p, o, d)).join("") + "</ul>" : "");
   }
+  // The folder a file is shown in: its made folder when it sits in one this person reads, else its kind's
+  const placeLabel = (doc, d) => text(madeOf(doc, d?.folders)?.name) || folderLabel(folderOf(doc));
   // Search across every file (the archive and the shared ones too), each with the folder it is in.
   function explorerResults(data, o, q) {
     const d = data || {}, docs = list(d.documents), words =String(q || "").toLowerCase().split(/\s+/).map(squash).filter(Boolean), whole = squash(q);
-    const found = search(docs, q).map((p) => ({ ...p, note: p.tier.tier === "archive" ? "Archived" : folderLabel(folderOf(p.doc)) }));
+    const found = search(docs, q).map((p) => ({ ...p, note: p.tier.tier === "archive" ? "Archived" : placeLabel(p.doc, d) }));
     for (const doc of list(d.shared)) {
       const hay = squash([doc.title, M.docKind(doc.doc_type), doc.attribution, doc.original_name].filter(Boolean).join(" "));
       if (words.length && (words.every((w) => hay.includes(w)) || hay.includes(whole))) found.push({ doc, tier: { tier: "shared" }, shared: true, note: folderLabel("shared") });
@@ -385,7 +441,16 @@
   // over it: the Documents list keeps every main document, newest first (arrange), so this one sits beside the other.
   const heldPlan = (primaries) => list(primaries).filter((p) => p && M.isPlan(p)).sort(newest)[0] || null;
   const planKind = (kind) => ["fep", "fwfp"].includes(kind);
-  function confirmHtml(items, primaries) {
+  // FL1: where.folders (the made folders, when this person arranges them) adds a Folder row per file: by its kind (no made folder), or
+  // one of them; where.current, the folder open when the file was added, is chosen at first.
+  const folderRowHtml = (i, where) => {
+    const made = madeList(where?.folders);
+    if (!made.length) return "";
+    const cur = where.current != null ? String(where.current) : "";
+    return '<label class="doc-field"><span>Folder</span><select name="folder-' + i + '"><option value=""' + (cur ? "" : " selected") + ">By its kind</option>" +
+      made.map((f) => '<option value="' + esc(f.id) + '"' + (String(f.id) === cur ? " selected" : "") + ">" + esc(tidyName(f.name)) + "</option>").join("") + "</select></label>";
+  };
+  function confirmHtml(items, primaries, where = null) {
     const mains = list(primaries).map((p) => [String(p.id), M.docTitle(p)]), held = heldPlan(primaries);
     const fields = items.map((it, i) => {
       const g = it.guess, here = [...mains, ...items.slice(0, i).filter((x) => x.guess.tier === "primary").map((x) => [x.key, x.guess.title])];
@@ -394,6 +459,7 @@
         (it.tooBig ? '<p class="doc-none">Too large to add here (over 100 MB).</p>' :
         '<label class="doc-field"><span>Title</span><input name="title-' + i + '" value="' + esc(g.title) + '" required></label>' +
         '<label class="doc-field"><span>Kind</span><select name="kind-' + i + '">' + C.KINDS.map(([k, label]) => '<option value="' + k + '"' + (k === g.doc_type ? " selected" : "") + ">" + esc(label) + "</option>").join("") + "</select></label>" +
+        folderRowHtml(i, where) +
         '<label class="doc-field"><span>Issue date</span><input type="date" name="issued-' + i + '"></label>' +
         (g.generation ? '<p class="doc-detected">It reads as ' + esc(C.GENERATIONS.find((x) => x[0] === g.generation)?.[1] || "a Farm Environment Plan") + ", so it is offered as the farm's main plan.</p>" : "") +
         '<div class="doc-tiers" role="radiogroup" aria-label="Where it sits">' + radio("primary", "Main") + radio("supporting", "Supporting") + radio("archive", "Archive") + "</div>" +
@@ -429,7 +495,9 @@
   function confirmed(items, value) {
     return items.map((it, i) => it.tooBig ? null : (() => {
       const tier = value("tier-" + i) || it.guess.tier, under = tier === "supporting" ? value("under-" + i) || null : null;
-      return { key: it.key, file: it.file, title: String(value("title-" + i) || it.guess.title).trim() || it.guess.title, doc_type: value("kind-" + i) || it.guess.doc_type, tier, relates_to: under, date_prepared: day(value("issued-" + i)) };
+      // FL1: the folder chosen, when the form offered one (null: by its kind)
+      return { key: it.key, file: it.file, title: String(value("title-" + i) || it.guess.title).trim() || it.guess.title, doc_type: value("kind-" + i) || it.guess.doc_type, tier, relates_to: under, date_prepared: day(value("issued-" + i)),
+        ...(value("folder-" + i) ? { folder_id: value("folder-" + i) } : {}) };
     })()).filter(Boolean);
   }
   // Primaries first, so a file can sit under a main document added in the same batch.
@@ -457,9 +525,24 @@
       opt('data-doc-set="archive"', "Archive", here === "archive") + (data?.canSupersede ? supersedeOptions(doc, others, opt) : "") + "</ul>";
   }
   // PH3: an editor's "•••" in the explorer: Download first (one control per row instead of two), then where the file sits, as before.
+  // FL1: and, for someone who arranges folders, "Move to folder…" second, which turns the menu to the folders (folderPickHtml).
   function explorerMenuHtml(doc, data, { pick = false } = {}) {
+    if (pick === "folder") return folderPickHtml(doc, data);
     const get = canDownload(doc) && !pick ? '<li><button type="button" data-download-document="' + esc(doc.id) + '">Download</button></li>' : "";
-    return moveHtml(doc, data, { pick }).replace(/^(<ul class="doc-menu)(" data-doc-menu="[^"]*" aria-label="[^"]*">)/, "$1 fx-menu$2" + get);
+    const fold = !pick && arranges(data) ? '<li><button type="button" data-doc-folder-pick>Move to folder…</button></li>' : "";
+    return moveHtml(doc, data, { pick }).replace(/^(<ul class="doc-menu)(" data-doc-menu="[^"]*" aria-label="[^"]*">)/, "$1 fx-menu$2" + get + fold);
+  }
+  // FL1: Move to which folder? The made folders A to Z (the one it is in ticked), "Out of <its folder>" back to its kind's standing
+  // folder, and "New folder…" (a name, then the folder is made and the file moved into it). A file sits in one folder at most.
+  function folderPickHtml(doc, data) {
+    const now = madeOf(doc, data?.folders), ask = "Move to which folder?";
+    const made = madeList(data?.folders).slice().sort((x, y) => tidyName(x.name).localeCompare(tidyName(y.name), "en-NZ", { sensitivity: "base", numeric: true }));
+    const opt = (attrs, label, current) => '<li><button type="button" ' + attrs + (current ? ' aria-current="true"' : "") + ">" + esc(label) + "</button></li>";
+    return '<ul class="doc-menu fx-menu" data-doc-menu="' + esc(doc.id) + '" aria-label="' + esc(ask) + '">' + opt("data-doc-with-back", "Back") +
+      '<li class="doc-menu-head" aria-hidden="true">' + esc(ask) + "</li>" +
+      made.map((f) => opt('data-doc-to-folder="' + esc(f.id) + '"', tidyName(f.name), now && String(now.id) === String(f.id))).join("") +
+      (now ? opt('data-doc-to-folder=""', "Out of " + tidyName(now.name) + " (back to " + folderLabel(folderOf(doc)) + ")") : "") +
+      '<li data-doc-folder-new-slot>' + '<button type="button" data-doc-folder-new>New folder…</button></li></ul>';
   }
   // V5: staff only (the database refuses anyone else). A superseded file can be brought back; a current one names the issue that replaces it.
   const supersedeOptions = (doc, others, opt) => isSuperseded(doc) ? opt('data-doc-supersede=""', "Not superseded")
@@ -516,7 +599,9 @@
       const made = await readDrop(picked, primaries());
       if (ctx.stale()) return;
       items = made;
-      box.innerHTML = confirmHtml(items, primaries()); box.hidden = false; drop.hidden = true;
+      // FL1: the Folder row (when this person arranges folders), the open made folder chosen at first
+      const where = fx && arranges(d) ? { folders: d.folders, current: String(place.folder || "").startsWith("f:") ? place.folder.slice(2) : null } : null;
+      box.innerHTML = confirmHtml(items, primaries(), where); box.hidden = false; drop.hidden = true;
       // PH4: in the explorer (a place's Files, where the + adds a file) the step is the one pattern for add forms: it takes the screen on
       // a phone, Cancel and Add in one thin top row with its title between them, the file's fields as plain rows (ui.css "doc-sheet")
       const form = box.querySelector(".doc-confirm-form"), acts = form?.querySelector(".doc-actions");
@@ -547,7 +632,28 @@
       const note = fieldset?.querySelector(".doc-plan-note");
       if (note) note.hidden = !(fieldset.querySelector('.doc-tiers input:checked')?.value === "primary" && planKind(fieldset.querySelector("select[name^=kind-]")?.value));
     });
+    // FL1: a folder named (new, renamed, or new with a file moved into it), checked here first, then saved through the host's store
+    async function nameFolder(form) {
+      const input = form.querySelector("input[name=folder-name]"), msg = form.querySelector(".fx-name-msg"), rename = form.dataset.fxRename ?? null, forDoc = form.dataset.fxForDoc ?? null;
+      const problem = nameProblem(input.value, d.folders, rename);
+      if (problem) { msg.textContent = problem; input.focus(); return; }
+      if (!store?.makeFolder) { msg.textContent = "Not saved: nothing here keeps folders."; return; }
+      const name = tidyName(input.value), buttons = form.querySelectorAll("button");
+      for (const b of buttons) b.disabled = true;
+      msg.textContent = rename ? "Renaming…" : "Making the folder…";
+      try {
+        if (rename) await store.renameFolder(rename, name);
+        else { const made = await store.makeFolder(name); if (forDoc) await store.toFolder(forDoc, made.id); }
+        if (ctx.stale()) return;
+        await store.changed(rename ? "Renamed the folder " + name + "." : forDoc ? "Made the folder " + name + " and moved the file into it." : "Made the folder " + name + ".");
+      } catch (err) {
+        if (ctx.stale()) return;
+        for (const b of buttons) b.disabled = false;
+        msg.textContent = err?.code === "23505" ? "There is already a folder called " + name + "." : err?.message || "That wasn't saved.";
+      }
+    }
     rootEl.addEventListener("submit", async (e) => {
+      if (e.target.matches?.("[data-fx-name-form]")) { e.preventDefault(); await nameFolder(e.target); return; }
       if (!e.target.matches(".doc-confirm-form")) return;
       e.preventDefault();
       const form = e.target, msg = form.querySelector(".doc-msg"), button = form.querySelector('button[type="submit"]');
@@ -565,6 +671,57 @@
     });
     rootEl.addEventListener("click", async (e) => {
       if (e.target.closest("[data-doc-cancel]")) { closeConfirm(); return; }
+      // FL1: New folder (the quiet last row), a made folder's "•••" (Rename, Remove), and Cancel on a folder's name
+      if (fx && e.target.closest("[data-fx-new]")) {
+        const slot = e.target.closest("[data-fx-new]").parentElement;
+        slot.innerHTML = fxNameFormHtml(); slot.querySelector("input")?.focus();
+        return;
+      }
+      if (fx && e.target.closest("[data-fx-name-cancel]")) { drawBody(); (fx.querySelector("[data-fx-new]") || fx.querySelector("[data-fx-folder-more]") || input)?.focus(); return; }
+      const openFolder = () => folders(d.documents, folding(d, place)).folders.find((x) => x.key === place.folder) || null;
+      const folderMore = e.target.closest("[data-fx-folder-more]");
+      if (fx && folderMore) {
+        const shown = fx.querySelector("[data-fx-folder-menu]"), open = openFolder();
+        shown?.remove(); folderMore.setAttribute("aria-expanded", "false");
+        if (shown || !open) return;
+        folderMore.closest(".fx-crumbs").insertAdjacentHTML("afterend", folderMenuHtml(open));
+        folderMore.setAttribute("aria-expanded", "true");
+        fx.querySelector("[data-fx-folder-menu] button")?.focus();
+        return;
+      }
+      const renameStart = e.target.closest("[data-fx-rename-start]");
+      if (fx && renameStart) {
+        const open = openFolder();
+        fx.querySelector("[data-fx-folder-menu]")?.remove();
+        if (!open) return;
+        fx.querySelector(".fx-crumbs").insertAdjacentHTML("afterend", fxNameFormHtml({ id: open.id, value: open.label }));
+        fx.querySelector("[data-fx-name-form] input")?.select();
+        return;
+      }
+      const remove = e.target.closest("[data-fx-remove]");
+      if (fx && remove) {
+        const open = openFolder(), menu = remove.closest(".doc-menu");
+        if (!open || open.items.length) return;
+        if (!store?.removeFolder) { menu.insertAdjacentHTML("afterend", '<p class="doc-msg" role="status">Not removed: nothing here keeps folders.</p>'); menu.remove(); return; }
+        for (const b of menu.querySelectorAll("button")) b.disabled = true;
+        try {
+          await store.removeFolder(open.id);
+          if (ctx.stale()) return;
+          place.folder = null;
+          await store.changed("Removed the folder " + open.label + ".");
+        } catch (err) {
+          if (ctx.stale()) return;
+          // (the database removes a folder only once no file is in it, files this person cannot see included: said plainly, nothing more)
+          menu.insertAdjacentHTML("afterend", '<p class="doc-msg" role="status">' + esc(removeRefusal(err)) + "</p>"); menu.remove();
+        }
+        return;
+      }
+      const folderNew = e.target.closest("[data-doc-folder-new]");
+      if (fx && folderNew) {
+        const menu = folderNew.closest(".doc-menu"), slot = folderNew.closest("[data-doc-folder-new-slot]");
+        slot.innerHTML = fxNameFormHtml({ doc: menu.dataset.docMenu }); slot.querySelector("input")?.focus();
+        return;
+      }
       // PH3: into a folder, up to the folders, and the one sort control (newest first, or by name)
       const into = e.target.closest("[data-fx-open]"), up = e.target.closest("[data-fx-up]"), sort = e.target.closest("[data-fx-sort]");
       if (fx && (into || up || sort)) {
@@ -628,24 +785,26 @@
         return;
       }
       // RF2: "With a main file…" turns the menu to the other main files, and Back turns it back; the focus goes to its first choice
-      const step = e.target.closest("[data-doc-with], [data-doc-with-back]");   // (RF2: also staff's "Superseded by another file…")
+      // (RF2: also staff's "Superseded by another file…"; FL1: "Move to folder…")
+      const step = e.target.closest("[data-doc-with], [data-doc-with-back], [data-doc-folder-pick]");
       if (step) {
         const menu = step.closest(".doc-menu"), doc = list(d.documents).find((x) => String(x.id) === menu.dataset.docMenu);
         if (!doc) return;
-        const pick = step.hasAttribute("data-doc-with") ? (step.dataset.docWith === "by" ? "by" : "with") : false;
+        const pick = step.hasAttribute("data-doc-folder-pick") ? "folder" : step.hasAttribute("data-doc-with") ? (step.dataset.docWith === "by" ? "by" : "with") : false;
         menu.insertAdjacentHTML("afterend", fx ? explorerMenuHtml(doc, d, { pick }) : moveHtml(doc, d, { pick }));
         const next = menu.nextElementSibling;
         menu.remove();
-        (pick ? next.querySelector("[data-doc-set], [data-doc-supersede]") : next.querySelector("[data-doc-with]") || next.querySelector("button"))?.focus();
+        (pick ? next.querySelector("[data-doc-set], [data-doc-supersede], [data-doc-to-folder], [data-doc-folder-new]") : next.querySelector("[data-doc-with]") || next.querySelector("button"))?.focus();
         return;
       }
-      const set = e.target.closest("[data-doc-set]"), mark = e.target.closest("[data-doc-supersede]");
-      if (!set && !mark) return;
-      const menu = (set || mark).closest(".doc-menu"), id = menu.dataset.docMenu;
-      if (!store) { menu.insertAdjacentHTML("afterend", '<p class="doc-msg" role="status">Not changed: nothing here saves files.</p>'); menu.remove(); return; }
+      const set = e.target.closest("[data-doc-set]"), mark = e.target.closest("[data-doc-supersede]"), toF = e.target.closest("[data-doc-to-folder]");
+      if (!set && !mark && !toF) return;
+      const menu = (set || mark || toF).closest(".doc-menu"), id = menu.dataset.docMenu;
+      if (!store || (toF && !store.toFolder)) { menu.insertAdjacentHTML("afterend", '<p class="doc-msg" role="status">Not changed: nothing here saves files.</p>'); menu.remove(); return; }
       for (const b of menu.querySelectorAll("button")) b.disabled = true;
       try {
         if (set) await store.move(id, change(set.dataset.docSet, set.dataset.docUnder));
+        else if (toF) await store.toFolder(id, toF.dataset.docToFolder || null);
         else await store.supersede(id, mark.dataset.docSupersede || null);
         if (!ctx.stale()) await store.changed(null);
       }
@@ -669,5 +828,5 @@
     state, render, mounted,
   });
   return { block, arrange, sourceLine, search, resultsHtml, guessBatch, readDrop, saveChoices, offerHtml, openRequest, askedLine, heldPlan, confirmHtml, confirmed, saveOrder, moveHtml, change, storagePath, sha256Hex, state, MAX_BYTES,
-    downloadName, downloadHref, FOLDERS, FLAT_MAX, folderOf, folders, explorerBody, explorerResults, explorerMenuHtml, fileLine };
+    downloadName, downloadHref, FOLDERS, STANDING, folderOf, folders, explorerBody, explorerResults, explorerMenuHtml, folderPickHtml, folderMenuHtml, nameProblem, tidyName, removeRefusal, REMOVE_REFUSED, fileLine };
 });

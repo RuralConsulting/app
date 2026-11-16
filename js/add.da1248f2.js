@@ -69,6 +69,9 @@
     can: mayCapture, run: (ctx) => root.FP.captures.start(ctx, "pest_control") });
   registry.register({ id: "file", label: "File", short: "File", hint: "A plan, consent or report, to the space's Files", icon: "file", where: ["farm", "group"], order: 10, verb: "Add a file",
     can: mayAddFile, run: (ctx) => addFile(ctx) });
+  // FL1: a folder, only while the space's Files is open (where it is made and seen), for those who may add files there; quietly after File
+  registry.register({ id: "folder", label: "Folder", short: "Folder", hint: "A folder to arrange this place's files", icon: "files", where: ["farm", "group"], order: 11, verb: "New folder",
+    can: (ctx) => mayAddFile(ctx) && ctx.view === "documents", run: (ctx) => newFolder(ctx) });
   registry.register({ id: "event", label: "Event", short: "Event", hint: "A meeting, field day or workshop", icon: "event", where: ["group"], order: 20, verb: "Add an event",
     can: mayAddEvent, run: (ctx) => root.FP.groupEvents.openNew(ctx.id) });
   registry.register({ id: "interaction", label: "Call or meeting note", short: "Call", hint: "A call, visit or meeting, in the group's log", icon: "note", where: ["group"], order: 30, verb: "Log a call or visit",
@@ -109,6 +112,17 @@
     if (root.location.hash !== target) return null;   // the person has gone somewhere else: nothing here takes the files
     const screen = root.document.querySelector(SCREENS[ctx.space]);
     return [...(screen?.querySelectorAll(FILE_INPUT) || [])].find((i) => i.isConnected && !stale.has(i) && i.closest(".doc-drop")?.getClientRects().length) || null;
+  }
+  // FL1: New folder from the +: the open Files' own "New folder" row (out of a folder or a search first); nothing is made until it is named
+  function newFolder(ctx) {
+    const block = root.document.querySelector(SCREENS[ctx.space] + ' [data-view="documents"] .documents-block.fx');
+    const search = block?.querySelector("[data-fx-search]");
+    if (search?.value) { search.value = ""; search.dispatchEvent(new Event("input", { bubbles: true })); }
+    if (block && !block.querySelector("[data-fx-new]")) block.querySelector("[data-fx-up]")?.click();
+    const row = block?.querySelector("[data-fx-new]");
+    if (!row) { toast("Folders can't be made here just now."); return; }
+    row.scrollIntoView?.({ block: "center" });
+    row.click();
   }
   // File: the files are chosen at once (the tap is the browser's permission to open the picker), then the space's Files opens and
   // they go into its existing add flow (the documents block's confirm step), exactly as if chosen there.

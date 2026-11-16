@@ -17,7 +17,7 @@
     return { url: D.downloadHref(data.signedUrl, name), name };
   }
   // owner: { farm_id } or { org_id }. Bytes to the content address (a group's files under org/<id>), then one documents insert with the choices made.
-  async function addFile(sb, owner, { file, title, doc_type, tier, relates_to, visibility, date_prepared }, known) {
+  async function addFile(sb, owner, { file, title, doc_type, tier, relates_to, visibility, date_prepared, folder_id }, known) {
     const bytes = await file.arrayBuffer(), sha = await D.sha256Hex(bytes);
     const same = list(known).find((d) => d.sha256 === sha);
     if (same) throw Error("already here as " + M.docTitle(same));
@@ -26,7 +26,8 @@
     // The same bytes uploaded before but never described: describe them now (the database checks they are yours).
     if (up.error && !/exist|duplicate|409/i.test(String(up.error.message || "") + (up.error.statusCode || ""))) throw up.error;
     const { data, error } = await sb.from("documents").insert({ ...owner, title, doc_type, original_name: file.name, mime_type: mime, sha256: sha, size_bytes: file.size, storage_path: path, tier,
-      relates_to: relates_to || null, tiered_at: new Date().toISOString(), date_prepared: date_prepared || null, ...(visibility === "private" ? { visibility } : {}) }).select("id").single();
+      relates_to: relates_to || null, tiered_at: new Date().toISOString(), date_prepared: date_prepared || null, ...(visibility === "private" ? { visibility } : {}),
+      ...(folder_id ? { folder_id } : {}) }).select("id").single();   // (FL1: straight into a made folder of the same place; the database checks it)
     if (error) throw error;
     return data.id;
   }
@@ -49,9 +50,50 @@
   }
   async function readRows(sb, match, columns) {
     const key = Object.keys(match)[0], n = await countRows(sb, match);
-    const { data, error } = await sb.from("documents").select(columns).eq(key, match[key]).order("title").limit(n);
+    const query = (cols) => sb.from("documents").select(cols).eq(key, match[key]).order("title").limit(n);
+    let { data, error } = await query(columns + folderColumn(sb));
+    if (error && noFolders(sb, error)) ({ data, error } = await query(columns));
     if (error) throw error;
     return data || [];
+  }
+
+  // ---- FL1: folders (public.document_folders; documents.folder_id) ---------------------------------------------------------------
+  // documents.folder_id is read with the rest of a file's row where the database has it; a database without it (before FL1) is learnt
+  // once per client from the refused read, and the files are read as before, every one in its kind's folder.
+  const foldless = new WeakSet();
+  const folderColumn = (sb) => (foldless.has(sb) ? "" : ",folder_id");
+  const noFolders = (sb, e) => {
+    const missing = !!e && !foldless.has(sb) && /folder_id/i.test(String(e.message || "") + " " + String(e.details || "") + " " + String(e.hint || ""));
+    if (missing) foldless.add(sb);
+    return missing;
+  };
+  // A place's made folders, A to Z, or null when they can't be read (not there yet, or a refused read): then nothing offers to make one.
+  const FOLDERS_LISTED = 200;   // the database's own limit per place (app.guard_document_folder)
+  function readFolders(sb, match) {
+    const key = Object.keys(match)[0];
+    return Promise.resolve(sb.from("document_folders").select("id,name").eq(key, match[key]).order("name").limit(FOLDERS_LISTED))
+      .then((r) => (r.error ? null : r.data || []), () => null);
+  }
+  async function makeFolder(sb, owner, name) {
+    const { data, error } = await sb.from("document_folders").insert({ ...owner, name }).select("id,name").single();
+    if (error) throw error;
+    return data;
+  }
+  async function renameFolder(sb, id, name) {
+    const { data, error } = await sb.from("document_folders").update({ name }).eq("id", id).select("id");
+    if (error) throw error;
+    if (!data?.length) throw Error("That folder wasn't renamed.");
+  }
+  async function removeFolder(sb, id) {
+    const { data, error } = await sb.from("document_folders").delete().eq("id", id).select("id");
+    if (error) throw error;
+    if (!data?.length) throw Error("That folder wasn't removed.");
+  }
+  // A file into a made folder, or out of one (null): the documents update policy and guards decide, as for any change to a file
+  async function toFolder(sb, id, folderId) {
+    const { data, error } = await sb.from("documents").update({ folder_id: folderId || null }).eq("id", id).select("id");
+    if (error) throw error;
+    if (!data?.length) throw Error("That change wasn't allowed.");
   }
   // relates_to and superseded_by come from document_relations, which leaves out a relationship whose other end the reader can't see. The ids go a
   // few at a time, so a long list never overruns a URL; a part that can't be read reads as no relationships.
@@ -63,5 +105,6 @@
     return list(rows).map((d) => ({ ...d, relates_to: known.get(d.id)?.relates_to ?? null, superseded_by: known.get(d.id)?.superseded_by ?? null }));
   }
 
-  return { downloadLink, addFile, moveFile, supersedeFile, countRows, readRows, withRelations, MAX_LISTED };
+  return { downloadLink, addFile, moveFile, supersedeFile, countRows, readRows, withRelations, MAX_LISTED,
+    folderColumn, noFolders, readFolders, makeFolder, renameFolder, removeFolder, toFolder };
 });

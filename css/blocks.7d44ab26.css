@@ -226,6 +226,23 @@
 .documents-block.fx .fx-menu button { min-height: 44px; }
 .documents-block.fx .doc-msg { margin: 0 14px 8px 50px; }
 .documents-block.fx .doc-add { margin-top: var(--s-4); }
+/* FL1: a folder row ends in a chevron; "New folder" is a quiet last row (ink-2, no fill); a folder's name is one plain line with its two
+   words (Make or Rename, Cancel). Rows keep the shared .fx-row shape. */
+.fx-chevron { flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.documents-block.fx .fx-count.fx-count-none { padding: 0; background: none; }   /* an empty folder: no count, said only to a screen reader (no empty pill from DN1's rows) */
+.documents-block.fx button.fx-new { width: 100%; padding-right: 16px; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: left; cursor: pointer; }
+.documents-block.fx button.fx-new .fx-name { color: inherit; font-weight: 400; }
+.documents-block.fx button.fx-new:hover { background: var(--fill); color: var(--ink); }
+.fx-name-form { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 8px 6px 14px; }
+.fx-name-field { flex: 1 1 6rem; min-width: 0; }
+.documents-block.fx .fx-name-form input { width: 100%; box-sizing: border-box; min-height: 44px; }
+.documents-block.fx .fx-name-form button { min-height: 44px; padding: 0 10px; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; }
+.documents-block.fx .fx-name-form .fx-name-cancel { color: var(--ink-2); font-weight: 400; }
+.documents-block.fx .fx-name-form .doc-msg { flex-basis: 100%; margin: 0; }
+.documents-block.fx .fx-crumbs .fx-folder-more { margin-left: auto; }
+.documents-block.fx .fx-sort + .fx-folder-more { margin-left: 0; }
+.fx-crumbs + .fx-name-form { margin: 0 0 var(--s-2); border: 1px solid var(--rule); border-radius: var(--radius); }
+.documents-block.fx .fx-menu li:has(> .fx-name-form) .fx-name-form { padding-left: 0; }
 @media (max-width: 760px) {
   /* a phone: the round + adds a file (it hands the files to this input), so the drop-zone is kept for it but not drawn; the list ends
      clear of the + */

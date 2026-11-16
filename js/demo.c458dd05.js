@@ -38,12 +38,15 @@
     // HV1: "?memberfarm=1" (or "long", a long farm name) with "#/demo/multi": the second farm is a member farm the person reads as
     // a coordinator of its group, not one of theirs (no farm_members row), so ".../farm-2" opens it read only
     const memberFarm = new URLSearchParams(root.location.search).get("memberfarm");
+    // FL1: "?files=4" leaves the demo group four files (a guide, a form, a protocol and a map) and none shared by member farms, as the
+    // owner saw a group's Files on 15 Nov 2026 (the folders it shows then)
+    const fewFiles = new URLSearchParams(root.location.search).get("files") === "4";
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, round, projects, memberFarm })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, round, projects, memberFarm, fewFiles })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -180,7 +183,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, round = false, projects = false, memberFarm = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -254,6 +257,11 @@
       data.wqEmpty = true;   // no titles, so no monitoring site is near
     }
     if (group) groupDemo(data, queue, longPeople);
+    if (group && fewFiles) {   // FL1
+      const four = ["demo-g-d2", "demo-g-d5", "demo-g-d6", "demo-g-d7"];
+      data.groupTables.documents = data.groupTables.documents.filter((x) => four.includes(x.id));
+      data.group.sharedDocs = [];
+    }
     if (group && longMembers) data.groupTables.group_members.push(...["Juliett", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango", "Uniform",
       "Victor", "Whiskey", "Xray", "Yankee", "Zulu", "Amber", "Birch", "Cedar"].map((w, i) => ({ id: "de000000-0000-4000-8000-0000000003" + String(20 + i), org_id: GROUP,
       member_number: String(10 + i), business_name: w + " Invented Ltd", ended_at: null, created_at: "2026-06-01T00:00:00Z" })));
@@ -544,6 +552,69 @@
   // As the restrictive policies on documents, map_layers and group_events: a tagged item only for the coordinators, or shared with a
   // shared project the person takes part in (and still within the item's own rule, which the demo's rows already are)
   const pjItemSeen = (r, co, reads) => !r.project_id || co || (r.project_shared && reads.has(r.project_id));
+  // FL1: folders in Files, in memory, as public.document_folders' policies and guards and documents.folder_id's guard allow them: made,
+  // renamed and removed by those who add the place's files (a farm's owner, admins and editors; a group's roles but plain member); a
+  // name tidied and used once in a place, case aside; a file only into a folder of its own place; a folder removed only once no file is in
+  // it, whoever can see the files (documents.folder_id's NO ACTION foreign key: 23503).
+  // Whether the demo person adds files in a place (a farm's owner, admin or editor; a group's roles but plain member)
+  function folderMay(d, o) {
+    if (o.org_id) { const m = [...(d.tables.org_members || []), ...(d.groupTables?.org_members || [])].find((x) => x.org_id === o.org_id && x.user_id === d.user.id); return !!m && m.role !== "member"; }
+    const m = (d.tables.farm_members || []).find((x) => x.farm_id === o.farm_id && x.user_id === d.user.id);
+    return !m || ["owner", "admin", "edit"].includes(m.role);
+  }
+  // As the read policy (the owner's ruling, 16 Nov 2026): a folder is read by those who add files in its place, and by anyone else only
+  // while it holds a file they read (here: the files the demo's reads give them, a project's narrowing included)
+  function folderSeen(d, f) {
+    if (folderMay(d, f.org_id ? { org_id: f.org_id } : { farm_id: f.farm_id })) return true;
+    const co = pjCoordinator(d), reads = pjReads(d);
+    return [...(d.tables.documents || []), ...(d.groupTables?.documents || [])].some((x) => x.folder_id === f.id && pjItemSeen(x, co, reads));
+  }
+  function folderWrite(d, table, { adding, changes, removing, filters, singular }) {
+    const T = (d.tables.document_folders ||= []), now = new Date().toISOString();
+    const refuse = (code, message) => ({ data: null, error: { code, message } });
+    const ownerOf = (r) => (r.org_id ? { org_id: r.org_id } : { farm_id: r.farm_id });
+    const may = (o) => folderMay(d, o);
+    const tidy = (v) => String(v ?? "").trim().replace(/\s+/g, " ");
+    const taken = (o, name, except) => T.some((f) => f.id !== except && (o.org_id ? f.org_id === o.org_id : f.farm_id === o.farm_id) && f.name.toLowerCase() === name.toLowerCase());
+    const hit = (rows) => rows.filter((row) => filters.every(([key, val]) => matches(row, key, val)));
+    const rlsRefused = refuse("42501", "new row violates row-level security policy for table \"" + table + "\"");
+    if (table === "documents") {   // a file into a made folder, or out of one
+      const docs = [...(d.tables.documents || []), ...(d.groupTables?.documents || [])], rows = hit(docs).filter((r) => may(ownerOf(r)));
+      const folder = changes.folder_id ? T.find((f) => f.id === changes.folder_id) : null;
+      for (const r of rows) if (changes.folder_id && (!folder || (folder.org_id || null) !== (r.org_id || null) || (folder.farm_id || null) !== (r.farm_id || null)))
+        return refuse("23514", "That folder is not one of this place's folders");
+      for (const r of rows) r.folder_id = changes.folder_id || null;
+      return { data: copy(rows.map((r) => ({ id: r.id }))), error: null };
+    }
+    if (adding) {
+      const rows = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-folder-" + ++made, ...ownerOf(r), name: tidy(r.name), created_by: d.user.id, created_at: now }));
+      for (const r of rows) {
+        if (!may(ownerOf(r))) return rlsRefused;
+        if (!r.name || [...r.name].length > 60) return refuse("23514", "new row violates check constraint \"document_folders_name\"");
+        if (taken(ownerOf(r), r.name)) return refuse("23505", "duplicate key value violates unique constraint");
+        T.push(r);
+      }
+      return { data: copy(singular ? rows[0] : rows), error: null };
+    }
+    const rows = hit(T).filter((r) => may(ownerOf(r)));
+    if (removing) {
+      const docs = [...(d.tables.documents || []), ...(d.groupTables?.documents || [])];
+      if (rows.some((r) => docs.some((doc) => doc.folder_id === r.id)))
+        return refuse("23503", "violates foreign key constraint");   // (the database's code; the app says it in its own words)
+      for (const r of rows) T.splice(T.indexOf(r), 1);
+      return { data: copy(rows.map((r) => ({ id: r.id }))), error: null };
+    }
+    if (changes) {
+      const name = tidy(changes.name);
+      for (const r of rows) {
+        if (!name || [...name].length > 60) return refuse("23514", "new row violates check constraint \"document_folders_name\"");
+        if (taken(ownerOf(r), name, r.id)) return refuse("23505", "duplicate key value violates unique constraint");
+        r.name = name;
+      }
+      return { data: copy(rows.map((r) => ({ id: r.id }))), error: null };
+    }
+    return null;
+  }
   // A write to the four tables, as their policies and guards allow it: the coordinators only; who and when stamped; the owning group from
   // the project; a sub-group or member named from the list; the same group or business once at a time
   function projectWrite(d, table, { adding, changes, filters, singular }) {
@@ -2315,6 +2386,12 @@
         if (table === "captures" && offlineNow()) return LOST();   // CAP1: no coverage
         const d = await ready, page = wqPageRows(d, table);   // WQV1
         if (PJ_TABLES.includes(table) && write) return projectWrite(d, table, { adding, changes, filters, singular });   // PJ1
+        // FL1: the place's made folders (read here like any table) and a file into or out of one
+        if (table === "document_folders") d.tables.document_folders ||= [];
+        if ((table === "document_folders" && write) || (table === "documents" && write && changes && Object.keys(changes).length === 1 && "folder_id" in changes)) {
+          const r = folderWrite(d, table, { adding, changes, removing, filters, singular });
+          if (r) return singular && Array.isArray(r.data) ? (r.data.length === 1 ? result(r.data[0]) : error("Demo row not found")) : r;
+        }
         const rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : page !== undefined ? page : table === "captures" && d.tables.captures ? capturesFor(d)
           : PJ_TABLES.includes(table) ? projectRows(d, table) : d.tables[table];
         if (write && adding && KEPT.includes(table)) {
@@ -2354,6 +2431,7 @@
         let selected = [...rows, ...((table === "places" && d.wqPage) ? [] : d.groupTables?.[table] || [])].filter((row) => filters.every(([key, val]) => matches(row, key, val)));
         // PJ1: an item in a project, as the restrictive policies narrow it
         if (table === "documents" || table === "map_layers" || table === "group_events") { const co = pjCoordinator(d), reads = pjReads(d); selected = selected.filter((r) => pjItemSeen(r, co, reads)); }
+        if (table === "document_folders") selected = selected.filter((f) => folderSeen(d, f));   // FL1: as the read policy
         for (const [key, asc] of [...orders].reverse()) selected = [...selected].sort((a, b) => String(a[key] || "").localeCompare(String(b[key] || "")) * (asc ? 1 : -1));
         const total = selected.length;   // (the count is of every row the filters pick, before a range)
         if (span) selected = selected.slice(span[0], span[1] + 1);
