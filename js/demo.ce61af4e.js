@@ -200,6 +200,7 @@
     const manifest = { bounds: [172, -43, 172.025, -42.98], boundary: "boundary.geojson", files: ["boundary.geojson"], layers: [] };
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
+    data.tables.published_map_edits = [];   // ML1: none saved yet
   }
   function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false, manyPlaces = false, insights = null } = {}) {
     const f = copy(fixture);
@@ -1985,7 +1986,8 @@
     "subgroup_businesses",   // SG2: a business added to a sub-group
     "group_fields", "group_membership_types",   // M1b: a field or type added by the group's admin
     "group_subscription_years", "group_agreements",   // M2: a year or agreement added by the group's admin
-    "farm_working_notes"];   // NP1b: a working note added on a farm
+    "farm_working_notes",   // NP1b: a working note added on a farm
+    "published_map_edits"];   // ML1: a map's edits saved by RCL staff (a new row per save)
   const EDITED = ["layer_notes", "farm_parcels", "group_events", "group_event_attendees", "people", "group_member_people", "group_member_details", "interactions",
     "subgroup_businesses",   // SG2: ended
     "group_fields", "group_membership_types",   // M1b: renamed, reordered, archived
@@ -2611,6 +2613,8 @@
         }
         const rows = table === "map_features" || table === "map_feature_versions" ? shapeRows(d, table) : page !== undefined ? page : table === "captures" && d.tables.captures ? capturesFor(d)
           : PJ_TABLES.includes(table) ? projectRows(d, table) : d.tables[table];
+        // ML1: only RCL staff save a map's edits (the demo person is staff unless shown as a client)
+        if (write && adding && table === "published_map_edits" && !d.tables.profiles?.[0]?.is_staff) return result(null, { code: "42501", message: "new row violates row-level security policy for table \"published_map_edits\"" });
         if (write && adding && KEPT.includes(table)) {
           const now = new Date().toISOString(), added = (Array.isArray(adding) ? adding : [adding]).map((r) => ({ id: "demo-new-" + ++made, created_at: now, ...(table === "layer_notes" ? { updated_at: now, created_by: d.user.id, updated_by: d.user.id } : {}),
             ...(table === "entries" ? { updated_at: now, created_by: d.user.id, captured_at: now } : {}), ...copy(r) }));
@@ -2619,6 +2623,7 @@
             if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
             if (table === "subgroup_businesses") Object.assign(r, { parent_org_id: GROUP, joined_on: r.joined_on ?? String(d.asAt).slice(0, 10), left_on: null, created_by: d.user.id });   // SG2: as the guard stamps it
             if (table === "group_fields") Object.assign(r, { key: r.key || String(r.label).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field", archived_at: null });   // M1b: as the guard makes the key
+            if (table === "published_map_edits") r.created_by = d.user.id;   // ML1: as the guard stamps it
             if (table === "farm_working_notes") Object.assign(r, { body: String(r.body || "").trim(), created_by: d.user.id, updated_by: d.user.id, updated_at: r.created_at, archived_at: null, archived_by: null });   // NP1b: as the guard stamps it
             rows.push(r);
             if (table === "documents") d.tables.document_relations.push({ id: r.id, tier: r.tier, relates_to: r.relates_to || null, superseded_by: null });
@@ -2693,6 +2698,8 @@
         if (name === "capture_tag_suggestions") return offlineNow() ? LOST() : result(captureTagSuggestions(d, args?.o));   // CAP1
         if (/^group_event_(notes|attendee_notes|set_notes|attendee_set_note)$/.test(name)) return result(...eventNotesRpc(d, name, args || {}));   // NP1
         // NP1b, as public.farm_working_notes_allowed: RCL staff on the farm (the demo person when staff); a client: no
+        // ML1, as public.published_map_edit_allowed: RCL staff (in the demo, the demo person when staff), for a map there
+        if (name === "published_map_edit_allowed") return result(!!d.tables.profiles?.[0]?.is_staff && !!d.tables.published_maps?.some((m) => m.id === args?.m));
         if (name === "farm_working_notes_allowed") return result(!!d.tables.profiles?.[0]?.is_staff && (args.f === FARM || args.f === FARM2));
         if (String(name).startsWith("crm_")) { const r = crmRpc(d, name, args || {}); if (r) return result(...r); }   // PE1
         if (name === "register_review_answer") return result(...reviewAnswer(d, args || {}));   // RV1

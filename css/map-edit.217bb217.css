@@ -1,0 +1,74 @@
+/* ML1: "Edit layers" on a published map's panel (js/map-edit.js). Computer only in this first cut: at a phone's width nothing here
+   shows. The editor takes the place of the panel's list inside the panel's own box, so neither the panel nor the map changes size
+   (WebKit blanks a map whose box is resized after its first draw). Calm: the app's ink for controls, small text and tight rows on
+   the DN1 scale, one filled button (Save changes); colour only in the layer swatches. Light and dark from the app's tokens. */
+.maps-viewer .ml-open-row { display: flex; }
+.maps-viewer .ml-open { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 2px; border: 0; background: none;
+  color: var(--ink-2); font: inherit; font-size: var(--text-small); cursor: pointer; }
+.maps-viewer .ml-open:hover { color: var(--ink); }
+.maps-viewer .ml-open .icon { width: 16px; height: 16px; }
+
+.maps-viewer .rv-panel.ml-editing > .rv-body, .maps-viewer .rv-panel.ml-editing > .rv-foot { display: none; }
+.maps-viewer .ml-edit { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); color: var(--ink); }
+.maps-viewer .ml-head { padding: 10px 18px 8px; border-bottom: 1px solid var(--rule-soft); }
+.maps-viewer .ml-head h2 { margin: 0; font-size: var(--text-body); font-weight: 600; }
+.maps-viewer .ml-who { margin: 2px 0 0; font-size: var(--text-small); color: var(--ink-2); }
+.maps-viewer .ml-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 10px; }
+.maps-viewer .ml-group { margin: 10px 18px 2px; font-size: var(--text-small); font-weight: 600; color: var(--ink-3); }
+.maps-viewer .ml-note { margin: 2px 0 0; font-size: var(--text-small); color: var(--ink-3); }
+.maps-viewer .ml-map-row { padding: 8px 18px 10px; border-bottom: 1px solid var(--rule-soft); }
+.maps-viewer .ml-switch-row { display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer; font-size: var(--text-small); }
+.maps-viewer .ml-map-row .ml-note { margin-left: 42px; }
+
+.maps-viewer .ml-row { padding: 2px 12px 2px 18px; }
+.maps-viewer .ml-line { display: flex; align-items: center; gap: 6px; min-height: 36px; }
+.maps-viewer .ml-name { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--clear); border-radius: var(--radius-s); background: none;
+  color: var(--ink); font: inherit; font-size: var(--text-small); }
+.maps-viewer .ml-name:hover { border-color: var(--rule); }
+.maps-viewer .ml-name:focus { border-color: var(--field-border); background: var(--panel); outline: none; }
+.maps-viewer .ml-row.off .ml-name { color: var(--ink-3); }
+.maps-viewer .ml-move, .maps-viewer .ml-more { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--radius-s);
+  background: none; color: var(--ink-2); cursor: pointer; }
+.maps-viewer .ml-move:hover:not(:disabled), .maps-viewer .ml-more:hover { background: var(--fill); color: var(--ink); }
+.maps-viewer .ml-move:disabled { opacity: .3; cursor: default; }
+.maps-viewer .ml-move .icon { width: 16px; height: 16px; }
+.maps-viewer .ml-more[aria-expanded="true"] { background: var(--fill); }
+.maps-viewer .ml-dot { display: block; width: 16px; height: 16px; border-radius: 4px; background: var(--dot, var(--clear)); box-shadow: inset 0 0 0 1px var(--rule); }
+.maps-viewer .ml-dot-qgis { background: conic-gradient(var(--map-hue-1) 0 25%, var(--map-hue-2) 0 50%, var(--map-hue-4) 0 75%, var(--map-hue-6) 0); }
+
+.maps-viewer .ml-style { display: grid; gap: 8px; margin: 2px 0 8px 42px; padding: 8px 10px; border-radius: var(--radius-s); background: var(--wash); }
+.maps-viewer .ml-field { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 8px; font-size: var(--text-small); color: var(--ink-2); }
+.maps-viewer .ml-field input[type="range"] { width: 100%; accent-color: var(--accent); }
+.maps-viewer .ml-pc { font-variant-numeric: tabular-nums; color: var(--ink-3); min-width: 3.2em; text-align: right; }
+.maps-viewer .ml-swatches { grid-column: 2 / span 2; display: flex; flex-wrap: wrap; gap: 6px; }
+.maps-viewer .ml-swatch { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: var(--dot); cursor: pointer; box-shadow: inset 0 0 0 1px var(--rule); }
+.maps-viewer .ml-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--ink); }
+.maps-viewer .ml-seg { grid-column: 2 / span 2; display: flex; border: 1px solid var(--rule); border-radius: var(--radius-s); overflow: hidden; }
+.maps-viewer .ml-seg button { flex: 1; min-height: 28px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-small); cursor: pointer; }
+.maps-viewer .ml-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.maps-viewer .ml-takeoff, .maps-viewer .ml-back, .maps-viewer .ml-reset { justify-self: start; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink-2);
+  font: inherit; font-size: var(--text-small); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.maps-viewer .ml-takeoff:hover, .maps-viewer .ml-back:hover, .maps-viewer .ml-reset:hover:not(:disabled) { color: var(--ink); }
+.maps-viewer .ml-reset:disabled { opacity: .4; cursor: default; text-decoration: none; }
+.maps-viewer .ml-off .ml-name-text { flex: 1; min-width: 0; padding: 0 8px; font-size: var(--text-small); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.maps-viewer .ml-foot { border-top: 1px solid var(--rule-soft); padding: 8px 18px 12px; display: grid; gap: 6px; }
+.maps-viewer .ml-kept { margin: 0; font-size: var(--text-small); color: var(--ink-3); }
+.maps-viewer .ml-status { margin: 0; font-size: var(--text-small); color: var(--ink); }
+.maps-viewer .ml-status:empty { display: none; }
+.maps-viewer .ml-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.maps-viewer .ml-reset-row { padding: 10px 18px 0; }
+.maps-viewer .ml-gap { flex: 1; }
+.maps-viewer .ml-count { font-size: var(--text-small); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.maps-viewer .ml-cancel, .maps-viewer .ml-save { min-height: 34px; padding: 0 14px; border-radius: var(--radius-pill); font: inherit; font-size: var(--text-small); cursor: pointer; }
+.maps-viewer .ml-cancel { border: 1px solid var(--rule); background: none; color: var(--ink); }
+.maps-viewer .ml-save { border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.maps-viewer .ml-save:hover:not(:disabled) { background: var(--accent-hover); }
+.maps-viewer .ml-save:disabled { background: var(--fill); color: var(--ink-3); cursor: default; }
+.maps-viewer .ml-edit :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* computer only in this first cut */
+@media (max-width: 720px) {
+  .maps-viewer .ml-open-row, .maps-viewer .ml-edit { display: none; }
+  .maps-viewer .rv-panel.ml-editing > .rv-body, .maps-viewer .rv-panel.ml-editing > .rv-foot { display: revert; }
+}

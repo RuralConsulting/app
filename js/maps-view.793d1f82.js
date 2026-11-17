@@ -14,6 +14,8 @@
 // N2b: the map's bounds go with it: a group the old model has no area for lists the shared sites inside its published map.
 // CTX2: on a group's map, the context layers the loader marked starts_on (native vegetation, protected places) are on as it first
 // opens on a device; a farm's map starts them all off, as before.
+// ML1: a map's saved edits (public.published_map_edits) are read with its package and applied to its manifest before anything else
+// (readPackage), and "Edit layers" (js/map-edit.js) is offered on the panel to those who may change the map.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) { module.exports = api; return; }
@@ -218,6 +220,14 @@
     },
     overlay: (map, holder, owner, state, bounds) => FP.wqSites?.attach({ map, holder, sb: FP.sb, owner, state, bounds }) || null,
     unshare: () => FP.shareSave?.clear(),
+    // ML1: a map's saved edits (the latest of public.published_map_edits, at most one row read), applied by map-edit-model.js, and the
+    // editor (map-edit.js), which offers itself only to those the database lets change the map
+    readEdits: async (sb, mapId) => {
+      try { const { data, error } = await sb.from("published_map_edits").select("id, edits, created_at, created_by").eq("map_id", mapId).order("created_at", { ascending: false }).limit(1); return error ? null : data?.[0] || null; }
+      catch { return null; }
+    },
+    applyEdits: (manifest, edits) => (FP.mapEditModel ? FP.mapEditModel.apply(manifest, edits) : manifest),
+    edit: (ctx) => FP.mapEdit?.attach({ ...ctx, sb: FP.sb }) || null,
     // EX1: the header's "Share or save" (share-save.js): this view as an image, the viewer's own A4 print, and a link to this map
     share: (map, holder, { title, place }) => FP.shareSave?.set(() => {
       const S = FP.shareSaveModel, day = new Intl.DateTimeFormat("en-CA", { timeZone: "Pacific/Auckland" }).format(new Date());
@@ -293,7 +303,13 @@
     // The map's current package and its signed links, or null when it has none the person may have.
     async function readPackage(map) {
       const sb = env.sb();
-      const { data: pkg, error } = await sb.from("map_packages").select("manifest, storage_prefix").eq("map_id", map.id).eq("is_current", true).maybeSingle();
+      // ML1: the map's latest saved edits (public.published_map_edits), kept beside the map so a publish from QGIS keeps them, applied to
+      // the manifest the viewer draws; the package as published goes with it for the editor (js/map-edit.js). Asked for at the same time
+      // as the package (no read round added before the first draw); a read that fails, or a database without the table, shows the map as
+      // published.
+      const [{ data: pkg, error }, saved] = await Promise.all([
+        sb.from("map_packages").select("manifest, storage_prefix, version").eq("map_id", map.id).eq("is_current", true).maybeSingle(),
+        env.readEdits ? Promise.resolve().then(() => env.readEdits(sb, map.id)).catch(() => null) : null]);
       if (error) throw error;
       if (!pkg) return null;
       const byPath = filesByPath(pkg.manifest, pkg.storage_prefix);
@@ -311,7 +327,9 @@
       // a reference layer whose file did not get a link (not uploaded yet, or removed) is left out: the map opens without it
       const referenceLayers = reference.filter((r) => urls[r.rel]).map((r) => ({ key: r.key, title: r.title, credit: r.credit, url: urls[r.rel], ...(r.style ? { style: r.style } : {}),
         ...(r.group ? { group: r.group } : {}), ...(r.order !== undefined ? { order: r.order } : {}), ...(r.startsOn ? { startsOn: true } : {}) }));
-      return { manifest: pkg.manifest, urls, shared: usable, referenceLayers };
+      let manifest = pkg.manifest;
+      try { if (saved && env.applyEdits) manifest = env.applyEdits(pkg.manifest, saved.edits); } catch { manifest = pkg.manifest; }
+      return { manifest, published: pkg.manifest, saved, version: pkg.version || null, urls, shared: usable, referenceLayers };
     }
 
     // CL1: the reference layers, from the core register: the rows whose style names how the viewer draws them
@@ -449,6 +467,8 @@
       s.keep?.made?.();
       s.renewAt = env.now() + RENEW_MS;
       s.timer = env.setTimer(wake, RENEW_MS);
+      // ML1: "Edit layers" in the panel, for those who may change this map (js/map-edit.js); a save draws the map again where it was
+      try { env.edit?.({ map: s.map, holder, owner: s.opts.owner, chosen: s.chosen, read, redraw: () => { if (s === shown && s.map) draw(s); } }); } catch {}
     }
 
     // TR1: arriving from another map (the place's Home, Water quality, Places): the viewer's map opens where that map was, under its
@@ -633,7 +653,8 @@
     if (group) when(() => map.getLayer("boundary"), () => { for (const id of ["boundary", "boundary-halo"]) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none"); });
     // the mask: outside the area's outer edge, under everything the map draws over its background. Review of #540, 4: exactly one
     // mask: a package that shades the outside itself (its "Shade outside", the viewer's own mask) keeps its own, and this is not added
-    if (!manifest?.mask && manifest?.boundary && url && palette?.outsideMask && phoneModel?.outlineFor && typeof fetch === "function") {
+    // ML1: a map whose darkening outside was turned off for everyone (manifest.shade false, map-edit-model.js) gets none
+    if (!manifest?.mask && manifest?.boundary && manifest?.shade !== false && url && palette?.outsideMask && phoneModel?.outlineFor && typeof fetch === "function") {
       fetch(url(manifest.boundary)).then((r) => (r.ok ? r.json() : null)).then((fc) => {
         const polys = (fc?.features || (fc?.geometry ? [fc] : [])).flatMap((f) => { const g = f.geometry || f; return g?.type === "Polygon" ? [g.coordinates] : g?.type === "MultiPolygon" ? g.coordinates : []; });
         if (!polys.length) return;
