@@ -72,9 +72,29 @@
     const grip = holder.querySelector(".rv-toggle-panel"), panel = holder.querySelector(".rv-panel");
     if (grip && panel) {
       grip.setAttribute("aria-label", "Layers and legend");
-      const said = () => grip.setAttribute("aria-expanded", String(!panel.classList.contains("collapsed")));
+      // MV1b (the live walk after MV1: on a phone the sites' list over the top half and the layers below it, no map): one panel at a time,
+      // the map in view. While the sheet rests at its peek its rows are inert: nothing in them can take the focus or a tap, so nothing
+      // can scroll the map's box to bring them into view (a keyboard's Tab, a screen reader, an automated tap did). Opening the sheet
+      // closes the sites' panel; Sites closes the sheet (dock).
+      const rows = [panel.querySelector(".rv-body"), panel.querySelector(".rv-foot")].filter(Boolean);
+      const said = () => {
+        const shut = panel.classList.contains("collapsed"), small = phone();
+        grip.setAttribute("aria-expanded", String(!shut));
+        for (const n of rows) if (n.inert !== (shut && small)) n.inert = shut && small;
+        if (!shut && small) { const close = holder.querySelector(".wqs-panel:not([hidden]) .wqs-close"); if (close) close.click(); }
+      };
       said();
       if (typeof MutationObserver !== "undefined") new MutationObserver(said).observe(panel, { attributes: true, attributeFilter: ["class"] });
+      // (review of #596: taken away with this map, or the listener would keep every map made again alive)
+      const width = root.matchMedia?.("(max-width: 720px)");
+      width?.addEventListener?.("change", said);
+      try { map.once("remove", () => width?.removeEventListener?.("change", said)); } catch { /* the map is going */ }
+    }
+    // MV1b: the map's box, and the box it is in, never scroll (the map is drawn to fill them); anything that scrolls one is put back
+    for (const n of [holder, holder.parentElement].filter(Boolean)) {
+      if (n.dataset.mvStill) continue;
+      n.dataset.mvStill = "1";
+      n.addEventListener("scroll", () => { if (n.scrollTop && n.querySelector(".maps-viewer, .rv-map")) n.scrollTop = 0; }, { passive: true });
     }
   }
   // MV1: the panel's body in the portal's order. The map's own layers first, each a switch with its legend under it (the viewer's own
@@ -95,6 +115,14 @@
     // (on a phone, Sites opens the sites' own sheet in place of the map's, which steps down to its peek)
     const panel = holder.querySelector(".rv-panel"), grip = holder.querySelector(".rv-toggle-panel");
     wq?.querySelector(".wqs-list-btn")?.addEventListener("click", () => { if (phone() && panel && !panel.classList.contains("collapsed")) grip?.click(); });
+    // MV1b: the sites' list closed on a phone while the sheet rests (its rows inert): the keyboard goes back to the sheet's handle, the
+    // way to Water quality and Sites again, not to nowhere
+    const sitesPanel = holder.querySelector(".wqs-panel");
+    if (sitesPanel && grip && typeof MutationObserver !== "undefined") new MutationObserver(() => {
+      if (!sitesPanel.hidden || !phone() || !panel?.classList.contains("collapsed")) return;
+      const at = holder.ownerDocument.activeElement;
+      if (!at || at === holder.ownerDocument.body || !at.isConnected || at.closest?.("[inert]") || sitesPanel.contains(at)) grip.focus({ preventScroll: true });
+    }).observe(sitesPanel, { attributes: true, attributeFilter: ["hidden"] });
     for (const row of body.querySelectorAll(".rv-ref-group .rv-ref-row")) ref.append(row);
     for (const s of body.querySelectorAll(":scope > .rv-ctx-group")) ref.append(s);
     for (const row of body.querySelectorAll(":scope > .rv-mask-row")) ref.append(row);
