@@ -16,7 +16,26 @@
   const M = () => FP.eventsModel, G = () => FP.groupModel;
   const el = (...a) => FP.el(...a);
   const COLS = "id,org_id,title,starts_at,ends_at,all_day,place_name,latitude,longitude,topics,head_count,cancelled_at,cancelled_by,created_by,created_at,updated_at";
-  const ATT_COLS = "id,event_id,user_id,group_member_id,name,role,added_at";
+  // EV2: each person's status (migration 20261113082000). The app can go live minutes before the migration runs. Every read of the
+  // list asks for the status first; while the database has no such column, that read is made again without it and statusReady is
+  // false: the list is shown plain (no statuses, no Mark who came, no adding, one line saying statuses arrive in a few minutes), so
+  // nothing is shown as "Came" that is not and no write can fail. The next read (or a re-check after a failed write) finds the column
+  // and the tab switches itself to statuses; a tab never stays on the old columns.
+  const ATT_COLS = "id,event_id,user_id,group_member_id,name,role,status,added_at", ATT_COLS_OLD = "id,event_id,user_id,group_member_id,name,role,added_at";
+  let statusReady = true;
+  const noStatusColumn = (error) => /status/.test(String(error?.message || "")) && /column|exist/i.test(String(error?.message || ""));
+  async function attRows(make) {
+    const { data, error } = await make(ATT_COLS);
+    if (error && noStatusColumn(error)) {
+      const old = await make(ATT_COLS_OLD);
+      if (old.error) throw old.error;
+      statusReady = false;
+      return Array.isArray(old.data) ? old.data : [];
+    }
+    if (error) throw error;
+    statusReady = true;
+    return Array.isArray(data) ? data : [];
+  }
   // NP1: who reads and writes the notes (the database decides; this only says whether to ask)
   const NOTE_ROLES = ["facilitator", "advisor", "admin"];
   const canNotes = (role) => NOTE_ROLES.includes(role);
@@ -48,11 +67,24 @@
     for (let i = 0; i < eventIds.length; i += 1000) for (const n of await rows(sb.rpc("group_event_attendee_notes", { g: org, event_ids: eventIds.slice(i, i + 1000) }))) out.set(n.attendee_id, n.note);
     return attendees.map((a) => ({ ...a, note: out.get(a.id) ?? null }));
   }
-  const readAttendees = async (sb, id) => (await rows(sb.from("group_event_attendees").select(ATT_COLS).eq("event_id", id).order("name", { ascending: true }).range(0, ATT_CAP - 1))).map(bare);
+  const readAttendees = async (sb, id) => (await attRows((c) => sb.from("group_event_attendees").select(c).eq("event_id", id).order("name", { ascending: true }).range(0, ATT_CAP - 1))).map(bare);
   async function readAttendeesOf(sb, ids) {
     const out = [];
-    for (let i = 0; i < ids.length; i += 100) out.push(...await rows(sb.from("group_event_attendees").select(ATT_COLS).in("event_id", ids.slice(i, i + 100)).range(0, 9999)));
+    for (let i = 0; i < ids.length; i += 100) out.push(...await attRows((c) => sb.from("group_event_attendees").select(c).in("event_id", ids.slice(i, i + 100)).range(0, 9999)));
     return out.map(bare);
+  }
+  // EV2: the counts the Events list shows, for those who read the lists: each event's people by status. Counted first, then at most
+  // TALLY_CAP rows (event id and status only); a group with more shows no named counts in the list (each event still shows its own).
+  const TALLY_CAP = 10000;
+  async function readTally(sb, org) {
+    const head = await sb.from("group_event_attendees").select("id", { count: "exact", head: true }).eq("org_id", org);
+    if (head.error) throw head.error;
+    const n = typeof head.count === "number" ? head.count : null;
+    if (n === 0) return new Map();
+    if (n == null || n > TALLY_CAP) return null;
+    const got = [];
+    for (let i = 0; i < n; i += 1000) got.push(...await attRows((c) => sb.from("group_event_attendees").select(c.includes("status") ? "event_id,status" : "event_id").eq("org_id", org).order("id", { ascending: true }).range(i, Math.min(n, i + 1000) - 1)));
+    return FP.eventAttendanceModel.tally(got);
   }
   function download(name, text, type) {
     const url = URL.createObjectURL(new Blob([text], { type })), a = el("a", { href: url, download: name, hidden: true });
@@ -67,7 +99,7 @@
     const canWrite = G().canWrite(group.role), isAdmin = G().canManage(group.role), notesToo = canNotes(group.role);
     const wrap = el("section", { class: "group-events", "data-view": "events" });
     const st = { events: [], total: 0, truncated: false, mode: narrow() ? "list" : "month", month: String(opts.today || M().dayKey(Date.now())).slice(0, 7),
-      tab: "upcoming", screen: "calendar", current: null, attendees: [], people: null, register: null, notice: null, preview: null, failed: null };
+      tab: "upcoming", screen: "calendar", current: null, attendees: [], attLoading: false, tally: null, people: null, register: null, notice: null, preview: null, failed: null };
     const today = () => String(opts.today || M().dayKey(Date.now())).slice(0, 10);
     const now = () => opts.now || new Date().toISOString();
     const canCancel = (ev) => isAdmin || (!!person?.id && ev.created_by === person.id);
@@ -77,7 +109,9 @@
         const r = await readEvents(sb, group.id);
         // NP1: the notes only for the group's facilitators, advisors and admins; a failed notes read leaves the events as they are
         if (notesToo && r.events.length) r.events = await withNotes(sb, group.id, r.events).catch(() => r.events);
-        Object.assign(st, r); st.failed = null;
+        // EV2: the list's counts, only for those who read the lists (anyone else: not asked for); a failed read shows no counts
+        const tally = canWrite && r.events.length ? await readTally(sb, group.id).catch(() => null) : null;
+        Object.assign(st, r, { tally }); st.failed = null;
       } catch (e) { st.failed = e?.message || String(e); }
     }
     function draw() {
@@ -150,7 +184,16 @@
           el("span", { class: "events-date", "aria-hidden": "true" }, el("b", {}, String(d)), el("small", {}, M().dateText(first).split(" ")[0])),
           el("span", { class: "events-item-text" }, el("b", {}, ev.title, ev.cancelled_at ? el("span", { class: "events-badge" }, "Cancelled") : null),
             el("small", {}, M().whenText(ev) + (ev.place_name ? " · " + ev.place_name : "")),
-            topics.length ? el("small", { class: "events-topics-line" }, topics.join(" · ")) : null)));
+            topics.length ? el("small", { class: "events-topics-line" }, topics.join(" · ")) : null,
+            countsNode(ev))));
+    }
+    // EV2: who is coming or came, on the list's row: each status's number and the head count beside them (never added together). A
+    // plain member sees the head count only (the named list is not theirs to read).
+    function countsNode(ev) {
+      const c = st.tally?.get(ev.id) || null, A = FP.eventAttendanceModel;
+      // (while the statuses are on their way: how many names, never "came")
+      const line = statusReady ? A.countsLine(c, ev.head_count) : A.plainLine(c?.all || 0, ev.head_count);
+      return line ? el("small", { class: "events-counts-line", "data-counts": ev.id }, line) : null;
     }
     function listNode() {
       const l = M().lists(st.events, now());
@@ -174,6 +217,7 @@
     async function openEvent(id) {
       st.current = st.events.find((e) => e.id === id) || null; st.attendees = [];
       if (!st.current) return go("calendar");
+      st.attLoading = canWrite;
       go("event");
       try {
         // NP3: the list only for those who record it (anyone else reads no rows: not asked for)
@@ -181,6 +225,7 @@
         if (notesToo && st.attendees.length) st.attendees = await withAttendeeNotes(sb, group.id, st.attendees, [id]).catch(() => st.attendees);
         if (canWrite && !st.current.cancelled_at) await pickers();
       } catch (e) { st.notice = "Couldn't read the attendance just now: " + (e?.message || e); }
+      st.attLoading = false;
       if (st.screen === "event" && st.current?.id === id) draw();
     }
     async function pickers() {
@@ -188,7 +233,6 @@
       if (st.register == null) st.register = (await optional(sb.from("group_members").select("id,member_number,business_name,ended_at").eq("org_id", group.id).range(0, 1999)))
         .filter((b) => !b.ended_at).sort((a, b) => String(a.business_name).localeCompare(String(b.business_name)));
     }
-    const KIND = { member: "Person with a sign-in", business: "Member", name: "Name only" };
     function eventScreen() {
       const ev = st.current, topics = M().cleanTopics(ev.topics);
       const box = el("article", { class: "events-event", "data-event": ev.id }, back(),
@@ -197,7 +241,10 @@
           el("dt", {}, "When"), el("dd", {}, M().whenText(ev)),
           el("dt", {}, "Where"), el("dd", {}, ev.place_name || "No place recorded", ev.latitude != null ? el("small", {}, " (" + Number(ev.latitude).toFixed(5) + ", " + Number(ev.longitude).toFixed(5) + ")") : null),
           ...(topics.length ? [el("dt", {}, "Topics"), el("dd", {}, el("ul", { class: "events-topic-chips" }, ...topics.map((t) => el("li", {}, t))))] : []),
-          ...(ev.head_count != null ? [el("dt", {}, "Head count"), el("dd", {}, String(ev.head_count))] : [])),
+          // (EV2: for those who record attendance the head count is a field in the block below)
+          ...(ev.head_count != null && !canWrite ? [el("dt", {}, "Head count"), el("dd", {}, String(ev.head_count))] : [])),
+        // EV2: who's coming, or who came, on the event itself, straight under its facts (NP3: only for those who read the list)
+        canWrite ? attendanceNode(ev) : null,
         notesToo && ev.notes ? el("div", { class: "events-notes" }, el("h4", {}, "Notes"), el("p", {}, ev.notes), el("small", { class: "events-private" }, "Not shown to members")) : null);
       if (ev.cancelled_at) box.append(el("p", { class: "group-fine" }, "Cancelled " + G().shortDate(ev.cancelled_at) + ". A cancelled event stays on record; it can't be changed until it is restored."));
       const buttons = el("div", { class: "events-actions" });
@@ -205,52 +252,30 @@
       if (canWrite && canCancel(ev)) buttons.append(el("button", { type: "button", class: "secondary", "data-action": ev.cancelled_at ? "restore" : "cancel", onclick: () => setCancelled(ev, !ev.cancelled_at) }, ev.cancelled_at ? "Restore the event" : "Cancel the event"));
       if (buttons.childNodes.length) box.append(buttons);
       // NP3: a plain member sees no attendance section at all (the head count, a number on the event, is in the facts above)
-      if (!canWrite) return box;
-      box.append(el("h4", {}, "Attendance (" + st.attendees.length + (ev.head_count != null ? " named, head count " + ev.head_count : "") + ")"));
-      box.append(st.attendees.length ? el("ul", { class: "events-attendees" }, ...st.attendees.map((a) => el("li", { "data-kind": M().ATTENDEE_KIND(a) },
-        el("span", {}, el("b", {}, a.name), el("small", {}, KIND[M().ATTENDEE_KIND(a)] + (a.role ? " · " + a.role : "")),
-          notesToo && a.note ? el("small", { class: "events-private events-attendee-note" }, "Note: " + a.note + " (not shown to members)") : null),
-        canWrite && !ev.cancelled_at ? el("button", { type: "button", class: "link", "aria-label": "Remove " + a.name, onclick: () => removeAttendee(a) }, "Remove") : null)))
-        : el("p", { class: "events-empty-tab" }, "No names recorded." + (ev.head_count == null ? "" : " The head count is " + ev.head_count + ".")));
-      if (canWrite && !ev.cancelled_at) box.append(attendeeForm(ev));
       return box;
     }
-    function attendeeForm(ev) {
-      const taken = new Set(st.attendees.map((a) => a.user_id || a.group_member_id).filter(Boolean));
-      const who = el("select", { id: "attendee-who", "aria-label": "Who" }, el("option", { value: "" }, "Someone without a sign-in (type their name)"),
-        (st.people || []).length ? el("optgroup", { label: "People with a sign-in" }, ...st.people.filter((p) => !taken.has(p.user_id)).map((p) => el("option", { value: "u:" + p.user_id, "data-name": p.name }, p.name))) : null,
-        (st.register || []).length ? el("optgroup", { label: "Members" }, ...st.register.filter((b) => !taken.has(b.id)).map((b) => el("option", { value: "b:" + b.id, "data-name": b.business_name }, b.business_name + (b.member_number ? " (" + b.member_number + ")" : "")))) : null);
-      const name = el("input", { id: "attendee-name", type: "text", maxlength: "200", autocomplete: "off" });
-      // NP1: a note on an attendee is the coordinators' (facilitators, advisors, admins); an editor adds names only
-      // NP3: the role or organisation is shared with whoever reads the list; the note is the coordinators' own
-      const role = el("input", { id: "attendee-role", type: "text", maxlength: "200", placeholder: "For example: committee, regional council", autocomplete: "off" });
-      const note = notesToo ? el("input", { id: "attendee-note", type: "text", maxlength: "200", autocomplete: "off" }) : null;
-      const msg = el("p", { class: "events-msg", role: "status" });
-      who.addEventListener("change", () => { const o = who.selectedOptions[0]; if (o?.dataset.name) name.value = o.dataset.name; });
-      const form = el("form", { class: "events-attendee-form" }, el("h4", {}, "Add someone"),
-        el("label", { for: "attendee-who" }, "Who"), who, el("label", { for: "attendee-name" }, "Name"), name,
-        el("label", { for: "attendee-role" }, "Role or organisation"), role,
-        ...(note ? [el("label", { for: "attendee-note" }, "Note (not shown to members)"), note] : []),
-        el("button", { type: "submit", class: "primary" }, "Add"), msg,
-        el("p", { class: "group-fine" }, "Names only: no phone numbers or emails are kept. People with a sign-in are listed once their sign-in has a name."));
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (!name.value.trim()) { msg.textContent = "Type their name."; return; }
-        const [kind, id] = (who.value || ":").split(":");
-        const row = { event_id: ev.id, name: name.value.trim(), ...(role.value.trim() ? { role: role.value.trim() } : {}), ...(note && note.value.trim() ? { note: note.value.trim() } : {}), ...(kind === "u" ? { user_id: id } : kind === "b" ? { group_member_id: id } : {}) };
-        form.querySelector("button[type=submit]").disabled = true;
-        const { data, error } = await sb.from("group_event_attendees").insert(row).select(ATT_COLS).single();
-        if (error) { msg.textContent = "Couldn't add them: " + error.message; form.querySelector("button[type=submit]").disabled = false; return; }
-        st.attendees = [...st.attendees, { org_id: group.id, note: null, ...row, ...bare(data) }].sort((a, b) => String(a.name).localeCompare(String(b.name)));
-        draw(); document.getElementById("attendee-name")?.focus();
-      });
-      return form;
+    // EV2: a re-read of one event's list after a failed write; the event is drawn again only when the statuses came (or went)
+    async function recheck(id) {
+      const was = statusReady;
+      try {
+        let list = await readAttendees(sb, id);
+        if (statusReady === was || st.screen !== "event" || st.current?.id !== id) return;
+        if (notesToo && list.length) list = await withAttendeeNotes(sb, group.id, list, [id]).catch(() => list);
+        st.attendees = list; draw();
+      } catch { /* the block already says what failed */ }
     }
-    async function removeAttendee(a) {
-      const { error } = await sb.from("group_event_attendees").delete().eq("id", a.id);
-      if (error) st.notice = "Couldn't remove " + a.name + ": " + error.message;
-      else st.attendees = st.attendees.filter((x) => x.id !== a.id);
-      draw();
+    // EV2: the block (event-attendance.js): the head count, the list with one status each, adding people, marking who came. Its changes
+    // come back here so the Events list's counts follow; it redraws itself, so the screen is not redrawn under the person's thumb.
+    function attendanceNode(ev) {
+      if (st.attLoading) return el("p", { class: "group-status ea-reading", role: "status" }, "Reading who's coming…");
+      return FP.eventAttendance.block({ sb, group, ev, attendees: st.attendees, register: st.register, people: st.people, notesToo, readOnly: !!ev.cancelled_at,
+        now, attCols: ATT_COLS, download, statuses: statusReady,
+        // (People is the group's facilitators', advisors' and admins'; an editor adds from the member register)
+        peopleOpen: notesToo,
+        // after any failed write: read the list again; once the status column has arrived (or gone), the screen follows
+        recheck: () => recheck(ev.id),
+        onAttendees: (list) => { st.attendees = list; if (st.tally) st.tally.set(ev.id, FP.eventAttendanceModel.counts(list)); else st.tally = new Map([[ev.id, FP.eventAttendanceModel.counts(list)]]); },
+        onEvent: (row) => { st.events = st.events.map((x) => (x.id === row.id ? { ...x, head_count: row.head_count, updated_at: row.updated_at } : x)); } });
     }
     async function setCancelled(ev, cancel) {
       const { data, error } = await sb.from("group_events").update({ cancelled_at: cancel ? new Date().toISOString() : null }).eq("id", ev.id).select(COLS).single();

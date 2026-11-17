@@ -197,7 +197,10 @@
   // The events file's columns. Dates and times are New Zealand's; topics are separated by semicolons; "id" is the event's own id
   // (leave it empty on a new row; keep it to update that event). "cancelled" is shown, never changed by an import.
   const EVENT_COLUMNS = ["id", "title", "start_date", "start_time", "end_date", "end_time", "all_day", "place_name", "latitude", "longitude", "topics", "notes", "head_count", "cancelled"];
-  const ATTENDANCE_COLUMNS = ["event_id", "event_title", "event_date", "name", "kind", "note", "role"];   // NP3: role (shared) last
+  // NP3: role (shared) after the note; EV2: status last (invited, coming, apologies or came; a row read without one is came)
+  const ATTENDANCE_COLUMNS = ["event_id", "event_title", "event_date", "name", "kind", "note", "role", "status"];
+  const STATUSES = ["invited", "coming", "apologies", "came"];
+  const attendeeStatus = (a) => (STATUSES.includes(a?.status) ? a.status : "came");
   // NP3: the spreadsheet formula guard the People and Membership exports use (people-model.js): a cell that begins with = + - @
   // (or a tab or carriage return) is written with an apostrophe in front, so a spreadsheet shows it as text and never runs it. Free
   // text only (titles, places, topics, notes, names, roles); a negative latitude or longitude, which is a number, is left as it is.
@@ -237,7 +240,7 @@
     const evs = inRange(events, from, to), byId = new Map(evs.map((e) => [e.id, e]));
     const rows = (attendees || []).filter((a) => byId.has(a.event_id))
       .sort((a, b) => byStart(byId.get(a.event_id), byId.get(b.event_id)) || String(a.name).localeCompare(String(b.name)))
-      .map((a) => ({ event_id: a.event_id, event_title: byId.get(a.event_id).title, event_date: span(byId.get(a.event_id)).first, name: a.name, kind: ATTENDEE_KIND(a), note: a.note || "", role: a.role || "" }));
+      .map((a) => ({ event_id: a.event_id, event_title: byId.get(a.event_id).title, event_date: span(byId.get(a.event_id)).first, name: a.name, kind: ATTENDEE_KIND(a), note: a.note || "", role: a.role || "", status: attendeeStatus(a) }));
     return toCsv(ATTENDANCE_COLUMNS, rows);
   }
   const TEMPLATE_EXAMPLE = { id: "", title: "Field day at the ford (example: replace or delete this row)", start_date: "2026-10-14", start_time: "10:00", end_date: "2026-10-14", end_time: "13:00",

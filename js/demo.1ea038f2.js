@@ -884,6 +884,11 @@
       { id: id(53), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: GROUP_MEMBERS[2].id, name: GROUP_MEMBERS[2].business_name, note: null, added_at: made },
       { id: id(54), event_id: id(3), org_id: GROUP, user_id: null, group_member_id: null, name: "Aroha Tāne (synthetic)", role: "Regional council, land management", note: "Keen to see the culvert (synthetic).", added_at: made },
       { id: id(55), event_id: id(2), org_id: GROUP, user_id: null, group_member_id: null, name: "Pat Example (synthetic)", role: "Chair", note: null, added_at: made },
+      // EV2: the rows above have no status, as rows written before EV2 are read back: came. The nitrogen evening (coming up) has a list
+      // with each status: invited by the coordinator their own way, coming, apologies.
+      ...[[1, "invited"], [2, "invited"], [3, "coming"], [4, "coming"], [5, "apologies"], [6, "coming"], [7, "invited"]].map(([m, status], i) => ({ id: id(60 + i), event_id: id(6), org_id: GROUP,
+        user_id: null, group_member_id: GROUP_MEMBERS[m].id, name: GROUP_MEMBERS[m].business_name, role: null, note: null, status, added_at: made })),
+      { id: id(67), event_id: id(6), org_id: GROUP, user_id: null, group_member_id: null, name: "Sam Visitor (synthetic)", role: "Regional council", note: null, status: "coming", added_at: made },
     ];
     data.eventPeople = [{ user_id: USER, name: "Demo advisor", role: "admin" }, { user_id: "de000000-0000-4000-8000-000000000499", name: "Mere Example (synthetic)", role: "member" }];
   }
@@ -2586,12 +2591,12 @@
     const result = (data = null, error = null) => ({ data: copy(data), error });
     const error = (message) => result(null, { message });
     function query(table) {
-      const filters = [], orders = []; let write = false, singular = false, maybe = false, adding = null, changes = null, removing = false, span = null, counting = false, withOrg = false;
+      const filters = [], orders = []; let cols = "", write = false, singular = false, maybe = false, adding = null, changes = null, removing = false, span = null, counting = false, withOrg = false;
       const q = {
         // M2b (#522 review): select(columns, { count: "exact", head: true }) gives the count as the API does (a head read: the count and no
         // rows), so a count-first read (people.js counted) never falls back to its cap and says "Only the first 2,000 are listed"
         // PERF3d: org_members with "organisations(...)" embeds each membership's organisation, as PostgREST does (null if none)
-        select(columns, options) { if (options?.count) counting = { head: !!options.head }; withOrg = table === "org_members" && /\borganisations\(/.test(columns || ""); return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
+        select(columns, options) { cols = String(columns || ""); if (options?.count) counting = { head: !!options.head }; withOrg = table === "org_members" && /\borganisations\(/.test(columns || ""); return q; }, eq(key, val) { filters.push([key, val]); return q; }, in(key, vals) { filters.push([key, { in: vals }]); return q; },
         order(key, options) { orders.push([key, options?.ascending !== false]); return q; }, limit() { return q; },
         // ON3b: `is(key, null)` and `range(from, to)` (inclusive), as PostgREST pages a long read
         is(key, val) { filters.push([key, { is: val }]); return q; }, range(from, to) { span = [from, to]; return q; },
@@ -2604,6 +2609,11 @@
       async function execute() {
         if (table === "captures" && offlineNow()) return LOST();   // CAP1: no coverage
         const d = await ready, page = wqPageRows(d, table);   // WQV1
+        // EV2: "?nostatus=1" stands in for the minutes after the app goes live and before the migration adds the status column: any read
+        // or write naming it is refused as the API refuses an unknown column (a test sets d.attendeeStatusMissing = false: the migration ran)
+        if (table === "group_event_attendees") d.attendeeStatusMissing ??= new URLSearchParams(globalThis.location?.search || "").get("nostatus") === "1";
+        if (table === "group_event_attendees" && d.attendeeStatusMissing && (/\bstatus\b/.test(cols) || [].concat(adding || [], changes || []).some((r) => r && "status" in r)))
+          return result(null, { code: "42703", message: "column group_event_attendees.status does not exist" });
         if (PJ_TABLES.includes(table) && write) return projectWrite(d, table, { adding, changes, filters, singular });   // PJ1
         // FL1: the place's made folders (read here like any table) and a file into or out of one
         if (table === "document_folders") d.tables.document_folders ||= [];
@@ -2621,6 +2631,7 @@
           if (added.some((r) => rows.some((x) => x.id === r.id))) return result(null, { code: "23505", message: "duplicate key value violates unique constraint" });
           for (const r of added) {
             if (table === "entry_links") r.farm_id = d.tables.entries.find((e) => e.id === r.entry_id)?.farm_id ?? null;
+            if (table === "group_event_attendees") Object.assign(r, { org_id: (d.tables.group_events || []).find((e) => e.id === r.event_id)?.org_id ?? null, status: r.status ?? "came" });   // N4/EV2: as the guard and the default make it
             if (table === "subgroup_businesses") Object.assign(r, { parent_org_id: GROUP, joined_on: r.joined_on ?? String(d.asAt).slice(0, 10), left_on: null, created_by: d.user.id });   // SG2: as the guard stamps it
             if (table === "group_fields") Object.assign(r, { key: r.key || String(r.label).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field", archived_at: null });   // M1b: as the guard makes the key
             if (table === "published_map_edits") r.created_by = d.user.id;   // ML1: as the guard stamps it
