@@ -175,7 +175,8 @@
     const people = ([k]) => k !== "people" || !!FP.peopleModel?.canSeeTab(group, groups);   // SG2: and, in a sub-group, its parent's too
     // GI1: Insights (how the group uses the app) is drawn for the group's facilitators, advisors and admins and RCL staff only
     const insights = ([k]) => k !== "insights" || (!!FP.insights && !!FP.insightsModel?.canSee(group.role, !!FP.ops?.isStaff?.()));
-    const tabs = (FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).filter(insights);   // UI1: the views drawn, for Add
+    const access = ([k]) => k !== "access" || !!FP.groupAccessModel?.canSee(group.role);   // GA1: the access page, for the group's admins only
+    const tabs = (FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).filter(insights).filter(access);   // UI1: the views drawn, for Add
     // UI2: five on a phone's tab bar and six in a computer's segmented control; the rest under More (space-nav.js)
     (FP.spaceNav?.render || plainTabs)($("#group-nav"), tabs.map(([key, label]) => ({ key, label, href: FP.href(G().href(group.id, key)), icon: FP.icons?.forView(key),
       badge: key === "people" ? () => FP.groupPeople?.countBadge?.(group.id) : null })), route.view,   // RV1: open review items, once People has read them
@@ -226,7 +227,7 @@
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records" || route.view === "projects" || route.view === "insights" || route.view === "water") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records" || route.view === "projects" || route.view === "insights" || route.view === "water" || route.view === "access") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
@@ -281,6 +282,15 @@
       document.title = group.name + " · " + G().viewLabel("records") + " | " + (FP.brand?.product || "");
       const panel = $("#group-panel");
       panel.replaceChildren(FP.records.view(group, { sb: FP.sb, item: route.item || null }));
+      panel.scrollTop = 0;
+      return;
+    }
+    // GA1: the access page is a list, not a map: who has a sign-in in the group and what each role can do (group-access.js), read as the
+    // person (public.group_access answers the group's admins only); the link to Manage's Members only where Manage is drawn
+    if (route.view === "access") {
+      document.title = group.name + " · " + G().viewLabel("access") + " | " + (FP.brand?.product || "");
+      const panel = $("#group-panel"), manage = shownTabs.some(([k]) => k === "manage") ? FP.href(G().href(group.id, "manage", "members")) : null;
+      panel.replaceChildren(FP.groupAccess.view(group, { sb: FP.sb, me: person?.id || null, manage }));
       panel.scrollTop = 0;
       return;
     }

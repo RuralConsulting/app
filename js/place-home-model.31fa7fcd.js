@@ -105,6 +105,7 @@
     projects: "Funded work and who takes part",   // PJ1
     insights: "How the group is using the app",   // GI1
     map: "The map with its layers and cards (RCL staff)", ask: "Ask about this farm (RCL staff)", create: "Reports and updates (RCL staff)", manage: "Members, checks and settings",
+    access: "Who can sign in and what each role can do",   // GA1: the group's admins only
   };
   function eventLine(ev) {
     if (!ev) return null;

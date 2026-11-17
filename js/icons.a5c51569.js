@@ -63,7 +63,7 @@
     print: "M7 8V3.5h10V8M5 17H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-1M7 14h10v6.5H7z",   // PJ1: a group's projects (a flag)
   };
   // The icon each space view shows in the tab bar
-  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records", water: "water", projects: "projects", plan: "plan", insights: "insights" };
+  const VIEW_ICONS = { home: "home", map: "overview", maps: "maps", documents: "files", events: "events", ask: "ask", create: "create", manage: "manage", people: "people", onboarding: "due", records: "records", water: "water", projects: "projects", plan: "plan", insights: "insights", access: "people" };
   const NS = "http://www.w3.org/2000/svg";
   function icon(name, size = 22) {
     const d = PATHS[name] || PATHS.file, doc = root.document;

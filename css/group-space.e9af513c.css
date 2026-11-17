@@ -106,6 +106,50 @@
 .manage-request { display: grid; gap: 6px; margin-top: 16px; max-width: 520px; }
 .manage-locations { display: grid; gap: 10px; }
 .manage-locations > li { display: grid; gap: 4px; }
+/* GA1: the access page, one calm column (the owner liked the older maps portal's staff page): the role cards side by side, a line on
+   signing in, the people as a plain table (rows on a phone), Add someone, Recent changes. DN1's sizes: 16 px text, 13 px quiet lines. */
+#screen-group[data-view="access"] .group-map { display: none; }
+#screen-group[data-view="access"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="access"] .group-panel { border-left: 0; border-top: 0; }
+.group-access { max-width: 920px; margin: 0 auto; overflow-wrap: anywhere; }
+.group-access h2 { margin: 0 0 var(--s-1); }
+.group-access h3 { margin: var(--s-5) 0 var(--s-2); font-size: var(--text-body); }
+.group-access p { margin: 0; }
+.ga-lead, .ga-signin, .ga-fine, .ga-summary, .ga-changes time { color: var(--ink-2); font-size: var(--text-small); }
+.ga-roles { list-style: none; margin: var(--s-3) 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr)); gap: var(--s-2); }
+.ga-role { display: grid; align-content: start; gap: 2px; padding: var(--s-2) var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-s); background: var(--panel); }
+.ga-role p { font-size: var(--text-small); color: var(--ink-2); line-height: 1.35; }
+.ga-summary { margin-bottom: var(--s-2) !important; }
+.ga-table { width: 100%; border-collapse: collapse; font-size: var(--text-body); }
+.ga-table th { text-align: left; font-weight: 600; font-size: var(--text-small); color: var(--ink-2); padding: 0 var(--s-3) var(--s-1) 0; border-bottom: 1px solid var(--rule); }
+.ga-table td { padding: var(--row-pad, 8px) var(--s-3) var(--row-pad, 8px) 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+.ga-table td.ga-email b { font-weight: 400; }
+.ga-table td small { color: var(--ink-3); font-size: var(--text-small); }
+.ga-table :is(.ga-2fa, .ga-last, .ga-rolecell) { white-space: nowrap; }
+.ga-table .ga-2fa[data-state="not-yet"] { color: var(--ink-3); }
+.ga-k { display: none; }
+.ga-add p { font-size: var(--text-small); }
+.ga-add p + p { margin-top: var(--s-1); color: var(--ink-2); }
+.ga-add a { display: inline-block; min-height: 44px; line-height: 44px; color: var(--ink); }
+.ga-changes { list-style: none; margin: 0; padding: 0; }
+.ga-changes li { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); column-gap: var(--s-3); padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: var(--text-small); }
+.ga-changes li:last-child { border-bottom: 0; }
+.ga-status { color: var(--ink-2); }
+.ga-staff { margin-top: var(--s-2) !important; }
+.ga-note { margin-top: var(--s-3) !important; }
+/* a phone (and a computer at large text): each person a row, the email on top, a quiet line of role · two-factor · last signed in */
+@media (max-width: 640px) {
+  .ga-table, .ga-table tbody, .ga-table tr, .ga-table td { display: block; }
+  .ga-table thead { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .ga-table tr { min-height: var(--row-min, 48px); padding: var(--row-pad, 8px) 0; border-bottom: 1px solid var(--rule); box-sizing: border-box; }
+  .ga-table td { display: inline; padding: 0; border: 0; font-size: var(--text-small); color: var(--ink-3); white-space: normal; }
+  .ga-table td.ga-email { display: block; font-size: var(--text-body); color: var(--ink); }
+  .ga-table td.ga-email ~ td:not(.ga-rolecell)::before { content: "\00b7"; margin: 0 6px; }
+  .ga-table .ga-rolecell { color: var(--ink-2); }
+  .ga-table :is(.ga-2fa, .ga-last, .ga-rolecell) { white-space: normal; }
+  .ga-k { display: inline; }
+  .ga-changes li { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 760px) {
   .group-screen { position: static; min-height: 100dvh; padding-top: var(--demo-banner-height, 0px); }
   .group-head { align-items: flex-start; }

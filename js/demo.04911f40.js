@@ -11,7 +11,7 @@
     const hash = root.location.hash;
     const active = api.isRoute(hash), sparse = api.isSparse(hash), farmer = api.isFarmer(hash), multi = api.isMulti(hash), group = api.isGroup(hash), queue = api.queueOf(hash);
     // V6: "?simple=client" (not staff), "staff" or "unreadable" (the staff flag can't be read) before the hash turns the simple view on in the demo
-    // (PF1: "facilitator", a client who is the group's facilitator)
+    // (PF1: "facilitator", a client who is the group's facilitator; GA1: "admin", a client who is the group's admin)
     const simple = new URLSearchParams(root.location.search).get("simple");
     // N2b: "?groupsites=none" makes the demo group one the old model has no area for (an MCCC sub-group): group_wq_sites is empty
     const groupSites = new URLSearchParams(root.location.search).get("groupsites");
@@ -108,7 +108,7 @@
       // demo's links to a sub-group here for its own visit; no other page links to it
       const sub = /^\/sub\/([0-9a-f-]{36})(\/(?:home|maps|water))?$/.exec(suffix);
       if (sub) return "#/group/" + sub[1] + (sub[2] || "");
-      return /^(?:\/(?:home|documents|events|water|insights|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:home|documents|events|water|insights|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|access|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -316,6 +316,8 @@
       data.tables.profiles = [{ user_id: USER, is_staff: false }];
       for (const m of data.groupTables?.org_members || []) m.role = "facilitator";
     }
+    // GA1: "?simple=admin": a client (not staff) who is the group's admin, as a group's own admin signs in (the role stays admin)
+    if (simple === "admin") data.tables.profiles = [{ user_id: USER, is_staff: false }];
     if (multi) {
       // A second, small farm so the portfolio can be exercised: its own extent, one authorisation, two documents.
       const second = { id: FARM2, org_id: ORG, name: "Waiau Flats — synthetic demo", region: "canterbury" };
@@ -534,6 +536,7 @@
         { id: "demo-g-s5", farm: MEMBERS[1].id, record_type: "note", body: "Spring stock count done; no change to the wintering paddocks (synthetic).", captured_at: at("2026-10-15"), location: null }],
       sharedDocs: [{ id: "demo-g-sd1", farm: MEMBERS[0].id, title: "Riparian planting plan (synthetic)", doc_type: "memo", created_at: "2026-09-20T03:00:00Z", tier: "primary", storage_path: "demo/riparian.pdf" }] };
     manageDemo(data, queue);
+    accessDemo(data);   // GA1
     eventsDemo(data);
     peopleDemo(data, longPeople);
     capturesDemo(data);
@@ -1593,6 +1596,30 @@
         { source_key: "ecan-consents", source_name: "Resource consents (ECan)", refresh_id: 1, refreshed_at: "2026-11-02T14:30:00Z", first_pull: false, partial: false,
           added: 1, changed: 2, removed: 0, members: ["3", "5"], members_count: 2, farms_count: 1, context_buffer_m: 2000, earlier: [] }, "2026-11-02T15:00:00Z",
         { status: "accepted", decision: { candidate: { action: "follow_up" }, note: "Check the new take near member 3 (synthetic)" }, decided_by: USER, decided_at: "2026-11-03T21:00:00Z" }),
+    ];
+  }
+  // GA1: the access page's invented people with a sign-in in the group (as public.group_access returns them to its admin) and the changes
+  // to them (public.change_log's org_members rows; actor null is RCL). Made-up addresses only.
+  function accessDemo(data) {
+    const id = (n) => "de000000-0000-4000-8000-0000000004a" + n;
+    // (is_staff: an RCL staff account; a client admin gets those as a count only, as public.group_access answers)
+    data.accessPeople = [
+      { user_id: USER, email: data.user.email, role: "admin", is_staff: null, two_factor: true, signed_in: true },   // the demo person: staff unless ?simple= says not
+      { user_id: id(6), email: "mapping@example.co.nz", role: "admin", is_staff: true, two_factor: false, signed_in: true },
+      { user_id: id(1), email: "advisor.two@example.co.nz", role: "advisor", is_staff: true, two_factor: true, signed_in: true },
+      { user_id: id(2), email: "j.ridge@example.co.nz", role: "facilitator", is_staff: false, two_factor: false, signed_in: true },
+      { user_id: id(3), email: "secretary@example.co.nz", role: "editor", is_staff: false, two_factor: false, signed_in: true },
+      { user_id: id(4), email: "m.tussock@example.co.nz", role: "member", is_staff: false, two_factor: false, signed_in: true },
+      { user_id: id(5), email: "new.member@example.co.nz", role: "member", is_staff: false, two_factor: false, signed_in: false },
+    ];
+    const log = (n, op, at, user, oldRole, newRole) => ({ id: 900 + n, org_id: GROUP, table_name: "org_members", row_id: "", op, actor: null, at,
+      old_row: oldRole ? { org_id: GROUP, user_id: user, role: oldRole } : null, new_row: newRole ? { org_id: GROUP, user_id: user, role: newRole } : null });
+    data.tables.change_log = [];
+    data.groupTables.change_log = [
+      log(4, "INSERT", "2026-11-11T21:00:00Z", id(5), null, "member"),
+      log(3, "UPDATE", "2026-11-04T23:15:00Z", id(3), "member", "editor"),
+      log(2, "DELETE", "2026-10-19T02:00:00Z", "de000000-0000-4000-8000-0000000004b9", "member", null),
+      log(1, "INSERT", "2026-10-01T20:00:00Z", id(2), null, "facilitator"),
     ];
   }
   function manageDemo(data, queue = null) {
@@ -2749,6 +2776,15 @@
         if (/^(group_(map|member_summary|member_farms|shared_entries|shared_documents|wq_sites|wq_pick|wq_presets|readiness|layer_features|reference_counts|reference_context)|set_group_member_detail)$/.test(name)) return result(...groupRpc(d, name, args || {}));
         // ON3a/ON3b: the group's proposal counts and decisions (in memory); an association request is not saved in the demo
         if (/^proposals_(open_counts|decide|since_seen|mark_seen|propose)$/.test(name) && d.group) return result(...proposalsRpc(d, name, args || {}));
+        // GA1: as public.group_access: the group's admins only, about their own group; anyone else gets no rows
+        // (two-factor and each staff account for RCL staff only; whether someone has signed in, never when)
+        if (name === "group_access") {
+          if (!d.accessPeople || args?.g !== GROUP || d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role !== "admin") return result(null);
+          const staff = !!d.tables.profiles?.[0]?.is_staff, isStaff = (p) => (p.user_id === USER ? staff : p.is_staff);
+          return result({ staff_view: staff, staff_others: staff ? 0 : d.accessPeople.filter(isStaff).length,
+            people: d.accessPeople.filter((p) => staff || !isStaff(p)).map((p) => ({ user_id: p.user_id, email: p.email, role: p.role, is_you: p.user_id === USER,
+              signed_in: p.signed_in, two_factor: staff ? p.two_factor : null })) });
+        }
         if (name === "request_farm_group_association") return error("The demo does not save changes");
         // FU4, as public.request_plan_import: a farm editor's ask for one of the farm's plans, once per plan (the open request again on a second ask),
         // in memory for the session, stamped with the fixture's date so the screenshots read the same on every day.
