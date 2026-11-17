@@ -272,6 +272,10 @@
 .chart-band { fill: var(--accent); stroke: none; }
 .chart-band-0 { opacity: .1; }
 .chart-band-1 { opacity: .2; }
+/* WQ4: a band in the map's level colour (its fill is the range's own), soft enough for the results to read over it */
+.chart-band-level { opacity: .22; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chart-band-level { opacity: .3; } }
+:root[data-theme="dark"] .chart-band-level { opacity: .3; }
 .chart-band-label { font: 600 var(--text-small) var(--f-ui); fill: var(--ink-2); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
 .chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .chart-line.chart-s0 { stroke: var(--accent); }

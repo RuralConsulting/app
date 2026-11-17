@@ -14,6 +14,11 @@
 // measurement_series, wq_state_trend_for_site, reference_view_features, monitoring_sites, and the `analysis` function's preview,
 // which computes the median, band and trend with the tested library and stores nothing). Nothing here widens what anyone can read.
 // The words are wq-sites-model.js's.
+// WQ4 (the owner, 15 Nov 2026: a chart when a site is tapped, sized for his phone; labels short and readable): on a group's Maps tab
+// (siteView), a site opened on a phone, and a published water quality layer's feature that matches one of the group's monitoring sites
+// (phone or computer), shows the site's calm view (wqsv.js: a measure picker and the Water quality page's own chart) in this
+// panel, which on a phone can be dragged by its handle or closed. A computer's site opened from a dot keeps the view below. A dot's name
+// is the site's short name, beside it, shown only where it touches no other name or dot.
 (function (root) {
   const FP = root.FP;
   const M = () => FP.wqSitesModel, W = () => FP.wqModel, A = () => FP.wqAnalysis;
@@ -31,7 +36,8 @@
   // map: the MapLibre map RCLViewer.mount returned; holder: the element the viewer fills; owner: { farm } or { org }; state: kept by
   // maps-view across a redraw of the same map (renewed links), so what the person had open stays open; bounds: the published map's
   // [west, south, east, north]. Returns { remove() }.
-  function attach({ map, holder, sb, owner, state, bounds = null, el = FP.el, now = () => Date.now() }) {
+  // WQ4: siteView: a group's Maps tab (wqsv.js opens its sites); wqLayers: the published map's water quality layers' ids.
+  function attach({ map, holder, sb, owner, state, bounds = null, el = FP.el, now = () => Date.now(), siteView = false, wqLayers = [] }) {
     const st = state || {};
     st.chosen = list(st.chosen); st.years = M().pickYears(st.years); st.cache = st.cache || new Map(); st.query = st.query || "";
     // N2c: older and sparse sites are hidden until the person switches them on; the choice is remembered on this device
@@ -113,6 +119,12 @@
     const lawaOf = (site) => (site.shared && site.source_key === "ecan-wq-sites"
       ? once("lawa|" + site.id, () => rpc("wq_state_trend_for_site", { site: site.id })).then((rows) => ({ rows }), () => ({ failed: true })) : Promise.resolve(null));
     const byId = (id) => sites?.find((s) => s.id === id) || null;
+    // WQ4: the group's monitoring sites as the Water quality page lists them (the page's own read, shared with it), for the calm view and
+    // for matching a published feature; read at once where the map has a water quality layer, so a tap can be answered there and then
+    const calm = !!(siteView && owner.org && FP.wqSiteView && FP.wqSiteViewModel);
+    let cands = null, candsRead = null, calmView = null;
+    const loadCands = () => (candsRead = candsRead || FP.wqSiteView.candidates(sb, owner.org).then((c) => (cands = c), () => { candsRead = null; return []; }));
+    if (calm && list(wqLayers).length) loadCands();
 
     // ---- the button over the map: placed under the viewer's own buttons, never on one ------------------------------------------
     // The viewer's buttons differ per map (a compare control on some), and its "Whole property" button sits under them on a
@@ -164,18 +176,46 @@
     place();
 
     // ---- the panel ----------------------------------------------------------------------------------------------------------
-    const back = el("button", { type: "button", class: "wqs-back", hidden: true, onclick: () => { st.chosen = []; st.adding = false; drawPins(); render(); } }, "‹ All sites");
+    const back = el("button", { type: "button", class: "wqs-back", hidden: true, onclick: () => { st.chosen = []; st.adding = false; st.wqSite = null; drawPins(); render(); } }, "‹ All sites");
     const close = el("button", { type: "button", class: "wqs-close", "aria-label": "Close water quality", onclick: () => closePanel(true) }, "×");
     const body = el("div", { class: "wqs-body" });
     const status = el("p", { class: "wqs-status", role: "status", "aria-live": "polite" });
+    // WQ4: on a phone the panel is a sheet with a handle: dragged up or down to the height wanted, or down to close; a tap toggles tall
+    const grip = el("button", { type: "button", class: "wqs-grip", "aria-label": "Drag to resize, or tap to make taller or shorter" }, el("span", { "aria-hidden": "true" }));
     const panel = el("section", { class: "wqs-panel", role: "dialog", "aria-modal": "false", "aria-label": "Water quality", hidden: true },
-      el("div", { class: "wqs-bar" }, back, close), status, body);
+      el("div", { class: "wqs-bar" }, back, grip, close), status, body);
+    (function drag() {
+      let y0 = 0, h0 = 0, moved = false, id = null;
+      const room = () => holder.clientHeight || 600, set = (h) => { panel.style.maxHeight = "none"; panel.style.height = Math.round(h) + "px"; };
+      grip.addEventListener("pointerdown", (e) => { if (!phone()) return; id = e.pointerId; y0 = e.clientY; h0 = panel.getBoundingClientRect().height; moved = false; try { grip.setPointerCapture(id); } catch { /* fine */ } });
+      grip.addEventListener("pointermove", (e) => {
+        if (id !== e.pointerId) return;
+        const dy = e.clientY - y0;
+        if (Math.abs(dy) > 6) moved = true;
+        if (moved) set(Math.max(80, Math.min(room() * 0.92, h0 - dy)));
+      });
+      const end = (e) => {
+        if (id !== e.pointerId) return;
+        id = null;
+        const h = panel.getBoundingClientRect().height;
+        if (moved && h < Math.min(h0, room() * 0.3)) { closePanel(true); return; }
+        if (!moved) set(h0 < room() * 0.6 ? room() * 0.88 : room() * 0.45);
+      };
+      grip.addEventListener("pointerup", end); grip.addEventListener("pointercancel", end);
+      grip.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); const h = panel.getBoundingClientRect().height; set(h < room() * 0.6 ? room() * 0.88 : room() * 0.45); } });
+    })();
     panel.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(true); } });
     holder.append(panel);
 
-    function openPanel() { panel.hidden = false; holder.classList.add("wqs-open"); place(); }
+    // (review of #570: on a phone a site's sheet and the map's sheet are never up together, whichever opened first: an open map sheet
+    // rests at its peek, by its own handle as dock's Sites does, so the site opens alone with the map in view above it)
+    function openPanel() {
+      if (phone()) { const sheet = holder.querySelector(".rv-panel:not(.collapsed)"); if (sheet) holder.querySelector(".rv-toggle-panel")?.click(); }
+      panel.hidden = false; holder.classList.add("wqs-open"); place();
+    }
     function closePanel(focusToggle) {
       panel.hidden = true; holder.classList.remove("wqs-open"); token++;
+      calmView?.destroy(); calmView = null; st.wqSite = null; panel.style.height = ""; panel.style.maxHeight = "";
       // (PH2: a chart brought into view can scroll the map's own box, which never scrolls by design: put it back, so nothing on the map
       // is left under the header)
       if (holder.scrollTop) holder.scrollTop = 0;
@@ -200,6 +240,13 @@
       const pts = [...markers.keys()].map((id) => { const s = byId.get(id), p = map.project(s.lngLat); return { id, x: p.x, y: p.y, rank: M().thinRank(s, st.chosen) }; });
       const hide = M().thin(pts, M().DOT_GAP);
       for (const [id, m] of markers) m.pin.classList.toggle("wqs-thinned", hide.has(id));
+      // WQ4: each name beside its dot (right, else left), and only where it touches no other name or dot; the most important first
+      const V = FP.wqSiteViewModel;
+      if (!V || !holder.classList.contains("wqs-near")) return;
+      const kept = pts.filter((p) => !hide.has(p.id)).sort((a, b) => a.rank - b.rank);
+      const items = kept.map((p) => { const t = markers.get(p.id)?.pin.querySelector(".wqs-label")?.textContent || ""; return { key: p.id, x: p.x, y: p.y, w: Math.ceil(t.length * 6.9) + 6, h: 16, dot: 10 }; });
+      const side = V.placeLabels(items, { width: holder.clientWidth, height: holder.clientHeight });
+      for (const [id, m] of markers) { const s = side.get(id); m.pin.classList.toggle("wqs-label-off", !s); m.pin.classList.toggle("wqs-label-left", s === "left"); }
     }
     function drawPins() {
       clearPins();
@@ -208,7 +255,7 @@
         // WQV1: the page's symbols: a square for groundwater, a ring for the group's own
         const pin = el("button", { type: "button", class: "wqs-pin" + (s.current && !s.sparse ? "" : " wqs-older") + (s.waterType === "groundwater" ? " wqs-gw" : "") + (s.owned ? " wqs-own" : ""), "data-wqs-site": s.id,
           title: s.name + (s.line ? " · " + s.line : ""), "aria-label": "Water quality site: " + s.name + (s.line ? ", " + s.line : ""),
-          onclick: (e) => { e.stopPropagation(); pinClicked(s.id); } }, el("i", { "aria-hidden": "true" }), el("span", { class: "wqs-label" }, s.name));
+          onclick: (e) => { e.stopPropagation(); pinClicked(s.id); } }, el("i", { "aria-hidden": "true" }), el("span", { class: "wqs-label" }, FP.wqSiteViewModel ? FP.wqSiteViewModel.shortName(s.name) : s.name));
         markers.set(s.id, { pin, marker: new gl.Marker({ element: pin, anchor: "center" }).setLngLat(s.lngLat).addTo(map) });
       }
       mark(); near();
@@ -278,6 +325,7 @@
       pick(id, adding);
     }
     function pick(id, add) {
+      st.wqSite = null;
       st.chosen = M().choose(st.chosen, id, { add });
       if (st.chosen.length > 1 || !add) st.adding = false;
       if (!markers.has(id)) drawPins(); else mark();
@@ -286,7 +334,14 @@
 
     // ---- what the panel shows ----------------------------------------------------------------------------------------------
     function render(focus = false) {
-      chart?.destroy(); chart = null; say("");
+      chart?.destroy(); chart = null; say(""); calmView?.destroy(); calmView = null;
+      // WQ4: a published feature's site opened on its own (it may not be one of this button's sites)
+      if (st.wqSite != null && st.chosen.length <= 1 && cands?.some((c) => c.id === st.wqSite)) {
+        back.hidden = !st.on || !sites; panel.dataset.view = "wqsite";
+        showView(cands.find((c) => c.id === st.wqSite), st.wqPublished);
+        if (focus) body.querySelector("h2")?.focus({ preventScroll: true });
+        return null;
+      }
       back.hidden = st.chosen.length === 0;
       panel.dataset.view = st.chosen.length === 0 ? "list" : st.chosen.length === 1 ? "site" : "compare";   // a phone keeps the list short, so the pins show above it
       const view = st.chosen.length === 0 ? showList() : st.chosen.length === 1 ? showSite(st.chosen[0]) : showCompare();
@@ -381,6 +436,14 @@
     async function showSite(id) {
       const t = ++token, site = byId(id);
       if (!site) { st.chosen = []; return showList(); }
+      // WQ4: on a group's Maps tab on a phone, the site's calm view (its chart for one measure at a time), where the group's sites list it
+      if (calm && phone()) {
+        fill(body, heading(site.name)); say("Loading this site's results…");
+        const row = list(await loadCands()).find((c) => c.id === id);
+        if (t !== token || gone) return;
+        say("");
+        if (row) { inSight(row.lngLat || site.lngLat); return showView(row, null, true); }
+      }
       fill(body, heading(site.name)); say("Loading this site's results…");
       let latest, rec;
       try { [latest, rec] = await Promise.all([latestOf(id), recordOf(site)]); }
@@ -435,6 +498,52 @@
         if (focus) host.scrollIntoView?.({ block: "start" });
       }
       return measure();
+    }
+
+    // WQ4: the calm view of one site (wqsv.js). On a computer, comparing stays one tap away for a site this button lists.
+    // published: the tapped point's own fields ({ title, rows }), kept one tap away; dot: opened from this button's own dot
+    function showView(row, published = null, dot = false) {
+      calmView?.destroy(); panel.dataset.view = "wqsite";
+      const listed = !phone() && !!byId(row.id);
+      const extra = listed ? [el("div", { class: "wqs-actions" }, st.adding ? adder() : el("button", { type: "button", class: "wqs-button", onclick: () => { st.adding = true; st.wqSite = null; st.chosen = [row.id]; render(); body.querySelector(".wqs-add")?.focus(); } }, "Compare with another site"))] : [];
+      calmView = FP.wqSiteView.render(body, { sb, org: owner.org, site: row, extra, published, dot });
+      return null;
+    }
+    // WQ4: a tap on a published layer's feature (the viewer's onFeature): a water quality site that matches one of the group's monitoring
+    // sites opens that site here, and true tells the viewer it is shown; anything else (no match, two candidates, the sites not read yet)
+    // is the viewer's own details, as before.
+    function feature(ctx) {
+      if (!calm || !cands || gone) return false;
+      const V = FP.wqSiteViewModel;
+      if (!list(wqLayers).includes(String(ctx?.layer_id)) && !V.isWqFeature(ctx?.properties, ctx?.layer_title)) return false;
+      const hit = V.matchSite({ props: ctx.properties, lngLat: ctx.lngLat }, cands);
+      if (!hit.site) return false;
+      token++; st.adding = false; st.wqSite = hit.site.id;
+      st.wqPublished = { title: String(ctx.layer_title || ""), rows: V.publishedRows(ctx.properties) };   // (review of #570: the point's own fields stay readable)
+      st.chosen = byId(hit.site.id) ? [hit.site.id] : [];
+      if (markers.size) mark();
+      openPanel(); render(true); inSight(hit.site.lngLat);
+      return true;
+    }
+    // WQ4: a site opened in the panel is moved into the part of the map left clear of it: above the sheet on a phone, left of the panel on
+    // a computer (the map's box itself never changes)
+    function inSight(at) {
+      if (!at || gone) return;
+      (root.requestAnimationFrame || ((f) => setTimeout(f, 16)))(() => {
+        try {
+          const h = holder.getBoundingClientRect(), p = panel.getBoundingClientRect(), q = map.project(at);
+          const still = !!root.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+          if (phone()) {
+            const top = p.top - h.top;
+            if (top < 120 || (q.y > 70 && q.y < top - 40 && q.x > 20 && q.x < h.width - 20)) return;
+            map.panBy([q.x - h.width / 2, q.y - Math.max(70, top / 2)], { duration: still ? 0 : 400 });
+          } else {
+            const left = p.left - h.left, side = holder.querySelector(".rv-panel:not(.collapsed)")?.getBoundingClientRect(), x0 = side ? Math.max(0, side.right - h.left) : 0;
+            if (left - x0 < 160 || (q.x > x0 + 40 && q.x < left - 120)) return;
+            map.panBy([q.x - (x0 + left) / 2, 0], { duration: still ? 0 : 400 });
+          }
+        } catch { /* the map is going */ }
+      });
     }
 
     // A table cell in two parts, the figure and then (smaller, on its own line) what it rests on: "2.28 mg/L" / "19 Sept 2026".
@@ -501,8 +610,9 @@
     near();
     if (st.on) switchOn();
     return {
+      feature,
       remove() {
-        gone = true; token++; chart?.destroy(); chart = null; clearPins();
+        gone = true; token++; chart?.destroy(); chart = null; calmView?.destroy(); calmView = null; clearPins();
         watch?.disconnect(); changes?.disconnect();
         try { map.off("zoom", near); map.off("resize", place); } catch { /* the map is going too */ }
         control.remove(); panel.remove(); holder.classList.remove("wqs-on", "wqs-near", "wqs-open", "wqs-comparing");

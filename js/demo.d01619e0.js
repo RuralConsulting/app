@@ -40,6 +40,9 @@
     // HV1: "?memberfarm=1" (or "long", a long farm name) with "#/demo/multi": the second farm is a member farm the person reads as
     // a coordinator of its group, not one of theirs (no farm_members row), so ".../farm-2" opens it read only
     const memberFarm = new URLSearchParams(root.location.search).get("memberfarm");
+    // WQ4: "?wqmap=1" gives the group's published map two invented water quality layers, labelled per measure as a QGIS map is, whose
+    // points match the demo's monitoring sites by site id, by name and by place, and one that matches none
+    const wqMap = new URLSearchParams(root.location.search).get("wqmap") === "1";
     // FL1: "?files=4" leaves the demo group four files (a guide, a form, a protocol and a map) and none shared by member farms, as the
     // owner saw a group's Files on 15 Nov 2026 (the folders it shows then)
     const fewFiles = new URLSearchParams(root.location.search).get("files") === "4";
@@ -56,7 +59,7 @@
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles, blank, manyPlaces, insights })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles, blank, manyPlaces, insights, wqMap })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -194,15 +197,27 @@
     ];
   }
   // V4: invented published maps: two for the farm (the list; none on the almost-empty farm, the message) and one for the group (opens at once)
-  function demoMaps(data, sparse) {
+  // WQ4: the group's map with two water quality point layers (demo/wq4-*.geojson), as the plugin publishes them: their fields, a
+  // category per level, and each point's own label (_lbl) naming the site and the measure's figures
+  function wqLayers() {
+    const fields = ["source", "site_name", "site_id", "parameter", "value", "median", "p95", "max_value", "samples", "status"].map((name) => ({ name, alias: "" }));
+    const dot = (color) => ({ color, radius: 5, stroke: "#ffffff", stroke_width: 1.5 });
+    const layer = (id, title, file, legend, colours) => ({ id, title, group: "Water quality (synthetic)", visible: true, geometry: "point", features: file, feature_count: 5, fields,
+      classes: { kind: "categories", field: "status", values: legend.map((l) => [l, l]) }, legend: legend.map((label) => ({ label })),
+      vector: { geom: "circle", layers: [{ type: "circle", by: Object.fromEntries(colours.map((c, i) => [String(i), dot(c)])) }] }, labels: { size: 12, color: "#ffffff" } });
+    return [layer("wq4-nitrate", "Group WQ - median nitrate-nitrite (synthetic)", "wq4-nitrate.geojson", ["< 1 mg/L", "1 to 2.4 mg/L", "2.4 to 6.9 mg/L"], ["#2f6fc6", "#3a9a4f", "#f2cf3b"]),
+      layer("wq4-ecoli", "Group WQ - E. coli median and p95 (synthetic)", "wq4-ecoli.geojson", ["P95 ≤ 540", "P95 > 540"], ["#3a9a4f", "#f08c2a"])];
+  }
+  function demoMaps(data, sparse, wqMap = false) {
     const row = (id, owner, slug, title, kind) => ({ id: "de000000-0000-4000-8000-00000000d00" + id, farm_id: null, org_id: null, ...owner, slug, title, description: "An invented map for the demo.", kind, archived_at: null });
     const maps = [...(sparse ? [] : [row(1, { farm_id: FARM }, "farm-map", "Farm map (synthetic)", "Farm plan"), row(2, { farm_id: FARM }, "soils", "Soils (synthetic)", "Land")]), row(3, { org_id: GROUP }, "catchment", "Catchment map (synthetic)", "Catchment")];
     const manifest = { bounds: [172, -43, 172.025, -42.98], boundary: "boundary.geojson", files: ["boundary.geojson"], layers: [] };
     data.tables.published_maps = maps;
-    data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
+    const wqManifest = { bounds: [171.975, -43.03, 172.08, -42.97], boundary: "wq4-boundary.geojson", files: ["wq4-boundary.geojson", "wq4-nitrate.geojson", "wq4-ecoli.geojson"], layers: wqLayers() };
+    data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest: wqMap && m.org_id ? wqManifest : manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
     data.tables.published_map_edits = [];   // ML1: none saved yet
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false, manyPlaces = false, insights = null } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false, manyPlaces = false, insights = null, wqMap = false } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -295,7 +310,7 @@
       for (const k of ["captures", "group_events", "group_event_attendees", "people", "group_member_people", "interactions", "interaction_links"]) data.tables[k] = [];
       data.groupTables.documents = []; data.group.sharedDocs = [];
     }
-    demoMaps(data, sparse);
+    demoMaps(data, sparse, group && wqMap);
     if (farmer) {
       data.tables.farm_members[0].role = "owner"; data.tables.org_members = [];
       data.user.email = "farmer@example.test";
@@ -2882,7 +2897,7 @@
       // the demo's photo points name the one stand-in picture.
       // CAP1: a capture's photo (org/<group>/captures/...) is the one sent in this session (kept as sent), else the drawn stand-in; while the
       // browser says it is offline, sending one gets no answer, and a second send of the same path is refused as Storage refuses it.
-      storage: { from: () => ({ createSignedUrls: async (paths) => { const d = await ready; return result(paths.map((path) => ({ path, error: null, signedUrl: capturePath(path) ? captureUrl(d, path) : new URL("demo/map-boundary.geojson", typeof location === "undefined" ? "http://localhost/" : location.href).href }))); },   // V4: the one invented outline
+      storage: { from: () => ({ createSignedUrls: async (paths) => { const d = await ready; return result(paths.map((path) => ({ path, error: null, signedUrl: capturePath(path) ? captureUrl(d, path) : new URL("demo/" + (/\/(wq4-[a-z]+\.geojson)$/.exec(path)?.[1] || "map-boundary.geojson"), typeof location === "undefined" ? "http://localhost/" : location.href).href }))); },   // V4: the one invented outline (WQ4: and the water quality layers)
         createSignedUrl: async (path) => { const d = await ready; return result({ signedUrl: capturePath(path) ? captureUrl(d, path) : new URL(path === PHOTO ? PHOTO : String(path).startsWith("demo/held/") && String(path).endsWith(".pdf") ? "demo/source.pdf" : "demo/source.html", typeof location === "undefined" ? "http://localhost/" : location.href).href }); },
         upload: async (path, blob) => {
           if (!capturePath(path)) return result({ path });

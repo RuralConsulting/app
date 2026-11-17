@@ -10,7 +10,8 @@
 //         (a second series may carry a `note`, which the key shows in place of "comparison": WQ6, another member's different key)
 //         (WQ8: up to four series, each its own line, never joined to another; a series with `part: true` is the first's place in
 //         another dataset, kept when the comparison is turned off)
-//         bands?: { label, demo?, ranges: [{ label, from, to }] },                          // from/to numbers, null = open ended
+//         bands?: { label, demo?, ranges: [{ label, from, to, colour? }] },                 // from/to numbers, null = open ended;
+//                                                                                            // colour: a hex fill (WQ4: the map's level colours)
 //         limits?: [{ value, label, style? }],   // N2: horizontal limit lines the caller gives (style "solid", "dashed" or "dotted";
 //                                                // dashed when not said), drawn across the plot and labelled; the scale reaches them
 //         assess?: "a line in place of 'Bands and trend: not assessed.'" (when no band ranges are given),
@@ -165,7 +166,9 @@
       const from = r?.from === null || r?.from === undefined ? -Infinity : Number(r.from), to = r?.to === null || r?.to === undefined ? Infinity : Number(r.to);
       if (!(from < to) || to < y.lo || from > y.hi) return null;   // not a range, or wholly off the scale
       const lo = Math.max(from, y.lo), hi = Math.min(to, y.hi);
-      return { label: text(r.label), from: r.from ?? null, to: r.to ?? null, y0: yy(hi), y1: yy(lo) };
+      // WQ4: a range may carry its own colour (the map's level colour for that range), a hex only
+      const colour = /^#[0-9a-f]{6}$/i.test(String(r.colour || "")) ? r.colour : null;
+      return { label: text(r.label), from: r.from ?? null, to: r.to ?? null, y0: yy(hi), y1: yy(lo), ...(colour ? { colour } : {}) };
     }).filter(Boolean);
     const drawn = series.map((s) => ({ ...s, total: s.points.length, points: thin(s.points).map((p) => ({ ...p, cx: x(p.ms), cy: yy(p.value), censored: censored(p) })) }));
     placeBandLabels(bands, drawn, { x0: m.l, x1: m.l + w, y0: m.t, y1: m.t + h });
@@ -199,7 +202,7 @@
     const g = layout(data, o, width, height), P = g.plot;
     const name = text(data?.parameter?.name) || "Result", unit = text(data?.parameter?.unit);
     const parts = [];
-    for (const b of g.bands) parts.push('<rect class="chart-band chart-band-' + (g.bands.indexOf(b) % 2) + '" x="' + P.x0 + '" y="' + b.y0.toFixed(1) + '" width="' + (P.x1 - P.x0) + '" height="' + Math.max(b.y1 - b.y0, 0).toFixed(1) + '"/>');
+    for (const b of g.bands) parts.push('<rect class="chart-band ' + (b.colour ? "chart-band-level" : "chart-band-" + (g.bands.indexOf(b) % 2)) + '"' + (b.colour ? ' style="fill:' + b.colour + '"' : "") + ' x="' + P.x0 + '" y="' + b.y0.toFixed(1) + '" width="' + (P.x1 - P.x0) + '" height="' + Math.max(b.y1 - b.y0, 0).toFixed(1) + '"/>');
     for (const t of g.yticks) parts.push('<line class="chart-grid" x1="' + P.x0 + '" x2="' + P.x1 + '" y1="' + t.y.toFixed(1) + '" y2="' + t.y.toFixed(1) + '"/><text class="chart-tick" x="' + (P.x0 - 6) + '" y="' + (t.y + 4).toFixed(1) + '" text-anchor="end">' + esc(t.label) + "</text>");
     for (const t of g.xticks) parts.push('<line class="chart-tickmark" x1="' + t.x.toFixed(1) + '" x2="' + t.x.toFixed(1) + '" y1="' + P.y1 + '" y2="' + (P.y1 + 4) + '"/><text class="chart-tick" x="' + t.x.toFixed(1) + '" y="' + (P.y1 + 18) + '" text-anchor="middle">' + esc(t.label) + "</text>");
     parts.push('<line class="chart-axis" x1="' + P.x0 + '" x2="' + P.x1 + '" y1="' + P.y1 + '" y2="' + P.y1 + '"/><line class="chart-axis" x1="' + P.x0 + '" x2="' + P.x0 + '" y1="' + P.y0 + '" y2="' + P.y1 + '"/>');

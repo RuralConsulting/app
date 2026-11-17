@@ -32,10 +32,14 @@
 /* WQV1: the Water quality page's symbols: a square for a groundwater site, a ring for the group's own (its sub-groups' too) */
 .wqs-pin.wqs-gw i { border-radius: 3px; }
 .wqs-pin.wqs-own i { box-shadow: 0 0 0 2px var(--map-wq), 0 0 0 4px var(--map-label); }
-.wqs-pin .wqs-label { display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: max-content; max-width: 160px; margin-top: -4px; text-align: center; line-height: 1.15; pointer-events: none; }
+/* WQ4: a name beside its dot (right, else left: wqs-label-left), smaller, with the map's halo; hidden where it would touch another (wqs-label-off) */
+.wqs-pin .wqs-label { display: none; position: absolute; top: 50%; left: 100%; transform: translateY(-50%); width: max-content; max-width: 170px; margin-left: -2px; text-align: left; line-height: 1.15; white-space: nowrap; pointer-events: none;
+  text-shadow: var(--map-label-shadow), 0 0 2px var(--map-halo), 0 0 3px var(--map-halo); }
+.wqs-pin.wqs-label-left .wqs-label { left: auto; right: 100%; margin: 0 -2px 0 0; text-align: right; }
 .wqs-near .wqs-pin .wqs-label, .wqs-pin.wqs-chosen .wqs-label, .wqs-pin:focus-visible .wqs-label, .wqs-pin:hover .wqs-label { display: block; }
 /* comparing: the pins carry their numbers, so names show only close in (or on hover and focus), never piled on each other */
 .wqs-comparing:not(.wqs-near) .wqs-pin.wqs-chosen:not(:hover, :focus-visible) .wqs-label { display: none; }
+.wqs-near .wqs-pin.wqs-label-off:not(.wqs-chosen, :hover, :focus-visible) .wqs-label { display: none; }
 /* the panel sits at the right on a computer: the map's own controls move to its left while it is open, so none is hidden */
 @media (min-width: 721px) {
   .wqs-open .maplibregl-ctrl-top-right, .wqs-open .maplibregl-ctrl-bottom-right { right: 454px; }
@@ -112,7 +116,43 @@
 @media (max-width: 720px) {
   .wqs-panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; max-height: 72%; border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
   .wqs-panel[data-view="list"] { max-height: 45%; }
+  .wqs-panel[data-view="wqsite"] { max-height: 66%; }   /* WQ4: the site stays in sight above it */
 }
+/* WQ4: a phone's sheet has a handle to drag it taller, shorter or away (a 44 px target; on a computer the panel has none) */
+.wqs-grip { display: none; }
+@media (max-width: 720px) {
+  .wqs-grip { display: grid; place-items: center; flex: 1; align-self: stretch; min-height: 44px; margin: 0; padding: 0; border: 0; background: none; cursor: grab; touch-action: none; }
+  .wqs-grip > span { width: 40px; height: 5px; border-radius: 3px; background: var(--ink-3); opacity: .7; }
+}
+/* WQ4: a site's calm view: the measures as chips, its level in words, the chart, one quiet link */
+.wqsv-measures { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.wqsv-measures[hidden] { display: none; }
+.wqsv-measure { min-height: 44px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.wqsv-measure[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.wqsv-facts { margin-top: 8px; }
+.wqsv-facts p { margin: 2px 0; }
+.wqsv-level { font-weight: 600; }
+.wqsv-chart .chart-block .block-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* (the chosen chip names the measure; kept for a screen reader) */
+@media (max-width: 720px) {
+  /* on a phone the measures are one row that scrolls sideways, so the chart starts high on the sheet */
+  .wqsv-measures { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; }
+  .wqsv-measure { flex: none; padding: 0 12px; }
+}
+.wqsv-chart .chart-summary { font-size: var(--text-small); color: var(--ink-2); }
+.wqsv-few { margin: 12px 0; padding: 12px; border-radius: 8px; background: var(--wash); font-size: var(--text-small); }
+.wqsv-lawa { margin-top: 8px; }
+.wqsv-open { margin: 12px 0 0; }
+/* review of #570: the tapped point's own published fields, closed, under plain names */
+.wqsv-fields { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 4px 0 8px; }
+.wqsv-fields dt { color: var(--ink-2); }
+.wqsv-fields dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.wqsv-open a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-weight: 600; font-size: var(--text-small); }
+/* WQ4: one short name per published water quality site, beside its dot, white with a dark halo as the map's own names */
+.wqsv-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.wqsv-labels[hidden] { display: none; }
+.wqsv-label { position: absolute; left: 0; top: 0; height: 18px; line-height: 18px; white-space: nowrap; color: var(--map-label); font: 600 var(--text-small) var(--f-ui); line-height: 18px; text-shadow: var(--map-label-shadow), 0 0 2px var(--map-halo), 0 0 3px var(--map-halo); }
+.wqsv-label[hidden] { display: none; }
+@media print { .wqsv-labels { display: none; } }
 @media print { .wqs-pin, .wqs-ctrl, .wqs-panel { display: none; } }
 /* N2c: the switch for older and sparse sites, beside the list's header */
 .wqs-switch { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-small); font-weight: 600; cursor: pointer; }

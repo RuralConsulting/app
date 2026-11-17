@@ -14,6 +14,10 @@
 // N2b: the map's bounds go with it: a group the old model has no area for lists the shared sites inside its published map.
 // CTX2: on a group's map, the context layers the loader marked starts_on (native vegetation, protected places) are on as it first
 // opens on a device; a farm's map starts them all off, as before.
+// WQ4: on a group's map, a published water quality layer (its points name a site and carry a measure's summary) has its columns named
+// plainly and its own per-measure labels drawn from no zoom on; one short label per site is laid over instead (wqsv.js labels),
+// and a tap on one of its sites that matches a group monitoring site opens that site's chart (wq-sites.js feature, the viewer's
+// onFeature). viewer.js is not changed.
 // ML1: a map's saved edits (public.published_map_edits) are read with its package and applied to its manifest before anything else
 // (readPackage), and "Edit layers" (js/map-edit.js) is offered on the panel to those who may change the map.
 (function (root, factory) {
@@ -201,8 +205,9 @@
       let colours = null;
       if (L && url && L.features) { try { const r = await fetch(url(L.features)); if (r.ok) colours = api.subgroupColoursOf(L, await r.json(), FP.mapPalette, subs); } catch { /* without the shapes */ } }
       if (L && !colours) colours = api.subgroupColoursOf(L, null, FP.mapPalette, subs);
-      return api.calmManifest(manifest, { group, palette: FP.mapPalette, names, subs, onDark: (bm || "aerial") === "aerial", colours,
+      const out = api.calmManifest(manifest, { group, palette: FP.mapPalette, names, subs, onDark: (bm || "aerial") === "aerial", colours,
         hues: FP.mapPalette && css ? FP.mapPalette.hues((k) => css.getPropertyValue(k)) : null });
+      return group && FP.wqSiteViewModel ? FP.wqSiteViewModel.tidyManifest(out) : out;   // WQ4
     },
     // PH5: a map about one place. A group's (or sub-group's) map: the viewer's white-and-black dashed boundary is hidden (the owner: no
     // dotted lines at overview scale) and everything outside the area is under the 45% mask, cut along the area's outer edge; a farm's
@@ -218,7 +223,9 @@
       const until = Date.now() + 4000;
       return new Promise((done) => { (function tick() { if (applies() || Date.now() > until) done(); else setTimeout(tick, 16); })(); });
     },
-    overlay: (map, holder, owner, state, bounds) => FP.wqSites?.attach({ map, holder, sb: FP.sb, owner, state, bounds }) || null,
+    overlay: (map, holder, owner, state, bounds, wqLayers = []) => FP.wqSites?.attach({ map, holder, sb: FP.sb, owner, state, bounds, siteView: true, wqLayers }) || null,
+    // WQ4: one short label per site of the published map's water quality layers
+    labels: (map, holder, manifest, url) => FP.wqSiteView?.labels({ map, holder, manifest, url }) || null,
     unshare: () => FP.shareSave?.clear(),
     // ML1: a map's saved edits (the latest of public.published_map_edits, at most one row read), applied by map-edit-model.js, and the
     // editor (map-edit.js), which offers itself only to those the database lets change the map
@@ -396,6 +403,8 @@
       env.clearTimer(s.timer); s.timer = null; s.renewAt = Infinity;
       try { s.overlay?.remove(); } catch {}
       s.overlay = null;
+      try { s.labels?.remove(); } catch {}
+      s.labels = null;
       try { s.unhand?.(); } catch {}
       try { s.map?.remove(); } catch {}
       s.map = null;
@@ -448,6 +457,8 @@
           ...(read.shared.length ? { shared: kept ? withChoices({ layers: read.shared.map((L) => L || null) }, kept).layers : read.shared } : {}),
           referenceLayers: startOn(read.referenceLayers, s.opts.owner),
           onBack: s.several ? () => env.go(s.opts.href(null)) : null, backLabel: "All maps",
+          // WQ4: a tap on a water quality site that matches a group monitoring site shows its chart (the overlay); otherwise the viewer's own
+          onFeature: (ctx) => { try { return s.overlay?.feature?.(ctx) === true; } catch { return false; } },
           ...env.backgrounds(),
         });
         if (at) s.map.jumpTo(at);
@@ -459,7 +470,9 @@
         // TR1: this map hands over when the address changes (the viewer's background: its own remembered choice)
         s.unhand = globalThis.FP?.mapHandoff?.register?.(s.map, { kind: "maps", base: () => { try { const b = globalThis.localStorage?.getItem("rv-basemap"); return b === "map" ? "topo" : b || "aerial"; } catch { return null; } } }) || null;
       } catch { s.handoff?.drop(); say(s, UNAVAILABLE, tryAgain(s)); return; }
-      try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq, read.manifest?.bounds || null) : null; } catch { s.overlay = null; }
+      const wqLayers = (Array.isArray(manifest?.layers) ? manifest.layers : []).filter((L) => L && L.wqSites).map((L) => String(L.id));   // WQ4
+      try { s.overlay = env.overlay ? env.overlay(s.map, holder, s.opts.owner, s.wq, read.manifest?.bounds || null, wqLayers) : null; } catch { s.overlay = null; }
+      try { s.labels = env.labels ? env.labels(s.map, holder, manifest, url) : null; } catch { s.labels = null; }
       try { env.dock?.(holder); } catch {}   // MV1
       try { env.share?.(s.map, holder, { title: s.chosen.title, place: s.opts.name }); } catch {}   // EX1
       // (the map's own box, which #568's nv-keep holds still while the new-version line shows; never the whole tab)
