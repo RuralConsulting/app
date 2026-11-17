@@ -176,7 +176,9 @@
     // GI1: Insights (how the group uses the app) is drawn for the group's facilitators, advisors and admins and RCL staff only
     const insights = ([k]) => k !== "insights" || (!!FP.insights && !!FP.insightsModel?.canSee(group.role, !!FP.ops?.isStaff?.()));
     const access = ([k]) => k !== "access" || !!FP.groupAccessModel?.canSee(group.role);   // GA1: the access page, for the group's admins only
-    const tabs = (FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).filter(insights).filter(access);   // UI1: the views drawn, for Add
+    // GA2: in the simple view Manage is the group's admins' only (Members alone, group-manage-model.js); staff's rule is unchanged
+    const clientManage = ([k]) => k !== "manage" || !!FP.groupManageModel?.showsClientLink(group.role);
+    const tabs = (FP.simpleView?.on() ? FP.simpleView.tabs("group").filter(clientManage) : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).filter(insights).filter(access);   // UI1: the views drawn, for Add
     // UI2: five on a phone's tab bar and six in a computer's segmented control; the rest under More (space-nav.js)
     (FP.spaceNav?.render || plainTabs)($("#group-nav"), tabs.map(([key, label]) => ({ key, label, href: FP.href(G().href(group.id, key)), icon: FP.icons?.forView(key),
       badge: key === "people" ? () => FP.groupPeople?.countBadge?.(group.id) : null })), route.view,   // RV1: open review items, once People has read them
@@ -348,7 +350,9 @@
       document.title = group.name + (route.view === "map" ? "" : " · " + G().viewLabel(route.view)) + " | " + (FP.brand?.product || "");
       // HOT1: the manage space opens from the group record alone (its group and role): it asks for no map and waits for no group load
       if (route.view === "manage") {
-        const node = await FP.groupManage.view(group, route, { settings: G().canManage(group.role) ? () => settingsView(group) : null });
+        // GA2: in the simple view a group admin's Members only (no Settings, no queues, no count line)
+        const client = !!FP.simpleView?.on();
+        const node = await FP.groupManage.view(group, route, { client, me: person?.id || null, settings: !client && G().canManage(group.role) ? () => settingsView(group) : null });
         if (current === token) { panel.replaceChildren(node); panel.scrollTop = 0; }
         return;
       }

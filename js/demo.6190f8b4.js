@@ -333,7 +333,11 @@
       for (const m of data.groupTables?.org_members || []) m.role = "facilitator";
     }
     // GA1: "?simple=admin": a client (not staff) who is the group's admin, as a group's own admin signs in (the role stays admin)
-    if (simple === "admin") data.tables.profiles = [{ user_id: USER, is_staff: false }];
+    if (simple === "admin") {
+      data.tables.profiles = [{ user_id: USER, is_staff: false }];
+      // GA2 FIX 1: this client admin is also the owner of member 1's farm (and of none of the others), so Manage offers the invite there only
+      data.tables.farm_members.push({ farm_id: "de000000-0000-4000-8000-0000000002a1", user_id: USER, role: "owner" });
+    }
     if (multi) {
       // A second, small farm so the portfolio can be exercised: its own extent, one authorisation, two documents.
       const second = { id: FARM2, org_id: ORG, name: "Waiau Flats — synthetic demo", region: "canterbury" };

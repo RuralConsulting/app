@@ -53,8 +53,20 @@
     const gapsAccess = gaps?.error ? "error" : "ok";
     return { counts: access === "ok" ? open.data : null, access, gapsAccess, gaps: gapsAccess === "ok" ? list(gaps.data).find((g) => g.group_id === group.id) || null : null };
   }
-  async function load(group) {
+  async function load(group, { client = false, me = null } = {}) {
     const sb = FP.sb, decide = M().canDecide(group.role), admin = M().canManage(group.role);
+    // GA2: a client admin's Manage is Members only: the register and the farm links, as the person reads them (row-level security
+    // decides); none of the queue's reads (no counts, no proposals, no load gaps) and no "since you last looked" (nor its stamp)
+    if (client) {
+      // (GA2 FIX 1: and the person's own farm roles, so the invite is offered only on a farm they run: bounded, own rows only)
+      const [register, associations, mine] = await Promise.all([
+        optional(sb.from("group_members").select("id,member_number,business_name,ended_at,created_at").eq("org_id", group.id)),
+        optional(sb.from("farm_group_associations").select(ASSOC_COLUMNS).eq("org_id", group.id)),
+        me ? optional(sb.from("farm_members").select("farm_id,role").eq("user_id", me).limit(1000)) : null]);
+      const runs = new Set(list(mine).filter((r) => r && (r.role === "owner" || r.role === "admin")).map((r) => r.farm_id));
+      return { client: true, runs, counts: null, access: "ok", gapsAccess: "ok", gaps: null, register: register == null ? null : list(register), associations: list(associations),
+        proposals: [], proposalsRead: true, open: null, sites: null, locations: [], since: null };
+    }
     // ON3c: what came since this person's last look, read beside the other reads (HOT1: the space waits on nothing extra);
     // this look is stamped only once that read has answered
     const sinceRead = optional(sb.rpc("proposals_since_seen", { org_id: group.id }));
@@ -97,25 +109,27 @@
     if (!c) return loadSites(group);
     return c.sites || (c.sites = loadSites(group));
   }
-  function data(group) {
+  function data(group, client = false, me = null) {
     let c = cache.get(group.id);
-    if (!c || c.role !== group.role) { c = { role: group.role, pending: load(group) }; cache.set(group.id, c); c.pending.then((d) => { c.data = d; }, () => cache.delete(group.id)); }
+    if (!c || c.role !== group.role || c.client !== client) { c = { role: group.role, client, pending: load(group, { client, me }) }; cache.set(group.id, c); c.pending.then((d) => { c.data = d; }, () => cache.delete(group.id)); }
     return c.data ? Promise.resolve(c.data) : c.pending;
   }
 
   // ---- the screen ---------------------------------------------------------------------------------------------------------
   // `settings` draws the existing member-detail form (group-space.js), for a group admin.
-  async function view(group, route, { settings } = {}) {
-    const wrap = el("section", { class: "group-manage", "data-view": "manage" }, el("h2", {}, "Manage the group"),
-      el("p", { class: "manage-count group-status", role: "status" }, "Reading what is open…"), el("p", { class: "manage-since group-fine", hidden: "" }));
-    const tab = M().tabFor(group.role, route.tab);
-    const nav = el("nav", { class: "manage-tabs", "aria-label": "Manage" }, ...M().tabs(group.role).map(([key, label]) =>
+  // client: the simple (client) view (GA2): a group admin's Members only, with no count line and no "since you last looked"
+  async function view(group, route, { settings, client = false, me = null } = {}) {
+    const wrap = el("section", { class: "group-manage", "data-view": "manage", ...(client ? { "data-client": "" } : {}) }, el("h2", {}, "Manage the group"),
+      client ? null : el("p", { class: "manage-count group-status", role: "status" }, "Reading what is open…"), client ? null : el("p", { class: "manage-since group-fine", hidden: "" }));
+    // GA2: anyone else in the simple view who opens a Manage address is told so, and nothing is read
+    if (client && !M().tabs(group.role, { client }).length) { wrap.append(el("p", { class: "manage-note", role: "status" }, "Only the group's admins manage its members here.")); return wrap; }
+    const tab = M().tabFor(group.role, route.tab, { client });
+    const nav = el("nav", { class: "manage-tabs", "aria-label": "Manage" }, ...M().tabs(group.role, { client }).map(([key, label]) =>
       el("a", { href: FP.href(FP.groupModel.href(group.id, "manage", key)), class: "manage-tab", "data-tab": key, ...(key === tab ? { "aria-current": "page" } : {}) }, label)));
     const body = el("div", { class: "manage-body", "data-tab": tab });
     wrap.append(nav, body);
-    const d = await data(group);
-    drawCount(wrap, group, d);
-    drawSince(wrap, d);
+    const d = await data(group, client, me);
+    if (!client) { drawCount(wrap, group, d); drawSince(wrap, d); }
     if (tab === "settings") body.append(settings ? settings() : el("p", {}, "Only a group admin chooses how member farms are shown."));
     else if (tab === "gaps") drawGaps(body, group, d, wrap);
     else if (tab === "sites") drawSites(body, group, d, wrap);
@@ -223,7 +237,7 @@
   // ---- Members ----------------------------------------------------------------------------------------------------------------
   function drawMembers(body, group, d) {
     if (d.register == null) { body.replaceChildren(el("p", { role: "alert" }, "Couldn't read the group's register.")); return; }
-    const v = M().membersTab({ register: d.register, associations: d.associations, gaps: d.gaps, canManage: M().canManage(group.role) });
+    const v = M().membersTab({ register: d.register, associations: d.associations, gaps: d.gaps, canManage: M().canManage(group.role), client: !!d.client, runs: d.runs || null });
     body.replaceChildren();
     if (v.summary) body.append(el("p", { class: "manage-summary" }, v.summary));
     if (v.noExtentNote) body.append(el("p", { class: "group-fine" }, v.noExtentNote));
@@ -233,7 +247,7 @@
       el("div", { class: "manage-item" }, el("b", {}, "Member " + r.number + " · " + r.name), r.retired ? el("small", {}, r.retired) : null),
       ...(r.associations.length ? r.associations.map((a) => el("small", { "data-association": a.state }, a.text)) : [el("small", {}, "No farm in the tool yet")]),
       r.noExtent ? el("small", { class: "manage-no-extent" }, r.noExtent) : null,
-      v.canInvite && r.associations.some((a) => a.state !== "ended" && a.farm) ? inviteForm(r, r.associations.find((a) => a.state !== "ended" && a.farm)) : null))));
+      v.canInvite && r.inviteFarm ? inviteForm(r, { farm: r.inviteFarm }) : null))));
     if (v.noExtentResolve) body.append(el("p", { class: "group-fine" }, "No map extent: " + v.noExtentResolve));
     if (v.unlinked.length) body.append(el("h3", {}, "Associations not tied to a member"),
       el("ul", { class: "group-lines" }, ...v.unlinked.map((a) => el("li", { "data-association": a.state }, a.text))));

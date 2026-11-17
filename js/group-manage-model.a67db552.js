@@ -19,16 +19,25 @@
   const canManage = (role) => role === "admin";
   // ON3c: Updates is the ongoing feed (analyses due for review, new gaps after a group load, reference changes near members)
   const TABS = [["members", "Members"], ["gaps", "Gaps"], ["updates", "Updates"], ["sites", "Sites"], ["settings", "Settings"]];
-  function tabs(role) {
+  // GA2 (the owner, 17 Nov 2026: a group's own admin sees "Manage members and invites"; the build manager's defaults, held for the
+  // owner's look): in the simple (client) view Manage is a group admin's only, with the Members tab only. Gaps, Updates and Sites
+  // (RCL's reconciliation queues) and Settings (how member farms are shown) stay with RCL staff. Widening it later is this list.
+  const CLIENT_TABS = ["members"];
+  const clientManage = (role) => canManage(role);   // who in the simple view gets Manage at all (no one else)
+  function tabs(role, { client = false } = {}) {
+    if (client) return clientManage(role) ? TABS.filter(([k]) => CLIENT_TABS.includes(k)) : [];
     return TABS.filter(([k]) => k === "members" || (k === "settings" ? canManage(role) : canDecide(role)));
   }
-  // The tab to show: the one asked for when the person may see it, else the queue for a decider and Members for anyone else.
-  function tabFor(role, asked) {
-    const keys = tabs(role).map(([k]) => k);
-    return keys.includes(asked) ? asked : canDecide(role) ? "gaps" : "members";
+  // The tab to show: the one asked for when the person may see it, else the queue for a decider and Members for anyone else (GA2: a
+  // client admin always lands on Members, whatever Manage address they open).
+  function tabFor(role, asked, { client = false } = {}) {
+    const keys = tabs(role, { client }).map(([k]) => k);
+    return keys.includes(asked) ? asked : client ? "members" : canDecide(role) ? "gaps" : "members";
   }
   // Whether the group header links to the space (a plain member never sees the link; the route itself shows them Members).
   const showsLink = canDecide;
+  // GA2: in the simple view, the Manage section (and so UX1's "Manage members and invites") is drawn for the group's admins only
+  const showsClientLink = clientManage;
 
   // ---- words --------------------------------------------------------------------------------------------------------------
   const num = (n) => Number(n).toLocaleString("en-NZ");
@@ -337,7 +346,9 @@
     return { state: "ended", text: "Ended " + (day(a.ended_at) || "") + (a.ended_side ? " by the " + a.ended_side : "") };
   }
   const byNumber = (a, b) => (Number(a) || 1e9) - (Number(b) || 1e9) || String(a).localeCompare(String(b));
-  function membersTab({ register = [], associations = [], gaps = null, canManage: admin = false } = {}) {
+  // GA2 FIX 1: `runs`, in the simple view, the farms whose owner or admin the signed-in person is (their own farm_members rows): the invite
+  // function refuses anyone else, so a client admin is offered the invite only on a farm they run. Staff (client false): as before.
+  function membersTab({ register = [], associations = [], gaps = null, canManage: admin = false, client = false, runs = null } = {}) {
     const assoc = (Array.isArray(associations) ? associations : []).filter(Boolean);
     const noExtent = new Map((gaps?.detail && Array.isArray(gaps.items) ? gaps.items : []).filter((i) => i?.kind === "member_no_extent" && i.member_number != null)
       .map((i) => [String(i.member_number), i.reason || "no block in the members layer"]));
@@ -345,7 +356,9 @@
       .map((a) => ({ id: a.id, farm: a.farm_id || null, ...associationText(a) }));
     const rows = (Array.isArray(register) ? register : []).filter(Boolean).sort((a, b) => byNumber(a.member_number, b.member_number)).map((m) => {
       const links = assocOf(m.id);
-      return { id: m.id, number: String(m.member_number), name: m.business_name, retired: m.ended_at ? "Retired " + day(m.ended_at) : null, associations: links,
+      const open = links.find((l) => l.state !== "ended" && l.farm) || null;
+      const inviteFarm = admin && open && (!client || (runs instanceof Set && runs.has(open.farm))) ? open.farm : null;
+      return { id: m.id, inviteFarm, number: String(m.member_number), name: m.business_name, retired: m.ended_at ? "Retired " + day(m.ended_at) : null, associations: links,
         active: links.some((l) => l.state === "active"), pending: links.some((l) => l.state === "pending"),
         noExtent: noExtent.has(String(m.member_number)) ? "No map extent: " + noExtent.get(String(m.member_number)) : null };
     });
@@ -357,7 +370,7 @@
       emptyText: "No members are on the group's register yet. RCL's group load adds them from the group's members layer.",
       noExtentNote: noExtentCount && !noExtent.size ? plural(noExtentCount, "member has", "members have") + " no map extent. The list is for the group's admins." : null,
       noExtentResolve: noExtentCount ? "Add the member's block to the members layer, then re-run the group load." : null,
-      canInvite: !!admin, canRequest: !!admin,
+      canInvite: !!admin, canRequest: !!admin && !client,   // GA2: the association request (it writes) stays with RCL staff for now
       businesses: current.map((r) => ({ id: r.id, label: "Member " + r.number + ", " + r.name })) };
   }
   // The farm id a group admin types to request an association (request_farm_group_association takes the farm's id; the farm's
@@ -496,7 +509,7 @@
     return { text, parts, first: !r.seen_at, seenAt: r.seen_at || null };
   }
 
-  return { DECIDERS, canDecide, canManage, TABS, tabs, tabFor, showsLink, countLine, noEvidence, waitingByGap, itemOf, evidenceText, line, waitingForLoad, decision, replace,
+  return { DECIDERS, canDecide, canManage, TABS, CLIENT_TABS, tabs, tabFor, showsLink, showsClientLink, countLine, noEvidence, waitingByGap, itemOf, evidenceText, line, waitingForLoad, decision, replace,
     gapsTab, membersTab, associationText, sitesTab, proposeArgs, feedLine, feedTab, feedDecision, sinceLine, farmId, email, INVITE_ROLES, MEMBER_KINDS, DECIDE_KINDS, FEED_KINDS, day,
     card, feedCard };
 });

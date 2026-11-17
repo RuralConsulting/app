@@ -104,7 +104,7 @@
     maps: "Published maps", documents: "Plans, consents and reports", events: "The group's calendar", people: "Members and the people linked to them", records: "Photos, water samples and pest control",
     projects: "Funded work and who takes part",   // PJ1
     insights: "How the group is using the app",   // GI1
-    map: "The map with its layers and cards (RCL staff)", ask: "Ask about this farm (RCL staff)", create: "Reports and updates (RCL staff)", manage: "Members, checks and settings",
+    map: "The map with its layers and cards (RCL staff)", ask: "Ask about this farm (RCL staff)", create: "Reports and updates (RCL staff)", manage: "Members and farm links",   // GA2: true for everyone who has Manage (an invite is offered only where the person may send one)
     access: "Who can sign in and what each role can do",   // GA1: the group's admins only
   };
   function eventLine(ev) {

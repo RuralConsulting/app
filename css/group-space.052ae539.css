@@ -101,7 +101,7 @@
 .manage-members > li { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
 .manage-members > li[data-retired] b { color: var(--ink-2); }
 .manage-no-extent { font-weight: 700; }
-.manage-invite-box summary { cursor: pointer; color: var(--ink-2); font-size: var(--text-small); min-height: 32px; display: flex; align-items: center; }
+.manage-invite-box summary { cursor: pointer; color: var(--ink-2); font-size: var(--text-small); min-height: 44px; display: flex; align-items: center; }
 .manage-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
 .manage-request { display: grid; gap: 6px; margin-top: 16px; max-width: 520px; }
 .manage-locations { display: grid; gap: 10px; }
