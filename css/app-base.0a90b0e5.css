@@ -1,0 +1,59 @@
+/* Shared components consume Paddock tokens; layout belongs to each view. SI2: the part a signed-out visitor needs (the page, the card
+   screens, the privacy note); the rest (app.css: access keys, the map, its controls, the decision card...) follows once signed in. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo-light { display: none; }
+  :root:not([data-theme="light"]) .logo-dark { display: block; }
+}
+:root[data-theme="dark"] .logo-light { display: none; }
+:root[data-theme="dark"] .logo-dark { display: block; }
+
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--wash); color: var(--ink); font: var(--text-body)/1.45 var(--f-ui); -webkit-text-size-adjust: 100%; }
+button, input { font: inherit; color: inherit; }
+.loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--ink-2); margin: 0; }
+.loading-failed { flex-direction: column; gap: var(--s-4); padding: 0 var(--s-5); text-align: center; line-height: 1.45; }   /* PUB1 */
+
+/* sign-in, password and farm list */
+.screen { min-height: 100%; display: flex; align-items: center; justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+.card { width: 100%; max-width: 400px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 28px 24px 22px; }
+.card.wide { max-width: 560px; }
+.org { display: flex; justify-content: space-between; align-items: center; }
+.logo { height: 30px; display: block; }
+.logo-dark { display: none; }
+.card h1 { font-family: var(--f-head); font-weight: 650; font-size: var(--text-title); line-height: 1.1; margin: 18px 0 20px; }
+.card form { display: grid; gap: 8px; }
+.card label { font-size: var(--text-small); font-weight: 600; color: var(--ink-2); }
+.card input { width: 100%; padding: 11px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); font-size: var(--text-body); }
+.card button[type="submit"] { margin-top: 6px; padding: 11px 14px; border: 0; border-radius: 8px; background: var(--accent);
+  color: var(--accent-ink); font-weight: 600; cursor: pointer; font-size: var(--text-body); }
+.card button[disabled] { opacity: 0.6; cursor: default; }
+.link { background: none; border: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; padding: 2px 0; font-size: var(--text-small); }
+.card .link { justify-self: start; }
+.help { margin: 2px 0 4px; color: var(--ink-2); font-size: var(--text-small); }
+.msg { min-height: 1.4em; margin: 12px 0 0; color: var(--bad); font-size: var(--text-small); }
+.msg.ok { color: var(--good); }
+.fine { margin: 14px 0 0; font-size: var(--text-small); color: var(--ink-3); }
+
+/* V8: the privacy and terms note (privacy.js), a page anyone can open and the one-time acknowledgement after sign-in. */
+.privacy-screen { align-items: flex-start; }
+.privacy-card { max-width: 680px; }
+.privacy-note { overflow-wrap: anywhere; }
+.privacy-note h1 { margin: 18px 0 12px; }
+.privacy-note h2 { font-family: var(--f-head); font-weight: 650; font-size: var(--text-heading); line-height: 1.2; margin: 22px 0 6px; }
+.privacy-note p { margin: 0 0 10px; }
+.privacy-note ul { margin: 0 0 10px; padding-left: 22px; display: grid; gap: 4px; }
+.privacy-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin-top: 16px; }
+.privacy-ok { min-height: 44px; padding: 11px 18px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; font-size: var(--text-body); }
+.privacy-ok[disabled] { opacity: 0.6; cursor: default; }
+.privacy-back { color: inherit; font-size: var(--text-small); }
+.group-legal { margin: 2px 0 0; font-size: var(--text-small); }
+.group-legal a { color: var(--ink-3); }
+@media print {
+  body:has(> #screen-privacy:not([hidden])) > :not(#screen-privacy):not(.demo-banner) { display: none !important; }
+  #screen-privacy { display: block; min-height: 0; padding: 0; }
+  #screen-privacy .privacy-card { max-width: none; box-shadow: none; padding: 0; background: none; }
+  #screen-privacy .privacy-actions, #screen-privacy .msg { display: none !important; }
+}

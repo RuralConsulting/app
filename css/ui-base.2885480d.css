@@ -1,0 +1,63 @@
+/* UI1 (12 Nov 2026): the shared look. Quiet surfaces, one accent, clear places. Tokens only (tokens.css); docs/DESIGN.md has the rules.
+   Phone first; a computer from 801 px. SI2: this first part (base, buttons, fields, the card screens, loading) is what a signed-out
+   visitor sees, so the page links it in the head; the rest of the shared look (ui.css) follows straight after it once signed in. */
+:root { --tabbar-h: 0px; --add-lift: 0px; }
+
+/* ---- base ---- */
+body { font-family: var(--f-ui); background: var(--wash); color: var(--ink); -webkit-font-smoothing: antialiased; }
+a { color: var(--accent-text); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+::selection { background: var(--accent-soft); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-s); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
+.icon { display: block; flex: none; }
+
+/* Loading: a quiet spinner beside the words, never a blank screen */
+.loading::before, .group-status::before, .maps-message[aria-busy="true"]::before {
+  content: ""; display: inline-block; width: 16px; height: 16px; margin-right: var(--s-2); vertical-align: -3px; border-radius: 50%;
+  border: 2px solid var(--rule); border-top-color: var(--ink-3); animation: fp-spin .8s linear infinite; }
+.group-status { color: var(--ink-2); }
+@keyframes fp-spin { to { transform: rotate(360deg); } }
+/* PUB1: the app could not load: the words and Reload, no spinner */
+.loading-failed::before { content: none; }
+
+/* ---- buttons and fields ---- */
+/* Primary: the accent, one per view. Secondary: a quiet fill. Link: words in the accent. */
+.card button[type="submit"], .group-panel button.primary, .privacy-ok, .home-card-open, .capture-form button[type=submit], .token-value button, .token-list .tk-revoke-yes, .loading-reload {
+  min-height: var(--tap); padding: 0 var(--s-5); border: 0; border-radius: var(--radius-pill); background: var(--accent); color: var(--accent-ink);
+  font-weight: 600; letter-spacing: -.005em; transition: background var(--dur-1) var(--ease), transform var(--dur-1) var(--ease); }
+.card button[type="submit"]:hover, .group-panel button.primary:hover, .privacy-ok:hover, .home-card-open:hover, .loading-reload:hover { background: var(--accent-hover); }
+.card button[type="submit"]:active, .group-panel button.primary:active, .home-card-open:active { transform: scale(.98); }
+.group-panel button.secondary, .maps-again, .photo-step button, .capture-actions button:not(.link) {
+  min-height: var(--tap); padding: 0 var(--s-4); border: 0; border-radius: var(--radius-pill); background: var(--fill); color: var(--ink); font-weight: 600; }
+.group-panel button.secondary:hover, .maps-again:hover { background: var(--fill-hover); }
+/* UI2: a link is ink, so it is always underlined (a quieter underline at rest, full ink on hover and focus) */
+.link, .group-panel button.link, .group-events button.link, .group-people button.link { color: var(--accent-text); text-decoration: underline; text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px; text-underline-offset: 3px; font-weight: 500; }
+.link:hover, .link:focus-visible, .group-panel button.link:hover, .group-events button.link:hover, .group-people button.link:hover { text-decoration-color: var(--ink); }
+.card input, .card select, .home-find input, .update-controls input, .group-events input[type="text"], .group-events input[type="date"], .group-events input[type="time"],
+.group-events input[type="number"], .group-events input:not([type]), .group-events select, .group-events textarea, .manage-controls input, .manage-controls select {
+  min-height: var(--tap); border: 1px solid var(--rule); border-radius: var(--radius-s); background: var(--panel); color: var(--ink);
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease); }
+/* every field's edge is at least 3:1 against its surface (the fill alone is not enough) */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [role="switch"]), select, textarea) { border-color: var(--field-border); }
+/* (at no specificity, so every focus style below and in the views' own stylesheets wins over it) */
+.card input:focus-visible, .card select:focus-visible, .home-find input:focus-visible, .group-events input:focus-visible, .group-events select:focus-visible,
+.group-events textarea:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-soft); }
+
+/* ---- sign-in and the other card screens ----------------------------------------------------------------------------------- */
+.card { border-radius: var(--radius-l); box-shadow: var(--shadow-1); padding: var(--s-8) var(--s-6) var(--s-6); }
+.card h1 { font: 700 var(--text-title)/1.15 var(--f-display); letter-spacing: -.02em; margin: var(--s-6) 0 var(--s-6); }
+.card form { gap: var(--s-2); }
+.card label { margin-top: var(--s-2); font-size: var(--text-small); font-weight: 600; color: var(--ink-2); }
+.card input { padding: 0 var(--s-3); }
+.card button[type="submit"] { margin-top: var(--s-4); width: 100%; }
+.card .link { justify-self: center; }
+.msg:not(:empty) { padding: var(--s-2) var(--s-3); border-radius: var(--radius-s); background: var(--fill); color: var(--ink); }
+.msg.ok:not(:empty) { background: var(--success-soft); }
+.fine { color: var(--ink-3); }
+.fine a { color: var(--ink-2); }
+@media (max-width: 800px) { .screen:not(.privacy-screen) { align-items: flex-start; padding-top: max(48px, env(safe-area-inset-top)); } .card { box-shadow: none; background: var(--clear); padding-left: var(--s-2); padding-right: var(--s-2); } }
+/* a field or view scrolled into place is not under the sticky header, nor under the new-version line (which adds to --demo-banner-height);
+   on every page at phone width, the sign-in page included (SI2: so it is here, not in ui.css) */
+@media (max-width: 800px) { html { scroll-padding-top: calc(var(--demo-banner-height, 0px) + 72px); } }
