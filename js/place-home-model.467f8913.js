@@ -103,6 +103,7 @@
   const STATIC = {
     maps: "Published maps", documents: "Plans, consents and reports", events: "The group's calendar", people: "Members and the people linked to them", records: "Photos, water samples and pest control",
     projects: "Funded work and who takes part",   // PJ1
+    insights: "How the group is using the app",   // GI1
     map: "The map with its layers and cards (RCL staff)", ask: "Ask about this farm (RCL staff)", create: "Reports and updates (RCL staff)", manage: "Members, checks and settings",
   };
   function eventLine(ev) {

@@ -134,6 +134,7 @@
     FP.placeHome?.close(); FP.groupOverview?.close();
     FP.records?.close();   // CAP1
     FP.wqPage?.close();   // WQV1
+    FP.insights?.close();   // GI1
     FP.groupManage?.forget(); lastView = null;   // ON3b: leaving the group space drops the manage space's reads
     document.body.classList.remove("group-space-active");
     FP.add?.update(null);
@@ -172,7 +173,9 @@
     // V6: a client's tabs are the allow-list (simple-view.js)
     // PE1: People (personal information) is linked for the group's facilitators, advisors and admins only, in either view
     const people = ([k]) => k !== "people" || !!FP.peopleModel?.canSeeTab(group, groups);   // SG2: and, in a sub-group, its parent's too
-    const tabs = (FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people);   // UI1: the views drawn, for Add
+    // GI1: Insights (how the group uses the app) is drawn for the group's facilitators, advisors and admins and RCL staff only
+    const insights = ([k]) => k !== "insights" || (!!FP.insights && !!FP.insightsModel?.canSee(group.role, !!FP.ops?.isStaff?.()));
+    const tabs = (FP.simpleView?.on() ? FP.simpleView.tabs("group") : G().views.filter(([k]) => k !== "manage" || FP.groupManageModel?.showsLink(group.role))).filter(people).filter(insights);   // UI1: the views drawn, for Add
     // UI2: five on a phone's tab bar and six in a computer's segmented control; the rest under More (space-nav.js)
     (FP.spaceNav?.render || plainTabs)($("#group-nav"), tabs.map(([key, label]) => ({ key, label, href: FP.href(G().href(group.id, key)), icon: FP.icons?.forView(key),
       badge: key === "people" ? () => FP.groupPeople?.countBadge?.(group.id) : null })), route.view,   // RV1: open review items, once People has read them
@@ -213,6 +216,8 @@
     if (route.view !== "home") { FP.placeHome?.close(); FP.groupOverview?.close(); FP.phoneArea?.close(); }
     if (route.view !== "records") FP.records?.close();   // CAP1
     if (route.view !== "projects") FP.projects?.close();   // PJ1
+    if (route.view !== "insights") FP.insights?.close();   // GI1
+    FP.insights?.record(group);   // GI1: a visit to the group, counted once in 30 minutes, after the first screen; failures ignored
     if (route.view !== "water") FP.wqPage?.close();   // WQV1: its map and charts go with the page
     if (route.view !== "water") FP.wqRound?.close();   // SR1: a round being typed is kept as a draft in the browser
     // ON3b: the manage space's reads last only across its own tabs: entering it from another view, or for another group, reads again
@@ -221,7 +226,7 @@
     if (lastView === "manage" && route.view !== "manage") FP.decisionCard?.sweep(true);
     lastView = route.view;
     // ON3b: the manage space is a queue, not a map: the map is put away (drawn again when the person goes back to it)
-    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records" || route.view === "projects" || route.view === "water") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
+    if (route.view === "manage" || route.view === "maps" || route.view === "events" || route.view === "people" || route.view === "home" || route.view === "records" || route.view === "projects" || route.view === "insights" || route.view === "water") { dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; mapReady = null; surface = null; entries = []; $("#group-map").replaceChildren(); timing = null; T()?.cancel("group"); if (ctx?.data) { ctx.data.mapSettled = null; ctx.data.settleMap = null; } }
     if (ctx?.group.id !== group.id) {
       dropParts(); wq?.destroy(); wq = null; wqAnswer?.destroy(); wqAnswer = null; mapHandle?.destroy(); mapHandle = null; surface = null; entries = []; draft = null;
       ctx = { group };   // HOT1: nothing is read yet; each view asks for what it draws
@@ -286,6 +291,15 @@
       const panel = $("#group-panel"), today = typeof FP.sb.today === "function" ? String(await FP.sb.today()).slice(0, 10) : null;
       if (current !== token) return;
       panel.replaceChildren(FP.projects.view(group, { sb: FP.sb, item: route.item || null, groups, today }));
+      panel.scrollTop = 0;
+      return;
+    }
+    // GI1: Insights is a page, not a map: the group's figures (insights.js), read as the person; for anyone but its coordinators and
+    // RCL staff it says so and reads nothing
+    if (route.view === "insights") {
+      document.title = group.name + " · " + G().viewLabel("insights") + " | " + (FP.brand?.product || "");
+      const panel = $("#group-panel");
+      panel.replaceChildren(FP.insights.view(group, { sb: FP.sb, staff: !!FP.ops?.isStaff?.(), search: (view, q) => { pendingSearch = { view, q }; } }));
       panel.scrollTop = 0;
       return;
     }

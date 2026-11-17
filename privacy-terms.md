@@ -1,5 +1,5 @@
 ---
-version: 2026-11-12
+version: 2026-11-17
 ---
 # Privacy and terms
 
@@ -17,6 +17,8 @@ We hold only what is needed to show you your maps and files.
 - Your farm's or group's maps: map layers, boundaries, farm features, drone imagery and photos that RCL publishes for you.
 - Your issued documents: finished documents such as your Farm Environment Plan, main consents and farm maps. Drafts and working files stay with RCL and are not put on the platform.
 - Records of changes: who published or changed something, and when.
+
+When you open a group, we record the day and hour, whether it was on a phone or a computer, and that you opened it that day. The group's coordinators see totals for the whole group, and which members have not signed in yet, never one person's visits. RCL keeps these records for 13 months.
 
 We do not use advertising or tracking tools on this platform.
 

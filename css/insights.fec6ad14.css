@@ -1,0 +1,102 @@
+/* GI1: a group's Insights (app/js/insights.js), "how the group is using the app". A page, not a map: the panel takes the width, as
+   Projects. Calm and small (DN1's scale): one card-free column of a head (title, period switch, staff tick), four tiles in one
+   outline with hairlines between, visits by day, when people look, and the members not signed in yet as plain rows. No filled button:
+   nothing here is an action but the follow-up rows. Colours: --series-1 (computer) and --series-2 (phone), the app's chart series;
+   the week grid is one hue, light to dark. 44 px targets; nothing scrolls sideways at 320 px with 150% text. */
+#screen-group[data-view="insights"] .group-map { display: none; }
+#screen-group[data-view="insights"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="insights"] .group-panel { padding: 0; border: 0; background: var(--wash); }
+@media (min-width: 801px) {
+  #screen-group[data-view="insights"] .group-head.space-head { padding-left: max(var(--s-3), calc((100% - var(--page-max)) / 2)); padding-right: max(var(--s-5), calc((100% - var(--page-max)) / 2 + var(--s-4))); }
+}
+.insights { display: grid; align-content: start; gap: var(--s-4); width: 100%; max-width: var(--page-max); margin: 0 auto; min-width: 0;
+  padding: var(--s-4) var(--s-4) calc(var(--s-10) + var(--fab-gutter, 0px)); box-sizing: border-box; color: var(--ink); font-size: var(--text-small); }
+.insights h2 { margin: 0; font: 600 var(--text-heading)/1.2 var(--f-display); }
+.insights h3 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.gi-quiet { margin: 2px 0 0; color: var(--ink-3); font-size: var(--text-small); line-height: 1.4; overflow-wrap: break-word; }
+.gi-status { margin: calc(-1 * var(--s-2)) 0 0; }
+.gi-status[data-state="error"], .gi-status[data-state="none"] { color: var(--ink-2); }
+
+/* the head: the title and its line; the period switch and the tick at the right (under it on a phone) */
+.gi-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
+.gi-title { min-width: 0; flex: 1 1 260px; }
+.gi-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); }
+.gi-seg { display: inline-flex; padding: 2px; border-radius: var(--radius-s); background: var(--fill); max-width: 100%; }
+.gi-seg-btn { min-height: var(--tap); min-width: var(--tap); padding: 0 var(--s-3); border: 0; border-radius: calc(var(--radius-s) - 2px); background: var(--clear); color: var(--ink-2);
+  font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; white-space: nowrap; }
+.gi-seg-btn[aria-pressed="true"] { background: var(--selected); color: var(--ink); box-shadow: var(--shadow-1); }
+.gi-seg-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.gi-tick { display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--tap); color: var(--ink-2); cursor: pointer; }
+.gi-tick input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+
+/* the tiles: one outline, hairlines between; a small label, the figure, a thin bar where there is a share, one quiet line */
+.gi-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); border: 1px solid var(--rule-soft);
+  border-radius: var(--radius); background: var(--panel); overflow: hidden; }
+.gi-tile { display: grid; align-content: start; gap: 4px; padding: var(--s-3); box-shadow: -1px 0 0 var(--rule-soft), 0 -1px 0 var(--rule-soft); min-width: 0; }
+.gi-tile-label { color: var(--ink-2); font-weight: 500; }
+.gi-tile-figure { font: 600 var(--text-heading)/1.15 var(--f-display); color: var(--ink); overflow-wrap: break-word; }
+.gi-tile-line { color: var(--ink-3); line-height: 1.35; overflow-wrap: break-word; }
+.gi-bar { display: block; height: 4px; border-radius: 2px; background: var(--fill); overflow: hidden; }
+.gi-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--ink-2); }
+
+/* a panel: the chart or the list, in one outline */
+.gi-panel { display: grid; gap: var(--s-2); min-width: 0; padding: var(--s-3); border: 1px solid var(--rule-soft); border-radius: var(--radius); background: var(--panel); }
+.gi-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-1) var(--s-3); }
+.gi-panel > .gi-quiet { margin: 0; }
+.gi-key, .gi-scale { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); color: var(--ink-2); }
+.gi-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.gi-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.gi-sw-computer { background: var(--series-1); }
+.gi-sw-phone { background: var(--series-2); }
+
+.gi-plot { position: relative; padding-left: 0; }
+.gi-chart { display: block; width: 100%; height: 160px; overflow: visible; }
+.gi-chart .gi-computer { fill: var(--series-1); }
+.gi-chart .gi-phone { fill: var(--series-2); }
+.gi-chart .gi-grid { stroke: var(--rule-soft); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.gi-chart .gi-axis { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.gi-chart .gi-hit { fill: var(--clear); }
+.gi-chart .gi-bar-g:hover rect:not(.gi-hit) { opacity: .8; }
+.gi-yticks { position: absolute; inset: 0 auto 0 0; width: 26px; pointer-events: none; }
+.gi-yticks > span { position: absolute; left: 0; transform: translateY(50%); color: var(--ink-3); font-size: var(--text-small); line-height: 1; font-variant-numeric: tabular-nums; }
+.gi-xlabels { display: flex; justify-content: space-between; padding-left: calc(28 / 640 * 100%); color: var(--ink-3); font-size: var(--text-small); }
+
+/* when people look: 7 rows by 24 hours; darker = more (one hue) */
+.gi-heat { display: grid; grid-template-columns: 2.4em repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; min-width: 0; }
+.gi-heat-hour { color: var(--ink-3); font-size: var(--text-small); white-space: nowrap; overflow: hidden; }
+.gi-heat-day { color: var(--ink-2); font-size: var(--text-small); }
+.gi-cell { display: block; aspect-ratio: 1; min-height: 8px; border-radius: 2px; background: var(--fill); }
+.gi-cell[data-level="1"] { background: color-mix(in srgb, var(--series-1) 25%, var(--panel)); }
+.gi-cell[data-level="2"] { background: color-mix(in srgb, var(--series-1) 50%, var(--panel)); }
+.gi-cell[data-level="3"] { background: color-mix(in srgb, var(--series-1) 75%, var(--panel)); }
+.gi-cell[data-level="4"] { background: var(--series-1); }
+.gi-scale .gi-cell { width: 10px; min-height: 10px; }
+
+.gi-details summary { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--ink-2); cursor: pointer; }
+.gi-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.gi-table :is(th, td) { padding: 4px var(--s-2) 4px 0; border-bottom: 1px solid var(--rule-soft); text-align: left; font-weight: 400; }
+.gi-table caption.gi-left-out { caption-side: bottom; text-align: left; padding-top: var(--s-1); color: var(--ink-3); }
+.gi-table thead th { color: var(--ink-3); font-weight: 500; }
+
+/* not signed in yet: plain rows, member number then name, a small chevron; each opens People with that member found */
+.gi-list { list-style: none; margin: 0; padding: 0; }
+.gi-list > li + li { border-top: 1px solid var(--rule-soft); }
+.gi-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 14px; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: var(--s-1) 0;
+  color: var(--ink); text-decoration: none; font-size: var(--text-body); }
+.gi-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-s); }
+@media (hover: hover) { .gi-row:hover { background: var(--fill); } }
+.gi-num { min-width: 2.5em; color: var(--ink-3); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.gi-name { overflow-wrap: break-word; }
+.gi-row svg { color: var(--ink-3); }
+.gi-unlinked { margin: 0; }
+.gi-empty { display: grid; gap: 4px; padding: var(--s-4); border: 1px dashed var(--rule); border-radius: var(--radius); background: var(--panel); }
+.gi-few { margin: 0; color: var(--ink-2); line-height: 1.4; }
+.gi-empty b { font: 600 var(--text-body)/1.3 var(--f-ui); }
+.gi-empty p { margin: 0; color: var(--ink-2); line-height: 1.4; }
+
+@media (min-width: 801px) { .insights .gi-heat .gi-cell { aspect-ratio: auto; height: 18px; } }
+@media (max-width: 800px) {
+  .insights { padding-left: var(--s-4); padding-right: var(--s-4); }
+  .gi-controls { width: 100%; justify-content: space-between; }
+  .gi-chart { height: 130px; }
+}

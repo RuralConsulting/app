@@ -48,12 +48,15 @@
     const manyPlaces = new URLSearchParams(root.location.search).get("places") === "many";
     // UX1: "?blank=1" leaves the demo group with nothing in Records, Events, Files or People (its members stay), as a group starts
     const blank = new URLSearchParams(root.location.search).get("blank") === "1";
+    // GI1: "?insights=empty" makes the group's Insights a group with no visits recorded yet (recording started on the demo's day);
+    // "?insights=small" a group where only a few people have used the app (totals only: no days or hours, no active count)
+    const insights = new URLSearchParams(root.location.search).get("insights");
     // LK2: the first batch of layer looks (tools/looks/first_batch.json, copied by build.sh), held as proposed looks; optional
     const looks = active ? fetch("demo/looks-first-batch.json").then((r) => (r.ok ? r.json() : null), () => null) : null;
     const ready = active ? Promise.all([fetch("demo/demo-farm.json").then((r) => {
       if (!r.ok) throw new Error("Demo fixture unavailable. Build the app before opening the demo.");
       return r.json();
-    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles, blank, manyPlaces })) : null;
+    }), looks]).then(([fixture, batch]) => api.dataset(fixture, { sparse, farmer, multi, group, queue, looks: batch, simple, groupSites, groupMap, titles, overview, wqPage, longPeople, longMembers, mixedMembers, round, projects, memberFarm, fewFiles, blank, manyPlaces, insights })) : null;
     root.FP.demo = { ...api, active, sparse, farmer, group, simple: active ? simple : null, href: (h) => api.href(h, sparse, farmer, multi, group, queue), ready, client: active ? api.client(ready) : null };
     // Entering or leaving a demo variant always starts a fresh runtime. Real sessions are neither read nor changed.
     root.addEventListener("hashchange", (event) => {
@@ -105,7 +108,7 @@
       // demo's links to a sub-group here for its own visit; no other page links to it
       const sub = /^\/sub\/([0-9a-f-]{36})(\/(?:home|maps|water))?$/.exec(suffix);
       if (sub) return "#/group/" + sub[1] + (sub[2] || "");
-      return /^(?:\/(?:home|documents|events|water|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
+      return /^(?:\/(?:home|documents|events|water|insights|people(?:\/(?:log|follow-ups|add-person|add-contact|review))?|create|settings|manage(?:\/(?:members|gaps|updates|sites|settings))?))?$/.test(suffix) ? "#/group/" + GROUP + suffix : null;
     }
     const [path, query] = hash.replace(/^#\/demo\/(empty|farmer|multi)(?=\/|\?|$)/, "#/demo").split("?");
     let suffix = path.slice("#/demo".length), farm = FARM;
@@ -198,7 +201,7 @@
     data.tables.published_maps = maps;
     data.tables.map_packages = maps.map((m) => ({ map_id: m.id, version: "1", manifest, storage_prefix: (m.farm_id || "org/" + m.org_id) + "/demo", is_current: true, published_at: "2026-11-01T00:00:00Z" }));
   }
-  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false, manyPlaces = false } = {}) {
+  function dataset(fixture, { sparse = false, farmer = false, multi = false, group = false, queue = null, looks = null, simple = null, groupSites = null, groupMap = null, titles = false, overview = null, wqPage = null, longPeople = false, longMembers = false, mixedMembers = false, round = false, projects = false, memberFarm = null, fewFiles = false, blank = false, manyPlaces = false, insights = null } = {}) {
     const f = copy(fixture);
     const farm = { id: FARM, org_id: ORG, name: f.farm.name, region: f.farm.region || null };
     // Illustrative rectangles, not the farm boundary or a survey.
@@ -302,6 +305,7 @@
     data.groupMapNone = groupMap === "none";
     data.wqPage = group && (wqPage === "sub" || wqPage === "parent") ? wqPage : null;   // WQV1
     data.roundDemo = !!(group && round);   // SR1
+    data.insightsDemo = insights === "empty" || insights === "small" ? insights : "full";   // GI1
     if (simple === "client" || simple === "unreadable") {
       data.tables.profiles = [{ user_id: USER, is_staff: false }];
       for (const m of data.groupTables?.org_members || []) m.role = "member";
@@ -763,6 +767,74 @@
     return singular ? (hit.length === 1 ? { data: copy(hit[0]), error: null } : { data: null, error: { message: "Demo row not found" } }) : { data: copy(hit), error: null };
   }
   // As public.group_projects(g) for the demo group, and public.project_tag (the coordinators; an item of the group, a project of the group)
+  // GI1, as public.group_insights, public.group_insights_not_signed_in and public.record_group_visit: invented visits to the demo
+  // group (weekday mornings and evenings, more by phone in the evening, a field day's spike, a few RCL staff visits by computer),
+  // recorded from 150 days before the demo's day; the group's facilitators, advisors and admins and RCL staff only (null or no rows
+  // for anyone else). Recording a visit does nothing in the demo. Returns [data, error], or null for a name it does not know.
+  function insightsRpc(d, name, args) {
+    if (name === "record_group_visit") return [null];
+    if (name !== "group_insights" && name !== "group_insights_not_signed_in") return null;
+    const role = d.groupTables?.org_members.find((m) => m.org_id === GROUP && m.user_id === USER)?.role;
+    const allowed = args.g === GROUP && (["facilitator", "advisor", "admin"].includes(role) || !!d.tables.profiles?.[0]?.is_staff);
+    const register = (d.groupTables?.group_members || []).filter((b) => !b.ended_at);
+    const small = d.insightsDemo === "small";
+    const neverNames = ["Echo", "Golf"], given = register.filter((b) => (small ? /^(?:Alpha|Echo|Golf) /.test(b.business_name) : !/^Delta /.test(b.business_name)));
+    if (name === "group_insights_not_signed_in") return [allowed ? given.filter((b) => neverNames.some((w) => b.business_name.startsWith(w + " ")))
+      .map((b) => ({ group_member_id: b.id, member_number: b.member_number, business_name: b.business_name })) : []];
+    const days = Number(args.days ?? 30);
+    if (!allowed || ![30, 90, 365].includes(days)) return [null];
+    // (every figure ends at yesterday, as the database's do: no live same-day figure)
+    const today = String(d.asAt).slice(0, 10), DAY = 86400000, t0 = Date.parse(today + "T00:00:00Z") - DAY, iso = (t) => new Date(t).toISOString().slice(0, 10);
+    const empty = d.insightsDemo === "empty", started = empty ? today : iso(t0 - 150 * DAY), since = iso(t0 - (days - 1) * DAY);
+    const withStaff = !!args.with_staff;
+    let seed = 7;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    const HOURS = [[7, 2], [8, 3], [9, 2], [10, 1], [12, 2], [13, 1], [16, 1], [19, 3], [20, 4], [21, 2]], SUM = HOURS.reduce((n, h) => n + h[1], 0);
+    const pickHour = () => { let r = rnd() * SUM; for (const [h, w] of HOURS) { r -= w; if (r <= 0) return h; } return 20; };
+    // each day's visits (and roughly how many people made them), from the day recording started
+    const daysOf = new Map();
+    for (let t = Date.parse(started + "T00:00:00Z"); !empty && t <= t0; t += DAY) {
+      const day = iso(t), dow = ((new Date(t).getUTCDay() + 6) % 7) + 1, weeks = Math.floor((t0 - t) / (7 * DAY));
+      let n = Math.round((dow <= 5 ? 2 + rnd() * 4 : 0.5 + rnd() * 2) * (1 + (20 - Math.min(20, weeks)) / 40) * (small ? 0.25 : 1));
+      if (day === iso(t0 - 18 * DAY) && !small) n += 14;   // the field day
+      const visits = [];
+      for (let i = 0; i < n; i++) { const h = pickHour(); visits.push({ h, phone: rnd() < (h >= 19 ? 0.65 : 0.3), staff: false }); }
+      // RCL staff: on some weekdays one of them, on a few (a field visit) three
+      const staffN = dow <= 5 ? (rnd() < 0.12 ? 3 : rnd() < 0.3 ? 1 : 0) : 0;
+      for (let i = 0; i < staffN; i++) visits.push({ h: 10 + Math.floor(rnd() * 5), phone: false, staff: true });
+      daysOf.set(day, { dow, visits, people: Math.round(n * 0.9), staff: staffN });
+    }
+    // as the database: the day rule first (a day counts only with at least 3 people; staff's visits on it only with the tick and at
+    // least 3 staff), then days for 30 days or whole Monday-to-Sunday weeks for 90 days and 12 months, from counted days only; the
+    // days left out are only counted, never dated
+    const weekly = days !== 30, step = weekly ? 7 : 1, dowOf = (x) => ((new Date(Date.parse(x + "T00:00:00Z")).getUTCDay() + 6) % 7) + 1;
+    const first = weekly ? iso(Date.parse(since + "T00:00:00Z") + ((8 - dowOf(since)) % 7) * DAY) : since;
+    const last = weekly ? iso(t0 - ((dowOf(iso(t0)) % 7) + 6) * DAY) : iso(t0);
+    const buckets = [], grid = new Map();
+    let total = 0, phone = 0, daysOut = 0, weeksOut = 0;
+    for (let b = Date.parse(first + "T00:00:00Z"); b <= Date.parse(last + "T00:00:00Z"); b += step * DAY) {
+      const r = { start: iso(b), end: iso(b + (step - 1) * DAY), phone: 0, computer: 0 };
+      let anyOut = false;
+      for (let k = 0; k < step; k++) {
+        const x = daysOf.get(iso(b + k * DAY));
+        if (!x) continue;
+        if (x.people < 3) { if (x.visits.some((v) => !v.staff)) { daysOut++; anyOut = true; } continue; }
+        for (const v of x.visits) {
+          if (v.staff && !(withStaff && x.staff >= 3)) continue;
+          r[v.phone ? "phone" : "computer"]++; total++; if (v.phone) phone++;
+          const key = x.dow + ":" + v.h; grid.set(key, (grid.get(key) || 0) + 1);
+        }
+      }
+      if (r.phone + r.computer) buckets.push(r); else if (anyOut) weeksOut++;
+    }
+    const enough = !empty && !small, signedIn = given.length - given.filter((b) => neverNames.some((w) => b.business_name.startsWith(w + " "))).length;
+    const active = enough && signedIn >= 5 ? (days === 30 ? 4 : 5) : null;
+    return [{ today, until: iso(t0), since, recording_started: started, days, with_staff: withStaff, min_people: 5, min_bucket: 3, enough, grid_shown: enough,
+      bucket: weekly ? "week" : "day", first, last, visits: enough ? { total, phone, computer: total - phone } : null, buckets: enough ? buckets : null,
+      left_out: enough ? { days: daysOut, weeks: weekly ? weeksOut : null } : null,
+      grid: !enough ? null : [...grid.entries()].map(([k, n]) => ({ dow: Number(k.split(":")[0]), hour: Number(k.split(":")[1]), n })).sort((a, b) => a.dow - b.dow || a.hour - b.hour),
+      members: { given: given.length, active, never: given.length - signedIn, unlinked: small ? 1 : 3, unlinked_never: small ? 0 : 1 } }];
+  }
   function projectsRpc(d, name, args) {
     if (name === "group_projects") {
       if (args.g !== GROUP) return [[], null];
@@ -2589,6 +2661,7 @@
         if (name === "group_event_people") return result(args.g === GROUP ? d.eventPeople || [] : []);   // N4
         if (name === "capture_save") return offlineNow() ? LOST() : result(...captureSave(d, args?.c));   // CAP1
         { const r = projectsRpc(d, name, args || {}); if (r) return result(...r); }   // PJ1
+        { const r = insightsRpc(d, name, args || {}); if (r) return result(...r); }   // GI1
         if (name === "sampling_round_save") return offlineNow() ? LOST() : result(...roundSave(d, args || {}));   // SR1
         if (name === "capture_tag_suggestions") return offlineNow() ? LOST() : result(captureTagSuggestions(d, args?.o));   // CAP1
         if (/^group_event_(notes|attendee_notes|set_notes|attendee_set_note)$/.test(name)) return result(...eventNotesRpc(d, name, args || {}));   // NP1
