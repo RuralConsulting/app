@@ -1,0 +1,408 @@
+/* CAP1: capture on a phone. The add menu (capture-ring.js), the capture screen (capture-photo.js) and Records (records.js).
+   Ink controls, one filled button per screen (Save), the device's font, light and dark from the tokens; light and fine, not chunky
+   (the owner, 13 Nov 2026: "more refined and less chunky"): hairline edges, small text, plain links for what is secondary. */
+
+/* ---- the add menu: a list rising from the + (PH1, after the owner's guide of 13 Nov 2026) -------------------------------------------
+   Plain rows of words with a small leading icon, no box around each option; one thin rounded outline around the set; a hairline between
+   groups; ink only. Each row is a 44 px target. Take a photo is first. RF1 (the owner's phone, 14 Nov 2026): every row the same plain
+   pattern, the photo's icon no longer in a filled circle; the map behind dimmed (--ring-dim, about 45% black) under the menu and over the
+   map and its names, so nothing reads through at the menu's edge; a tap on the dim closes the menu. */
+.ring { position: fixed; inset: 0; z-index: 35; }
+.ring-backdrop { position: absolute; inset: 0; background: var(--ring-dim); animation: fp-fade var(--dur-2) var(--ease); }
+.ring-list { position: fixed; box-sizing: border-box; padding: 6px 0; border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); color: var(--ink);
+  box-shadow: var(--shadow-2); animation: ring-in var(--dur-2) var(--ease) both; }
+.ring-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; margin: 0; padding: 0 18px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; cursor: pointer; box-sizing: border-box; -webkit-tap-highlight-color: var(--clear); }
+.ring-dot { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; color: var(--ink); }
+.ring-word { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ring-sep { height: 1px; margin: 4px 18px; background: var(--rule-soft); }
+.ring .ring-item:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; border-radius: var(--radius-s); }
+@media (hover: hover) { .ring-item:hover { background: var(--fill); } }
+.ring-item:active { background: var(--fill); }
+.ring-close { position: fixed; display: grid; place-items: center; width: 52px; height: 52px; margin: 0; padding: 0; border: 0; border-radius: 50%; transform: translate(-50%, -50%);
+  background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+@keyframes ring-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ring-list, .ring-backdrop { animation: none; } }
+body.ring-open .space-tabs { pointer-events: none; }
+
+/* the Edit sheet */
+.ring-edit-list { list-style: none; margin: 0; padding: 0 var(--s-3); display: grid; gap: 2px; }
+.ring-edit-row { display: flex; align-items: center; gap: var(--s-2); min-height: 52px; }
+.ring-edit-label { flex: 1; display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); cursor: pointer; }
+.ring-edit-label input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.ring-edit-moves { display: flex; gap: 2px; }
+.ring-move { display: grid; place-items: center; width: var(--tap); height: var(--tap); border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.ring-move[disabled] { opacity: .35; cursor: default; }
+.ring-edit-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-5) 0; }
+.ring-edit-note { margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+.ring-edit-reset { min-height: var(--tap); }
+.ring-edit-help { padding: 0 var(--s-5) var(--s-2); }
+
+/* the count on the + */
+.add-button .add-badge { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--radius-pill); background: var(--panel); color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 700; font-size: var(--text-small); line-height: 20px; text-align: center; }
+.add-button { position: relative; }   /* (ui.css, loaded after this, makes the phone's round + fixed) */
+
+/* ---- the capture screen (and a record seen full screen) ----------------------------------------------------------------------------- */
+.cap-screen { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--wash); color: var(--ink); }
+body.cap-open { overflow: hidden; }
+body.cap-open .add-button { opacity: 0; pointer-events: none; }
+.cap-head { display: grid; grid-template-columns: var(--tap) 1fr var(--tap); align-items: center; gap: var(--s-2); padding: max(var(--s-2), env(safe-area-inset-top)) var(--s-2) var(--s-2);
+  background: var(--panel); border-bottom: 1px solid var(--rule-soft); }
+.cap-head h2 { margin: 0; text-align: center; font: 600 var(--text-body)/1.3 var(--f-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-close { display: grid; place-items: center; width: var(--tap); height: var(--tap); border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.cap-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; display: grid; align-content: start; gap: var(--s-5); padding: var(--s-4) var(--s-4) var(--s-6);
+  width: 100%; max-width: 640px; margin: 0 auto; box-sizing: border-box; }
+.cap-foot { padding: var(--s-2) var(--s-4) max(var(--s-2), env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--rule-soft); }
+.cap-save { display: block; width: 100%; max-width: 640px; margin: 0 auto; height: 44px; border: 0; border-radius: var(--radius-pill); background: var(--primary); color: var(--primary-ink);
+  font: 600 var(--text-body)/1 var(--f-ui); cursor: pointer; }
+.cap-save[disabled] { opacity: .5; cursor: progress; }
+
+.cap-photo { position: relative; display: grid; gap: var(--s-2); justify-items: center; }
+.cap-img { display: block; width: 100%; max-height: 42vh; object-fit: contain; border-radius: var(--radius); background: var(--fill); }
+.cap-photo-empty { display: grid; justify-items: center; gap: var(--s-1); width: 100%; padding: var(--s-5) var(--s-4); border-radius: var(--radius); background: none;
+  border: 1px dashed var(--field-border); box-sizing: border-box; }
+.cap-photo[data-has-photo="true"] .cap-photo-empty { display: none; }
+.cap-take { display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--tap); padding: 0 var(--s-2); border: 0; background: none; color: var(--ink);
+  font: 500 var(--text-body)/1 var(--f-ui); text-decoration: underline; text-decoration-color: var(--field-border); text-underline-offset: 3px; cursor: pointer; }
+.cap-screen .link { min-height: var(--tap); padding: 0 var(--s-1); font-size: var(--text-small); }
+
+.cap-tags, .cap-kind { margin: 0; padding: 0; border: 0; display: grid; gap: var(--s-2); min-width: 0; }
+.cap-tags legend, .cap-kind legend, .cap-field > span, .cap-sub { padding: 0; margin: 0 0 var(--s-1); color: var(--ink-2); font: 600 var(--text-small)/1.3 var(--f-ui); }
+/* (rows 14 px apart and chips 6 px apart, so each chip's 44 px tap area below never overlaps a neighbour's) */
+.cap-chips { display: flex; flex-wrap: wrap; gap: 14px 6px; padding: 7px 0; }
+.chip { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border: 1px solid var(--field-border); border-radius: var(--radius-pill); background: none; color: var(--ink);
+  font: 400 var(--text-small)/1.2 var(--f-ui); cursor: pointer; box-sizing: border-box; }
+/* a chip looks 30 px high, and is a 44 px target: its tap area reaches 7 px above and below and 3 px to each side (as ui.css's .crm-chip-on) */
+.chip { position: relative; }
+.chip::after { content: ""; position: absolute; inset: -7px -3px; }
+.chip-static::after { content: none; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip-static { cursor: default; min-height: 24px; }
+.chip-count { margin-left: var(--s-1); color: inherit; opacity: .7; }
+.cap-tag-row { display: flex; gap: var(--s-2); }
+.cap-tag-row input { flex: 1; min-width: 0; }
+.cap-tag-add { display: grid; place-items: center; width: var(--tap); height: var(--tap); flex: none; border: 0; border-radius: 50%; background: none; color: var(--ink); cursor: pointer; }
+.cap-screen input[type="text"], .cap-screen select { min-height: var(--tap); padding: 0 10px; border: 1px solid var(--field-border); border-radius: var(--radius-s);
+  background: var(--panel); color: var(--ink); font: 400 var(--text-body)/1.2 var(--f-ui); box-sizing: border-box; width: 100%; }
+.cap-field { display: grid; gap: 2px; }
+.cap-field-short input { max-width: 8em; }
+.cap-readings { display: grid; gap: var(--s-2); }
+.cap-reading { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: var(--s-2); }
+.cap-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.cap-line .icon { flex: none; color: var(--ink-3); }
+.cap-pos-acts { display: inline-flex; gap: var(--s-3); margin-left: auto; }
+.cap-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--ink-3); flex: none; }
+.cap-pos[data-has="true"] .cap-dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cap-pin-map { height: 220px; border-radius: var(--radius); overflow: hidden; background: var(--fill); }
+.cap-share { display: flex; gap: var(--s-3); align-items: flex-start; min-height: var(--tap); box-sizing: border-box; padding: var(--s-3) 0 0; border-top: 1px solid var(--rule-soft); cursor: pointer; }
+.cap-share b { font-weight: 500; }
+.cap-share input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.cap-share span { display: grid; gap: 2px; }
+.cap-share small, .cap-quiet { color: var(--ink-3); font-size: var(--text-small); margin: 0; }
+.cap-msg { margin: 0; min-height: 1.2em; color: var(--ink); font-size: var(--text-small); }
+.cap-msg:empty { display: none; }
+
+/* after Save: one quiet line that opens it */
+.cap-saved { position: fixed; z-index: 41; left: 50%; bottom: calc(var(--tabbar-h) + 24px); transform: translateX(-50%); max-width: calc(100vw - 32px); }
+@media (max-width: 800px) { .cap-saved { left: 16px; right: 84px; transform: none; max-width: none; } }   /* (clear of the round +) */
+.cap-saved[hidden] { display: none; }
+.cap-saved-link { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); padding: 0 var(--s-4); border-radius: var(--radius-pill); background: var(--ink); color: var(--panel);
+  font-size: var(--text-small); text-decoration: none; box-shadow: var(--shadow-2); }
+.cap-saved-open { text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+
+/* ---- Records ------------------------------------------------------------------------------------------------------------------------ */
+/* a list, not a map: the panel takes the width (as Events and People) */
+#screen-group[data-view="records"] .group-map { display: none; }
+#screen-group[data-view="records"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="records"] .group-panel { padding: 0; border: 0; background: var(--wash); }
+@media (min-width: 801px) {
+  #screen-group[data-view="records"] .group-head.space-head { padding-left: max(var(--s-3), calc((100% - var(--page-max)) / 2)); padding-right: max(var(--s-5), calc((100% - var(--page-max)) / 2 + var(--s-4))); }
+}
+.records { display: grid; align-content: start; gap: var(--s-3); width: 100%; max-width: var(--page-max); margin: 0 auto; padding: var(--s-4) var(--s-4) calc(var(--s-10) + var(--fab-gutter, 0px)); box-sizing: border-box; }
+.rec-head h2 { margin: 0; font: 600 var(--text-heading)/1.2 var(--f-display); }
+.rec-quiet { margin: 2px 0 0; color: var(--ink-3); font-size: var(--text-small); }
+.rec-status:empty, .rec-status[hidden] { display: none; }
+.rec-filters { display: flex; gap: var(--s-2); overflow-x: auto; padding: 8px 4px; }   /* (room for each chip's 44 px tap area inside the scrolling row) */
+.rec-filters[hidden] { display: none; }
+.rec-filters .chip { flex: none; }
+.rec-list { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--rule-soft); border-bottom: 1px solid var(--rule-soft); }
+.rec-list:empty { display: none; }
+.rec-list > li + li { border-top: 1px solid var(--rule-soft); }
+.rec-row { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: var(--s-3); width: 100%; min-height: 64px; padding: var(--s-2) 0; border: 0; background: none;
+  color: var(--ink); text-align: left; font: inherit; cursor: pointer; box-sizing: border-box; }
+li.rec-row { cursor: default; }
+@media (hover: hover) { button.rec-row:hover { background: var(--fill); } }
+.rec-thumb { display: grid; place-items: center; width: 48px; height: 48px; border-radius: var(--radius-s); overflow: hidden; background: var(--fill); color: var(--ink-3); }
+.rec-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rec-thumb-none { display: grid; place-items: center; width: 100%; height: 100%; color: var(--ink-3); }   /* a thumbnail that could not load: a calm placeholder */
+.cap-field-msg { margin: 2px 0 0; color: var(--ink); font-size: var(--text-small); }
+.cap-field-msg:empty { display: none; }
+[aria-invalid="true"] { border-color: var(--ink) !important; box-shadow: inset 0 0 0 1px var(--ink); }
+.rec-text { display: grid; gap: 2px; min-width: 0; }
+.rec-text b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-text small { color: var(--ink-3); font-size: var(--text-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-date { color: var(--ink-3); font-size: var(--text-small); white-space: nowrap; }
+.rec-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.records .rec-acts button.link { min-height: var(--tap); padding: 0 var(--s-1); }   /* (over .group-panel button.link's 32 px) */
+.rec-confirm { color: var(--ink-2); font-size: var(--text-small); }
+.rec-waiting { display: grid; gap: var(--s-2); }
+.rec-waiting[hidden] { display: none; }
+.rec-waiting-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.rec-waiting-head h3 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.rec-send { display: inline-flex; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 0 var(--s-1); border: 0; background: none; color: var(--ink);
+  font: 500 var(--text-small)/1 var(--f-ui); text-decoration: underline; text-decoration-color: var(--field-border); text-underline-offset: 3px; cursor: pointer; }
+.rec-send[disabled] { color: var(--ink-3); text-decoration: none; cursor: default; }
+.rec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
+.rec-photo-box { display: grid; place-items: center; }
+.rec-photo { display: block; max-width: 100%; max-height: 62vh; border-radius: var(--radius); background: var(--fill); }
+.rec-note { margin: 0; font-size: var(--text-body); }
+.rec-facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-4); margin: 0; font-size: var(--text-small); }
+.rec-facts dt { color: var(--ink-3); }
+.rec-facts dd { margin: 0; color: var(--ink); }
+.rec-tags { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+
+/* ---- PH1: a group's Home on a phone: the area on a plain map, Locate me, Near you ---------------------------------------------------
+   After the owner's guide (13 Nov 2026): plain rows of text about 17 px with a small leading icon, no box around each; one thin rounded
+   outline around a set; a heading the same size as the rows in medium weight; generous side margins; ink controls, no accent. */
+@media (max-width: 800px) {
+  #screen-group[data-view="home"]:has(.pa) { position: fixed; inset: var(--demo-banner-height, 0px) 0 var(--tabbar-h) 0; padding: 0; min-height: 0; }
+  #screen-group[data-view="home"]:has(.pa) .group-body { display: flex; flex: 1; min-height: 0; }
+  #screen-group[data-view="home"]:has(.pa) .group-panel { position: relative; flex: 1; min-height: 0; padding: 0; overflow: hidden; }
+}
+.pa { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--wash); }
+.pa-stage { position: relative; flex: 1; min-height: 160px; }
+.pa-map { position: absolute; inset: 0; background: var(--map-background); }
+.pa-stage .wqs-ctrl { display: none; }   /* no layer switching on the phone: a site opens from the list */
+.pa-locate { position: absolute; z-index: 5; top: 12px; right: 12px; display: grid; place-items: center; width: 44px; height: 44px; margin: 0; padding: 0;
+  border: 1px solid var(--rule); border-radius: 50%; background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); cursor: pointer; }
+.pa-locate[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }   /* on, without a second filled control beside the + */
+.pa-locate.pa-busy .icon { animation: pa-pulse 1s ease-in-out infinite; }
+@keyframes pa-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pa-locate.pa-busy .icon { animation: none; opacity: .5; } }
+/* RF1: Aerial | Topo under Locate, in the same top-right cluster (upright, as on Places); each choice 34 px to see, 44 px to tap */
+.pa-bg { position: absolute; z-index: 5; top: 66px; right: 12px; flex-direction: column; width: auto; min-width: 62px; box-sizing: border-box; }   /* (HM1: wider with large text, never "Aeria") */
+.pa-bg[hidden] { display: none; }
+.pa-stage .pa-bg button { position: relative; width: 100% !important; min-height: 34px; padding: 0 6px !important; }
+.pa-stage .pa-bg button::after { content: ""; position: absolute; inset: -5px 0; }
+/* RF2: upright, the two choices are 36 px apart, so a 5 px reach each way left each a 36 px target (the other's reach covered half of
+   it). Each now reaches 10 px outward (Aerial up, Topo down: clear of Locate above) and meets the other in the gap: 45 px each */
+.pa-stage .pa-bg button:first-child::after { inset: -10px 0 -2px; }
+.pa-stage .pa-bg button:last-child::after { inset: -1px 0 -10px; }
+.pa-sheet { flex: none; max-height: 46%; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 24px 16px; background: var(--panel); border-top: 1px solid var(--rule-soft);
+  border-radius: var(--radius-l) var(--radius-l) 0 0; margin-top: -12px; position: relative; z-index: 4; box-sizing: border-box; }
+.pa:has(.wqs-open) .pa-sheet { display: none; }
+/* PH2: Home is only the map; Near you is a small sheet that comes up once Locate me is tapped, with its own close row */
+.pa-sheet[hidden] { display: none; }
+.pa-sheet { max-height: 42%; padding-top: 6px; }
+.pa-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin: 0 -10px 2px 0; }
+.pa-shut { display: grid; place-items: center; width: 44px; height: 44px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink-2); cursor: pointer; }
+.pa-shut:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+/* the sub-groups' names: small, quiet, over the map; the smaller ones wait for room (phone-model keepLabels) */
+.pa-labels { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+/* PH5 (the owner, 14 Nov 2026: the names were large, and the base map's town names showed under them): a small quiet name on an
+   opaque soft pill (nothing of the map shows through it), no shadow, no button look; a tap zooms there (phone-area.js goTo) */
+/* RF1 (the owner's phone, 14 Nov 2026: a narrow sub-group was hidden under its own name): smaller and tighter, the app's smallest type
+   size (13 px: the four-size scale, tokens.css) on a tight line in a tight pill, with the same 44 px tap target round it (an unseen
+   area, not a bigger name) */
+.pa-label { position: absolute; left: 0; top: 0; max-width: 132px; min-height: 18px; padding: 1px 6px; border: 0; border-radius: var(--radius-pill); pointer-events: auto;
+  background: var(--panel); color: var(--ink); font: 500 var(--text-small)/1.1 var(--f-ui); letter-spacing: 0; text-align: center; white-space: normal;
+  box-shadow: 0 0 0 0.5px var(--rule-soft); cursor: pointer; -webkit-tap-highlight-color: var(--clear); box-sizing: border-box; }
+.pa-label::after { content: ""; position: absolute; inset: min(0px, calc((100% - 44px) / 2)) min(-4px, calc((100% - 44px) / 2)); }   /* at least 44 x 44 */
+.pa-label[hidden] { display: none; }
+.pa-label-only { color: var(--ink-2); }   /* a sub-group the person is not in: a tap only zooms to it */
+.pa-label.pa-going { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.pa-label:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* Home's search at the top of the sheet: one quiet field, 44 px; while searching, its results take the sheet (Near you steps aside) */
+.pa-sheet .ph-compact:not([hidden]) { display: block; max-width: none; margin: 0 0 14px; padding: 0; gap: 0; }
+.pa-sheet .ph-compact .ph-search input { min-height: var(--tap); border-radius: var(--radius-l); background: none; box-shadow: inset 0 0 0 1px var(--rule); }
+.pa-sheet .ph-compact .ph-results { margin-top: 12px; }
+.pa-sheet:has(.ph-compact.searching) { max-height: 72%; }
+.pa-sheet:has(.ph-compact.searching) > :not(.ph-compact) { display: none; }   /* a site's panel takes the bottom while it is open */
+.pa-sheet h2 { margin: 0; font: 500 var(--text-body)/1.3 var(--f-ui); letter-spacing: 0; }
+.pa-line { margin: 2px 0 10px; color: var(--ink-3); font-size: var(--text-small); }
+.pa-line:empty { display: none; }
+.pa-say:empty { display: none; }
+.pa-say-text { margin: 0 0 10px; color: var(--ink); font-size: var(--text-body); line-height: 1.4; }
+.pa-set { list-style: none; margin: 0 0 10px; padding: 4px 0; border: 1px solid var(--rule); border-radius: var(--radius-l); }
+.pa-set[hidden] { display: none; }
+.pa-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; margin: 0; padding: 0 16px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; cursor: pointer; box-sizing: border-box; -webkit-tap-highlight-color: var(--clear); }
+@media (hover: hover) { .pa-row:hover { background: var(--fill); } }
+.pa-row:active { background: var(--fill); }
+.pa-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; border-radius: var(--radius-s); }
+.pa-dot { display: grid; place-items: center; width: 24px; height: 24px; flex: none; color: var(--ink-2); }
+/* PH2: a long name wraps to two lines rather than being cut off mid-word */
+.pa-row:has(.pa-name) { padding-top: 8px; padding-bottom: 8px; }
+.pa-name { flex: 1; min-width: 0; white-space: normal; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.pa-line .icon { width: 15px; height: 15px; margin: 0 3px; vertical-align: -3px; }
+.pa-far { flex: none; color: var(--ink-3); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.pa-quiet { margin: 16px; color: var(--ink-3); font-size: var(--text-small); }
+
+/* ---- HM1: Home's sheet (the owner, 14 Nov 2026: option A, "the map with a peek") -------------------------------------------------
+   A thin sheet over the bottom of the map, just above the bar: a handle and ONE line; pulled half way, the search, one quiet line of
+   facts, the rows of what is new or next, and the sub-groups. Plain rows (PH4's pattern): one thin outline round a set, hairlines between,
+   no pill round each. Opaque, so nothing of the map shows or is tapped through it; the map's credit and the + ride above it. */
+.pa-peek { position: absolute; z-index: 6; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; max-height: calc(100% - 8px); box-sizing: border-box;
+  padding: 0 0 6px; background: var(--panel); border-top: 1px solid var(--rule-soft); border-radius: var(--radius-l) var(--radius-l) 0 0;
+  box-shadow: var(--shadow-2); }
+.pa-peek[hidden], .pa:has(.wqs-open) .pa-peek { display: none; }
+.pa-peek.pa-moving { transition: height .24s var(--ease, ease); }
+@media (prefers-reduced-motion: reduce) { .pa-peek.pa-moving { transition: none; } }
+.pa-stage .maplibregl-ctrl-bottom-left { bottom: var(--pa-peek-h, 0px); }   /* the map's credit ("i") above the sheet */
+/* the handle: the whole width, 28 px, with 16 px more reach above the sheet's edge (a 44 px target) */
+.pa-grip { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 100%; height: 28px; margin: 0; padding: 0; border: 0;
+  background: none; cursor: grab; touch-action: none; -webkit-tap-highlight-color: var(--clear); }
+.pa-grip::after { content: ""; position: absolute; top: -16px; right: 0; bottom: 0; left: 0; }
+.pa-grip-bar { width: 36px; height: 4px; border-radius: 2px; background: var(--rule); }
+.pa-grip:focus-visible { outline: none; }
+.pa-grip:focus-visible .pa-grip-bar { background: var(--ink); box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--ink); }
+.pa-peek-line { flex: none; min-height: 52px; touch-action: none; }
+.pa-peek-line[hidden] { display: none; }
+.pa-peek-row { list-style: none; margin: 0; padding: 0; }
+.pa-peek .pa-row { gap: 12px; padding: 6px 20px; }
+.pa-peek-line .pa-row { min-height: 52px; }
+.pa-peek-line .pa-text b { -webkit-line-clamp: 1; }   /* ONE line, closed */
+.pa-row-plain { margin: 0; cursor: default; }
+.pa-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pa-text b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.pa-text small { color: var(--ink-3); font-size: var(--text-small); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pa-chev { flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.pa-peek-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 6px 16px 12px; }   /* (room for the search box's focus ring) */
+/* while searching (the phone's keyboard up), the sheet takes the map's height, so the results have room; Locate and Aerial | Topo step aside */
+.pa-peek[data-state="half"]:not(.pa-dragging, .pa-held):has(.ph-compact.searching) { height: calc(100% - 8px) !important; }   /* (a drag still follows the finger) */
+.pa:has(.pa-peek[data-state="half"]:not(.pa-held) .ph-compact.searching) :is(.pa-locate, .pa-bg, .pa-labels, .maplibregl-ctrl-bottom-left) { visibility: hidden; }
+/* RF2: let go at half while searching, the sheet stays at half (phone-area.js pa-held) and the map's controls come back above it */
+.pa-peek-body[hidden] { display: none; }
+.pa-peek .ph-compact:not([hidden]) { display: block; max-width: none; margin: 0 0 10px; padding: 0; gap: 0; }
+.pa-peek .ph-compact .ph-search input { min-height: var(--tap); border-radius: var(--radius-l); background: none; box-shadow: inset 0 0 0 1px var(--rule); }
+.pa-peek .ph-compact .ph-results { margin-top: 10px; }
+.pa-peek:has(.ph-compact.searching) :is(.pa-facts, .pa-next, .pa-empty, .pa-subs, .pa-mapset) { display: none; }   /* while searching, the results take the sheet */
+.pa-facts { margin: 0 4px 10px; color: var(--ink-3); font-size: var(--text-small); }
+.pa-empty { margin: 2px 4px 12px; color: var(--ink-2); font-size: var(--text-body); line-height: 1.4; }
+.pa-peek .pa-set { margin: 0 0 12px; padding: 0; overflow: hidden; }
+.pa-peek .pa-set li { list-style: none; }
+.pa-peek .pa-set li + li { border-top: 1px solid var(--rule-soft); }
+.pa-peek .pa-set .pa-row { padding: 6px 14px; }
+.pa-subs h3 { margin: 0; padding: 10px 14px 4px; color: var(--ink-2); font: 600 var(--text-small)/1.3 var(--f-ui); letter-spacing: 0; }
+.pa-subs-list { margin: 0; padding: 0; }
+.pa-subs .pa-name { -webkit-line-clamp: 2; }
+.pa-swatch { display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-3); box-shadow: inset 0 0 0 1px var(--rule-soft); }
+.pa-sub-only .pa-name { color: var(--ink-3); }
+/* MV2: the sheet's Map switches, in the Maps tab's order and words (the map's layers, then Reference), each row a 44 px target; the
+   switch drawn as the panels' own (ov-switch); the sub-groups' names go with their fills when Sub-groups is off */
+.pa-mapset { margin: 0 0 12px; padding: 4px 14px 6px; border: 1px solid var(--rule); border-radius: var(--radius-l); }
+.pa-mapset h3 { margin: 0; padding: 6px 0 2px; color: var(--ink-2); font: 600 var(--text-small)/1.3 var(--f-ui); letter-spacing: 0; }
+.pa-mref { margin: 6px 0 0; color: var(--ink-3); font-size: var(--text-small); font-weight: 600; }
+.pa-switch-row { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); font-size: var(--text-body); cursor: pointer; }
+.pa-switch { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 36px; height: 22px; margin: 0; border-radius: 11px; background: var(--rule); cursor: pointer; transition: background .15s; }
+.pa-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--raised); box-shadow: var(--shadow-1); transition: transform .15s; }
+.pa-switch:checked { background: var(--ink); }
+.pa-switch:checked::after { transform: translateX(14px); }
+.pa-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .pa-switch, .pa-switch::after { transition: none; } }
+.pa-mkey { margin: -6px 0 4px 48px; color: var(--ink-2); font-size: var(--text-small); }
+.pa-subs-off .pa-labels { display: none; }
+
+/* ---- PH1: the quick photo (+ then Take a photo) ------------------------------------------------------------------------------------- */
+.qp .qp-body { gap: var(--s-4); padding: var(--s-5) 24px var(--s-6); }
+.qp-quiet { margin: 0; color: var(--ink-3); font-size: var(--text-body); }
+.qp-say { margin: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.45; }
+/* PH2: where this phone turns location on, step by step, in the quiet style under the sentence */
+.qp-help { margin: -4px 0 0; padding: 0 0 0 1.3em; color: var(--ink-2); font-size: var(--text-small); line-height: 1.45; }
+.qp-help li + li { margin-top: 6px; }
+.qp-set { margin: 0; padding: 4px 0; border: 1px solid var(--rule); border-radius: var(--radius-l); }
+.qp-row { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 44px; margin: 0; padding: 0 16px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; cursor: pointer; box-sizing: border-box; }
+.qp-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; border-radius: var(--radius-s); }
+.qp-dot { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; color: var(--ink); }
+.qp-primary { font-weight: 500; }
+.qp-primary .qp-dot { background: var(--ink); color: var(--panel); }
+.qp-photo { display: grid; justify-items: center; gap: 2px; }
+.qp-img { max-height: 46vh; }
+/* the tags: small quiet chips in one line, scrolling sideways when there are more (each chip's 44 px tap area inside the row) */
+.qp-tags { display: flex; gap: 6px; overflow-x: auto; padding: 7px 3px; margin: 0 -3px; scrollbar-width: none; }
+.qp-tags::-webkit-scrollbar { display: none; }
+.qp-tags .chip { flex: none; }
+.qp-tags .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.qp-note { min-height: var(--tap); padding: 0 2px; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); width: 100%; box-sizing: border-box; }
+.qp input.qp-note { border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: none; padding: 0 2px; }
+.qp-note:focus { outline: none; border-bottom-color: var(--ink); }
+.qp-foot[hidden] { display: none; }
+
+/* ---- PH4: the capture screens in the form pattern (ui.css "PH4"; js/form-rows.js) ---------------------------------------------------- */
+/* the photo fills the top; "Take it again" sits on it, small */
+.fs .qp-photo { position: relative; display: block; }
+.fs .qp-img, .fs .cap-img { display: block; width: 100%; height: auto; max-height: 52vh; object-fit: cover; border-radius: var(--radius-l); background: var(--fill); }
+.fs .cap-photo[hidden] { display: none; }
+.qp-again { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; margin: 0; padding: 0 12px; border: 0; border-radius: var(--radius-pill);
+  background: var(--material); color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui); box-shadow: var(--shadow-1); cursor: pointer; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.qp-again::after { content: ""; position: absolute; inset: -5px -2px; }   /* a 44 px target */
+.qp-again:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.fs .qp-where { margin: -8px var(--s-1) 0; }
+.fs.qp .qp-body { gap: var(--s-5); padding: var(--s-4) var(--s-4) var(--s-8); }
+/* a photo added to a sample or pest control: small, at the end of its row */
+.fs .cap-row-thumb { flex: none; width: 36px; height: 36px; border-radius: var(--radius-s); object-fit: cover; background: var(--fill); }
+.fs .cap-row-thumb[hidden] { display: none; }
+.fs .cap-pin-map { height: 240px; border-radius: var(--radius-l); }
+.fs .cap-pin-map[hidden] { display: none; }
+.fs .cap-msg { min-height: 0; }
+
+/* ---- PH4: a saved record's page ------------------------------------------------------------------------------------------------------ */
+.rec-viewer .rec-photo-box { display: block; }
+.rec-viewer .rec-photo { display: block; width: 100%; height: auto; max-height: 56vh; object-fit: cover; border-radius: var(--radius-l); }
+.rec-viewer .rec-summary { margin: 0; font: 500 var(--text-body)/1.4 var(--f-ui); color: var(--ink); }
+.rec-viewer .rec-note { margin: -8px 0 0; font: 400 var(--text-body)/1.45 var(--f-ui); color: var(--ink); white-space: pre-wrap; }
+.rec-viewer .rec-value { min-width: 0; color: var(--ink); overflow-wrap: anywhere; padding: 12px 0; }
+.rec-viewer .fs-row { min-height: 44px; }
+.rec-viewer .rec-where .fs-chosen { white-space: normal; padding: 12px 0; }
+.rec-viewer .rec-where { display: grid; grid-template-columns: minmax(5.5rem, 34%) minmax(0, 1fr) auto; }
+.rec-viewer .rec-coords { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s-3); padding: 0 var(--s-4) 10px 0; color: var(--ink-2); font-size: var(--text-small); }
+.rec-viewer .rec-coords[hidden] { display: none; }
+.rec-viewer .rec-coords code { font: 400 var(--text-small)/1.4 var(--f-mono); color: var(--ink); user-select: all; -webkit-user-select: all; }
+.rec-viewer .rec-copy { position: relative; min-height: 32px; padding: 0 var(--s-2); border: 0; border-radius: var(--radius-s); background: none; color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); cursor: pointer; }
+.rec-viewer .rec-copy::after { content: ""; position: absolute; inset: -6px 0; }
+.rec-viewer .rec-seen { margin: -8px var(--s-1) 0; color: var(--ink-3); font-size: var(--text-small); }
+.rec-viewer .rec-say { margin: 0; color: var(--ink); font-size: var(--text-small); }
+.rec-viewer .rec-say:empty { display: none; }
+
+/* ---- SH1: photos you already have: the review screen ----------------------------------------------------------------------------------- */
+/* the photos as one outlined list: a thumbnail, the date found, the place found; a tap opens that photo's own choices under it */
+.lib .lib-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-radius: var(--radius-l); background: var(--panel); min-width: 0; }   /* (no overflow: hidden: in the sheet's grid it would let the list shrink under its rows) */
+.lib .lib-list:empty { display: none; }
+.lib .lib-item + .lib-item { border-top: 1px solid var(--rule-soft); }
+.lib .lib-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 72px; margin: 0; padding: 10px var(--s-3) 10px 10px; border: 0; background: none; color: var(--ink);
+  font: 400 var(--text-body)/1.3 var(--f-ui); text-align: left; box-sizing: border-box; -webkit-tap-highlight-color: var(--clear); }
+.lib button.lib-row { cursor: pointer; }
+.lib button.lib-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; border-radius: var(--radius); }
+@media (hover: hover) { .lib button.lib-row:hover { background: var(--fill); } }
+.lib .lib-thumb { flex: none; width: 52px; height: 52px; border-radius: var(--radius-s); object-fit: cover; background: var(--fill); }
+.lib .lib-thumb-none { display: grid; place-items: center; color: var(--ink-3); }
+.lib .lib-words { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.lib .lib-date { font-weight: 500; overflow-wrap: anywhere; }
+.lib .lib-line { color: var(--ink-2); font-size: var(--text-small); line-height: 1.35; overflow-wrap: anywhere; }
+.lib .lib-place[data-place="none"] { color: var(--ink-3); }
+.lib .lib-flag, .lib .lib-problem, .lib .lib-state[data-state="failed"], .lib .lib-state[data-state="notkept"] { color: var(--ink); font-weight: 500; }
+.lib .lib-item[data-state="dup"] .lib-thumb, .lib .lib-item[data-state="out"] .lib-thumb, .lib .lib-item[data-state="unreadable"] .lib-thumb { opacity: .45; }
+.lib .lib-row .fs-chev { flex: none; color: var(--ink-3); }
+.lib .lib-edit { display: grid; gap: var(--s-3); padding: 0 var(--s-3) var(--s-3); }
+.lib .lib-edit .cap-pin-map { height: 220px; border-radius: var(--radius); overflow: hidden; background: var(--fill); }
+.lib .lib-again { display: block; min-height: var(--tap); margin: -4px 0 var(--s-2) calc(52px + 10px + var(--s-3)); padding: 0 var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-pill);
+  background: var(--panel); color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; }
+.lib .lib-status:empty, .lib .lib-noplace[hidden], .lib .lib-all[hidden] { display: none; }
+.lib .lib-status { margin: 0 var(--s-1); }
+.lib .lib-noplace { margin: -8px var(--s-1) 0; }
+.lib .lib-all { display: grid; gap: var(--s-3); min-width: 0; }
+.lib .lib-all-head { margin: 0 var(--s-1); color: var(--ink-3); font: 500 var(--text-small)/1.3 var(--f-ui); }
+/* SH1b: the Tag and Note for all sit above the list (twenty photos never push them out of reach); the list has its own small head */
+.lib .lib-photos-head { margin-bottom: calc(-1 * var(--s-2)); }
+/* SH1b: photos shared before this person signed in: one quiet line and a plain way to discard them (Add stays the one filled button) */
+.lib-before-box { display: grid; gap: var(--s-2); justify-items: start; min-width: 0; }
+.lib-before { margin: 0 var(--s-1); color: var(--ink); overflow-wrap: anywhere; }
+.lib-discard { min-height: var(--tap); margin: 0; padding: 0 var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--panel); color: var(--ink);
+  font: 500 var(--text-small)/1.2 var(--f-ui); cursor: pointer; max-width: 100%; }
+.lib-which-sheet .lib-before-box { flex: none; margin: 0 var(--s-4) var(--s-3); }
+.lib-which-sheet .lib-before { margin: 0; }
+@media (hover: hover) { .lib-discard:hover { background: var(--fill); } }

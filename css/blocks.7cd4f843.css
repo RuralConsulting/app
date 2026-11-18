@@ -1,0 +1,461 @@
+.answer-panel { background: var(--panel); color: var(--ink); padding: 20px; border: 1px solid var(--rule); border-radius: 10px; }
+.answer-panel > :is(h1, h2, h3, h4, h5) { margin: 0 0 12px; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.answer-panel > :is(h1, h2, h3, h4, h5) a { text-decoration: none; }
+.answer-sentence { font: 400 var(--text-title)/1.25 var(--f-display); margin: 0 0 14px; }
+.answer-currency { font-size: var(--text-small); color: var(--ink-2); margin-top: 14px; }
+.answer-highlights { list-style: none; margin: 12px 0; padding: 0; }
+.answer-highlights li { padding: 10px 0; border-top: 1px solid var(--rule); }
+.answer-panel a { color: inherit; text-underline-offset: 2px; }
+.answer-reason { color: var(--ink-2); }
+.answer-all { border-top: 1px solid var(--rule); padding-top: 12px; margin-bottom: 12px; }
+.answer-all summary { cursor: pointer; font-weight: 600; }
+.answer-all ul { padding-left: 20px; }.answer-all li { padding: 8px 0; scroll-margin-top: 20px; overflow-wrap: anywhere; }
+.record-detail { font-size: var(--text-small); color: var(--ink-2); margin: 4px 0; }
+.answer-compact { padding: 16px; }
+.answer-compact > :is(h1, h2, h3, h4, h5) { font-size: var(--text-body); margin-bottom: 8px; }.answer-compact .answer-sentence { font-size: var(--text-heading); margin-bottom: 8px; }
+.answer-compact .answer-currency { font-size: var(--text-small); margin-top: 8px; }
+.answer-all-link { font-size: var(--text-small); }.selected-record { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+.answer-compact .answer-highlights { margin: 8px 0; font-size: var(--text-small); }
+.answer-compact .answer-highlights li { padding: 8px 0; }
+/* Phone: a plain promoted list shows its first line; What's due's lines (the Checklist) all show, each with its Done (#257):
+   the headline counts them, so the sheet shows them (the rest are behind "and N more"). */
+@media (max-width: 800px) {
+  .answer-compact ul.answer-highlights > li:not(:first-child) { display: none; }
+}
+/* What's due's quiet folds under its lines: the practice to keep up, and what the FEP must contain. */
+.answer-fold { border-top: 1px solid var(--rule); padding: 10px 0; }
+.answer-fold > summary { cursor: pointer; font-weight: 600; min-height: 28px; display: flex; align-items: center; list-style: none; position: relative; padding-left: 16px; }
+.answer-fold > summary::-webkit-details-marker { display: none; }
+.answer-fold > summary::before { content: ""; position: absolute; left: 2px; top: calc(50% - 4px); border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.answer-fold[open] > summary::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.answer-compact .answer-fold > summary { font-size: var(--text-small); }
+.answer-fold .checklist-list { margin-top: 6px; }
+.answer-lines { margin: 8px 0; }
+.answer-lines .checklist-item:first-child { border-top: 1px solid var(--rule); }
+
+.answer-panel { border-radius: var(--radius); }
+.answer-sentence { overflow-wrap: anywhere; }
+
+/* The block contract's own states (js/blocks/registry.js): empty is designed, loading is quiet, never a blank. */
+.block-empty { background: var(--panel); color: var(--ink); padding: 20px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.block-empty .block-title { margin: 0 0 8px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.block-empty p { margin: 0; font: 400 var(--text-heading)/1.3 var(--f-display); }
+.block-loading { display: flex; gap: 6px; justify-content: center; padding: 28px 0; }
+.block-loading i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); animation: block-pulse 1.2s ease-in-out infinite; }
+.block-loading i:nth-child(3) { animation-delay: .15s; }.block-loading i:nth-child(4) { animation-delay: .3s; }
+@keyframes block-pulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .block-loading i { animation: none; opacity: .6; } }
+
+/* Map scene: its own frame when it has no live surface to draw on. */
+.map-scene-canvas { position: relative; width: 100%; height: 100%; min-height: 280px; border-radius: var(--radius); overflow: hidden; background: var(--map-background); }
+/* TIM1 (#410): the farm's boundary drawn over the canvas the moment farm_map is back, until the map paints its own line */
+.map-sketch { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: visible; }
+.map-sketch path { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; }
+.map-scene-empty { display: grid; place-items: center; min-height: 280px; border-radius: var(--radius); background: var(--map-background); }
+.map-scene-note { margin: 0; padding: 10px 16px; border-radius: 999px; background: var(--panel); color: var(--ink); box-shadow: var(--shadow); font-size: var(--text-small); }
+
+/* List: stacked cards in a narrow host, a table with real headers in a wide one. The block's own width decides. */
+.list-block { container-type: inline-size; color: var(--ink); }
+.list-block > .block-title { margin: 0 0 12px; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.list-group + .list-group, .list-group + .list-collapsed, .list-collapsed + .list-group { margin-top: 18px; }
+/* Supporting rows are folded: one line each for the group and for a run of the same kind. */
+.list-fold, .list-collapsed { border-top: 1px solid var(--rule); padding: 10px 0; }
+.list-fold > summary, .list-collapsed > summary { cursor: pointer; font-weight: 600; }
+.list-collapsed > summary { font: 600 var(--text-body)/1.3 var(--f-head); }
+.list-fold > :is(.list-cards, .list-table-wrap), .list-collapsed > :is(.list-cards, .list-table-wrap, .list-fold) { margin-top: 10px; }
+.list-collapsed > .list-fold:first-of-type { border-top: 0; }
+.list-group > :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 8px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.list-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.list-card { border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); padding: 12px; overflow-wrap: anywhere; }
+.list-card-title { margin: 0 0 6px; font-weight: 600; }
+.list-card dl { margin: 0; }
+.list-card dl div { display: grid; grid-template-columns: 100px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--rule); }
+.list-card dt { color: var(--ink-2); font-size: var(--text-small); }.list-card dd { margin: 0; font-size: var(--text-small); }
+.list-block button { font: inherit; min-height: 36px; border: 1px solid var(--rule); border-radius: 6px; background: var(--wash); color: var(--ink); padding: 6px 12px; }
+.list-card > button { margin-top: 10px; }
+.list-dense .list-cards { gap: 6px; }.list-dense .list-card { padding: 8px 10px; }.list-dense .list-card dl div { padding: 3px 0; }
+.list-table-wrap { display: none; }
+.list-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.list-table :is(th, td) { padding: 10px 12px 10px 0; text-align: left; vertical-align: top; overflow-wrap: anywhere; border-top: 1px solid var(--rule); }
+.list-table thead th { border-top: 0; border-bottom: 1px solid var(--ink-3); color: var(--ink-2); font: 600 var(--text-small)/1.3 var(--f-ui); }
+.list-table tbody th { font-weight: 600; width: 34%; }
+.list-table td { font-size: var(--text-small); }
+.list-table .list-number { text-align: right; font-variant-numeric: tabular-nums; width: 64px; }.list-table .list-act { width: 84px; text-align: right; padding-right: 0; }
+.list-dense .list-table :is(th, td) { padding-top: 5px; padding-bottom: 5px; }
+.list-more { margin: 12px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+/* Provenance (PROV1): the reference source behind a list or chart, one quiet line each */
+.prov-line { margin: 6px 0; font: 400 var(--text-small)/1.4 var(--f-ui); color: var(--ink-3); }
+@container (min-width: 560px) {
+  .list-cards { display: none; }
+  .list-table-wrap { display: block; }
+}
+
+/* Timeline: records in time order, a rule down the side and a dot for each. */
+.timeline-block > .block-title { margin: 0 0 12px; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.timeline-group + .timeline-group { margin-top: 18px; }
+.timeline-group > :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 8px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.timeline-list { list-style: none; margin: 0 0 0 4px; padding: 0; border-left: 1px solid var(--rule); }
+.timeline-item { position: relative; padding: 0 0 14px 16px; overflow-wrap: anywhere; scroll-margin-top: 20px; }
+.timeline-item:last-child { padding-bottom: 2px; }
+.timeline-item::before { content: ""; position: absolute; left: -4px; top: .5em; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); }
+.timeline-when { display: block; color: var(--ink-2); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.timeline-sentence { margin: 0; }
+.timeline-sentence a { color: inherit; text-underline-offset: 2px; }
+.timeline-source { margin: 2px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+
+/* Inside an Answer's All, the plain-list rules above must not reach into a block's own lists. */
+.answer-all .list-cards { padding-left: 0; }
+.answer-all .list-card { padding: 12px; }
+.answer-all .list-dense .list-card { padding: 8px 10px; }
+.answer-all .timeline-item { padding: 0 0 14px 16px; }
+.answer-all .timeline-item:last-child { padding-bottom: 2px; }
+
+/* Documents: the main documents as plain rows, their supporting ones folded under each, a quiet search, and the
+   editor's drop-zone and one-step confirm. Status is carried by words and position, never colour. */
+.documents-block { background: var(--panel); color: var(--ink); padding: 8px 20px 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.documents-block > .block-title:not(.visually-hidden) { margin: 12px 0 4px; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.doc-list { list-style: none; margin: 0; padding: 0; }
+.doc { padding: 12px 0; border-top: 1px solid var(--rule); scroll-margin-top: 20px; overflow-wrap: anywhere; }
+.doc-main > .doc:first-child { border-top: 0; }
+.doc-head { display: flex; align-items: flex-start; gap: 8px; }
+.doc-title { flex: 1; margin: 0; font-weight: 600; line-height: 1.3; }
+.doc-open { all: unset; cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.doc-open:hover { text-decoration-color: currentColor; }
+.doc-open:focus-visible, .doc-move:focus-visible, .doc-fold > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+.doc-download { flex: none; min-height: 32px; margin: -6px 0 0 auto; padding: 0 8px; border: 0; background: none; color: var(--ink-2); cursor: pointer; font-size: var(--text-small); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.doc-download:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+.doc-source { margin: 3px 0 0; color: var(--ink-2); font-size: var(--text-small); line-height: 1.35; }
+.doc-move { flex: none; min-width: 44px; min-height: 32px; margin: -6px -10px 0 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; font-size: var(--text-small); letter-spacing: 1px; }
+.doc-fold { margin-top: 8px; }
+.doc-fold > summary { cursor: pointer; padding: 6px 0; color: var(--ink-2); font-size: var(--text-small); list-style-position: outside; margin-left: 16px; }
+.doc-fold > summary span { color: var(--ink); font-weight: 600; }
+.doc-fold > summary small { display: block; font-size: var(--text-small); color: var(--ink-3); }
+.doc-sub { margin-left: 2px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.doc-sub .doc { padding: 9px 0; }
+.doc-sub > .doc:first-child, .doc-run .doc-list > .doc:first-child { border-top: 0; }
+.doc-sub .doc-title { font-weight: 500; }
+.doc-run > details > summary { cursor: pointer; padding: 9px 0; font-size: var(--text-small); border-top: 1px solid var(--rule); margin-left: 16px; }
+.doc-loose, .doc-more, .doc-replaced, .doc-archive { border-top: 1px solid var(--rule); margin-top: 0; padding-top: 6px; }
+.doc-menu { list-style: none; margin: 8px 0 0; padding: 4px; border: 1px solid var(--rule); border-radius: 8px; background: var(--wash); }
+.doc-menu button { display: block; width: 100%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 6px; background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.doc-menu button:hover { background: var(--panel); }
+.doc-menu button[aria-current="true"] { font-weight: 600; }
+.doc-menu button[aria-current="true"]::after { content: " ✓"; }
+/* RF2: what the menu's choices are about, a quiet line over them; every choice a 44 px row */
+.doc-menu-head { padding: 8px 10px 2px; color: var(--ink-3); font-size: var(--text-small); }
+.doc-menu button { min-height: 44px; }
+.doc-search { margin-top: 10px; }
+.doc-search-label { display: block; margin-bottom: 4px; font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink-2); }
+.doc-search input { width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--wash); color: var(--ink); font: inherit; }
+.doc-search input::placeholder { color: var(--ink-3); }
+.doc-results .doc:first-child { border-top: 0; }
+.doc-none, .doc-msg, .doc-notice, .doc-offer, .doc-detected, .doc-plan-note { margin: 8px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.doc-plan-note[hidden] { display: none; }
+.doc-read-in { display: block; width: fit-content; min-height: 44px; padding: 0; border: 0; background: none; font: inherit; line-height: 44px; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.doc-read-in:disabled { color: var(--ink-3); cursor: default; }
+.doc-read-in:focus-visible, .doc-queue:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+.doc-queue { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.doc-requested { margin: 2px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.doc-add { margin-top: 12px; }
+.doc-drop { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px; border: 1px dashed var(--rule); border-radius: 8px; color: var(--ink-2); cursor: pointer; }
+.doc-drop:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.doc-drop span { font-weight: 600; }
+.doc-drop-over { border-style: solid; border-color: var(--brand); color: var(--ink); background: var(--wash); }
+.doc-drop[hidden] { display: none; }
+.doc-confirm-form { display: grid; gap: 12px; }
+.doc-item { margin: 0; padding: 10px 12px 12px; border: 1px solid var(--rule); border-radius: 8px; display: grid; gap: 8px; min-width: 0; }
+.doc-item legend { padding: 0 4px; font-size: var(--text-small); color: var(--ink-2); overflow-wrap: anywhere; }
+.doc-field { display: grid; gap: 3px; font-size: var(--text-small); color: var(--ink-2); }
+.doc-field[hidden] { display: none; }
+.doc-field :is(input, select) { min-height: 40px; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--wash); color: var(--ink); font: inherit; font-size: var(--text-body); min-width: 0; }
+.doc-tiers { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.doc-tiers label { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; }
+.doc-tiers input { accent-color: var(--brand); }
+.doc-actions { display: flex; align-items: center; gap: 16px; }
+.doc-actions button[type="submit"] { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 8px; background: var(--primary); color: var(--primary-ink); font-weight: 600; cursor: pointer; font-size: var(--text-body); }
+.doc-actions button[type="submit"]:disabled { opacity: .6; cursor: progress; }
+/* The Documents view: its sentence, then the block, as two panels with the standing answers' gap. */
+.documents-view { display: grid; gap: 10px; }
+
+/* PH3: Files as a file explorer (documents.js, option explorer): a search field, then folders (a folder icon, the name, the count), or
+   one folder's files (a type icon, the name, one quiet line, one quiet control) under a way back up. Plain rows with hairlines in one
+   outline, no box around each; ink for controls, no accent colour. Every control is a 44 px target. Selectors carry .fx so they are
+   stronger than the older Files rules in ui.css (which loads last). */
+.documents-block.fx { padding: 0; border: 0; background: none; }
+.documents-block.fx > .doc-notice, .documents-block.fx > .doc-offer { margin: 0 0 var(--s-3); }
+.fx-bar { margin: 0 0 var(--s-3); }
+.fx-search { position: relative; display: block; }
+.fx-search > svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.documents-block.fx .fx-search input { width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 12px 8px 38px; border: 1px solid var(--field-border, var(--rule)); border-radius: var(--radius-s, 8px);
+  background: var(--panel); color: var(--ink); font: inherit; }
+.documents-block.fx .fx-search input::placeholder { color: var(--ink-3); }
+.fx-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.fx-list > li + li { border-top: 1px solid var(--rule-soft, var(--rule)); }
+.fx-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 4px 6px 14px; box-sizing: border-box; }
+.documents-block.fx button.fx-folder { width: 100%; padding-right: 16px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.documents-block.fx button.fx-folder:hover, .fx-file:has(.fx-name:hover) .fx-row { background: var(--fill); }
+.fx-icon { flex: none; display: grid; place-items: center; width: 24px; color: var(--ink-2); }
+.fx-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.documents-block.fx .fx-name { all: unset; color: var(--ink); font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; cursor: default;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.documents-block.fx button.fx-name { cursor: pointer; }
+.documents-block.fx button.fx-name:hover { text-decoration: none; }
+/* the name's button covers the row, so the whole row opens the file; the control at the right sits above it */
+.documents-block.fx button.fx-name::after { content: ""; position: absolute; inset: 0; }
+.documents-block.fx button.fx-name:focus-visible { outline: none; }
+.documents-block.fx button.fx-name:focus-visible::after { outline: 2px solid var(--focus, var(--ink)); outline-offset: -2px; border-radius: var(--radius-s, 6px); }
+.fx-line { color: var(--ink-3); font-size: var(--text-small); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fx-old .fx-name { color: var(--ink-2); }
+.fx-count { flex: none; color: var(--ink-3); font-size: var(--text-small); }
+.documents-block.fx :is(.fx-more, .fx-get) { position: relative; z-index: 1; flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: 0; padding: 0; border: 0; border-radius: 50%;
+  background: none; color: var(--ink-2); font-size: inherit; cursor: pointer; }
+.documents-block.fx :is(.fx-more, .fx-get):hover, .documents-block.fx .fx-more[aria-expanded="true"] { background: var(--fill); color: var(--ink); }
+.fx-file .doc-requested { margin: -4px 0 8px 50px; }
+.fx-crumbs { display: flex; align-items: center; gap: 6px; min-height: 44px; margin: 0 0 var(--s-2); }
+.documents-block.fx .fx-up { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin-left: -6px; padding: 0 6px 0 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.documents-block.fx .fx-up:hover { color: var(--ink); }
+.fx-sep { color: var(--ink-3); }
+.documents-block.fx .fx-here.fx-total { font: 500 var(--text-small)/1.3 var(--f-ui); color: var(--ink-3); }
+.documents-block.fx .fx-here { flex: 1; min-width: 0; margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); color: var(--ink); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.documents-block.fx .fx-sort { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-left: auto; padding: 0 2px 0 8px; border: 0; background: none; color: var(--ink-2);
+  font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; white-space: nowrap; }
+.documents-block.fx .fx-sort:hover { color: var(--ink); }
+.fx-none { margin: var(--s-2) 0; color: var(--ink-2); }
+.fx-found { margin-top: var(--s-2); }
+.documents-block.fx .fx-menu { margin: 0 8px 8px 50px; }
+.documents-block.fx .fx-menu button { min-height: 44px; }
+.documents-block.fx .doc-msg { margin: 0 14px 8px 50px; }
+.documents-block.fx .doc-add { margin-top: var(--s-4); }
+/* FL1: a folder row ends in a chevron; "New folder" is a quiet last row (ink-2, no fill); a folder's name is one plain line with its two
+   words (Make or Rename, Cancel). Rows keep the shared .fx-row shape. */
+.fx-chevron { flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.documents-block.fx .fx-count.fx-count-none { padding: 0; background: none; }   /* an empty folder: no count, said only to a screen reader (no empty pill from DN1's rows) */
+.documents-block.fx button.fx-new { width: 100%; padding-right: 16px; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: left; cursor: pointer; }
+.documents-block.fx button.fx-new .fx-name { color: inherit; font-weight: 400; }
+.documents-block.fx button.fx-new:hover { background: var(--fill); color: var(--ink); }
+.fx-name-form { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 8px 6px 14px; }
+.fx-name-field { flex: 1 1 6rem; min-width: 0; }
+.documents-block.fx .fx-name-form input { width: 100%; box-sizing: border-box; min-height: 44px; }
+.documents-block.fx .fx-name-form button { min-height: 44px; padding: 0 10px; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; }
+.documents-block.fx .fx-name-form .fx-name-cancel { color: var(--ink-2); font-weight: 400; }
+.documents-block.fx .fx-name-form .doc-msg { flex-basis: 100%; margin: 0; }
+.documents-block.fx .fx-crumbs .fx-folder-more { margin-left: auto; }
+.documents-block.fx .fx-sort + .fx-folder-more { margin-left: 0; }
+.fx-crumbs + .fx-name-form { margin: 0 0 var(--s-2); border: 1px solid var(--rule); border-radius: var(--radius); }
+.documents-block.fx .fx-menu li:has(> .fx-name-form) .fx-name-form { padding-left: 0; }
+@media (max-width: 760px) {
+  /* a phone: the round + adds a file (it hands the files to this input), so the drop-zone is kept for it but not drawn; the list ends
+     clear of the + */
+  .documents-block.fx .doc-drop { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
+  .documents-block.fx { padding-bottom: 72px; }
+  /* a farm's Files on a phone: the explorer under the plain heading "Files" (the sentence, and the panel around it, are for a computer) */
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel { padding: 0; border: 0; background: none; box-shadow: none; }
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel > :not(h2) { display: none; }
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel > h2 { margin: 6px 0 0; font: 700 var(--text-heading)/1.2 var(--f-head); }
+  .documents-view:has(> .documents-host .fx) > .block-host:first-child .answer-panel > h2 a { color: inherit; text-decoration: none; }
+}
+
+/* Chart block (B8): hand-drawn SVG. Series are told apart by line style and marker shape as well as colour; a censored result is
+   an open triangle and the line into it is dotted, so it is never read as an exact value. Band ranges are shaded by the data given. */
+.chart-block { background: var(--panel); color: var(--ink); padding: 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.chart-block > :is(h1, h2, h3, h4, h5) { margin: 0 0 8px; font: 600 var(--text-body)/1.25 var(--f-head); overflow-wrap: anywhere; }
+.chart-provisional { display: inline-block; margin-left: 6px; padding: 0 8px; border: 1px solid var(--ink-2); border-radius: 999px; font: 600 var(--text-small)/1.5 var(--f-ui); color: var(--ink-2); white-space: nowrap; vertical-align: 1px; }
+.chart-summary, .chart-assess, .chart-attribution { margin: 8px 0; font: 400 var(--text-small)/1.4 var(--f-ui); color: var(--ink-2); }
+.chart-demo { font-weight: 600; }
+.chart-plot { min-width: 0; }
+.chart-svg { display: block; width: 100%; height: auto; max-width: 100%; overflow: visible; }
+.chart-grid { stroke: var(--rule); stroke-width: 1; }
+.chart-axis { stroke: var(--ink-3); stroke-width: 1; }
+.chart-tickmark { stroke: var(--ink-3); stroke-width: 1; }
+.chart-tick { font: 400 var(--text-small) var(--f-ui); fill: var(--ink-2); }
+.chart-unit { font: 600 var(--text-small) var(--f-ui); fill: var(--ink); }
+.chart-band { fill: var(--accent); stroke: none; }
+.chart-band-0 { opacity: .1; }
+.chart-band-1 { opacity: .2; }
+/* WQ4: a band in the map's level colour (its fill is the range's own), soft enough for the results to read over it */
+.chart-band-level { opacity: .22; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chart-band-level { opacity: .3; } }
+:root[data-theme="dark"] .chart-band-level { opacity: .3; }
+.chart-band-label { font: 600 var(--text-small) var(--f-ui); fill: var(--ink-2); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+.chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.chart-line.chart-s0 { stroke: var(--accent); }
+.chart-line.chart-s1 { stroke: var(--ink); stroke-dasharray: 7 4; }
+.chart-line.chart-s2 { stroke: var(--accent); stroke-dasharray: 3 3; }
+.chart-line.chart-s3 { stroke: var(--ink-2); stroke-dasharray: 10 3 2 3; }
+.chart-line.chart-line-censored { stroke-dasharray: 1 5; stroke-linecap: round; }
+.chart-mark.chart-s0 { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s1 { fill: var(--ink); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s2 { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s3 { fill: var(--ink-2); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-censored { fill: var(--panel); stroke-width: 2; }
+.chart-mark.chart-censored.chart-s0 { stroke: var(--accent); }
+.chart-mark.chart-censored.chart-s1 { stroke: var(--ink); }
+.chart-mark.chart-censored.chart-s2 { stroke: var(--accent); }
+.chart-mark.chart-censored.chart-s3 { stroke: var(--ink-2); }
+/* N2: a fifth and sixth series (a comparison of up to six sites), and the site colours: each its own colour, dash and marker */
+.chart-line.chart-s4 { stroke: var(--ink); stroke-dasharray: 12 4; }
+.chart-line.chart-s5 { stroke: var(--ink-2); stroke-dasharray: 6 2 2 2 2 2; }
+.chart-line.chart-line-censored:is(.chart-s4, .chart-s5) { stroke-dasharray: 1 5; }   /* a censored stretch stays dotted */
+.chart-mark.chart-s4 { fill: var(--ink); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-s5 { fill: var(--ink-2); stroke: var(--panel); stroke-width: 1.5; }
+.chart-mark.chart-censored.chart-s4 { stroke: var(--ink); }
+.chart-mark.chart-censored.chart-s5 { stroke: var(--ink-2); }
+.chart-palette-sites .chart-s0 { --series: var(--series-1); }
+.chart-palette-sites .chart-s1 { --series: var(--series-2); }
+.chart-palette-sites .chart-s2 { --series: var(--series-3); }
+.chart-palette-sites .chart-s3 { --series: var(--series-4); }
+.chart-palette-sites .chart-s4 { --series: var(--series-5); }
+.chart-palette-sites .chart-s5 { --series: var(--series-6); }
+.chart-palette-sites .chart-line { stroke: var(--series); }
+.chart-palette-sites .chart-mark { fill: var(--series); }
+.chart-palette-sites .chart-mark.chart-censored { fill: var(--panel); stroke: var(--series); }
+.chart-palette-sites .chart-band { fill: var(--ink-3); }
+/* WQV1: a field meter or test-strip reading is hollow, in its series' colour; a laboratory result stays solid */
+.chart-mark.chart-field { fill: var(--panel); stroke-width: 1.75; }
+.chart-mark.chart-field.chart-s0, .chart-mark.chart-field.chart-s2 { stroke: var(--accent); }
+.chart-mark.chart-field.chart-s1, .chart-mark.chart-field.chart-s4 { stroke: var(--ink); }
+.chart-mark.chart-field.chart-s3, .chart-mark.chart-field.chart-s5 { stroke: var(--ink-2); }
+.chart-palette-sites .chart-mark.chart-field { fill: var(--panel); stroke: var(--series); }
+/* N2: limit lines the caller gives (none yet; N3's adjustable lines), labelled at the right */
+.chart-limit { stroke: var(--ink); stroke-width: 1.5; }
+.chart-limit-dashed { stroke-dasharray: 8 4; }
+.chart-limit-dotted { stroke-dasharray: 2 3; stroke-linecap: round; }
+.chart-limit-label { font: 600 var(--text-small) var(--f-ui); fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+.chart-legend { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font: 400 var(--text-small)/1.35 var(--f-ui); }
+.chart-key { display: flex; gap: 8px; align-items: center; }
+.chart-key > span { min-width: 0; overflow-wrap: anywhere; }
+.chart-swatch { flex: none; overflow: visible; }
+.chart-table { margin-top: 8px; font: 400 var(--text-small)/1.4 var(--f-ui); }
+.chart-table > summary { cursor: pointer; font-weight: 600; min-height: 28px; display: flex; align-items: center; }
+.chart-table p { margin: 4px 0; color: var(--ink-2); }
+.chart-table-scroll { max-height: 240px; overflow: auto; border: 1px solid var(--rule); border-radius: 6px; }
+.chart-table table { width: 100%; border-collapse: collapse; }
+.chart-table :is(th, td) { text-align: left; padding: 4px 8px; border-top: 1px solid var(--rule); white-space: nowrap; }
+.chart-table thead th { position: sticky; top: 0; background: var(--wash); border-top: 0; }
+@media print { .chart-table-scroll { max-height: none; } }
+
+/* Checklist (js/blocks/checklist.js): one line per item, its reason under it, where it stands in words. No mark
+   beside it (a ring reads as a box to tick, and nothing here is ticked): status is carried by words and position,
+   never colour. */
+.checklist-block { color: var(--ink); }
+.checklist-block > .block-title { margin: 0 0 12px; font: 600 var(--text-heading)/1.2 var(--f-head); }
+.checklist-group + .checklist-group { margin-top: 18px; }
+.checklist-group > :is(h1, h2, h3, h4, h5, h6) { margin: 0 0 6px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.checklist-list { list-style: none; margin: 0; padding: 0; }
+.checklist-item { padding: 10px 0; border-top: 1px solid var(--rule); overflow-wrap: anywhere; scroll-margin-top: 20px; }
+.checklist-line { margin: 0; font-weight: 600; overflow-wrap: normal; }
+/* The line is the control: a tap opens its fold (the consent, the condition, the wording, Done and Add the record). */
+summary.checklist-line { cursor: pointer; list-style: none; display: block; padding-left: 16px; position: relative; min-height: 24px; }
+summary.checklist-line::-webkit-details-marker { display: none; }
+summary.checklist-line::before { content: ""; position: absolute; left: 2px; top: .5em; border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.checklist-fold[open] > summary.checklist-line::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.checklist-fold > .checklist-body { padding: 4px 0 2px 16px; }
+.checklist-sub { margin: 8px 0 0; font-size: var(--text-small); color: var(--ink-2); }
+.checklist-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.checklist-actions button, .checklist-attach { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.checklist-actions button[disabled] { opacity: .6; cursor: progress; }
+/* Done on the line itself (inline_done): the line opens its fold, the tick is one tap beside it; after a tick, Undo takes its place. */
+.checklist-row { display: flex; align-items: flex-start; gap: 10px; }
+.checklist-row > :is(details, p) { flex: 1 1 auto; min-width: 0; }
+.checklist-done-inline, .checklist-undo button { flex: none; min-width: 56px; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px; background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.checklist-done-inline[hidden], [data-check-done][hidden] { display: none; }
+.checklist-undo { display: inline-flex; flex: none; align-items: center; gap: 8px; min-height: 40px; font-size: var(--text-small); color: var(--ink-2); }
+.checklist-undo button { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.checklist-attach:focus-within { outline: 2px solid var(--ink); outline-offset: 3px; }
+.checklist-upload:not([hidden]) { margin-top: 10px; }
+.checklist-msg:empty { display: none; }
+.checklist-msg { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); }
+.checklist-line a { color: inherit; text-underline-offset: 2px; }
+.checklist-reason, .checklist-standing, .checklist-note { margin: 2px 0 0; font-size: var(--text-small); }
+.checklist-reason { color: var(--ink-2); }
+.checklist-standing { color: var(--ink); font-variant-numeric: tabular-nums; }
+.checklist-note { color: var(--ink-2); line-height: 1.4; }
+.checklist-more { margin-top: 6px; font-size: var(--text-small); }
+.checklist-more > summary { cursor: pointer; color: var(--ink-2); min-height: 28px; display: flex; align-items: center; }
+.checklist-parts { margin: 4px 0 0; padding-left: 18px; }.checklist-parts li { padding: 2px 0; }
+.checklist-wording { margin: 6px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--rule); color: var(--ink); font: 400 var(--text-small)/1.45 var(--f-display); }
+.checklist-source { margin: 6px 0 0; color: var(--ink-2); }
+.checklist-more-count { margin: 12px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.answer-all .checklist-list { padding-left: 0; }.answer-all .checklist-item { padding: 10px 0; }.answer-all .checklist-parts li { padding: 2px 0; }
+
+/* E4 (Josh, 2 Nov 2026): the standing answers beside the map (the Answer block's summary option). The heading is a
+   quiet label, the sentence a short line with its count and the rest under it, small; every row is its title, where it
+   stands on a line of its own, and its action aligned at the right; the folds read as group headings with their counts. */
+.answer-summary { padding: 14px 16px; }
+.answer-summary > :is(h1, h2, h3, h4, h5) { margin: 0 0 4px; font: 600 var(--text-small)/1.3 var(--f-ui); letter-spacing: .02em; color: var(--ink-2); }
+.answer-summary .answer-sentence { margin: 0 0 10px; font: 400 var(--text-small)/1.4 var(--f-ui); color: var(--ink-2); }
+.answer-summary .answer-lead { display: block; font: 600 var(--text-body)/1.3 var(--f-ui); color: var(--ink); }
+.answer-summary .answer-sep, .answer-summary .checklist-sep { display: none; }
+.answer-summary .answer-because { display: block; margin-top: 2px; }
+.answer-summary .answer-highlights { margin: 6px 0; font-size: var(--text-body); }
+.answer-summary .answer-highlights li { padding: 8px 0; font-weight: 600; font-size: var(--text-small); }
+.answer-summary .answer-highlights .answer-reason { display: block; margin-top: 1px; font-weight: 400; }
+.answer-summary .answer-lines { margin: 6px 0 4px; }
+.answer-summary .checklist-item { padding: 8px 0; }
+.answer-summary .checklist-row { align-items: center; }
+.answer-summary .checklist-line { font: 600 var(--text-small)/1.35 var(--f-ui); }
+.answer-summary .checklist-title { display: block; color: var(--ink); }
+.answer-summary .checklist-status { display: block; margin-top: 1px; font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* UI1: the state is in the line's words ("overdue since ...", "upcoming, due ...", "recorded: ...", "done ..."); the styling only
+   backs the words up, in ink alone: a passed date reads firmer, a line that is recorded or done reads quieter. No verdict colour. */
+.checklist-item[data-check-state="overdue"] .checklist-status { color: var(--ink); font-weight: 600; }
+.checklist-item[data-check-state="done"] .checklist-title { color: var(--ink-2); font-weight: 500; }
+.checklist-item[data-check-state="done"] .checklist-status { color: var(--ink-2); }
+.checklist-item[data-check-recorded] .checklist-status a { text-underline-offset: 2px; }
+.answer-summary summary.checklist-line::before { top: .45em; }
+.answer-summary .checklist-done-inline, .answer-summary .checklist-undo button { min-width: 64px; min-height: 36px; }
+.answer-summary :is(.answer-fold, .answer-all) { border-top: 1px solid var(--rule); padding: 6px 0; margin: 0; }
+.answer-summary :is(.answer-fold, .answer-all) > summary { cursor: pointer; display: flex; align-items: center; min-height: 36px; list-style: none; position: relative; padding-left: 16px;
+  font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink); }
+.answer-summary .answer-all > summary::-webkit-details-marker { display: none; }
+.answer-summary .answer-all > summary::before { content: ""; position: absolute; left: 2px; top: calc(50% - 4px); border: 4px solid var(--clear); border-left: 5px solid var(--ink-3); }
+.answer-summary .answer-all[open] > summary::before { transform: rotate(90deg); transform-origin: 25% 50%; }
+.answer-summary .answer-all > :not(summary) { margin-top: 4px; }
+.answer-summary .answer-currency { margin-top: 6px; }
+/* Fetch conditions from ECan (CC1): the button in an unrecorded consent's fold, then the proposal in its place. */
+.checklist-fetch { margin-top: 10px; }
+.checklist-fetch > button, .cc-actions > button:not(.link) { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.checklist-fetch > button[hidden] { display: none; }
+.checklist-fetch > button[disabled], .cc-actions > button[disabled] { opacity: .6; cursor: progress; }
+.cc-proposal { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; }
+.cc-head { margin: 0; font-weight: 600; }
+.cc-list { margin: 8px 0 0; padding: 0 0 0 4px; list-style: none; }
+.cc-condition { padding: 8px 0; border-top: 1px solid var(--rule); }
+.cc-condition:first-child { border-top: 0; }
+.cc-line, .cc-summary, .cc-states { margin: 0; overflow-wrap: anywhere; }
+.cc-code { font-weight: 600; }
+.cc-heading, .cc-states, .cc-skipped, .cc-attr, .cc-who { font-size: var(--text-small); color: var(--ink-2); }
+.cc-wording > summary { margin-top: 4px; font-size: var(--text-small); color: var(--ink-2); cursor: pointer; }
+.cc-wording blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 2px solid var(--rule); white-space: pre-line; font-size: var(--text-small); }
+.cc-skipped, .cc-attr { margin: 8px 0 0; }
+.cc-attr a { color: inherit; text-underline-offset: 2px; }
+.cc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+.cc-msg:empty { display: none; }
+.cc-msg { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); }
+.ask-proposal { margin-top: 12px; }
+
+/* Water-quality analysis cards in Ask's answer (X1): the platform's figures as a small table, the method, caveats, Confirm. */
+.ask-analysis { margin-top: 12px; }
+.wq-card { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; }
+.wq-title { margin: 0; font: 600 var(--text-body) var(--f-ui); }
+.wq-period, .wq-method, .wq-members, .wq-attr, .wq-who, .wq-caveats { font-size: var(--text-small); color: var(--ink-2); }
+.wq-period, .wq-method, .wq-members, .wq-attr, .wq-unavailable { margin: 6px 0 0; overflow-wrap: anywhere; }
+/* RD1: a recorded analysis whose inputs have changed since: one quiet line, never a banner. */
+.wq-review { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); font-style: italic; overflow-wrap: anywhere; }
+.wq-table { width: 100%; margin-top: 8px; border-collapse: collapse; font-size: var(--text-small); }
+.wq-table th, .wq-table td { padding: 4px 6px; border-top: 1px solid var(--rule); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.wq-table th { width: 45%; font-weight: 600; }
+.wq-caveats { margin: 6px 0 0; padding-left: 18px; }
+.wq-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+.wq-actions > button:not(.link) { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.wq-actions button[disabled] { opacity: .6; cursor: progress; }
+.wq-adjust { width: 100%; font-size: var(--text-small); }
+.wq-adjust label, .wq-note-label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.wq-adjust input, .wq-adjust select { min-height: 36px; max-width: 12em; }
+.wq-note-label { width: 100%; flex-direction: column; align-items: stretch; font-size: var(--text-small); }
+.wq-note-label textarea { width: 100%; box-sizing: border-box; }
+.wq-msg:empty { display: none; }
+.wq-msg { margin: 6px 0 0; font-size: var(--text-small); color: var(--ink-2); }

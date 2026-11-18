@@ -1,0 +1,161 @@
+/* The catchment group's space (S5): a header with the group's views, its map, and a panel of standing answers or the
+   view's content. Phone: the map strip on top and the panel under it, scrolling. Wide: the map beside a panel. */
+.group-screen { position: fixed; inset: var(--demo-banner-height, 0px) 0 0 0; display: flex; flex-direction: column; background: var(--wash); color: var(--ink); font-family: var(--f-ui); }
+.group-screen[hidden] { display: none; }
+.group-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px var(--space); padding: 10px var(--space); background: var(--panel); border-bottom: 1px solid var(--rule); }
+.group-identity { display: flex; align-items: center; gap: var(--space); min-width: 0; }
+/* V8: a group's own logo (group-model.js, GROUP_LOGOS). Drawn for paper: on a paper-coloured plate in dark mode. */
+.group-logo { display: block; height: 64px; width: auto; flex: none; border-radius: var(--radius); }
+.group-logo[hidden] { display: none; }
+:root[data-theme="dark"] .group-logo { background: var(--print-panel); padding: 4px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .group-logo { background: var(--print-panel); padding: 4px; } }
+.group-title { min-width: 0; }
+.group-title h1 { margin: 0; font-family: var(--f-display); font-size: var(--text-heading); line-height: 1.2; overflow-wrap: anywhere; }
+.group-kind { margin: 2px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.group-back { display: inline-block; margin-bottom: 2px; font-size: var(--text-small); color: var(--ink-2); }
+.group-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.group-tab { padding: 8px 12px; border-radius: var(--radius); color: var(--ink); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.group-tab[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
+.group-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); }
+.group-map { position: relative; min-height: 0; background: var(--wash); }
+.group-map > .map-scene, .group-map .map-scene-canvas { position: absolute; inset: 0; height: 100%; }
+.group-map-empty { display: grid; place-items: center; height: 100%; padding: var(--space); color: var(--ink-2); text-align: center; }
+.group-panel { overflow-y: auto; padding: var(--space); background: var(--panel); border-left: 1px solid var(--rule); }
+.group-panel h2 { font-size: var(--text-heading); font-family: var(--f-display); margin: 0 0 8px; }
+.group-panel h3 { font-size: var(--text-body); margin: 16px 0 6px; }
+.group-panel h4 { font-size: var(--text-body); margin: 12px 0 6px; }
+.group-card { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.group-card:last-child { border-bottom: 0; }
+.group-card h2 { font-family: var(--f-ui); font-size: var(--text-body); font-weight: 700; margin: 0 0 6px; }
+.group-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.group-lines li { display: grid; gap: 2px; overflow-wrap: anywhere; }
+/* MC1: the group's standing water-quality answer, above B8's line and chart in the Water quality card */
+.group-wq-answer { margin: 0 0 10px; }
+.group-wq-answer .answer-panel { padding: 0; }
+.group-wq-answer .answer-all li { padding: 6px 0; overflow-wrap: anywhere; }
+.group-lines small, .group-layers small, .update-line small { color: var(--ink-2); font-size: var(--text-small); }
+.group-lines li.overdue span::before { content: "Overdue · "; font-weight: 700; }
+.group-fine { color: var(--ink-2); font-size: var(--text-small); }
+.group-status { color: var(--ink-2); }
+.group-layers { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.group-layers label { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; min-height: 44px; }
+.group-layers small { grid-column: 2; }
+/* PERF3b: a deferred layer or a reference source on its way shows its switch on but busy (faded), not off; the line under
+   its name says it is loading, couldn't load, or that there are too many in view to draw (zoom in) */
+.group-layers input[aria-busy="true"] { opacity: .6; cursor: progress; }
+.group-layers .layer-state { font-style: italic; }
+.group-layers .group { padding-top: 8px; font: 600 var(--text-small) var(--f-head); color: var(--ink-2); }   /* LK4: a view's heading */
+.group-links[hidden] { display: none; }
+.group-links { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.group-links a { display: grid; gap: 2px; padding: 8px 0; color: var(--ink); }
+.group-links small { color: var(--ink-2); font-size: var(--text-small); }
+.group-documents .doc-open { font: inherit; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; text-decoration: underline; cursor: pointer; }
+.update-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 12px; }
+.update-controls input { font: inherit; min-height: 44px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); }
+.group-panel button.primary { font: inherit; min-height: 44px; padding: 8px 16px; border: 0; border-radius: var(--radius); background: var(--primary); color: var(--primary-ink); cursor: pointer; }
+.group-panel button.link { font: inherit; background: none; border: 0; padding: 4px 0; color: var(--ink-2); text-decoration: underline; cursor: pointer; min-height: 32px; }
+.update-title { font-family: var(--f-display); }
+.update-lines { margin: 0; padding-left: 1.2rem; display: grid; gap: 10px; }
+.update-line { display: grid; gap: 2px; }
+.update-line textarea { font: inherit; width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); resize: vertical; }
+.update-line.stale textarea { border: 2px solid var(--ink); }
+.update-line.stale small { font-weight: 700; color: var(--ink); }
+.update-alert { font-weight: 700; }
+.group-settings fieldset { border: 1px solid var(--rule); border-radius: var(--radius); padding: 8px 12px; margin: 0 0 12px; }
+.group-settings legend { font-weight: 700; padding: 0 4px; }
+.group-choice { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; padding: 8px 0; min-height: 44px; }
+/* DQ1's gaps panel on the group's map view (an Answer panel): its heading below its sentence, as on the Operations page */
+.group-gaps .answer-compact > :is(h1, h2, h3) { font-family: var(--f-ui); font-size: var(--text-body); }
+/* ON3b: the manage space: a queue, not a map; the panel takes the width */
+#screen-group[data-view="manage"] .group-map { display: none; }
+#screen-group[data-view="manage"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="manage"] .group-panel { border-left: 0; border-top: 0; }
+.group-manage { max-width: 920px; margin: 0 auto; }
+.manage-count { margin: 0 0 8px; font-size: var(--text-body); color: var(--ink); }
+.manage-count small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+.manage-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--rule); }
+.manage-tab { padding: 8px 12px; min-height: 44px; display: inline-flex; align-items: center; color: var(--ink); text-decoration: none; border-bottom: 3px solid var(--clear); }
+.manage-tab[aria-current="page"] { border-bottom-color: var(--accent); font-weight: 700; }
+.manage-empty { font-weight: 700; }
+.manage-group { padding: 4px 0 12px; border-bottom: 1px solid var(--rule); }
+.manage-group:last-child { border-bottom: 0; }
+.manage-group h3 small { font-weight: 400; color: var(--ink-2); font-size: var(--text-small); }
+.manage-lines, .manage-members, .manage-locations, .manage-evidence { list-style: none; margin: 0; padding: 0; }
+.manage-lines { display: grid; gap: 12px; }
+.manage-line { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); overflow-wrap: anywhere; }
+.manage-line[data-state="accepted"], .manage-line[data-state="rejected"], .manage-line[data-state="other"] { background: var(--wash); }   /* DEC3: other */
+.manage-item { display: grid; gap: 2px; }
+.manage-item small, .manage-line > small, .manage-members small, .manage-locations small, .manage-candidate small { color: var(--ink-2); font-size: var(--text-small); }
+.manage-state { margin: 0; font-weight: 700; }
+.manage-candidate { display: grid; gap: 2px; padding-left: 10px; border-left: 3px solid var(--rule); }
+.manage-evidence li { color: var(--ink-2); font-size: var(--text-small); }
+.manage-evidence li::before { content: "· "; }
+.manage-controls { display: grid; gap: 6px; margin-top: 4px; }
+.manage-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.manage-controls input, .manage-controls select, .manage-invite input, .manage-invite select, .manage-request input, .manage-request select { font: inherit; min-height: 44px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-sizing: border-box; max-width: 100%; }
+.group-panel button.secondary { font: inherit; min-height: 44px; padding: 8px 16px; border: 1px solid var(--ink-2); border-radius: var(--radius); background: var(--panel); color: var(--ink); cursor: pointer; }
+.group-panel button:disabled { opacity: .6; cursor: default; }
+.manage-msg { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.manage-msg:empty { display: none; }
+.manage-members { display: grid; gap: 8px; }
+.manage-members > li { display: grid; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.manage-members > li[data-retired] b { color: var(--ink-2); }
+.manage-no-extent { font-weight: 700; }
+.manage-invite-box summary { cursor: pointer; color: var(--ink-2); font-size: var(--text-small); min-height: 44px; display: flex; align-items: center; }
+.manage-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.manage-request { display: grid; gap: 6px; margin-top: 16px; max-width: 520px; }
+.manage-locations { display: grid; gap: 10px; }
+.manage-locations > li { display: grid; gap: 4px; }
+/* GA1: the access page, one calm column (the owner liked the older maps portal's staff page): the role cards side by side, a line on
+   signing in, the people as a plain table (rows on a phone), Add someone, Recent changes. DN1's sizes: 16 px text, 13 px quiet lines. */
+#screen-group[data-view="access"] .group-map { display: none; }
+#screen-group[data-view="access"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="access"] .group-panel { border-left: 0; border-top: 0; }
+.group-access { max-width: 920px; margin: 0 auto; overflow-wrap: anywhere; }
+.group-access h2 { margin: 0 0 var(--s-1); }
+.group-access h3 { margin: var(--s-5) 0 var(--s-2); font-size: var(--text-body); }
+.group-access p { margin: 0; }
+.ga-lead, .ga-signin, .ga-fine, .ga-summary, .ga-changes time { color: var(--ink-2); font-size: var(--text-small); }
+.ga-roles { list-style: none; margin: var(--s-3) 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr)); gap: var(--s-2); }
+.ga-role { display: grid; align-content: start; gap: 2px; padding: var(--s-2) var(--s-3); border: 1px solid var(--rule); border-radius: var(--radius-s); background: var(--panel); }
+.ga-role p { font-size: var(--text-small); color: var(--ink-2); line-height: 1.35; }
+.ga-summary { margin-bottom: var(--s-2) !important; }
+.ga-table { width: 100%; border-collapse: collapse; font-size: var(--text-body); }
+.ga-table th { text-align: left; font-weight: 600; font-size: var(--text-small); color: var(--ink-2); padding: 0 var(--s-3) var(--s-1) 0; border-bottom: 1px solid var(--rule); }
+.ga-table td { padding: var(--row-pad, 8px) var(--s-3) var(--row-pad, 8px) 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+.ga-table td.ga-email b { font-weight: 400; }
+.ga-table td small { color: var(--ink-3); font-size: var(--text-small); }
+.ga-table :is(.ga-2fa, .ga-last, .ga-rolecell) { white-space: nowrap; }
+.ga-table .ga-2fa[data-state="not-yet"] { color: var(--ink-3); }
+.ga-k { display: none; }
+.ga-add p { font-size: var(--text-small); }
+.ga-add p + p { margin-top: var(--s-1); color: var(--ink-2); }
+.ga-add a { display: inline-block; min-height: 44px; line-height: 44px; color: var(--ink); }
+.ga-changes { list-style: none; margin: 0; padding: 0; }
+.ga-changes li { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); column-gap: var(--s-3); padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: var(--text-small); }
+.ga-changes li:last-child { border-bottom: 0; }
+.ga-status { color: var(--ink-2); }
+.ga-staff { margin-top: var(--s-2) !important; }
+.ga-note { margin-top: var(--s-3) !important; }
+/* a phone (and a computer at large text): each person a row, the email on top, a quiet line of role · two-factor · last signed in */
+@media (max-width: 640px) {
+  .ga-table, .ga-table tbody, .ga-table tr, .ga-table td { display: block; }
+  .ga-table thead { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .ga-table tr { min-height: var(--row-min, 48px); padding: var(--row-pad, 8px) 0; border-bottom: 1px solid var(--rule); box-sizing: border-box; }
+  .ga-table td { display: inline; padding: 0; border: 0; font-size: var(--text-small); color: var(--ink-3); white-space: normal; }
+  .ga-table td.ga-email { display: block; font-size: var(--text-body); color: var(--ink); }
+  .ga-table td.ga-email ~ td:not(.ga-rolecell)::before { content: "\00b7"; margin: 0 6px; }
+  .ga-table .ga-rolecell { color: var(--ink-2); }
+  .ga-table :is(.ga-2fa, .ga-last, .ga-rolecell) { white-space: normal; }
+  .ga-k { display: inline; }
+  .ga-changes li { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .group-screen { position: static; min-height: 100dvh; padding-top: var(--demo-banner-height, 0px); }
+  .group-head { align-items: flex-start; }
+  .group-nav { width: 100%; }
+  .group-tab { flex: 1 1 auto; justify-content: center; padding: 8px 6px; }
+  .group-body { display: block; }
+  .group-map { height: 42vh; min-height: 220px; }
+  .group-panel { border-left: 0; border-top: 1px solid var(--rule); overflow: visible; }
+}
