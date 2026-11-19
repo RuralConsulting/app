@@ -10,25 +10,34 @@ const width = (node, fallback = 700) => Math.floor(node.getBoundingClientRect().
 const H = (n) => el("h2", { text: n });
 
 // ---- the area map (SVG; no tiles) -------------------------------------------------------------------------------------------
-const BOX = { w: 170.95, e: 172.8, s: -44.22, n: -43.3 };
+// the frame: the zone's outline with a margin of 6% of its size on every side
+export function zoneBox(margin = 0.06) {
+  let w = 180, e = -180, s = 90, n = -90;
+  for (const f of data.geo.features) {
+    if (f.properties.role !== "area") continue;
+    const rings = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const poly of rings) for (const [x, y] of poly[0]) { w = Math.min(w, x); e = Math.max(e, x); s = Math.min(s, y); n = Math.max(n, y); }
+  }
+  const dx = (e - w) * margin, dy = (n - s) * margin;
+  return { w: w - dx, e: e + dx, s: s - dy, n: n + dy };
+}
+
 export function areaMap({ w = 640, colourBy = "median", caption = true } = {}) {
+  const BOX = zoneBox();
   const k = Math.cos(((BOX.s + BOX.n) / 2) * Math.PI / 180);
   const h = Math.round((w * (BOX.n - BOX.s)) / ((BOX.e - BOX.w) * k));
   const X = (lon) => ((lon - BOX.w) / (BOX.e - BOX.w)) * w, Y = (lat) => ((BOX.n - lat) / (BOX.n - BOX.s)) * h;
   const ring = (r) => "M" + r.map(([a, b]) => `${X(a).toFixed(1)},${Y(b).toFixed(1)}`).join("L") + "Z";
   const line = (r) => "M" + r.map(([a, b]) => `${X(a).toFixed(1)},${Y(b).toFixed(1)}`).join("L");
   const svg = sv("svg", { viewBox: `0 0 ${w} ${h}`, role: "img", "aria-labelledby": "areamap-t" });
-  svg.append(sv("title", { id: "areamap-t", text: "Map of the area covered: the Ashburton water management zone between the Rangitata and Rakaia rivers, with the wells; the land from the Rakaia to the Waimakariri is shown as not covered." }));
-  const pat = sv("pattern", { id: "hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" },
-    sv("rect", { width: 6, height: 6, style: { fill: "var(--notcovered)" } }), sv("line", { x1: 0, y1: 0, x2: 0, y2: 6, "stroke-width": 1.4, style: { stroke: "var(--rule-2)" } }));
-  svg.append(sv("defs", {}, pat), sv("rect", { width: w, height: h, style: { fill: "var(--water-2)", opacity: 0.18 } }));
+  svg.append(sv("title", { id: "areamap-t", text: "Map of Environment Canterbury's Ashburton water management zone, between the Rangitata and Rakaia rivers, with the wells." }));
+  svg.append(sv("rect", { width: w, height: h, style: { fill: "var(--water-2)", opacity: 0.18 } }));
   const polys = (role) => data.geo.features.filter((f) => f.properties.role === role);
   const draw = (f, style) => {
     const g = f.geometry, rings = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
     svg.append(sv("path", { d: rings.map((p) => p.map(ring).join("")).join(""), "fill-rule": "evenodd", ...style }));
   };
   for (const f of polys("land")) draw(f, { style: { fill: "var(--land)", stroke: "var(--rule-2)" }, "stroke-width": 0.6 });
-  for (const f of polys("notcovered")) draw(f, { fill: "url(#hatch)", style: { stroke: "var(--rule-2)" }, "stroke-width": 0.6 });
   for (const f of polys("area")) draw(f, { style: { fill: "var(--area)", stroke: "var(--area-line)" }, "stroke-width": 1.6 });
   for (const f of polys("river")) {
     const g = f.geometry, parts = g.type === "LineString" ? [g.coordinates] : g.coordinates;
@@ -44,10 +53,10 @@ export function areaMap({ w = 640, colourBy = "median", caption = true } = {}) {
   }
   svg.append(dots);
   // river names, placed on the river itself: the point 70% of the way towards the coast, turned to the river's direction
-  for (const [name, short] of [["Rangitata", "Rangitata"], ["Hinds / Hekeao", "Hinds"], ["Ashburton / Hakatere", "Ashburton"], ["Rakaia", "Rakaia"], ["Selwyn / Waikirikiri", "Selwyn"], ["Waimakariri", "Waimakariri"]]) {
+  for (const [name, short] of [["Rangitata", "Rangitata"], ["Hinds / Hekeao", "Hinds"], ["Ashburton / Hakatere", "Ashburton"], ["Rakaia", "Rakaia"]]) {
     const pts = [];
     for (const f of polys("river")) {
-      if (f.properties.name !== name || f.properties.kind === "other" && !["Selwyn / Waikirikiri", "Waimakariri"].includes(name)) continue;
+      if (f.properties.name !== name || f.properties.kind === "other") continue;
       const g = f.geometry, parts = g.type === "LineString" ? [g.coordinates] : g.coordinates;
       for (const part of parts) for (const [lon, lat] of part) if (lon > BOX.w && lon < BOX.e && lat > BOX.s && lat < BOX.n) pts.push([X(lon), Y(lat)]);
     }
@@ -65,13 +74,11 @@ export function areaMap({ w = 640, colourBy = "median", caption = true } = {}) {
     svg.append(sv("text", { x: X(lon), y: Y(lat), "text-anchor": "middle", style: { fill: "var(--ink)", "font-weight": "700", "font-size": `${Math.max(11, w / 42)}px`, "paint-order": "stroke", stroke: "var(--surface)", "stroke-width": "4px" }, text: t }));
     if (sub) svg.append(sv("text", { x: X(lon), y: Y(lat) + Math.max(13, w / 36), "text-anchor": "middle", style: { fill: "var(--ink-2)", "font-size": `${Math.max(10, w / 54)}px`, "paint-order": "stroke", stroke: "var(--surface)", "stroke-width": "3px" }, text: sub }));
   };
-  big("Covered", 171.32, -43.66, "Rangitata to Rakaia");
-  big("Not covered", 172.22, -43.52, "Rakaia to Waimakariri");
+  big("Ashburton water management zone", 171.3, -43.5, "Rangitata to Rakaia");
   const fig = el("figure", { class: "areamap" }, svg);
   if (caption) {
     fig.append(el("div", { class: "legend-row" },
-      el("span", {}, el("span", { class: "sw area" }), "Area analysed (ECan's Ashburton zone)"),
-      el("span", {}, el("span", { class: "sw notcovered" }), "Not covered"),
+      el("span", {}, el("span", { class: "sw area" }), "Ashburton water management zone"),
       el("span", {}, el("span", { class: "sw river" }), "Rivers"),
       ...LEVELS.map((l) => el("span", {}, levelSymbol(l.key, 12), ` ${l.short}`)),
       el("span", { class: "muted", text: "Dots: 5-year median, mg/L (grey: not sampled since 2021)" })));
@@ -111,13 +118,12 @@ export async function renderSummary(main) {
   const left = el("div", {},
     el("div", { class: "kicker", text: "Independent analysis · Environment Canterbury data" }),
     el("h1", { text: "Groundwater nitrate between the Rangitata and Rakaia rivers: levels and trends" }),
-    el("p", { class: "sub", text: "The rest of mid Canterbury, from the Rakaia to the Waimakariri, is not yet covered." }),
     el("p", { class: "lede", text: "Is nitrate in the groundwater under the Ashburton plains rising or falling, and how much of it is above the drinking-water limit? This page answers from the groundwater nitrate results Environment Canterbury published for the area's wells." }),
     el("div", { class: "asat" },
       el("span", { class: "pill", text: `Results to ${dateText(m.as_at)}` }),
       el("span", { class: "pill", text: `Collected from ECan ${m.collected}` }),
       el("span", { class: "pill", text: `${c.wells_in_area_with_nitrate} wells, ${c.observations_in_area.toLocaleString("en-NZ")} sampling days` })),
-    el("p", { class: "notice", text: "This analysis covers the Rangitata to the Rakaia: Environment Canterbury's Ashburton water management zone. The plains from the Rakaia to the Waimakariri (the Selwyn - Waihora and Christchurch - West Melton zones) are not covered." }));
+    el("p", { class: "sub", text: "This analysis covers Environment Canterbury's Ashburton water management zone: the plains and foothills between the Rangitata and Rakaia rivers." }));
   const right = el("div", {});
   main.append(el("section", { class: "hero" }, left, right));
   right.append(areaMap({ w: Math.max(320, width(right, 520)) }));
@@ -472,8 +478,8 @@ export async function renderMethod(main) {
     el("h1", { text: "Method, sources and limits" }),
     el("p", { class: "lede", text: "Exactly what was done, with what data, and what it cannot tell you." }),
     H("The question and the area"),
-    p("How much nitrate is in the groundwater between the Rangitata and Rakaia rivers, and is it rising or falling? This analysis covers the Rangitata to the Rakaia: Environment Canterbury's Ashburton water management zone (Canterbury Water Management Strategy), which runs from the coast to the Main Divide between the two rivers. It uses the groundwater results Environment Canterbury published for the zone's wells, collected on " + m.collected + ". The plains from the Rakaia to the Waimakariri (the Selwyn - Waihora and Christchurch - West Melton zones) are not covered. Wells in the collected results that lie outside the Ashburton zone are left out: " +
-      Object.entries(c.wells_outside_area).map(([k, v]) => `${v} in ${k}`).join(", ") + "."),
+    p("How much nitrate is in the groundwater between the Rangitata and Rakaia rivers, and is it rising or falling? This analysis covers Environment Canterbury's Ashburton water management zone: the plains and foothills between the Rangitata and Rakaia rivers. The zone is a Canterbury Water Management Strategy zone and runs from the coast to the Main Divide. The analysis uses the groundwater results Environment Canterbury published for the zone's wells, collected on " + m.collected + ". " +
+      `${c.wells_outside_area} wells in the collected results lie outside the zone and are not part of this analysis.`),
     p(`Sub-areas: which side of the Hinds/Hekeao River (with its South Branch) and the Ashburton River/Hakatere (with its South Branch) a well lies on, from ECan's river network: Rangitata to Hinds, Hinds to Ashburton, Ashburton to Rakaia. That split agrees with ECan's groundwater allocation zones (all Mayfield-Hinds wells fall in "Rangitata to Hinds"; all but one Valetta well in "Hinds to Ashburton"). An inland/coastal split was considered but not made: with ${t20.assessed} wells assessed over twenty years, a further split would leave groups too small to say anything. Depth classes, from the well's recorded depth: shallower than 30 m (the median depth of the ${c.depth_recorded} wells with a recorded depth is ${fmt(c.depth_median_m, 1)} m; ${c.depth_under_30} are shallower than 30 m), 30 to 80 m, and 80 m or deeper (${c.depth_over_80} wells, ${pct(c.depth_over_80, c.depth_recorded)}%); ${c.wells_in_area_with_nitrate - c.depth_recorded} wells have no recorded depth and are kept, shown as such.`),
     H("The data"),
     p(`Every nitrate result Environment Canterbury published for wells in the area, from ECan's public per-well "export all samples" files, collected on ${m.collected}. Wells and their depth, screens and position: ECan's "Water Quality – Groundwater" layer. Positions and results are Environment Canterbury's public records; this page shows wells to about 100 m (positions to 3 decimal places of a degree), and where several wells fall on one such point the map draws them on a small ring about 25 m across so none hides another. Sub-areas and the zone are worked out from ECan's exact positions. Results run from ${dateText(c.first_in_area)} to ${dateText(m.as_at)} in the area. ECan's results are provisional until reviewed by ECan and appear up to about three months after sampling, so 2026 is incomplete.`),
@@ -514,8 +520,7 @@ export async function renderMethod(main) {
       li("Why nitrate changed. Nitrate in a well reflects land use, how much water drains through the soil, irrigation, rainfall and the years it takes water to reach the well; this analysis does not attribute any change to a cause."),
       li("The state of the whole aquifer. ECan's wells are not a random sample: many are private bores chosen for other reasons, the annual survey samples once a year in spring, and investigation wells cluster where problems were suspected. A trend in a well is a trend in that well."),
       li(`Anything about wells with too little data: only ${t10.assessed} wells had enough data for ${WIN_LABEL("10y")} and ${t20.assessed} for ${WIN_LABEL("20y")}; most wells in the area were sampled once or a few times.`),
-      li("Whether your water is safe to drink. Ask your water supplier, or have your own bore tested."),
-      li("Anything north of the Rakaia. That land is not covered.")),
+      li("Whether your water is safe to drink. Ask your water supplier, or have your own bore tested.")),
     H("Sources, licence and attribution"),
     el("ul", {},
       li(`Groundwater quality results and wells: Environment Canterbury. ${m.attribution_statement} ${m.provisional_note}`),
@@ -542,7 +547,7 @@ export async function renderPrint(main) {
   brief.append(
     el("div", { class: "kicker", text: `Rural Consulting Limited · independent analysis · results to ${dateText(m.as_at)}` }),
     el("h1", { text: "Groundwater nitrate between the Rangitata and Rakaia rivers" }),
-    el("p", { class: "lede", text: `Levels and trends from Environment Canterbury's results for ${c.wells_in_area_with_nitrate} wells in the Ashburton water management zone. The rest of mid Canterbury, from the Rakaia to the Waimakariri, is not covered.` }),
+    el("p", { class: "lede", text: `Levels and trends from Environment Canterbury's results for ${c.wells_in_area_with_nitrate} wells in Environment Canterbury's Ashburton water management zone, between the Rangitata and Rakaia rivers.` }),
     findings(true),
     areaMap({ w: 560 }),
     el("h2", { text: "The same wells, every year" }),
@@ -559,7 +564,6 @@ export async function renderPrint(main) {
       "ECan's wells are not a random sample of the aquifer; a trend in a well is a trend in that well.",
       "Nitrate responds to land use, drainage, irrigation and climate, with lags of years; nothing here attributes a cause.",
       `Only ${t10.all.assessed} wells (10 years) and ${t20.all.assessed} (20 years) had enough data for a trend.`,
-      "The land north of the Rakaia is not covered.",
     ].map((t) => el("li", { text: t }))),
     el("p", { class: "small", text: `Built ${dateText(m.built_at.slice(0, 10))}. Full method, data and QA: the "Method" view of this site.` }));
 }

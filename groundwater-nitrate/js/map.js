@@ -3,7 +3,7 @@
 // MapLibre (the app's vendored CSP build, copied into this site at build time) is loaded only when the map is first opened.
 import { data, href, replaceParams } from "./app.js";
 import { CLASSES, LEVELS, classSymbol, cssVar, el, fmt, level, levelOf, levelSymbol, signed, dateText } from "./util.js";
-import { wellPanel } from "./views.js";
+import { wellPanel, zoneBox } from "./views.js";
 
 // LINZ Basemaps: the app's own public browser key (app/js/config.js), used for the same domain; tiles CC BY 4.0 LINZ.
 const LINZ_KEY = "d01m5g152dsk2a73kfxb6a9xf1k";
@@ -93,18 +93,6 @@ function makeIcon(kind, key, dark) {
   return { width: size, height: size, data: new Uint8Array(g.getImageData(0, 0, size, size).data.buffer) };
 }
 
-function hatch(dark) {
-  const n = 16, cv = document.createElement("canvas");
-  cv.width = cv.height = n;
-  const g = cv.getContext("2d");
-  g.fillStyle = cssVar("--notcovered");
-  g.fillRect(0, 0, n, n);
-  g.strokeStyle = dark ? "rgba(255,255,255,.12)" : "rgba(0,0,0,.14)";
-  g.lineWidth = 2;
-  g.beginPath(); g.moveTo(0, n); g.lineTo(n, 0); g.moveTo(-4, 4); g.lineTo(4, -4); g.moveTo(n - 4, n + 4); g.lineTo(n + 4, n - 4); g.stroke();
-  return { width: n, height: n, data: new Uint8Array(g.getImageData(0, 0, n, n).data.buffer) };
-}
-
 const isDark = () => {
   const t = document.documentElement.dataset.theme;
   return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
@@ -114,10 +102,9 @@ let M = null;   // the live view: { map, s, root, ... }
 
 function addImages(map) {
   const dark = isDark();
-  const put = (name, img) => { if (map.hasImage(name)) map.updateImage(name, img); else map.addImage(name, img, { pixelRatio: name === "hatch" ? 1 : 2 }); };
+  const put = (name, img) => { if (map.hasImage(name)) map.updateImage(name, img); else map.addImage(name, img, { pixelRatio: 2 }); };
   for (const l of LEVELS) put("lv-" + l.key, makeIcon("lv", l.key, dark));
   for (const c of CLASSES) put("tr-" + c.i, makeIcon("tr", c.i, dark));
-  put("hatch", hatch(dark));
 }
 
 function paint(map) {
@@ -129,7 +116,6 @@ function paint(map) {
   map.setPaintProperty("land-line", "line-color", v("--rule-2"));
   map.setPaintProperty("area", "fill-color", v("--area"));
   map.setPaintProperty("area", "fill-opacity", bg ? 0.12 : 1);
-  map.setPaintProperty("notcovered", "fill-opacity", bg ? 0.55 : 1);
   map.setPaintProperty("area-line", "line-color", v("--area-line"));
   map.setPaintProperty("rivers", "line-color", v("--water"));
   map.setPaintProperty("sel", "circle-stroke-color", v("--ink"));
@@ -169,10 +155,10 @@ function selFeature(s) {
   return { type: "FeatureCollection", features: w ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: position(w) } }] : [] };
 }
 
+// the first view frames the Ashburton zone (its outline with a small margin)
 function bounds() {
-  let a = [180, 90, -180, -90];
-  for (const w of data.wells) a = [Math.min(a[0], w.lon), Math.min(a[1], w.lat), Math.max(a[2], w.lon), Math.max(a[3], w.lat)];
-  return [[a[0], a[1]], [a[2], a[3]]];
+  const b = zoneBox(0.03);
+  return [[b.w, b.s], [b.e, b.n]];
 }
 
 function controls(s) {
@@ -295,7 +281,7 @@ async function render(main, r) {
     el("h1", { class: "visually-hidden", text: "Map of groundwater nitrate in the wells" }),
     controls(s),
     el("div", { class: "mapview" }, el("div", { class: "mapcol" }, box,
-      el("p", { class: "attrib", text: `Area: the Ashburton water management zone, Rangitata to Rakaia (green). Hatched: Rakaia to Waimakariri, not covered. Outlines and wells: Environment Canterbury. Wells are shown to about 100 m. Results to ${dateText(m.as_at)}.` })),
+      el("p", { class: "attrib", text: `Green: Environment Canterbury's Ashburton water management zone, between the Rangitata and Rakaia rivers. Outlines and wells: Environment Canterbury. Wells are shown to about 100 m. Results to ${dateText(m.as_at)}.` })),
     el("div", { class: "side" })));
   main.append(root);
   apply(s);
@@ -321,9 +307,8 @@ async function render(main, r) {
         { id: "linz-topo", type: "raster", source: "linz-topo", layout: { visibility: "none" }, paint: { "raster-opacity": 0.85 } },
         { id: "linz-aerial", type: "raster", source: "linz-aerial", layout: { visibility: "none" } },
         { id: "land", type: "fill", source: "geo", filter: ["==", ["get", "role"], "land"], paint: { "fill-color": cssVar("--land") } },
-        { id: "notcovered", type: "fill", source: "geo", filter: ["==", ["get", "role"], "notcovered"], paint: { "fill-pattern": "hatch" } },
         { id: "area", type: "fill", source: "geo", filter: ["==", ["get", "role"], "area"], paint: { "fill-color": cssVar("--area") } },
-        { id: "land-line", type: "line", source: "geo", filter: ["in", ["get", "role"], ["literal", ["land", "notcovered"]]], paint: { "line-color": cssVar("--rule-2"), "line-width": 0.8 } },
+        { id: "land-line", type: "line", source: "geo", filter: ["==", ["get", "role"], "land"], paint: { "line-color": cssVar("--rule-2"), "line-width": 0.8 } },
         { id: "rivers", type: "line", source: "geo", filter: ["==", ["get", "role"], "river"], paint: {
           "line-color": cssVar("--water"), "line-width": ["match", ["get", "kind"], "bound", 2.2, "divide", 1.6, 1.1], "line-opacity": 0.9 } },
         { id: "area-line", type: "line", source: "geo", filter: ["==", ["get", "role"], "area"], paint: { "line-color": cssVar("--area-line"), "line-width": 2 } },
@@ -335,6 +320,7 @@ async function render(main, r) {
     canvasContextAttributes: { preserveDrawingBuffer: true },   // (so the map prints, and a full-page picture keeps it)
   });
   M.map = map;
+  box.querySelector(".ml").gwnMap = map;   // (the browser test reads the first view and the layers from here)
   map.touchZoomRotate.disableRotation();
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
   map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "Environment Canterbury, CC BY 4.0" }), "bottom-right");

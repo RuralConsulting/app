@@ -2,7 +2,7 @@
 :root {
   --bg: #f7f6f2; --surface: #ffffff; --surface-2: #f0eee8; --ink: #1d1d1b; --ink-2: #4a4945; --ink-3: #74726c;
   --rule: #dcd9d1; --rule-2: #c9c5bb; --accent: #1d1d1b; --focus: #1f5fbf; --link: #1f4f8f;
-  --area: #e9efe6; --area-line: #5d6b58; --notcovered: #ece9e3; --land: #f3f1ec; --water: #6f93b8; --water-2: #9db6cf;
+  --area: #e9efe6; --area-line: #5d6b58; --land: #f3f1ec; --water: #6f93b8; --water-2: #9db6cf;
   /* concentration classes (viridis steps: safe for colour-blind readers; each also has its own shape) */
   --lv-under: #9fd34a; --lv-half: #24868e; --lv-over: #3f1260;
   /* trend classes (purple-orange diverging; arrows give direction, fill gives strength) */
@@ -19,7 +19,7 @@
   :root:not([data-theme="light"]) {
     --bg: #131312; --surface: #1c1c1a; --surface-2: #252522; --ink: #ecebe6; --ink-2: #c3c1ba; --ink-3: #9a978f;
     --rule: #34332f; --rule-2: #46443f; --accent: #ecebe6; --focus: #7fb0ff; --link: #9cc1ff;
-    --area: #1f2a20; --area-line: #8fa487; --notcovered: #232220; --land: #1a1a18; --water: #6f93b8; --water-2: #4f6f8f;
+    --area: #1f2a20; --area-line: #8fa487; --land: #1a1a18; --water: #6f93b8; --water-2: #4f6f8f;
     --lv-under: #b5de2b; --lv-half: #35b7a9; --lv-over: #d9b8ff;
     --tr-0: #b9a6ff; --tr-1: #8d82bf; --tr-2: #8a877f; --tr-3: #e8973a; --tr-4: #ffb15c;
     --mav: #ff8a80; --half: #f2c45a; --sen: #ecebe6; --sen-band: rgba(236, 235, 230, .14);
@@ -30,7 +30,7 @@
 :root[data-theme="dark"] {
   --bg: #131312; --surface: #1c1c1a; --surface-2: #252522; --ink: #ecebe6; --ink-2: #c3c1ba; --ink-3: #9a978f;
   --rule: #34332f; --rule-2: #46443f; --accent: #ecebe6; --focus: #7fb0ff; --link: #9cc1ff;
-  --area: #1f2a20; --area-line: #8fa487; --notcovered: #232220; --land: #1a1a18; --water: #6f93b8; --water-2: #4f6f8f;
+  --area: #1f2a20; --area-line: #8fa487; --land: #1a1a18; --water: #6f93b8; --water-2: #4f6f8f;
   --lv-under: #b5de2b; --lv-half: #35b7a9; --lv-over: #d9b8ff;
   --tr-0: #b9a6ff; --tr-1: #8d82bf; --tr-2: #8a877f; --tr-3: #e8973a; --tr-4: #ffb15c;
   --mav: #ff8a80; --half: #f2c45a; --sen: #ecebe6; --sen-band: rgba(236, 235, 230, .14);
@@ -129,7 +129,6 @@ figcaption { font-size: .875rem; color: var(--ink-3); margin-top: 6px; max-width
 .legend-row { display: flex; flex-wrap: wrap; gap: 12px 18px; font-size: .8125rem; color: var(--ink-2); margin-top: 8px; align-items: center; }
 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; border: 1px solid var(--rule-2); }
 .sw.area { background: var(--area); border-color: var(--area-line); }
-.sw.notcovered { background: repeating-linear-gradient(45deg, var(--notcovered), var(--notcovered) 3px, var(--rule-2) 3px, var(--rule-2) 4px); }
 .sw.river { background: none; border: 0; border-top: 3px solid var(--water); height: 3px; border-radius: 0; vertical-align: 3px; }
 .findings { list-style: none; padding: 0; margin: 20px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
 .finding { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r); padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -229,3 +228,4 @@ figcaption { font-size: .875rem; color: var(--ink-3); margin-top: 6px; max-width
 }
 .prose p, .prose li, .terms { overflow-wrap: anywhere; }
 .chart svg { max-width: 100%; height: auto; }
+.hero .sub { margin-top: 14px; }
