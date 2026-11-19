@@ -1,0 +1,324 @@
+/* V4: Maps in the farm and group spaces. The space's header stays; the viewer (vendor/viewer.css) fills what is under it, on a
+   phone and on a computer. The viewer's own layout is its stylesheet's. */
+#screen-maps { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--demo-banner-height) + var(--farm-header-height)); background: var(--wash); color: var(--ink); font-family: var(--f-ui); overflow: auto; }
+.group-maps { display: none; }
+#farm-actions a { white-space: nowrap; }   /* five tabs on a phone, each on one line */
+/* a phone's group space otherwise scrolls as a page, which gives the viewer no height to fill */
+#screen-group[data-view="maps"] { position: fixed; inset: var(--demo-banner-height, 0px) 0 0 0; padding-top: 0; min-height: 0; }
+#screen-group[data-view="maps"] .group-body { display: none; }
+#screen-group[data-view="maps"] .group-maps { display: block; flex: 1; min-height: 0; position: relative; overflow: auto; }
+.maps-viewer { height: 100%; }
+.maps-message { max-width: 34em; margin: 0 auto; padding: var(--space); text-align: center; }
+.maps-again { min-height: 44px; padding: 0 16px; font: inherit; cursor: pointer; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); }
+.maps-list { max-width: 40em; margin: 0 auto; padding: var(--space); }
+.maps-list h2 { margin: 0 0 8px; font-family: var(--f-display); font-size: var(--text-heading); }
+.maps-list ul { list-style: none; margin: 0; padding: 0; }
+.maps-list li + li { margin-top: 8px; }
+.maps-list a { display: block; min-height: 44px; padding: 10px 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: var(--radius); text-decoration: none; overflow-wrap: anywhere; }
+.maps-list a:hover { border-color: var(--brand); }
+.maps-list small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+
+/* N2: water quality sites in Maps (js/wq-sites.js): a button among the map's controls, pins named at close zoom, and a panel beside
+   the map on a computer or a sheet from the bottom on a phone (the viewer's own breakpoint, 720px). Tokens only. */
+/* N2b: the button is the app's own, laid over the map; js/wq-sites.js sets its top and right below the viewer's buttons */
+.wqs-ctrl { position: absolute; z-index: 6; top: 10px; right: 10px; }
+.wqs-toggle { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 4px; box-shadow: var(--map-pin-shadow); font: 600 var(--text-small) var(--f-ui); color: var(--ink); background: var(--panel); white-space: nowrap; cursor: pointer; }
+.wqs-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.wqs-drop { width: 10px; height: 10px; border-radius: 50% 0 50% 50%; transform: rotate(-45deg); background: var(--map-wq); flex: none; }
+.wqs-toggle[aria-pressed="true"] .wqs-drop { background: var(--accent-ink); }
+.wqs-pin { display: block; border: 0; background: none; padding: 6px; cursor: pointer; color: var(--map-label); font: 600 var(--text-small) var(--f-ui); text-shadow: var(--map-label-shadow); }
+.wqs-pin i { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: var(--map-wq); border: 2px solid var(--map-label); box-shadow: var(--map-pin-shadow); font-style: normal; text-shadow: none; color: var(--map-label); }
+.wqs-pin.wqs-older i { width: 12px; height: 12px; background: var(--map-wq-older); }
+/* WQV1: the Water quality page's symbols: a square for a groundwater site, a ring for the group's own (its sub-groups' too) */
+.wqs-pin.wqs-gw i { border-radius: 3px; }
+.wqs-pin.wqs-own i { box-shadow: 0 0 0 2px var(--map-wq), 0 0 0 4px var(--map-label); }
+/* WQ4: a name beside its dot (right, else left: wqs-label-left), smaller, with the map's halo; hidden where it would touch another (wqs-label-off) */
+.wqs-pin .wqs-label { display: none; position: absolute; top: 50%; left: 100%; transform: translateY(-50%); width: max-content; max-width: 170px; margin-left: -2px; text-align: left; line-height: 1.15; white-space: nowrap; pointer-events: none;
+  text-shadow: var(--map-label-shadow), 0 0 2px var(--map-halo), 0 0 3px var(--map-halo); }
+.wqs-pin.wqs-label-left .wqs-label { left: auto; right: 100%; margin: 0 -2px 0 0; text-align: right; }
+.wqs-near .wqs-pin .wqs-label, .wqs-pin.wqs-chosen .wqs-label, .wqs-pin:focus-visible .wqs-label, .wqs-pin:hover .wqs-label { display: block; }
+/* comparing: the pins carry their numbers, so names show only close in (or on hover and focus), never piled on each other */
+.wqs-comparing:not(.wqs-near) .wqs-pin.wqs-chosen:not(:hover, :focus-visible) .wqs-label { display: none; }
+.wqs-near .wqs-pin.wqs-label-off:not(.wqs-chosen, :hover, :focus-visible) .wqs-label { display: none; }
+/* the panel sits at the right on a computer: the map's own controls move to its left while it is open, so none is hidden */
+@media (min-width: 721px) {
+  .wqs-open .maplibregl-ctrl-top-right, .wqs-open .maplibregl-ctrl-bottom-right { right: 454px; }
+  /* CO1b (the owner's walk: the panel covered "Whole area"): the viewer's "Whole area" moves with them */
+  .wqs-open .rv-fit { right: 454px; }
+}
+.wqs-pin.wqs-chosen { z-index: 2; }
+.wqs-pin.wqs-chosen i { width: 22px; height: 22px; outline: 2px solid var(--map-halo); color: var(--panel); }
+.wqs-pin:focus-visible { outline: none; }
+.wqs-pin:focus-visible i { outline: 3px solid var(--map-label); outline-offset: 2px; }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="1"] i { background: var(--series-1); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="2"] i { background: var(--series-2); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="3"] i { background: var(--series-3); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="4"] i { background: var(--series-4); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="5"] i { background: var(--series-5); }
+:is(.wqs-pin, .wqs-chip, .wqs-table tr)[data-slot="6"] i { background: var(--series-6); }
+.wqs-panel { position: absolute; z-index: 10; top: 12px; right: 12px; bottom: 34px; width: 430px; max-width: calc(100% - 24px); display: flex; flex-direction: column;
+  background: var(--panel); color: var(--ink); border-radius: var(--radius); box-shadow: var(--shadow); font: 400 var(--text-body)/1.4 var(--f-ui); overflow: hidden; }
+.wqs-panel[hidden] { display: none; }
+.wqs-bar { display: flex; align-items: center; gap: 8px; padding: 4px 4px 0 8px; flex: none; }
+.wqs-back { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; text-decoration: underline; }
+.wqs-close { margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--wash); color: var(--ink-2); font: 400 var(--text-heading)/1 var(--f-ui); cursor: pointer; }
+.wqs-status { margin: 0 16px; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-status:empty { display: none; }
+.wqs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; }
+.wqs-body h2 { margin: 0 0 4px; font: 600 var(--text-heading)/1.2 var(--f-head); overflow-wrap: anywhere; }
+.wqs-body h2:focus { outline: none; }
+.wqs-body h3 { margin: 16px 0 4px; font: 600 var(--text-body)/1.3 var(--f-head); }
+.wqs-search { width: 100%; min-height: 44px; margin: 8px 0 0; padding: 0 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; }
+.wqs-none { margin-top: 8px; }
+.wqs-none > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: var(--text-small); }
+.wqs-source { margin: 16px 0 0; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-meta, .wqs-hint, .wqs-credit { margin: 4px 0; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-provisional { display: inline-block; padding: 0 8px; border: 1px solid var(--ink-2); border-radius: 999px; font-weight: 600; white-space: nowrap; }
+.wqs-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.wqs-site { display: block; width: 100%; min-height: 44px; padding: 8px 4px; border: 0; border-top: 1px solid var(--rule); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.wqs-site:hover { background: var(--wash); }
+.wqs-site b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.wqs-site small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-site.wqs-older b { font-weight: 400; }
+.wqs-values { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.wqs-value { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; width: 100%; min-height: 44px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.wqs-value[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--wash); padding: 5px 9px; }
+.wqs-value .wqs-name { font-weight: 600; overflow-wrap: anywhere; }
+.wqs-value .wqs-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wqs-value small { grid-column: 1 / -1; color: var(--ink-2); font-size: var(--text-small); }
+.wqs-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 12px 0 0; }
+.wqs-field { display: grid; gap: 2px; min-width: 0; flex: 1 1 14em; }
+.wqs-field > span { color: var(--ink-2); font-size: var(--text-small); font-weight: 600; }
+.wqs-panel select { min-height: 44px; max-width: 100%; padding: 0 8px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; }
+.wqs-chart .chart-block { padding: 8px 0 0; border: 0; background: none; }
+.wqs-findings p { margin: 8px 0; font-size: var(--text-small); }
+.wqs-how { margin-top: 8px; font-size: var(--text-small); color: var(--ink-2); }
+.wqs-how > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--ink); }
+.wqs-how ul { margin: 4px 0; padding-left: 1.2em; }
+.wqs-actions { margin-top: 12px; }
+.wqs-button { min-height: 44px; padding: 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); font: 600 var(--text-body) var(--f-ui); cursor: pointer; }
+.wqs-button:hover { border-color: var(--accent); }
+.wqs-adder select { width: 100%; }
+.wqs-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; padding: 0; }
+.wqs-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 2px 2px 4px; border: 1px solid var(--rule); border-radius: 999px; font-size: var(--text-small); }
+.wqs-chip > span { overflow-wrap: anywhere; }
+.wqs-chip button { flex: none; width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--wash); color: var(--ink); font: 600 var(--text-body)/1 var(--f-ui); cursor: pointer; }
+:is(.wqs-chip, .wqs-table th) > i { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; margin-right: 4px; border-radius: 50%; color: var(--panel); font: 700 var(--text-small)/1 var(--f-ui); font-style: normal; vertical-align: -4px; }
+.wqs-table-wrap { overflow-x: auto; margin-top: 8px; }
+.wqs-table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+.wqs-table caption { text-align: left; font-weight: 600; padding: 4px 0; }
+.wqs-table :is(th, td) { text-align: left; vertical-align: top; padding: 6px 4px; border-top: 1px solid var(--rule); }
+.wqs-table thead th { color: var(--ink-2); border-top: 0; }
+.wqs-table tbody th { font-weight: 600; min-width: 7em; overflow-wrap: anywhere; }
+.wqs-table .wqs-figure { display: block; font-variant-numeric: tabular-nums; }
+.wqs-table td:is(:nth-child(2), :nth-child(3)) .wqs-figure { white-space: nowrap; }
+.wqs-table td small { display: block; color: var(--ink-2); font-size: var(--text-small); }
+@media (max-width: 720px) {
+  .wqs-panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none; max-height: 72%; border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .wqs-panel[data-view="list"] { max-height: 45%; }
+  .wqs-panel[data-view="wqsite"] { max-height: 66%; }   /* WQ4: the site stays in sight above it */
+}
+/* WQ4: a phone's sheet has a handle to drag it taller, shorter or away (a 44 px target; on a computer the panel has none) */
+.wqs-grip { display: none; }
+@media (max-width: 720px) {
+  .wqs-grip { display: grid; place-items: center; flex: 1; align-self: stretch; min-height: 44px; margin: 0; padding: 0; border: 0; background: none; cursor: grab; touch-action: none; }
+  .wqs-grip > span { width: 40px; height: 5px; border-radius: 3px; background: var(--ink-3); opacity: .7; }
+}
+/* WQ4: a site's calm view: the measures as chips, its level in words, the chart, one quiet link */
+.wqsv-measures { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.wqsv-measures[hidden] { display: none; }
+.wqsv-measure { min-height: 44px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); color: var(--ink); font: 600 var(--text-small) var(--f-ui); cursor: pointer; }
+.wqsv-measure[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.wqsv-facts { margin-top: 8px; }
+.wqsv-facts p { margin: 2px 0; }
+.wqsv-level { font-weight: 600; }
+.wqsv-chart .chart-block .block-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }   /* (the chosen chip names the measure; kept for a screen reader) */
+@media (max-width: 720px) {
+  /* on a phone the measures are one row that scrolls sideways, so the chart starts high on the sheet */
+  .wqsv-measures { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; }
+  .wqsv-measure { flex: none; padding: 0 12px; }
+}
+.wqsv-chart .chart-summary { font-size: var(--text-small); color: var(--ink-2); }
+.wqsv-few { margin: 12px 0; padding: 12px; border-radius: 8px; background: var(--wash); font-size: var(--text-small); }
+.wqsv-lawa { margin-top: 8px; }
+.wqsv-open { margin: 12px 0 0; }
+/* review of #570: the tapped point's own published fields, closed, under plain names */
+.wqsv-fields { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 4px 0 8px; }
+.wqsv-fields dt { color: var(--ink-2); }
+.wqsv-fields dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.wqsv-open a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-weight: 600; font-size: var(--text-small); }
+/* WQ4: one short name per published water quality site, beside its dot, white with a dark halo as the map's own names */
+.wqsv-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.wqsv-labels[hidden] { display: none; }
+.wqsv-label { position: absolute; left: 0; top: 0; height: 18px; line-height: 18px; white-space: nowrap; color: var(--map-label); font: 600 var(--text-small) var(--f-ui); line-height: 18px; text-shadow: var(--map-label-shadow), 0 0 2px var(--map-halo), 0 0 3px var(--map-halo); }
+.wqsv-label[hidden] { display: none; }
+@media print { .wqsv-labels { display: none; } }
+@media print { .wqs-pin, .wqs-ctrl, .wqs-panel { display: none; } }
+/* N2c: the switch for older and sparse sites, beside the list's header */
+.wqs-switch { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
+.wqs-held { margin-top: 8px; }
+.wqs-pagelink a { display: inline-flex; align-items: center; min-height: 44px; }   /* RF2: "Open the Water quality page", a 44 px target */
+.wqs-held > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; font-size: var(--text-small); }
+
+/* ---- PH2: one layout rule for a phone map screen (the viewer's own breakpoint, 720 px) -----------------------------------------------
+   Top right: one small cluster, Locate then More (zoom is a pinch; the compass, 3D, measure and print are under More, shown while it
+   is open). Top left: "Whole area" (or "Whole property"), and the Water quality chip under it. Bottom left, above the sheet: the scale
+   and the credit's "i". Bottom right, above the sheet: the + alone (add.js). The map's own sheet: its title row and Layers; open, it
+   leaves the cluster clear and the +, the chip and the scale step aside. Every control a 44 px target. viewer.js is not edited. */
+.ph-more, .ph-locate, .ph-layers, .ph-fit { display: none; }
+.ph-locate-btn, .ph-more-btn { display: grid; place-items: center; color: var(--ink); }
+.ph-locate-btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--ink); }
+.ph-locate-btn.ph-busy .icon { animation: pa-pulse 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ph-locate-btn.ph-busy .icon { animation: none; opacity: .5; } }
+.ph-me-dot { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--map-me); box-shadow: 0 0 0 2.5px var(--map-label); }
+.ph-locate-sheet .ph-locate-say { margin: 0 var(--s-4) var(--s-3); color: var(--ink); }
+.ph-locate-sheet .ph-locate-help { margin: 0 var(--s-4) var(--s-3); }
+.ph-locate-sheet .qp-set { margin: 0 var(--s-4) var(--s-3); }
+@media (max-width: 720px) {
+  /* review of #538, 2: More opens two short columns to the left of the cluster (zoom and the compass; 3D, measure, print), all within
+     the top of the map, so on the shortest phone (320 x 568, Safari's bars showing) none runs under the sheet or the +, which steps
+     aside while the list is open; the Water quality chip steps aside too */
+  /* MV1: Locate and More sit in the sheet's peek (maps-view.js); More opens the tools in two short columns top right, as before */
+  .maps-viewer .maplibregl-ctrl-top-right { display: grid; grid-template-columns: repeat(2, auto); justify-content: end; align-items: start; gap: 10px; padding: 10px 10px 0 0; }
+  .maps-viewer .maplibregl-ctrl-top-right > .maplibregl-ctrl { margin: 0; }
+  .maps-viewer .maplibregl-ctrl-top-right > :has(.maplibregl-ctrl-geolocate) { display: none; }   /* the app's own Locate instead (maps-view.js) */
+  .maps-viewer .ph-locate, .maps-viewer .ph-more { display: block; }
+  .maps-viewer .maplibregl-ctrl-top-right > :has(.maplibregl-ctrl-zoom-in) { grid-column: 1; grid-row: 1 / span 3; }
+  .maps-viewer .maplibregl-ctrl-top-right > .rv-3d { grid-column: 2; grid-row: 1; }
+  .maps-viewer .maplibregl-ctrl-top-right > .rv-tools { grid-column: 2; grid-row: 2 / span 3; }
+  .maps-viewer:not(.ph-more-open) .maplibregl-ctrl-top-right > :is(:has(.maplibregl-ctrl-zoom-in), .rv-3d, .rv-tools) { display: none; }
+  .maps-viewer.ph-more-open > .wqs-ctrl { display: none; }
+  .maps-viewer .maplibregl-ctrl-top-right button { width: 44px; height: 44px; }
+  .maps-viewer .rv-3d button { line-height: 44px; }
+  .maps-viewer.ph-more-open .ph-more-btn { background: var(--fill); }
+  /* PH5 (the owner's iPhone, 14 Nov 2026: Locate and More were black squares, the icon off-centre): the same round ink buttons as
+     Home's Locate (capture.css .pa-locate), the icon in the middle (MV1: in the peek, without the shadow a button over the map needs) */
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) > :is(.ph-locate, .ph-more) { background: none; border: 0; border-radius: 50%; box-shadow: none; overflow: visible; }
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) :is(.ph-locate-btn, .ph-more-btn) { display: grid; place-items: center; box-sizing: border-box; width: 44px; height: 44px; margin: 0; padding: 0;
+    border: 1px solid var(--rule); border-radius: 50%; background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); line-height: 0; cursor: pointer; }
+  .maps-viewer .mv-peek-tools :is(.ph-locate-btn, .ph-more-btn) { box-shadow: none; }
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) :is(.ph-locate-btn, .ph-more-btn) > .icon { display: block; margin: 0; }
+  .maps-viewer :is(.maplibregl-ctrl-top-right, .mv-peek-tools) .ph-locate-btn[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .maps-viewer.ph-more-open :is(.maplibregl-ctrl-top-right, .mv-peek-tools) .ph-more-btn { background: var(--fill); }
+  .maps-viewer .mv-peek-tools { display: flex; flex: none; align-items: center; gap: 8px; margin: 0 0 0 auto; }
+  .maps-viewer .mv-peek-tools > .maplibregl-ctrl { margin: 0; float: none; }
+  /* the whole peek opens the sheet: its title and facts are not targets of their own, so a tap on them is a tap on the head */
+  .maps-viewer .rv-titlebar > div:first-child > * { pointer-events: none; }
+  /* the scale and the credit: bottom left, above the map's sheet, side by side */
+  .maps-viewer .maplibregl-ctrl-bottom-right { right: auto; left: 0; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px)); display: flex; align-items: flex-end; gap: 8px; padding: 0 0 8px 10px; }
+  .maps-viewer .maplibregl-ctrl-bottom-right > .maplibregl-ctrl { margin: 0; }
+  .maps-viewer .maplibregl-ctrl-attrib.maplibregl-compact-show { max-width: calc(100vw - 110px); }
+  .maps-viewer:is(.rv-panel-open, .wqs-open) .maplibregl-ctrl-bottom-right, .maps-viewer:is(.rv-panel-open, .wqs-open) > .wqs-ctrl { display: none; }
+  /* the chips (where one is still over the map): 34 px to look at, 44 px to tap */
+  .maps-viewer > .wqs-ctrl .wqs-toggle::after, .maps-viewer > .wqs-ctrl .wqs-list-btn::after { content: ""; position: absolute; inset: -5px 0; }
+  .maps-viewer .wqs-toggle, .maps-viewer .wqs-list-btn { position: relative; }
+  /* RF1 then MV1: the sheet's own Layers button steps aside, so its title has the row to itself, on one line, beside Locate and More;
+     the peek itself opens the sheet. "Whole group" is a tool under More. */
+  .maps-viewer .rv-titlebar .rv-layers-btn { display: none; }
+  .maps-viewer .rv-panel .wqs-toggle, .maps-viewer .rv-panel .wqs-list-btn { min-height: 44px; }
+  .maps-viewer .rv-titlebar > div:first-child { flex: 1; }
+  .maps-viewer .ph-fit { display: none; grid-column: 1 / -1; grid-row: 5; justify-self: end; }
+  .maps-viewer.ph-more-open .maplibregl-ctrl-top-right > .ph-fit { display: block; background: none; border: 0; border-radius: var(--radius-pill); box-shadow: none; overflow: visible; }
+  .maps-viewer .maplibregl-ctrl-top-right .ph-fit .rv-fit { position: static; display: inline-flex; align-items: center; box-sizing: border-box; width: auto; height: 44px; margin: 0; padding: 0 16px;
+    border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); font: 600 var(--text-small)/1 var(--f-ui); white-space: nowrap; }
+  /* the sheet: the title on one line; the group's name and the Rural Consulting mark are the header's, not repeated here */
+  .maps-viewer .rv-kicker, .maps-viewer .rv-org .rv-brand { display: none; }
+  .maps-viewer .rv-org:not(:has(.rv-back)) { display: none; }
+  .maps-viewer .rv-title { font-size: var(--text-body); font-weight: 600; line-height: 1.3; margin: 4px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .maps-viewer .rv-panel { max-height: calc(100% - 124px); }
+  /* measuring or comparing (a tool from More, which closes): the tool's bar sits low, above the sheet, in place of the scale and credit,
+     and the tools stay up top so the same button ends it; the + steps aside meanwhile (add.js) */
+  .maps-viewer .rv-toolbar { top: auto; bottom: calc(var(--peek, 120px) + env(safe-area-inset-bottom, 0px) + 10px); left: 10px; right: 10px; transform: none; max-width: none; }
+  .maps-viewer:is(.rv-measuring, .rv-comparing) .maplibregl-ctrl-top-right > .rv-tools { display: block; }
+  .maps-viewer:is(.rv-measuring, .rv-comparing) .maplibregl-ctrl-bottom-right, .maps-viewer:is(.rv-measuring, .rv-comparing) > .wqs-ctrl { display: none; }
+  /* RF2: every control in the Layers sheet a 44 px target, the sheet looking as it did. A section's heading and a layer's row are
+     44 px tall (40 and about 42 before: the row's own 6 px margins became part of its label, the whole row a switch); the grab
+     handle is a 44 px button with the bar drawn inside it, laid over the head's top so the sheet's peek is unchanged; Aerial, Topo
+     and None are 44 px buttons with the 30 px pill drawn inside them; "All maps", "More" and another map's choice likewise. */
+  .maps-viewer button.rv-group { min-height: 44px; padding-top: 4px; padding-bottom: 0; }
+  .maps-viewer .rv-layer { padding-top: 0; padding-bottom: 2px; }
+  .maps-viewer .rv-layer-row label { align-self: stretch; min-height: 44px; }
+  .maps-viewer .rv-opacity input { min-height: 44px; margin: 0; }
+  .maps-viewer .rv-toggle-panel { position: relative; z-index: 1; flex: none; width: 96px; height: 44px; margin: 0 auto -31px; background: none; border-radius: 0; }
+  .maps-viewer .rv-toggle-panel::before { content: ""; position: absolute; left: 28px; right: 28px; top: 8px; height: 5px; border-radius: 3px; background: var(--rule); }
+  .maps-viewer .rv-toggle-panel:focus-visible { outline-offset: -4px; }
+  .maps-viewer .rv-foot { padding-top: 3px; padding-bottom: 5px; }
+  .maps-viewer .rv-foot .rv-seg { border: 0; border-radius: 0; overflow: visible; }
+  .maps-viewer .rv-foot .rv-seg button { position: relative; z-index: 0; min-height: 44px; padding: 0 12px; background: none; color: var(--ink-2); }
+  .maps-viewer .rv-foot .rv-seg button::before { content: ""; position: absolute; z-index: -1; inset: 7px 0; border: 1px solid var(--rule); border-left-width: 0; }
+  .maps-viewer .rv-foot .rv-seg button:first-child::before { border-left-width: 1px; border-radius: 999px 0 0 999px; }
+  .maps-viewer .rv-foot .rv-seg button:last-child::before { border-radius: 0 999px 999px 0; }
+  .maps-viewer .rv-foot .rv-seg button[aria-pressed="true"] { background: none; color: var(--accent-ink); }
+  .maps-viewer .rv-foot .rv-seg button[aria-pressed="true"]::before { background: var(--accent); border-color: var(--accent); }
+  .maps-viewer .rv-foot .rv-seg button:focus-visible { outline: none; }
+  .maps-viewer .rv-foot .rv-seg button:focus-visible::before { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .maps-viewer .rv-org .rv-back { min-height: 44px; margin: -12px 0; }
+  .maps-viewer .rv-desc .rv-link { min-height: 44px; padding: 0; }
+  .maps-viewer .rv-mapsel select { min-height: 44px; }
+}
+/* the water quality dots: small far out, a little larger close in, the chosen one clear (wq-sites.js sets the zoom band) */
+.wqs-pin { padding: 6px; }
+.wqs-pin i { width: var(--wqs-dot, 12px); height: var(--wqs-dot, 12px); border-width: 1.5px; box-sizing: border-box; }
+.wqs-pin.wqs-older i { width: calc(var(--wqs-dot, 12px) - 2px); height: calc(var(--wqs-dot, 12px) - 2px); }
+[data-wqs-zoom="far"] { --wqs-dot: 10px; }
+[data-wqs-zoom="mid"] { --wqs-dot: 12px; }
+[data-wqs-zoom="near"] { --wqs-dot: 14px; }
+.wqs-pin.wqs-chosen i { width: 18px; height: 18px; }
+.wqs-pin.wqs-thinned { visibility: hidden; pointer-events: none; }
+@media (max-width: 720px) { .wqs-pin { padding: 16px; } }   /* a 44 px tap target round a 12 px dot */
+/* the list of sites, on request: a quiet chip beside Water quality once it is on (a phone) */
+.wqs-list-btn { display: none; height: 34px; margin-left: 6px; padding: 0 10px; border: 0; border-radius: 4px; box-shadow: var(--map-pin-shadow); font: 600 var(--text-small) var(--f-ui); color: var(--ink); background: var(--panel); cursor: pointer; }
+@media (max-width: 720px) { .wqs-on .wqs-list-btn { display: inline-flex; align-items: center; } .wqs-ctrl { display: flex; } }
+/* the panel's top row is its own: the back link and the close button, over a hairline, so the close never sits on the list */
+.wqs-bar { border-bottom: 1px solid var(--rule-soft); padding-bottom: 4px; margin-bottom: 4px; }
+
+/* ---- MV1: one panel, few controls, one action (the owner, 16 Nov 2026, of the older maps portal: "the maps are just simpler and much
+   easier to navigate"). maps-view.js moves the viewer's own rows; viewer.js is not edited. -------------------------------------------- */
+.mv-peek-tools { display: none; }
+/* the water quality sites: one more switch in the panel, after the map's own layers (wq-sites.js's own button, drawn as a row) */
+.maps-viewer .mv-wq-row { padding: 6px 18px 6px 22px; }   /* (the switch where the viewer's own switches are, after their input's margin) */
+.maps-viewer .rv-panel .wqs-toggle { position: relative; }
+.maps-viewer .rv-panel .wqs-ctrl { position: static !important; display: flex; align-items: center; gap: 8px; }
+.maps-viewer .rv-panel .wqs-toggle { flex: 1; min-width: 0; height: auto; min-height: 30px; justify-content: flex-start; gap: 10px; padding: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; color: var(--ink); font: inherit; font-weight: 400; text-align: left; white-space: normal; }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"] { background: none; color: var(--ink); }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"] .wqs-drop { background: var(--map-wq); }
+/* (a switch drawn as the viewer draws its own: a pill and a knob; the button's pressed state is what it says) */
+.maps-viewer .rv-panel .wqs-toggle::before { content: ""; flex: none; width: 32px; height: 18px; border-radius: 9px; background: var(--rule); transition: background .15s; }
+.maps-viewer .rv-panel .wqs-toggle::after { content: ""; position: absolute; inset: auto; left: 2px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: var(--raised);
+  box-shadow: var(--shadow-1); transition: transform .15s; }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"]::before { background: var(--switch-on); }   /* LP2: green, as every layer's switch */
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"]::after { transform: translateX(14px); }
+.maps-viewer .rv-panel .wqs-list-btn { height: auto; margin: 0; padding: 0 4px; box-shadow: none; background: none; text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) { .maps-viewer .rv-panel .wqs-toggle::before, .maps-viewer .rv-panel .wqs-toggle::after { transition: none; } }
+/* one Reference group, as the portal had it: a quiet caption, not a fold of its own (its themes still fold) */
+.maps-viewer .mv-ref-head { padding: 14px 18px 2px; font-size: var(--text-small); font-weight: 600; color: var(--ink-3); }
+.maps-viewer .mv-ref .rv-section button.rv-group { padding-left: 18px; }
+@media (min-width: 721px) {
+  /* the one column of controls, top right, with "Whole group" at its foot (the portal's "Whole property") */
+  .maps-viewer .maplibregl-ctrl-top-right > .ph-fit { display: block; }
+  .maps-viewer .maplibregl-ctrl-top-right > .ph-fit .rv-fit { position: static; display: flex; align-items: center; width: auto; height: 29px; padding: 0 10px; border-radius: 4px; box-shadow: none;
+    background: var(--panel); color: var(--ink); font: 600 var(--text-small)/1 var(--f-ui); white-space: nowrap; }
+}
+@media (max-width: 720px) {
+  /* RF2's rule: every control in the sheet a 44 px target */
+  .maps-viewer .rv-panel .wqs-toggle, .maps-viewer .rv-panel .wqs-list-btn { min-height: 44px; }
+  .maps-viewer .mv-wq-row { padding-top: 0; padding-bottom: 2px; }
+}
+/* LP2: a layer's switch in the viewer's panel, as the farm's and group's Layers draw theirs: off hollow, on green with a tick (viewer.js
+   and vendor/viewer.css are not edited). Each heading that folds carries its group's switch; how many are on shows folded or open. */
+.maps-viewer .rv-switch { background: var(--panel); box-shadow: inset 0 0 0 2px var(--switch-off); }
+.maps-viewer .rv-switch::after { top: 4px; left: 4px; width: 10px; height: 10px; background: var(--switch-off); box-shadow: none; }
+.maps-viewer .rv-switch:checked { background: var(--switch-on); box-shadow: none; }
+.maps-viewer .rv-switch:checked::after { top: 2px; left: 2px; width: 14px; height: 14px; background: var(--switch-on-knob); }
+.maps-viewer .rv-switch:checked::before { content: ""; position: absolute; left: 6px; top: 3px; width: 4px; height: 8px; border: solid var(--switch-on-knob); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.maps-viewer .mv-lg { display: flex; align-items: center; min-height: 0; padding-right: 8px; }
+.maps-viewer .mv-lg > button.rv-group { flex: 1; min-width: 0; }
+.maps-viewer .mv-lg .rv-group-on { display: none; }
+.maps-viewer .mv-lg .lg-count { background: var(--wash); }
+.maps-viewer .mv-lg .lg-switch { margin-top: 2px; }
+/* (the water quality sites' switch, drawn as one: off hollow, on green) */
+.maps-viewer .rv-panel .wqs-toggle::before { background: var(--panel); box-shadow: inset 0 0 0 2px var(--switch-off); }
+.maps-viewer .rv-panel .wqs-toggle::after { left: 4px; width: 10px; height: 10px; margin-top: -5px; background: var(--switch-off); box-shadow: none; }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"]::before { box-shadow: none; }
+.maps-viewer .rv-panel .wqs-toggle[aria-pressed="true"]::after { left: 2px; width: 14px; height: 14px; margin-top: -7px; background: var(--switch-on-knob); }

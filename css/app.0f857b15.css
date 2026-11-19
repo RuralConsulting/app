@@ -1,0 +1,272 @@
+/* Shared components consume Paddock tokens; layout belongs to each view. SI2: once signed in, straight after app-base.css (the page,
+   the card screens and the privacy note, which a signed-out visitor needs). */
+/* access keys for QGIS (QGIS1a): the person's own page, #/account/qgis */
+.card select { width: 100%; padding: 11px 12px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); font-size: var(--text-body); color: inherit; }
+.card code { font-size: var(--text-small); overflow-wrap: anywhere; }
+.tf-qr { display: block; margin: 8px auto; padding: 8px; box-sizing: content-box; border-radius: 8px; background: var(--qr-ground); }
+.token-heading { font-family: var(--f-head); font-weight: 650; font-size: var(--text-heading); margin: 22px 0 8px; }
+.token-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.token-list li { border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; min-width: 0; }
+.token-list li.token-wait { border: 0; padding: 0; color: var(--ink-2); font-size: var(--text-small); }
+.token-list li[data-state="revoked"], .token-list li[data-state="expired"] { color: var(--ink-2); }
+.token-list .tk-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.token-list .tk-state { font-size: var(--text-small); color: var(--ink-2); }
+.token-list small { color: var(--ink-2); font-size: var(--text-small); overflow-wrap: anywhere; }
+.token-list p { margin: 4px 0 0; font-size: var(--text-small); }
+.token-list .tk-revoke-yes { padding: 6px 10px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.token-new { margin-top: 14px; padding: 12px 14px; border: 2px solid var(--accent); border-radius: 10px; display: grid; gap: 8px; min-width: 0; }
+.token-new p { margin: 0; }
+.token-value { display: flex; gap: 8px; min-width: 0; }
+.token-value input { flex: 1; min-width: 0; width: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: var(--text-small); }
+.token-value button { padding: 10px 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+.token-steps { margin: 0; padding-left: 20px; font-size: var(--text-small); display: grid; gap: 4px; overflow-wrap: anywhere; }
+.farm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.farm-list button { width: 100%; text-align: left; border: 1px solid var(--rule); background: var(--panel); border-radius: 10px;
+  padding: 14px 16px; cursor: pointer; display: grid; gap: 2px; }
+.farm-list button:hover { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.farm-list b { font-family: var(--f-head); font-size: var(--text-heading); font-weight: 650; }
+.farm-list span { font-size: var(--text-small); color: var(--ink-2); }
+
+/* the map */
+.map-screen { position: fixed; inset: 0; }
+#map { position: absolute; inset: 0; }
+.panel { position: absolute; z-index: 2; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left));
+  width: 300px; max-width: calc(100vw - 80px); max-height: calc(100% - 60px); display: flex; flex-direction: column;
+  background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.panel-toggle { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; padding: 12px 14px 8px;
+  background: none; border: 0; cursor: pointer; text-align: left; font-family: var(--f-head); font-weight: 650; font-size: var(--text-heading); line-height: 1.15; }
+.chev { font-size: var(--text-small); transition: transform .15s; }
+.panel.closed .chev { transform: rotate(-90deg); }
+.panel.closed .panel-body { display: none; }
+.panel-body { overflow-y: auto; padding: 0 14px 12px; }
+.sub { margin: -4px 0 10px; color: var(--ink-2); font-size: var(--text-small); }
+.basemaps { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+.basemaps button { border: 0; background: none; padding: 6px 12px; cursor: pointer; font-size: var(--text-small); }
+.basemaps button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.layer-list { list-style: none; margin: 0; padding: 0; }
+.layer-list li { border-bottom: 1px solid var(--rule); }
+.layer-list .group { padding: 14px 0 4px; border-bottom: 0; font: 600 var(--text-small) var(--f-head); color: var(--ink-2); }
+.layer-list .group.job { padding-top: 8px; font-weight: 400; color: var(--ink-3); }
+.layer-list label { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 8px 0; cursor: pointer; align-items: start; }
+.layer-list b { display: block; font-weight: 600; font-size: var(--text-body); }
+.layer-list small { display: block; color: var(--ink-3); font-size: var(--text-small); line-height: 1.3; }
+/* A switch, not a tick box: the layer is either on the map or it is not. LP2: off is hollow (a ring, a small knob at the left); on
+   is green (--switch-on), filled, its knob at the right and a tick, so on and off differ by shape as well as colour. */
+.layer-list input[role="switch"], .group-layers input[role="switch"], .terrain-toggle input[role="switch"] { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 34px; height: 20px; margin: 2px 0 0; border-radius: 999px; background: var(--panel); box-shadow: inset 0 0 0 2px var(--switch-off); cursor: pointer; transition: background .15s; }
+.layer-list input[role="switch"]::after, .group-layers input[role="switch"]::after, .terrain-toggle input[role="switch"]::after { content: ""; position: absolute; top: 5px; left: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--switch-off); transition: transform .15s; }
+.layer-list input[role="switch"]:checked, .group-layers input[role="switch"]:checked, .terrain-toggle input[role="switch"]:checked { background: var(--switch-on); box-shadow: none; }
+.layer-list input[role="switch"]:checked::after, .group-layers input[role="switch"]:checked::after, .terrain-toggle input[role="switch"]:checked::after { top: 2px; left: 2px; width: 16px; height: 16px; transform: translateX(14px); background: var(--switch-on-knob); }
+.layer-list input[role="switch"]:checked::before, .group-layers input[role="switch"]:checked::before, .terrain-toggle input[role="switch"]:checked::before { content: ""; position: absolute; left: 7px; top: 4px; width: 4px; height: 8px; border: solid var(--switch-on-knob); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.group-layers input[role="switch"] { margin: 0; }
+/* LP2: a group's heading: the fold (a chevron, the name, how many are on) and the group's switch, each a 44 px target. The group's
+   switch is drawn as a layer's; part on (some of its layers, not all) is on, with a dash for the tick. */
+.layer-list .layer-group, .group-layers .layer-group { padding: 6px 0 0; border-bottom: 0; }
+.lg-head { display: flex; align-items: center; gap: 4px; min-height: var(--tap); }
+.lg-fold { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: var(--tap); padding: 0; border: 0; background: none; color: var(--ink-2);
+  font: 600 var(--text-small) var(--f-head); text-align: left; cursor: pointer; }
+.lg-fold:hover { color: var(--ink); }
+.lg-chev { flex: none; width: 7px; height: 7px; margin: -3px 2px 0 1px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(45deg); transition: transform .15s; }
+.lg-fold[aria-expanded="false"] .lg-chev { transform: rotate(-45deg); margin-top: 0; }
+.lg-name { min-width: 0; }
+.lg-count { flex: none; font-size: var(--text-small); font-weight: 500; color: var(--ink-2); background: var(--fill); border-radius: var(--radius-pill); padding: 1px 8px; }
+.lg-count:empty { display: none; }
+.lg-switch { flex: none; display: inline-flex; align-items: center; justify-content: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; background: none; cursor: pointer; }
+.lg-switch[hidden] { display: none; }
+.lg-track { position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--panel); box-shadow: inset 0 0 0 2px var(--switch-off); transition: background .15s; }
+.lg-track::after { content: ""; position: absolute; top: 5px; left: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--switch-off); transition: transform .15s; }
+.lg-switch[aria-checked="true"] .lg-track { background: var(--switch-on); box-shadow: none; }
+.lg-switch[aria-checked="true"] .lg-track::after { top: 2px; left: 2px; width: 16px; height: 16px; transform: translateX(14px); background: var(--switch-on-knob); }
+.lg-switch[aria-checked="true"] .lg-track::before { content: ""; position: absolute; left: 7px; top: 4px; width: 4px; height: 8px; border: solid var(--switch-on-knob); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.lg-switch[aria-checked="true"][data-part="true"] .lg-track::before { left: 5px; top: 9px; width: 8px; height: 0; border-width: 2px 0 0; transform: none; }
+.lg-fold:focus-visible, .lg-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-s); }
+/* PERF1b: a reference source on its way shows its switch on but busy (faded, the knob ringed), not off. */
+.layer-list input[role="switch"][aria-busy="true"] { opacity: .6; cursor: progress; }
+.layer-list input[role="switch"][aria-busy="true"]::after { box-shadow: 0 0 0 2px var(--accent-ink) inset; }
+.layer-list .layer-state { font-style: italic; }
+/* FU2: the reference sources could not be counted just now: one line in the Reference list, and a way to read again. */
+.layer-list .layer-error { padding: 8px 0; }
+/* LK4: the drawer grouped by view, then All layers folded; under a shared fill that replaced another, what it replaced and Show both */
+.layer-list .group-all, .group-layers .group-all { border-bottom: 0; }
+.all-layers > summary { padding: 14px 0 4px; font: 600 var(--text-small) var(--f-head); color: var(--ink-3); cursor: pointer; }
+.all-layers-list { list-style: none; margin: 0; padding: 0; }
+.layer-replaced .link { padding: 0; min-height: 0; font-size: inherit; }
+.layer-list .layer-error small { font-style: italic; }
+.layer-list .layer-error .link { padding: 6px 0; min-height: 32px; }
+@media (prefers-reduced-motion: reduce) { .layer-list input[role="switch"], .layer-list input[role="switch"]::after, .group-layers input[role="switch"], .group-layers input[role="switch"]::after, .terrain-toggle input[role="switch"], .terrain-toggle input[role="switch"]::after, .lg-chev, .lg-track, .lg-track::after { transition: none; } }
+.panel-foot { margin-top: 10px; }
+.map-msg { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; padding: 12px 16px;
+  background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
+
+/* land unit labels: white text, no box, a soft shadow (RCL map style) */
+.lu-label { pointer-events: none; text-align: center; color: var(--map-label); line-height: 1.1;
+  text-shadow: var(--map-label-shadow); font-family: var(--f-head); }
+.lu-label b { display: block; font-size: var(--text-body); font-weight: 700; }
+.lu-label span { display: block; font-size: var(--text-small); font-weight: 600; max-width: 140px; }
+.lu-label.code-only span { display: none; }
+.lu-label.far { visibility: hidden; }   /* the farm is not in frame yet (national scale) */
+.lu-label.on-line { visibility: hidden; }   /* a chosen line (the creek) runs under it (#224) */
+
+/* tap details */
+.maplibregl-popup-content { background: var(--panel); color: var(--ink); border-radius: 10px; box-shadow: var(--shadow); padding: 12px 14px; }
+.maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+.maplibregl-popup-close-button { font-size: var(--text-heading); padding: 0 8px; color: var(--ink-2); }
+.pop h3 { margin: 0 18px 2px 0; font-family: var(--f-head); font-size: var(--text-body); font-weight: 650; line-height: 1.2; }
+.pop-layer { margin: 0; font-size: var(--text-small); color: var(--ink-3); }
+.pop-q { margin: 4px 0 0; font-size: var(--text-small); color: var(--ink-2); font-style: italic; }
+.pop-photo { display: block; width: 100%; max-height: 220px; object-fit: cover; border-radius: 6px; margin-top: 8px; background: var(--wash); min-height: 60px; }
+.pop dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: var(--text-small); max-height: 220px; overflow-y: auto; }
+.pop dt { color: var(--ink-3); text-transform: capitalize; }
+.pop dd { margin: 0; word-break: break-word; }
+.pop-attr { margin: 8px 0 0; font-size: var(--text-small); color: var(--ink-3); }
+/* Provenance (PROV1): where a reference layer came from, in one quiet line under its details */
+.pop-prov { margin: 8px 0 0; font-size: var(--text-small); line-height: 1.35; color: var(--ink-3); }
+.pop-prov + .pop-prov, .pop-prov + .pop-attr { margin-top: 2px; }
+.pop-link { margin: 6px 0 0; font-size: var(--text-small); }
+.pop-link a { color: inherit; text-underline-offset: 2px; }
+
+/* Photos on the map (E3): a small white camera on each photo point (no box; a soft shadow), and the open photo's card,
+   inside the map's frame: top left on a wide map (the controls are top right), the map's own sheet on a narrow one. */
+.photo-pin { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: none;
+  color: var(--map-label); cursor: pointer; filter: var(--map-icon-shadow); }
+.photo-pin svg { display: block; transition: transform .15s; }
+.photo-pin.selected { box-shadow: inset 0 0 0 2px var(--map-label); }
+.photo-pin.selected svg { transform: scale(1.2); }
+@media (prefers-reduced-motion: reduce) { .photo-pin svg { transition: none; } }
+.photo-card { position: absolute; z-index: 3; top: 12px; left: 12px; width: min(300px, 46%); max-height: calc(100% - 52px); overflow-y: auto; box-sizing: border-box;
+  padding: 12px 14px; background: var(--panel); color: var(--ink); border-radius: 10px; box-shadow: var(--shadow); }
+.photo-card.sheet { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 62%; padding: 12px; border-radius: 14px 14px 0 0; }
+.photo-pop { position: relative; }
+.photo-pop .pop-photo { width: 100%; height: auto; max-height: none; aspect-ratio: 4 / 3; object-fit: contain; margin: 0 0 10px; }
+.photo-card.sheet .pop-photo { aspect-ratio: auto; height: 180px; }
+/* The original can take a while: until it is in, the box is a soft wash that says so quietly, never a blank slab. */
+.photo-frame { position: relative; }
+.photo-frame.loading .pop-photo { visibility: hidden; }
+.photo-loading { display: none; }
+.photo-frame.loading .photo-loading { display: flex; position: absolute; inset: 0 0 10px; align-items: center; justify-content: center; border-radius: 6px;
+  background: var(--wash); color: var(--ink-3); font-size: var(--text-small); }
+.photo-pop h3 { margin: 0 36px 2px 0; }
+.photo-pop .pop-photo ~ h3 { margin-right: 0; }
+.photo-close { position: absolute; z-index: 1; top: -4px; right: -6px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--panel); color: var(--ink-2); font: var(--text-heading)/1 var(--f-ui); cursor: pointer; }
+.photo-place { margin: 2px 0 0; font-size: var(--text-small); }
+.photo-step { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.photo-step button { min-height: 36px; padding: 4px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--wash); color: var(--ink); font: inherit; font-size: var(--text-small); }
+.photo-step button[disabled] { opacity: .45; cursor: default; }
+.photo-step span { color: var(--ink-3); font-size: var(--text-small); }
+
+/* Shared controls: quiet surfaces, the brand accent and a visible keyboard path. */
+button, input, select, textarea { font-family: var(--f-ui); }
+button, select { cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+/* App controls are scoped so MapLibre retains its own dimensions and icon alignment. */
+.answer-panel button, .ask-form button {
+  font: inherit; min-height: 36px; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--wash); color: var(--ink); padding: 6px 12px;
+}
+.ask-form button { min-height: 44px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Keep the map vendor controls legible in both token sets. */
+.maplibregl-ctrl-group, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact { background: var(--panel); color: var(--ink); }
+.maplibregl-ctrl-attrib a { color: inherit; }
+.maplibregl-ctrl-icon, .maplibregl-ctrl-attrib-button { filter: var(--map-icon-filter); }
+/* RF2: the credit's "i" (MapLibre's own 24 px button) is a 44 px target on a phone or any touch screen: an unseen area round it, more
+   above than below, where a sheet's handle reaches up to it */
+@media (max-width: 800px), (pointer: coarse) {
+  .maplibregl-ctrl-attrib-button::after { content: ""; position: absolute; inset: -14px -10px -6px; }
+}
+/* RF1: the scale is quiet on every map: a hairline, the smallest of the app's four type sizes in a light weight and quiet ink, a soft
+   see-through ground */
+.maplibregl-ctrl-scale { background: var(--map-scale-ground); color: var(--ink-2); border: 1px solid var(--ink-3); border-top: 0;
+  padding: 0 4px; font: 400 var(--text-small)/1.3 var(--f-ui); }
+.terrain-toggle { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: var(--text-body); cursor: pointer; }
+.terrain-toggle[hidden] { display: none; }
+/* LN1: a layer's advisor note in its info panel, folded, read-only */
+.pop-note { margin: 8px 0 0; border-top: 1px solid var(--rule); padding-top: 6px; font-size: var(--text-small); }
+.pop-note > summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.pop .pop-note dl { grid-template-columns: 1fr; gap: 0; max-height: 200px; }
+.pop .pop-note dt { text-transform: none; margin-top: 6px; }
+.pop-note-from { color: var(--ink-3); }
+.pop-note-by { margin: 6px 0 0; color: var(--ink-3); font-size: var(--text-small); }
+
+/* DEC1b: the decision card, one for every queue (group-manage.js, onboarding.js). The question sits with the thing it is about:
+   beside it on a wide screen, under it on a phone. */
+.decision-card .card-body { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  .decision-card .card-body.card-with-thing { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+  .decision-card .card-body.card-viewing { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}
+.decision-card .card-line { color: var(--ink-2); font-size: var(--text-small); display: block; }
+.card-thing { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--wash); min-width: 0; }
+.card-thing-title { margin: 0; font: 700 var(--text-small)/1.3 var(--f-ui); color: var(--ink-2); }
+.card-fields { display: grid; gap: 4px; margin: 0; }
+.card-fields > div { display: grid; grid-template-columns: minmax(6rem, 34%) minmax(0, 1fr); gap: 8px; }
+.card-fields dt { color: var(--ink-2); font-size: var(--text-small); }
+.card-fields dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.card-page { font-family: var(--f-ui); font-size: var(--text-small); line-height: 1.4; }
+.card-page p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.card-more summary { cursor: pointer; color: var(--ink-2); font-size: var(--text-small); min-height: 32px; display: flex; align-items: center; }
+.card-fine { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.card-fine:empty { display: none; }
+.card-not-held { margin: 0; font-size: var(--text-small); font-weight: 700; color: var(--ink); }
+.card-map { height: 240px; border-radius: var(--radius); overflow: hidden; background: var(--map-background, var(--wash)); cursor: pointer; }
+@media (min-width: 900px) { .card-map { height: 280px; } }
+.card-viewer:not([hidden]) { display: grid; gap: 4px; }
+.card-viewer-frame { width: 100%; height: 420px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); }
+@media (min-width: 900px) { .card-viewer-frame { height: 560px; } }
+.card-question { display: grid; gap: 6px; min-width: 0; align-content: start; }
+.card-answer { display: grid; gap: 6px; }
+.card-options { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.card-options legend { padding: 0; font-size: var(--text-small); color: var(--ink-2); margin-bottom: 2px; }
+.card-option label { display: flex; gap: 8px; align-items: flex-start; min-height: 32px; cursor: pointer; }
+.card-option input[type="radio"] { min-height: 0; width: 20px; height: 20px; margin: 2px 0 0; flex: none; }
+.card-nosuggest, .card-prompt { margin: 0; font-weight: 700; }
+.card-register { display: grid; gap: 4px; }
+.card-register label { font-size: var(--text-small); color: var(--ink-2); }
+.card-register input[type="search"] { font: inherit; min-height: 44px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); box-sizing: border-box; width: 100%; }
+.card-results { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.card-results:empty { display: none; }
+.card-result { font: inherit; text-align: left; width: 100%; min-height: 44px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); color: var(--ink); cursor: pointer; }
+.card-result:hover, .card-result:focus-visible { border-color: var(--accent); }
+.card-picked { margin: 0; font-weight: 700; }
+.card-picked:empty { display: none; }
+.card-decided { color: var(--ink-2); font-size: var(--text-small); }
+.card-evidence { list-style: none; margin: 0; padding: 0; }
+.card-evidence li { color: var(--ink-2); font-size: var(--text-small); }
+.card-evidence li::before { content: "· "; }
+.decision-card button.card-open, .decision-card button.card-frame { justify-self: start; }
+/* DEC3 (#455 A): an undecided card's question in words above its thing, and its map's legend. The swatches are drawn as the map
+   draws them, over an aerial-like ground (the map's own colours, not the theme's: they must match what the map shows). */
+.decision-card .card-ask { margin: 2px 0 0; font-weight: 700; font-size: var(--text-body); color: var(--ink); }
+.card-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--text-small); color: var(--ink-2); }
+.card-legend li { display: flex; align-items: center; gap: 6px; }
+.card-legend li[hidden] { display: none; }
+.card-swatch { display: inline-block; width: 20px; height: 14px; border-radius: 2px; background: var(--card-swatch-ground); flex: none; }
+.card-swatch[data-swatch="subject"] { background: linear-gradient(var(--card-subject-fill), var(--card-subject-fill)), var(--card-swatch-ground); box-shadow: inset 0 0 0 2px var(--card-subject); }
+.card-swatch[data-swatch="member"] { box-shadow: inset 0 0 0 2px var(--card-member-line); }
+.card-swatch[data-swatch="others"] { box-shadow: inset 0 0 0 1.5px var(--card-others-line); }
+/* DEC3 (#455 E): "Something else", folded under the answers */
+.card-other { border-top: 1px solid var(--rule); padding-top: 6px; }
+.card-other > summary { cursor: pointer; color: var(--ink); font-size: var(--text-body); min-height: 44px; display: flex; align-items: center; }   /* review F5: 44 px, body text */
+.card-other[open] { display: grid; gap: 6px; }
+.card-other fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.card-other legend { padding: 0; font-size: var(--text-body); font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.card-other-option { display: flex; gap: 10px; align-items: center; min-height: 44px; cursor: pointer; font-size: var(--text-body); }
+.card-other-option input[type="radio"] { min-height: 0; width: 22px; height: 22px; margin: 0; flex: none; }
+.card-other .manage-buttons button { min-height: 44px; }
+.card-other > p.card-fine { font-size: var(--text-body); }
+/* review F2: on the small card map a tapped paddock's popup sits over the map's own controls, never under them */
+.card-map .maplibregl-popup { z-index: 3; }
+
+/* V6, the simple view (simple-view.js): what a client's screens leave out. The routes themselves are refused in the router;
+   this hides the chrome around them. Display only: the database's policies decide what anyone can read. */
+body.simple-view #space-people, body.simple-view #space-layers, body.simple-view #command-bar, body.simple-view .layers-ctrl,
+body.simple-view #overview-rail, body.simple-view #layers-drawer, body.simple-view .documents-onboarding,
+body.simple-view #pw-qgis-line { display: none !important; }
+body.simple-files #map, body.simple-files #farm-scene { visibility: hidden; }
+body.simple-files #space-content { inset: 0; width: auto; height: auto; border-radius: 0; }
+body.simple-files #space-content > .sheet-head { display: none; }
+body.simple-files #space-body { width: 100%; max-width: 860px; margin: 0 auto; }
+body.simple-files #group-map { display: none; }
+body.simple-files .group-body { grid-template-columns: minmax(0, 1fr); }
+
