@@ -9,7 +9,7 @@
 // is the page's IndexedDB, not a cache: a new version activating never touches it, so what waits to upload survives it.
 // SI1 (sign-in first): the page registers this worker only once the sign-in form or first screen is up and the page is quiet
 // (boot.js worker()), so its install never competes with them.
-const VERSION = "202611190940-d4a2165";
+const VERSION = "202611191047-85c03b6";
 const APP = "fp-app";
 const CACHE = `${APP}-${VERSION}`;
 const FLOATING = ["./", "index.html", "layer-kinds.json", "privacy-terms.md", "demo/demo-farm.json", "demo/source.html"];
@@ -121,6 +121,9 @@ async function takeShare(request) {
 }
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
+  // GWN: the stand-alone groundwater nitrate site published beside the app (sites/groundwater-nitrate) is not the app: its pages
+  // and files go straight to the network, never answered from or kept in this worker's caches.
+  if (url.origin === location.origin && url.pathname.startsWith(new URL("groundwater-nitrate/", self.registration.scope).pathname)) return;
   if (e.request.method === "POST" && url.origin === location.origin && /\/share-target$/.test(url.pathname)) { e.respondWith(takeShare(e.request)); return; }
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   // the page (PERF3c): this version's own copy at once, with no network, so the app it names is the one this cache holds, whole,
