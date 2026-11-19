@@ -1,0 +1,53 @@
+/* FP2: "Plans to place" (app/js/plans-place.js). A page, not a map: the panel takes the width, as Projects. The list in one column of
+   plain rows; a card with the files beside the member's place on a computer, one above the other on a phone; one filled button. The
+   map's box has a fixed height, so it is never resized after its first draw (MV1). 44 px targets. */
+#screen-group[data-view="plans"] .group-map { display: none; }
+#screen-group[data-view="plans"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="plans"] .group-panel { padding: 0; border: 0; background: var(--wash); }
+.plans-place { display: grid; align-content: start; gap: var(--s-3); width: 100%; max-width: var(--page-max); margin: 0 auto; min-width: 0;
+  padding: var(--s-4) var(--s-4) calc(var(--s-10) + var(--fab-gutter, 0px)); box-sizing: border-box; color: var(--ink); }
+.plans-place h2 { margin: 0; font: 600 var(--text-heading)/1.2 var(--f-display); overflow-wrap: break-word; }
+.plans-place h3 { margin: 0 0 var(--s-2); font: 600 var(--text-body)/1.3 var(--f-ui); }
+.pp-quiet { margin: 2px 0 0; color: var(--ink-3); font-size: var(--text-small); line-height: 1.4; overflow-wrap: break-word; }
+.pp-status:empty { display: none; }
+.pp-empty { margin: 0; color: var(--ink-2); }
+
+.pp-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rule-soft); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
+.pp-list > li + li { border-top: 1px solid var(--rule-soft); }
+.pp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 14px; align-items: center; column-gap: var(--s-3); min-height: 56px; padding: var(--s-2) var(--s-3);
+  color: inherit; text-decoration: none; box-sizing: border-box; }
+@media (hover: hover) { .pp-row:hover { background: var(--fill); } }
+.pp-row:focus-visible, .pp-back:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-s); }
+.pp-text { display: grid; gap: 2px; min-width: 0; }
+.pp-text b { font-weight: 500; overflow-wrap: anywhere; }
+.pp-text small { color: var(--ink-3); font-size: var(--text-small); overflow-wrap: break-word; }
+.pp-state { color: var(--ink-2); font-size: var(--text-small); white-space: nowrap; }
+.pp-row[data-state="open"] .pp-state { color: var(--ink); font-weight: 600; }
+.pp-row svg { color: var(--ink-3); }
+
+.pp-back { display: inline-flex; align-items: center; gap: var(--s-1); justify-self: start; min-height: var(--tap); color: var(--ink-2); text-decoration: none; }
+.pp-card { display: grid; gap: var(--s-3); min-width: 0; }
+.pp-question { margin: 0; font: 500 var(--text-body)/1.4 var(--f-ui); }
+.pp-inview { display: grid; gap: var(--s-3); grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 801px) { .pp-inview { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+.pp-files, .pp-where, .pp-answer { min-width: 0; padding: var(--s-3); border: 1px solid var(--rule-soft); border-radius: var(--radius); background: var(--panel); }
+.pp-file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.pp-file + .pp-file { border-top: 1px solid var(--rule-soft); padding-top: var(--s-2); }
+.pp-file-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s-2); }
+.pp-open, .pp-change { min-height: var(--tap); min-width: var(--tap); }
+.pp-viewer { margin-top: var(--s-2); }
+.pp-frame { display: block; width: 100%; height: 420px; border: 1px solid var(--rule-soft); border-radius: var(--radius-s); background: var(--panel); }
+.pp-map { height: 260px; border-radius: var(--radius-s); overflow: hidden; background: var(--map-background); }
+@media (max-width: 800px) { .pp-frame { height: 360px; } .pp-map { height: 220px; } }
+
+.pp-form { display: grid; gap: var(--s-2); }
+.pp-form fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: 2px; min-width: 0; }
+.pp-form legend { padding: 0 0 var(--s-1); font-weight: 500; }
+.pp-option { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: var(--s-2); min-height: var(--tap); cursor: pointer; overflow-wrap: anywhere; }
+.pp-option input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+.pp-note-label { font-size: var(--text-small); color: var(--ink-2); }
+.pp-form textarea { width: 100%; box-sizing: border-box; min-height: 64px; font: inherit; }
+.pp-form .primary { justify-self: start; min-height: var(--tap); }
+.pp-msg { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.pp-msg:empty { display: none; }
+.pp-done p { margin: 0 0 4px; overflow-wrap: anywhere; }

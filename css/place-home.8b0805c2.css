@@ -1,0 +1,236 @@
+/* J2: Home, the first section of a place (js/place-home.js): search, the add actions shown openly, the sections as a list, and
+   anything waiting as one quiet line. Calm: no filled button of its own (the + is the screen's one), ink controls, the list as
+   Attio's rows. Phone first; a computer gets the same in a comfortable width, nothing extra. */
+.place-home { display: grid; align-content: start; gap: var(--s-5); width: 100%; max-width: var(--page-max); margin: 0 auto; padding: var(--s-4) var(--space) var(--s-8);
+  color: var(--ink); font-family: var(--f-ui); }
+/* a farm's Home: its own screen under the farm's header (as Maps) */
+.place-home-screen { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--demo-banner-height) + var(--farm-header-height)); background: var(--wash); overflow: auto; }
+/* a group's Home: its panel takes the width, no map beside it */
+#screen-group[data-view="home"] .group-map { display: none; }
+#screen-group[data-view="home"] .group-body { grid-template-columns: minmax(0, 1fr); }
+#screen-group[data-view="home"] .group-panel { padding: 0; border: 0; background: var(--wash); }
+
+/* search */
+.ph-search { position: relative; display: flex; align-items: center; }
+.ph-search .icon { position: absolute; left: 14px; color: var(--ink-3); pointer-events: none; }
+.ph-search input { width: 100%; min-height: 52px; padding: 0 var(--s-4) 0 44px; border: 0; border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--field-border); font: 400 var(--text-body) var(--f-ui); -webkit-appearance: none; appearance: none; }
+.ph-search input::placeholder { color: var(--ink-3); }
+.ph-search input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ph-results { display: grid; gap: var(--s-4); }
+.ph-results[hidden] { display: none; }
+.ph-group h2 { margin: 0 0 var(--s-2); font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink-2); }
+.ph-group h2 small { font-weight: 400; color: var(--ink-3); }
+.ph-quiet { margin: 0; padding: var(--s-2) var(--s-1); color: var(--ink-3); font-size: var(--text-small); }
+/* while searching, the results are the page */
+.place-home.searching > :not(.ph-search):not(.ph-results) { display: none; }
+
+/* a list of rows: the results and the sections */
+.ph-rows { list-style: none; margin: 0; padding: 0; overflow: hidden; border-radius: var(--radius); background: var(--panel); box-shadow: inset 0 0 0 1px var(--rule-soft); }
+.ph-rows > li + li { border-top: 1px solid var(--rule-soft); }
+.ph-row { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 60px; padding: var(--s-2) var(--s-4); border: 0; background: none; color: var(--ink);
+  font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.ph-row:hover { background: var(--fill); }
+.ph-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ph-row-icon, .ph-add-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-s); background: var(--fill); color: var(--ink); }
+.ph-row-text { flex: 1 1 auto; display: grid; gap: 2px; min-width: 0; }
+.ph-row-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-row-text small { color: var(--ink-3); font-size: var(--text-small); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-row > .icon:last-child { flex: none; color: var(--ink-3); }
+
+/* the add actions: large targets, two across on a phone */
+.ph-adds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+.ph-adds[hidden] { display: none; }
+.ph-add { display: flex; align-items: center; gap: var(--s-3); min-height: 64px; padding: var(--s-3); border: 0; border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--field-border); font: 600 var(--text-body)/1.25 var(--f-ui); text-align: left; cursor: pointer; }
+.ph-add:hover { background: var(--fill); }
+.ph-add:active { transform: scale(.98); }
+.ph-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* anything waiting: one quiet line */
+.ph-waiting { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--s-1); margin: calc(-1 * var(--s-3)) 0; color: var(--ink-3); font-size: var(--text-small); }
+.ph-waiting[hidden] { display: none; }
+/* each link a full tap target (44 px high), the line itself as quiet as before */
+.ph-waiting a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-weight: 500; }
+
+@media (max-width: 800px) {
+  body.farm-space-active #screen-farm-home { bottom: var(--tabbar-h); }
+  /* clear of the round + over the bottom right */
+  .place-home { padding-bottom: calc(var(--fab) + var(--s-8)); }
+  #screen-group[data-view="home"] { padding-bottom: var(--tabbar-h); }
+}
+@media (min-width: 801px) {
+  .place-home { padding-top: var(--s-6); gap: var(--s-6); }
+  .ph-adds { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
+
+/* NP1b: a farm's working notes (js/working-notes.js): coordinators' and staff's own lines, not shown to the farm. Quiet: a heading
+   that says so, one line to add (an ink outline button, not filled), and the notes as rows, newest first. */
+.working-notes { display: grid; gap: var(--s-2); }
+.working-notes[hidden] { display: none; }
+.working-notes h2 { margin: 0; font: 600 var(--text-small)/1.3 var(--f-ui); color: var(--ink-2); }
+.working-notes h2 small { font-weight: 400; color: var(--ink-3); font-size: inherit; }
+.working-notes-add { display: flex; gap: var(--s-2); }
+.working-notes-add input { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 0 var(--s-3); border: 0; border-radius: var(--radius); background: var(--panel); color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--field-border); font: 400 var(--text-body) var(--f-ui); }
+.working-notes-add input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.working-notes-add button { flex: none; min-height: 44px; }
+.working-notes-msg { margin: 0; min-height: 1em; color: var(--ink-3); font-size: var(--text-small); }
+.working-notes-msg:empty { display: none; }
+.working-notes-list { list-style: none; margin: 0; padding: 0; overflow: hidden; border-radius: var(--radius); background: var(--panel); box-shadow: inset 0 0 0 1px var(--rule-soft); }
+.working-notes-list > li { display: flex; align-items: flex-start; gap: var(--s-3); padding: var(--s-3) var(--s-4); }
+.working-notes-list > li + li { border-top: 1px solid var(--rule-soft); }
+.working-notes-text { flex: 1 1 auto; display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.working-notes-text small { color: var(--ink-3); font-size: var(--text-small); }
+.working-notes-list .link { flex: none; min-height: 44px; }
+.working-notes-empty { margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+
+/* FEP1, FEP2: a farm's Plan (js/farm-plan.js; in this file, beside Home, which it is reached from, so the sign-in page loads no extra
+   tag). FEP2 (the owner, 19 Nov 2026): the actions first, one row each, hairlines not cards; the ratings as one small table of dots
+   (green Low, orange Medium, red High: --plan-low, --plan-medium, --plan-high, a plan author's rating of the land, nothing more); the
+   map beside the list on a computer (it stays in view while the list scrolls), and on a phone a short strip of it over the list that
+   opens to full size. The map's box never changes size: the strip is a window onto it (--fp-strip), moved, not resized. No main
+   action on this screen. Tokens only. */
+.farm-plan-screen { position: fixed; left: 0; right: 0; bottom: 0; top: calc(var(--demo-banner-height) + var(--farm-header-height)); background: var(--wash); overflow: auto; }
+.farm-plan { width: 100%; max-width: var(--page-max); margin: 0 auto; color: var(--ink); font-family: var(--f-ui); font-size: var(--text-body); line-height: 1.4;
+  --fp-full: calc(100svh - var(--demo-banner-height) - var(--farm-header-height) - var(--tabbar-h)); }
+.fp-listcol { display: grid; align-content: start; gap: var(--s-6); min-width: 0; padding: var(--s-4) var(--space) var(--s-8); }
+
+/* the top: the farm's name, one line of facts, the plan's file */
+.fp-head { display: grid; gap: var(--s-1); }
+.fp-head h1 { margin: 0; font: 600 var(--text-heading)/1.25 var(--f-ui); overflow-wrap: anywhere; }
+.fp-facts, .fp-asat { margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.fp-asat { font-size: var(--text-body); }
+.fp-open { display: inline-flex; align-items: center; gap: var(--s-2); justify-self: start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; cursor: pointer; }
+.fp-open .icon { flex: none; color: var(--ink-2); }
+.fp-open:hover { text-decoration-thickness: 2px; }
+.fp-note, .fp-quiet { margin: 0; color: var(--ink-3); font-size: var(--text-small); }
+.fp-capped { color: var(--ink-2); }
+.farm-plan :is(button, a):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* a section: its heading, and for the actions the sort beside it */
+.fp-section { display: grid; gap: var(--s-2); min-width: 0; }
+.fp-section h2 { margin: 0; font: 600 var(--text-body)/1.3 var(--f-ui); }
+.fp-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.fp-seg { display: inline-flex; padding: 2px; border-radius: var(--radius-pill); background: var(--panel); box-shadow: inset 0 0 0 1px var(--rule); }
+.fp-seg button { min-height: 40px; min-width: 44px; padding: 0 var(--s-3); border: 0; border-radius: var(--radius-pill); background: none; color: var(--ink-2); font: 500 var(--text-small)/1 var(--f-ui); cursor: pointer; }
+.fp-seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+
+/* the actions: one row each; the plan's progress word as a small circle; the land unit and By when at the right */
+.fp-groups { display: grid; gap: var(--s-4); }
+.fp-group { display: grid; }
+.fp-group h3 { margin: 0 0 var(--s-1); color: var(--ink-3); font: 600 var(--text-small)/1.3 var(--f-ui); }
+.fp-acts { margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--rule-soft); }
+.fp-act { border-top: 1px solid var(--rule-soft); }
+.fp-act-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: var(--s-3); align-items: start; width: 100%; min-height: 44px; padding: var(--s-3) 0;
+  border: 0; background: none; color: inherit; font: inherit; line-height: 1.35; text-align: left; cursor: pointer; }
+.fp-act-row:hover .fp-act-title { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule); }
+.fp-act-title { min-width: 0; overflow-wrap: anywhere; }
+.fp-act.open .fp-act-title { font-weight: 600; }
+.fp-act-meta { padding-top: 1px; color: var(--ink-3); font-size: var(--text-small); white-space: nowrap; }
+.fp-mark { width: 14px; height: 14px; margin-top: 3px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink); }
+.fp-mark[data-mark="half"] { background: linear-gradient(90deg, var(--ink) 50%, var(--wash) 50%); }
+.fp-mark[data-mark="full"] { background: var(--ink); }
+.fp-mark[data-mark="none"] { box-shadow: none; }
+.fp-detail { display: grid; gap: 2px; padding: 0 0 var(--s-3) calc(14px + var(--s-3)); color: var(--ink-2); font-size: var(--text-small); }
+.fp-detail p { margin: 0; overflow-wrap: anywhere; }
+.fp-label { color: var(--ink-3); }
+.fp-link { justify-self: start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* the ratings: land units down, the risks across, one dot a cell; a risk's heading shades the map */
+.fp-table-wrap { overflow-x: auto; }
+.fp-table { width: 100%; border-collapse: collapse; font-size: var(--text-small); }
+.fp-table th, .fp-table td { padding: 0 1px; border-top: 1px solid var(--rule-soft); text-align: center; vertical-align: middle; }
+.fp-table thead th { border-top: 0; vertical-align: bottom; font-weight: 400; }
+.fp-table tbody tr:last-child > * { border-bottom: 1px solid var(--rule-soft); }
+.fp-th-unit { position: sticky; left: 0; z-index: 1; min-width: 8.5em; padding: var(--s-2) var(--s-2) var(--s-2) 0 !important; background: var(--wash); text-align: left !important; }
+.fp-th-unit b { display: block; font-size: var(--text-body); font-weight: 500; overflow-wrap: anywhere; }
+.fp-th-unit small { display: block; max-width: 16em; overflow: hidden; color: var(--ink-3); font-size: var(--text-small); font-weight: 400; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
+.fp-uses { border-top: 1px solid var(--rule-soft); }
+.fp-uses summary { display: flex; align-items: center; min-height: 44px; color: var(--ink); cursor: pointer; }
+.fp-uses ul { display: grid; gap: var(--s-2); margin: 0; padding: 0 0 var(--s-2) var(--s-4); color: var(--ink-2); font-size: var(--text-small); }
+.fp-uses b { font-weight: 600; color: var(--ink); }
+.fp-risk { min-width: 44px; min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--ink-2); font: inherit; line-height: 1.2; cursor: pointer; }
+.fp-risk:hover { color: var(--ink); }
+.fp-risk[aria-pressed="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+.fp-td-none { color: var(--ink-3); text-align: left !important; padding-left: var(--s-2) !important; }
+.fp-dot { --dot: var(--ink-3); display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.fp-dot::before { content: ""; grid-area: 1 / 1; width: 12px; height: 12px; border-radius: 50%; background: var(--dot); }
+.fp-dot[data-level="low"] { --dot: var(--plan-low); }
+.fp-dot[data-level="medium"] { --dot: var(--plan-medium); }
+.fp-dot[data-level="high"] { --dot: var(--plan-high); }
+.fp-dot[data-level="unrated"] { --dot: var(--plan-none); }
+.fp-dot[data-level="unrated"]::before { box-shadow: inset 0 0 0 1px var(--plan-none-line); }
+.fp-dot:is([data-level="word"], [data-level="unread"], [data-level="none"])::before { display: none; }
+.fp-dot-word { grid-area: 1 / 1; font-size: var(--text-small); line-height: 1.1; }
+.fp-said { min-height: 1.4em; margin: 0; color: var(--ink-2); font-size: var(--text-small); }
+.fp-said:empty { min-height: 0; }
+
+/* the foot: one quiet line */
+.fp-foot { margin: 0; padding-top: var(--s-3); border-top: 1px solid var(--rule-soft); color: var(--ink-3); font-size: var(--text-small); }
+
+/* the map: a box of its own, never resized; the 2D / 3D switch always, the key only while a risk is chosen */
+.fp-mapcol { position: relative; background: var(--map-background); }
+.fp-mapcol[data-map="unavailable"], .fp-mapcol[data-map="failed"] { display: grid; place-items: center; }
+.fp-mapclip { position: absolute; inset: 0; overflow: hidden; }
+.fp-mapbox { position: absolute; left: 0; right: 0; top: 0; height: 100%; }
+.fp-map-note { position: relative; z-index: 1; margin: 0; padding: var(--s-4); color: var(--ink-2); font-size: var(--text-small); }
+.fp-seg-map { position: absolute; z-index: 2; top: var(--s-2); left: var(--s-2); box-shadow: var(--shadow-1); }
+.fp-key { position: absolute; z-index: 2; left: var(--s-2); bottom: var(--s-8); display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--s-3); max-width: min(360px, calc(100% - var(--s-4)));
+  padding: var(--s-2) var(--s-3); border-radius: var(--radius-s); background: var(--panel); color: var(--ink); box-shadow: var(--shadow-1); font-size: var(--text-small); line-height: 1.3; }
+.fp-key[hidden] { display: none; }
+.fp-key b { flex-basis: 100%; font-weight: 600; }
+.fp-key small { flex-basis: 100%; color: var(--ink-3); font-size: var(--text-small); }
+.fp-key small.fp-key-item { display: flex; }
+.fp-key small .fp-dot { flex: none; }
+.fp-key-item { display: inline-flex; align-items: center; gap: var(--s-1); }
+.fp-key .fp-dot { width: 12px; height: 12px; cursor: default; }
+.fp-map-toggle { display: none; }
+
+@media (max-width: 800px) {
+  body.farm-space-active #screen-farm-plan { bottom: var(--tabbar-h); }
+  .farm-plan { padding-bottom: calc(var(--fab) + var(--s-8)); }
+  /* the strip: a window across the middle of the full-size map, at the top of the page and staying there as the list scrolls */
+  .fp-mapcol { --fp-strip: 136px; position: sticky; top: 0; z-index: 3; height: var(--fp-strip); box-shadow: 0 1px 0 var(--rule); }
+  .fp-mapcol:not(.strip) { display: none; }
+  .fp-mapclip { bottom: auto; height: var(--fp-strip); transition: height var(--dur-2) var(--ease); }
+  .fp-mapbox { height: var(--fp-full); transform: translateY(calc((var(--fp-strip) - var(--fp-full)) / 2)); transition: transform var(--dur-2) var(--ease); }
+  .fp-mapcol.open .fp-mapclip { position: fixed; top: calc(var(--demo-banner-height) + var(--farm-header-height)); height: var(--fp-full); }
+  .fp-mapcol.open .fp-mapbox { transform: none; }
+  .fp-mapcol:not(.open) .maplibregl-control-container { display: none; }
+  .fp-map-toggle { position: absolute; z-index: 2; right: var(--s-2); bottom: var(--s-2); display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s-4); border: 0;
+    border-radius: var(--radius-pill); background: var(--panel); color: var(--ink); font: 500 var(--text-small)/1 var(--f-ui); box-shadow: var(--shadow-1); cursor: pointer; }
+  /* (on the strip the key sits under it, across the page, so it covers no part of the map) */
+  .fp-mapcol:not(.open) .fp-key { top: 100%; bottom: auto; left: 0; right: 0; max-width: none; padding: var(--s-1) var(--space); border-radius: 0; box-shadow: 0 1px 0 var(--rule); }
+  .fp-mapcol.open :is(.fp-seg-map, .fp-map-toggle, .fp-key) { position: fixed; }
+  .fp-mapcol.open .fp-seg-map { top: calc(var(--demo-banner-height) + var(--farm-header-height) + var(--s-2)); }
+  .fp-mapcol.open .fp-map-toggle { top: calc(var(--demo-banner-height) + var(--farm-header-height) + var(--s-2)); bottom: auto; right: auto; left: 50%; transform: translateX(-50%); }
+  .fp-mapcol.open .fp-key { bottom: calc(var(--tabbar-h) + var(--s-8)); max-width: calc(100% - 100px); }
+  /* (the round + keeps its corner: the rows' right-hand words, the table and the foot stay clear of it) */
+  body:has(.add-button:not([hidden])) .farm-plan :is(.fp-act-row, .fp-detail, .fp-foot) { padding-right: var(--fab-gutter); }
+  /* the table edge to edge, its risks' headings on their side, so the six fit a phone without scrolling sideways */
+  .fp-table-wrap { margin: 0 calc(-1 * var(--space)); padding: 0 var(--s-2); }
+  .fp-table { table-layout: fixed; }
+  .fp-table thead th:not(.fp-th-unit) { width: 44px; }
+  .fp-th-unit { min-width: 0; }
+  .fp-th-unit small { max-width: 100%; }
+  .fp-risk { width: 44px; min-height: 0; padding: var(--s-2) 0; }
+  .fp-risk-name { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg); text-align: left; white-space: nowrap; }
+  .fp-risk[aria-pressed="true"] { border-radius: var(--radius-s); background: var(--fill); box-shadow: none; }
+}
+@media (min-width: 801px) {
+  /* the list at the left, the map at the right, staying in view while the list scrolls */
+  .farm-plan:not(.farm-plan-message) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); max-width: none; }
+  .fp-listcol { grid-column: 1; grid-row: 1; width: 100%; max-width: 660px; justify-self: end; padding: var(--s-5) var(--s-6) var(--s-8); }
+  .fp-head h1 { font-size: var(--text-title); }
+  .fp-mapcol { grid-column: 2; grid-row: 1; position: sticky; top: 0; height: calc(100vh - var(--demo-banner-height) - var(--farm-header-height)); box-shadow: -1px 0 0 var(--rule); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fp-mapclip, .fp-mapbox { transition: none; }
+}
+@media print {
+  .farm-plan-screen { position: static; overflow: visible; }
+  .fp-mapcol, .fp-seg { display: none; }
+}
+
